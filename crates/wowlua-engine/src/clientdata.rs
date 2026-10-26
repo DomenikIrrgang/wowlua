@@ -139,6 +139,10 @@ pub trait ClientData: Send + Sync {
     fn appearance_sources(&self, _visual: u32) -> Vec<u32> {
         Vec::new()
     }
+    /// An atlas as the API answers it (decision T472).
+    fn atlas(&self, _name: &str) -> Option<ClientAtlas> {
+        None
+    }
     /// A call's answer as the client's tables give it, written as the
     /// recordings write answers (`1: {flags=number 2,…}`; decision T464):
     /// taken where a recorded answer would be.
@@ -324,6 +328,26 @@ pub struct TaxiNode {
 /// The flight paths a world map shows, as the client's tables give them.
 pub(crate) fn taxi_nodes(vm: &Vm, ui_map: i64) -> Option<Vec<TaxiNode>> {
     data(vm)?.taxi_nodes(u32::try_from(ui_map).ok()?)
+}
+
+/// An atlas as `C_Texture.GetAtlasInfo` answers it: its size, file,
+/// texture coordinates, tiling and its size in the file's pixels.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ClientAtlas {
+    pub width: f64,
+    pub height: f64,
+    pub file: u32,
+    pub coords: [f64; 4],
+    pub tiles_horizontally: bool,
+    pub tiles_vertically: bool,
+    pub raw: (f64, f64),
+}
+
+/// An atlas as the client's tables give it.
+pub(crate) fn atlas(vm: &Vm, name: &str) -> Option<(usize, ClientAtlas)> {
+    let d = data(vm)?;
+    let a = d.atlas(name)?;
+    Some((Arc::as_ptr(&d) as *const () as usize, a))
 }
 
 /// A call's answer as the client's tables give it (decision T464).

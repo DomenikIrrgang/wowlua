@@ -447,7 +447,8 @@ pub(crate) fn control_set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
 /// 1.60.1: "" and "x").
 fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = vm.check_str(&c, 1)?;
-    let Some(known) = crate::measures::atlas(&String::from_utf8_lossy(vm.str_bytes(name))) else {
+    let Some(known) = crate::measures::atlas(vm, &String::from_utf8_lossy(vm.str_bytes(name)))
+    else {
         return Ok(vec![]);
     };
     let width = known.width.unwrap_or(0.0);
@@ -498,7 +499,7 @@ fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
 fn atlas_exists(vm: &mut Vm, c: NativeCall) -> Ret {
     let known = match vm.hidden(c.arg(1)) {
         Value::Str(s) => {
-            crate::measures::atlas(&String::from_utf8_lossy(vm.str_bytes(s))).is_some()
+            crate::measures::atlas(vm, &String::from_utf8_lossy(vm.str_bytes(s))).is_some()
         }
         _ => false,
     };

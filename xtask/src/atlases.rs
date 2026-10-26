@@ -62,7 +62,8 @@ fn rows(dir: &Path, table: &str) -> Result<Vec<HashMap<String, String>>> {
             header
                 .iter()
                 .cloned()
-                .zip(l.split(',').map(str::to_string))
+                // (a value with a space comes quoted: `"Raid Frame"`)
+                .zip(l.split(',').map(|v| v.trim_matches('"').to_string()))
                 .collect()
         })
         .collect())

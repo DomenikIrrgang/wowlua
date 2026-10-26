@@ -20,7 +20,7 @@ fn main() {
                 } else if let Some(c) = c.strip_suffix("[]") {
                     let f: Vec<String> = row.ints(c).iter().map(|v| v.to_string()).collect();
                     f.join(",")
-                } else if c.ends_with("_lang") || c == "InternalName" {
+                } else if c.ends_with("_lang") || c.ends_with("Name") {
                     row.string(c).unwrap_or_default()
                 } else {
                     row.signed(c).to_string()

@@ -144,7 +144,40 @@ fn atlas_line(l: &'static str) -> (String, Atlas) {
 /// its tables (`data/camelot-atlases-client.txt`, decision T238), an
 /// answer recorded from the client in its place (`data/camelot-atlases.txt`;
 /// a size recorded alone keeps the tables' file and coordinates).
-pub fn atlas(name: &str) -> Option<&'static Atlas> {
+pub fn atlas(vm: &wowlua_vm::Vm, name: &str) -> Option<&'static Atlas> {
+    // The installation's tables first (decision T472).
+    if let Some((client, a)) = crate::clientdata::atlas(vm, name) {
+        type Built = std::sync::Mutex<std::collections::HashMap<(usize, String), &'static Atlas>>;
+        static BUILT: std::sync::OnceLock<Built> = std::sync::OnceLock::new();
+        let mut built = BUILT
+            .get_or_init(Default::default)
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let key = (client, name.to_ascii_lowercase());
+        if let Some(a) = built.get(&key) {
+            return Some(a);
+        }
+        let atlas: &'static Atlas = Box::leak(Box::new(Atlas {
+            name: Box::leak(name.to_string().into_boxed_str()),
+            width: Some(a.width),
+            height: Some(a.height),
+            info: Some(AtlasInfo {
+                file: f64::from(a.file),
+                coords: a.coords,
+                tiles_horizontally: a.tiles_horizontally,
+                tiles_vertically: a.tiles_vertically,
+                raw: Some(a.raw),
+            }),
+        }));
+        built.insert(key, atlas);
+        return Some(atlas);
+    }
+    snapshot_atlas(name)
+}
+
+/// The atlas named `name` in the engine's snapshot of the client's tables
+/// (and the recorded answers), without the installation.
+pub fn snapshot_atlas(name: &str) -> Option<&'static Atlas> {
     static TABLE: std::sync::OnceLock<std::collections::HashMap<String, Atlas>> =
         std::sync::OnceLock::new();
     let lines = |text: &'static str| {
@@ -185,7 +218,7 @@ pub fn apply_atlas_size(vm: &mut Vm, id: WidgetId, args: &[Value]) {
         return;
     };
     let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
-    if let Some(a) = atlas(&name) {
+    if let Some(a) = atlas(vm, &name) {
         let r = &mut crate::engine_mut(vm).world.widgets[id.0];
         r.width = a.width.unwrap_or(r.width);
         r.height = a.height.unwrap_or(r.height);
@@ -205,7 +238,7 @@ fn set_atlas(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         && let Some(Value::Str(name)) = args.first().copied()
     {
         let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
-        if !name.is_empty() && atlas(&name).is_none() {
+        if !name.is_empty() && atlas(vm, &name).is_none() {
             return Ok(vec![]);
         }
     }
@@ -225,7 +258,7 @@ fn get_atlas(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
         return Ok(vec![Value::Nil]);
     };
     let given = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
-    Ok(vec![match atlas(&given) {
+    Ok(vec![match atlas(vm, &given) {
         Some(a) if a.name != given => vm.str(a.name),
         _ => Value::Str(s),
     }])
@@ -253,7 +286,7 @@ fn texture_file(vm: &mut Vm, id: WidgetId) -> Value {
             let atlas_set =
                 widgets::stored_args(vm, props, "Atlas").and_then(|v| v.first().copied());
             match atlas_set {
-                Some(Value::Str(s)) => atlas(&String::from_utf8_lossy(vm.str_bytes(s)))
+                Some(Value::Str(s)) => atlas(vm, &String::from_utf8_lossy(vm.str_bytes(s)))
                     .and_then(|a| a.info.as_ref())
                     .filter(|info| info.file > 0.0)
                     .map_or(Value::Nil, |info| Value::Num(info.file)),

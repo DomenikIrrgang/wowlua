@@ -1936,6 +1936,57 @@ return name, points, tostring(completed), tostring(month), tostring(mine), tostr
     assert_eq!(r, ["Hugs given", "10", "false", "nil", "false", "nil"]);
 }
 
+/// A client whose tables have one atlas of a new build.
+struct NewAtlas;
+
+impl wowlua_engine::clientdata::ClientData for NewAtlas {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn atlas(&self, name: &str) -> Option<wowlua_engine::clientdata::ClientAtlas> {
+        (name.eq_ignore_ascii_case("New-Build-Atlas")).then_some(
+            wowlua_engine::clientdata::ClientAtlas {
+                width: 32.0,
+                height: 16.0,
+                file: 123456,
+                coords: [0.0, 0.5, 0.25, 0.75],
+                tiles_horizontally: true,
+                tiles_vertically: false,
+                raw: (64.0, 32.0),
+            },
+        )
+    }
+}
+
+/// An atlas is the client's tables' where at hand (decision T472): one
+/// the engine's snapshot lacks exists, with its size, file and region.
+#[test]
+fn atlases_come_from_the_client_tables() {
+    let mut vm = vm();
+    let before = run(
+        &mut vm,
+        "return tostring(C_Texture.GetAtlasExists('New-Build-Atlas'))",
+    );
+    assert_eq!(before, ["false"]);
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(NewAtlas));
+    let r = run(
+        &mut vm,
+        "local i = C_Texture.GetAtlasInfo('new-build-atlas')
+return tostring(C_Texture.GetAtlasExists('New-Build-Atlas')), i.width, i.height, i.file,
+    i.rightTexCoord, tostring(i.tilesHorizontally)",
+    );
+    assert_eq!(r, ["true", "32", "16", "123456", "0.5", "true"]);
+}
+
 /// `BNGetInfo()` answers the account; given an argument, nothing (both
 /// recorded).
 #[test]

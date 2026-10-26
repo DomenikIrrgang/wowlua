@@ -434,7 +434,7 @@ fn image_of(vm: &Vm, id: WidgetId) -> Option<ImageOf> {
         return Some((image, None, (false, false), None));
     }
     if let Some(name) = first(vm, id, "Atlas").and_then(|v| text_of(vm, v))
-        && let Some(a) = crate::measures::atlas(&name)
+        && let Some(a) = crate::measures::atlas(vm, &name)
         && let Some(info) = &a.info
     {
         let c = info.coords;
@@ -734,7 +734,7 @@ fn inline_images(raw: &str) -> Vec<(String, bool, u32)> {
 fn inline_quad(vm: &Vm, id: WidgetId, file: &str, atlas: bool, place: Rect) -> Option<Quad> {
     let full = [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0];
     let (image, texcoord) = if atlas {
-        let info = crate::measures::atlas(file)?.info.as_ref()?;
+        let info = crate::measures::atlas(vm, file)?.info.as_ref()?;
         let c = info.coords;
         let (l, r, t, b) = (c[0] as f32, c[1] as f32, c[2] as f32, c[3] as f32);
         (Image::FileId(info.file as u32), [l, t, l, b, r, t, r, b])
@@ -1540,7 +1540,7 @@ fn minimap_mask(vm: &Vm, f: WidgetId, rect: Rect) -> Option<Mask> {
         v => text_of(vm, v).filter(|t| !t.is_empty()).map(Ok),
     });
     let atlas = |name: &str| {
-        let info = crate::measures::atlas(name)?.info.as_ref()?;
+        let info = crate::measures::atlas(vm, name)?.info.as_ref()?;
         let c = info.coords;
         Some(Mask {
             image: Image::FileId(info.file as u32),
@@ -1915,7 +1915,8 @@ fn unit_position_player(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
     let unit = unit_of(vm, f);
     let size = num(vm, pin.get(1), 24.0) as f32 * unit;
     let facing = pin.get(8).is_none_or(|v| v.truthy());
-    let (image, texcoord) = match crate::measures::atlas(&texture).and_then(|a| a.info.as_ref()) {
+    let (image, texcoord) = match crate::measures::atlas(vm, &texture).and_then(|a| a.info.as_ref())
+    {
         Some(info) => {
             let c = info.coords;
             let (l, r, t, b) = (c[0] as f32, c[1] as f32, c[2] as f32, c[3] as f32);

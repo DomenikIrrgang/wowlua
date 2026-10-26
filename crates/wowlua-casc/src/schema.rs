@@ -2091,4 +2091,42 @@ pub(crate) static LAYOUTS: &[(&str, Layouts)] = &[
             ],
         )],
     ),
+    (
+        "UiTextureAtlasMember",
+        &[(
+            0x75E12F73,
+            &[
+                "$CommittedName",
+                "ID~4",
+                "UiTextureAtlasID~2",
+                "Width~2",
+                "Height~2",
+                "CommittedLeft~2",
+                "CommittedRight~2",
+                "CommittedTop~2",
+                "CommittedBottom~2",
+                "UiTextureAtlasElementID~2",
+                "OverrideWidth~2",
+                "OverrideHeight~2",
+                "CommittedFlags~1",
+                "UiCanvasID~1",
+            ],
+        )],
+    ),
+    (
+        "UiTextureAtlas",
+        &[(
+            0x91378408,
+            &[
+                "ID~4",
+                "FileDataID~4",
+                "UiTextureAtlasSetID~4",
+                "AtlasWidth~2",
+                "AtlasHeight~2",
+                "UiCanvasID~1",
+            ],
+        )],
+    ),
+    ("UiCanvas", &[(0x9CA2CFB4, &["Width~2", "Height~2"])]),
+    ("UiTextureAtlasElement", &[(0x7CCBD18F, &["$Name", "ID~4"])]),
 ];

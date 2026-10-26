@@ -468,6 +468,8 @@ pub struct CascClientData {
     traits: OnceLock<Option<Arc<TraitTables>>>,
     /// The answers the tables give (decision T464), read on first use.
     answers: OnceLock<Option<crate::answers::Answers>>,
+    /// The atlases as the API answers them (decision T472).
+    api_atlases: OnceLock<Option<HashMap<String, wowlua_casc::atlas::ApiAtlas>>>,
     /// The client's fonts by their file's name (lower case), read on first
     /// use; `None` for one the storage lacks.
     fonts: std::sync::Mutex<std::collections::HashMap<String, Option<Arc<fontdue::Font>>>>,
@@ -486,6 +488,7 @@ impl CascClientData {
             spells: OnceLock::new(),
             traits: OnceLock::new(),
             answers: OnceLock::new(),
+            api_atlases: OnceLock::new(),
             fonts: Default::default(),
             glyphs: Default::default(),
         }
@@ -841,6 +844,26 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
 
     fn traits(&self) -> Option<Arc<TraitTables>> {
         self.trait_tables()
+    }
+
+    fn atlas(&self, name: &str) -> Option<wowlua_engine::clientdata::ClientAtlas> {
+        let a = *self
+            .api_atlases
+            .get_or_init(|| {
+                let casc = self.casc.get_or_init(|| (self.open)()).as_ref()?;
+                Some(wowlua_casc::atlas::read_api(casc)).filter(|m| !m.is_empty())
+            })
+            .as_ref()?
+            .get(&name.to_ascii_lowercase())?;
+        Some(wowlua_engine::clientdata::ClientAtlas {
+            width: a.width,
+            height: a.height,
+            file: a.file,
+            coords: a.coords,
+            tiles_horizontally: a.tiles_horizontally,
+            tiles_vertically: a.tiles_vertically,
+            raw: a.raw,
+        })
     }
 
     fn answer(&self, call: &str) -> Option<String> {

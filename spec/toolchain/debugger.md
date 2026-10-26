@@ -280,6 +280,15 @@ T310).
   pixels, the middle stretched or tiled) is drawn in pieces: its corners as
   they are, at the region's scale, its edges and middle filled; an atlas
   that tiles repeats at its size instead of stretching.
+  The API's atlases (`C_Texture.GetAtlasInfo`, `GetAtlasExists`, a
+  texture's atlas size) are the installation's tables' too (decision
+  T472), chosen as the API chooses: the flavor's set over the default's,
+  the larger canvas (2x) over 1x, then the first; the size the member's
+  override or its own over its canvas's scale, the texture coordinates in
+  single precision, tiling by its flags 4 and 2, the raw size its pixels.
+  Without the installation, the engine's snapshot of the same build's
+  tables and the recorded answers. Checked: all 16,857 atlases of the
+  snapshot and all 291 recorded answers the same.
 - **Encrypted files** (decision T317): chunks encrypted with a key the
   client has (its `TactKeyLookup` and `TactKey` tables, and the keys its
   hotfix cache holds, `Cache/ADB/<locale>/DBCache.bin`) are decrypted in

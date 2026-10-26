@@ -44,6 +44,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- With your WoW installation, atlases (`C_Texture.GetAtlasInfo`, `C_Texture.GetAtlasExists`, `SetAtlas` sizes) come from your client's game tables.
 - With your WoW installation, trainer services' tooltips, descriptions and icons come from your client's spell data, and spell tooltips show combo points, melee and minimum ranges, passive, next-swing and channeled spells, and the forms, weapons, tools and reagents a spell needs.
 - With your WoW installation, profession recipes (`C_TradeSkillUI.GetRecipeSchematic`, `GetRecipeInfo`, `GetRecipeRequirements`, `GetCategoryInfo`) come from your client's game tables; what the character knows stays as recorded.
 - With your WoW installation, item class and subclass names (`C_Item.GetItemClassInfo`, `C_Item.GetItemSubClassInfo`) come from your client's game tables.
@@ -82,6 +83,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `C_Texture.GetAtlasInfo` finds the atlases whose names contain a space (`Raid Frame`, `shop-virtual currency-menu-bg`).
 - Function descriptions taken from old-style warcraft.wiki.gg pages no longer include the page's raw markup (`----`, `;''Returns''`).
 - The router checks the types of `run`'s parameters against `args` and `flags` (E8112).
 - `L.KEY({...})` reports a missing or unknown placeholder.

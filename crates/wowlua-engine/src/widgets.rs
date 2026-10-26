@@ -3299,7 +3299,7 @@ fn set_status_bar_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
             let is_atlas = match asset {
                 Value::Str(s) => {
                     let name = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
-                    crate::measures::atlas(&name).is_some()
+                    crate::measures::atlas(vm, &name).is_some()
                 }
                 _ => false,
             };

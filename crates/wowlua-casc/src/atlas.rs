@@ -181,3 +181,114 @@ pub fn read(casc: &Casc) -> HashMap<String, Atlas> {
     }
     out
 }
+
+/// An atlas as the API answers it (`C_Texture.GetAtlasInfo`, decision
+/// T472): its size in UI units, file, texture coordinates (single
+/// precision), tiling and its size in the file's pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ApiAtlas {
+    pub width: f64,
+    pub height: f64,
+    pub file: u32,
+    pub coords: [f64; 4],
+    pub tiles_horizontally: bool,
+    pub tiles_vertically: bool,
+    pub raw: (f64, f64),
+}
+
+/// Every element's atlas as the API answers it, by name (lower case): the
+/// member of the flavor's own set over the default's, of the larger canvas
+/// (2x) over 1x, else the first; its size the override's or its own, over
+/// its canvas's scale (a 2x member half its pixels). Held to the client's
+/// answers by `cargo xtask atlases` (decision T238).
+pub fn read_api(casc: &Casc) -> HashMap<String, ApiAtlas> {
+    use crate::tables::Table;
+    let mut out = HashMap::new();
+    let (Some(atlases), Some(members), Some(elements)) = (
+        Table::open(casc, "UiTextureAtlas"),
+        Table::open(casc, "UiTextureAtlasMember"),
+        Table::open(casc, "UiTextureAtlasElement"),
+    ) else {
+        return out;
+    };
+    let canvases: HashMap<u32, f64> = Table::open(casc, "UiCanvas")
+        .map(|t| {
+            t.rows()
+                .map(|r| (r.id(), f64::from(r.int("Width"))))
+                .collect()
+        })
+        .unwrap_or_default();
+    let base = canvases.get(&1).copied().unwrap_or(1024.0);
+    let mut by_element: HashMap<u32, Vec<crate::tables::Row<'_>>> = HashMap::new();
+    for r in members.rows() {
+        by_element
+            .entry(r.int("UiTextureAtlasElementID"))
+            .or_default()
+            .push(r);
+    }
+    let coord = |v: f64| f64::from(v as f32);
+    for e in elements.rows() {
+        let Some(name) = e.string("Name") else {
+            continue;
+        };
+        let Some(list) = by_element.get(&e.id()) else {
+            continue;
+        };
+        let canvas_of = |m: &crate::tables::Row<'_>| match m.int("UiCanvasID") {
+            0 => atlases
+                .row(m.int("UiTextureAtlasID"))
+                .map_or(1, |a| a.int("UiCanvasID")),
+            c => c,
+        };
+        let Some(m) = list
+            .iter()
+            .filter(|m| atlases.row(m.int("UiTextureAtlasID")).is_some())
+            .min_by(|a, b| {
+                let set = |m: &crate::tables::Row<'_>| {
+                    atlases
+                        .row(m.int("UiTextureAtlasID"))
+                        .map_or(0, |a| a.int("UiTextureAtlasSetID"))
+                };
+                set(b)
+                    .cmp(&set(a))
+                    .then(canvas_of(b).cmp(&canvas_of(a)))
+                    .then(a.id().cmp(&b.id()))
+            })
+        else {
+            continue;
+        };
+        let Some(a) = atlases.row(m.int("UiTextureAtlasID")) else {
+            continue;
+        };
+        let (aw, ah) = (
+            f64::from(a.int("AtlasWidth")),
+            f64::from(a.int("AtlasHeight")),
+        );
+        if aw == 0.0 || ah == 0.0 {
+            continue;
+        }
+        let scale = canvases.get(&canvas_of(m)).map_or(1.0, |w| w / base);
+        let (w, h) = (f64::from(m.int("Width")), f64::from(m.int("Height")));
+        let ow = f64::from(m.int("OverrideWidth"));
+        let oh = f64::from(m.int("OverrideHeight"));
+        let flags = m.int("CommittedFlags");
+        out.insert(
+            name.to_ascii_lowercase(),
+            ApiAtlas {
+                width: if ow > 0.0 { ow } else { w } / scale,
+                height: if oh > 0.0 { oh } else { h } / scale,
+                file: a.int("FileDataID"),
+                coords: [
+                    coord(f64::from(m.int("CommittedLeft")) / aw),
+                    coord(f64::from(m.int("CommittedRight")) / aw),
+                    coord(f64::from(m.int("CommittedTop")) / ah),
+                    coord(f64::from(m.int("CommittedBottom")) / ah),
+                ],
+                tiles_horizontally: flags & 4 != 0,
+                tiles_vertically: flags & 2 != 0,
+                raw: (w, h),
+            },
+        );
+    }
+    out
+}

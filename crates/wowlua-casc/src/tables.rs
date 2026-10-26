@@ -100,6 +100,7 @@ const FILES: &[(&str, u32)] = &[
     ("UiCamFbackTransmogChrRace", 1261406),
     ("UiCamFbackTransmogWeapon", 1261407),
     ("UiCamera", 1120287),
+    ("UiCanvas", 1989363),
     ("UiMap", 1957206),
     ("UiMapArt", 1957202),
     ("UiMapArtStyleLayer", 1957208),
@@ -110,6 +111,9 @@ const FILES: &[(&str, u32)] = &[
     ("UiModelSceneActor", 1548214),
     ("UiModelSceneActorDisplay", 1548216),
     ("UiModelSceneCamera", 1548213),
+    ("UiTextureAtlas", 897470),
+    ("UiTextureAtlasElement", 1989276),
+    ("UiTextureAtlasMember", 897532),
     ("WorldMapOverlay", 1134579),
     ("WorldMapOverlayTile", 1957212),
 ];
