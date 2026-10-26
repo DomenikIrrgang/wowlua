@@ -102,6 +102,77 @@ fn new_package_builds_for_several_flavors() {
     assert!(project.join("wowlua.lock").exists());
 }
 
+/// Every template checks clean for every flavor (spec CLI §12.9), its tests
+/// pass, and `--ci github` writes a workflow that checks, tests and, for an
+/// addon, builds and publishes as §12.10 does.
+#[test]
+fn every_template_checks_clean() {
+    let dir = tempfile::tempdir().unwrap();
+    let flavors = [
+        "standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla",
+    ];
+    for kind in ["addon", "library", "lua-library", "types"] {
+        for flavor in flavors {
+            let name = format!("{kind}-{flavor}");
+            wowlua(dir.path())
+                .args([
+                    "new",
+                    &name,
+                    "--kind",
+                    kind,
+                    "--flavors",
+                    flavor,
+                    "--ci",
+                    "github",
+                ])
+                .assert()
+                .success();
+            let project = dir.path().join(&name);
+            let check = wowlua(&project)
+                .args(["check", "--deny-warnings"])
+                .output()
+                .unwrap();
+            let stderr = String::from_utf8_lossy(&check.stderr);
+            assert!(check.status.success(), "{name}: {stderr}");
+            assert!(!stderr.contains("warning"), "{name}: {stderr}");
+            let workflow = fs::read_to_string(project.join(".github/workflows/ci.yml")).unwrap();
+            assert!(workflow.contains("run: wowlua check"), "{workflow}");
+            if matches!(kind, "addon" | "library") {
+                let test = wowlua(&project).arg("test").output().unwrap();
+                let stdout = String::from_utf8_lossy(&test.stdout);
+                let stderr = String::from_utf8_lossy(&test.stderr);
+                assert!(test.status.success(), "{name}: {stdout}{stderr}");
+                assert!(
+                    stderr.contains("1 passed, 0 failed"),
+                    "{name}: {stdout}{stderr}"
+                );
+                assert!(workflow.contains("run: wowlua test"), "{workflow}");
+            }
+            if kind == "addon" {
+                for step in [
+                    "run: wowlua check --locked --message-format github",
+                    "run: wowlua test --locked --message-format github",
+                    "run: wowlua build --release --locked",
+                    "run: wowlua publish",
+                ] {
+                    assert!(workflow.contains(step), "{step}: {workflow}");
+                }
+                // The steps run as they are written: the lockfile exists.
+                for args in [
+                    &["check", "--locked"][..],
+                    &["test", "--locked"],
+                    &["build", "--release", "--locked"],
+                ] {
+                    wowlua(&project).args(args).assert().success();
+                }
+            } else {
+                assert!(!workflow.contains("--locked"), "no lockfile: {workflow}");
+                assert!(!workflow.contains("publish"), "{workflow}");
+            }
+        }
+    }
+}
+
 #[test]
 fn init_adopts_an_existing_addon() {
     let dir = tempfile::tempdir().unwrap();

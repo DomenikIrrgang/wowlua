@@ -262,8 +262,10 @@ fn build_inner(
     let root = manifest.root.clone();
     let addon_name = project.addon_name();
     let kind = manifest.package().map(|p| p.kind).unwrap_or_default();
-    // A wowlua library is checked on its own and built into its addons.
-    let checkable = kind == wowlua_manifest::model::PackageKind::Library && !request.write;
+    // A wowlua library is checked and tested on its own (a test build is
+    // the library as an addon) and built into its addons.
+    let checkable =
+        kind == wowlua_manifest::model::PackageKind::Library && (!request.write || request.tests);
     if kind != wowlua_manifest::model::PackageKind::Addon && !checkable {
         let mut d = Diagnostic::plain_error(format!(
             "a package of kind `{}` is not built on its own",

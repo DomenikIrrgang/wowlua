@@ -65,6 +65,8 @@ pub struct NewRequest {
 const GITIGNORE_ADDON: &str = "dist/\n";
 const GITIGNORE_LIBRARY: &str = "dist/\nwowlua.lock\n";
 
+/// The workflow of spec CLI §12.10: checks, tests and builds every push,
+/// and publishes tags.
 const CI_WORKFLOW: &str = r#"name: ci
 on:
   push:
@@ -78,13 +80,15 @@ jobs:
       contents: write # GitHub releases
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0 } # tags and history for build.version and changelogs
       - uses: DomenikIrrgang/wowlua/.github/actions/setup-wowlua@main
       - uses: actions/cache@v4
         with:
           path: ~/.wowlua/cache
           key: wowlua-${{ hashFiles('wowlua.lock') }}
-      - run: wowlua build --release --locked --message-format github
+      - run: wowlua check --locked --message-format github
+      - run: wowlua test --locked --message-format github
+      - run: wowlua build --release --locked
       - if: startsWith(github.ref, 'refs/tags/')
         run: wowlua publish
         env:
@@ -93,6 +97,36 @@ jobs:
           WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 "#;
+
+/// The workflow for library kinds: they are not built or published on
+/// their own (spec Package manager §10.5.1), and keep no lockfile, so it
+/// checks (and tests) every push.
+fn library_workflow(test: bool) -> String {
+    let test = if test {
+        "      - run: wowlua test --message-format github\n"
+    } else {
+        ""
+    };
+    format!(
+        "name: ci\n\
+         on:\n\
+         \x20 push:\n\
+         \x20   branches: [main]\n\
+         \x20 pull_request:\n\
+         jobs:\n\
+         \x20 check:\n\
+         \x20   runs-on: ubuntu-latest\n\
+         \x20   steps:\n\
+         \x20     - uses: actions/checkout@v5\n\
+         \x20     - uses: DomenikIrrgang/wowlua/.github/actions/setup-wowlua@main\n\
+         \x20     - uses: actions/cache@v4\n\
+         \x20       with:\n\
+         \x20         path: ~/.wowlua/cache\n\
+         \x20         key: wowlua-${{{{ hashFiles('wowlua.json') }}}}\n\
+         \x20     - run: wowlua check --message-format github\n\
+         {test}"
+    )
+}
 
 /// Creates a new package from a template. Returns the files written.
 pub fn new_package(request: &NewRequest) -> Result<Vec<PathBuf>, Diagnostic> {
@@ -171,11 +205,8 @@ pub fn new_package(request: &NewRequest) -> Result<Vec<PathBuf>, Diagnostic> {
             if !flavors.is_empty() {
                 manifest.insert("flavors".into(), Value::Object(flavors.clone()));
             }
-            files.push((
-                "src/init.wowlua".into(),
-                "-- Library entry module.\nlocal _, ns = ...\n".into(),
-            ));
-            files.push(("tests/init.test.wowlua".into(), test_template()));
+            files.push(("src/init.wowlua".into(), library_template()));
+            files.push(("tests/init.test.wowlua".into(), library_test_template()));
             files.push((".gitignore".into(), GITIGNORE_LIBRARY.into()));
         }
         PackageKind::LuaLibrary => {
@@ -199,7 +230,12 @@ pub fn new_package(request: &NewRequest) -> Result<Vec<PathBuf>, Diagnostic> {
     }
     files.push(("README.md".into(), format!("# {display_name}\n\nBuilt with [wowlua](https://github.com/DomenikIrrgang/wowlua).\n\n```sh\nwowlua build\n```\n")));
     if request.ci_github {
-        files.push((".github/workflows/ci.yml".into(), CI_WORKFLOW.into()));
+        let workflow = match request.kind {
+            PackageKind::Addon => CI_WORKFLOW.to_string(),
+            PackageKind::Library => library_workflow(true),
+            PackageKind::LuaLibrary | PackageKind::Types => library_workflow(false),
+        };
+        files.push((".github/workflows/ci.yml".into(), workflow));
     }
     files.insert(0, (MANIFEST_FILE.into(), pretty(&Value::Object(manifest))));
 
@@ -248,8 +284,24 @@ fn addon_test_template(addon: &str) -> String {
     )
 }
 
-fn test_template() -> String {
-    "-- Tests run with `wowlua test` (milestone M9). Test files are never part of a build.\n"
+fn library_template() -> String {
+    "-- The library's entry module: what it exports is the library's API.\n\
+     export function greet(name: string): string\n\
+     \x20   return \"Hello, \" .. name .. \"!\"\n\
+     end\n"
+        .to_string()
+}
+
+fn library_test_template() -> String {
+    "-- Tests run in the emulated client with `wowlua test`. Test files are never\n\
+     -- part of a build.\n\
+     import test, expect from \"wowlua:test\"\n\
+     import greet from \"/init\"\n\
+     \n\
+     @test(\"greets by name\")\n\
+     local function greets()\n\
+     \x20   expect(greet(\"Azeroth\")).toBe(\"Hello, Azeroth!\")\n\
+     end\n"
         .to_string()
 }
 

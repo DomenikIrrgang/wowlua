@@ -28,7 +28,7 @@ wowlua <command> [options]
 |---------|-------------|
 | `wowlua new <path> [--kind addon\|library\|lua-library\|types] [--name <Name>] [--flavors <f,…>] [--ci github]` | Create a new package from a template (§12.9) |
 | `wowlua init [--from-toc <file>] [--from-pkgmeta [<file>]]` | Create `wowlua.json` in an existing directory (§12.6) |
-| `wowlua check [--flavor <f>…] [--watch]` | Parse and type-check without emitting, the test side (test files, mocks, helpers) included |
+| `wowlua check [--flavor <f>…] [--watch]` | Parse and type-check without emitting, the test side (test files, mocks, helpers) included. A `lua-library` or `types` package is checked as an addon using it would check it: its entry files, their XML and load order, or its declarations (W4306 about its license is left to its consumers). `--watch` checks again after each change. |
 | `wowlua build [--profile <p> \| --release] [--flavor <f>…] [--watch] [--out <dir>] [--stats] [--reproducible]` | Build the AddOn into `dist/<profile>/<Name>/` |
 | `wowlua dev [--flavor <f>…] [--client <folder>…] [--link] [--wow <install>] [--force]` | Watch, build with the `dev` profile, and sync the AddOn into WoW (§12.5) |
 | `wowlua install [--profile <p> \| --release] [--flavor <f>…] [--client <folder>…] [--wow <install>] [--force]` | Build once (default profile `dev`, decision T45) and install into WoW (§12.5) |
@@ -397,9 +397,13 @@ variables in [Publishing §11.1.3](publishing.md#1113-tokens), and `NO_COLOR`.
 | `lua-library` | `wowlua.json` (`kind: "lua-library"` with `lua-library.files`), `<Name>.lua`, `README.md`, `.gitignore` |
 | `types` | `wowlua.json` (`kind: "types"`), `types/index.d.wowlua`, `README.md`, `.gitignore` |
 
-With `--ci github`, the template also contains the workflow of §12.10. A Git
-repository is initialized when `git` is available and the target is not
-already inside one.
+Every template checks without diagnostics for every flavor, and its tests
+pass. With `--ci github`, the template also contains the workflow of
+§12.10. The library kinds are not built or published on their own and do
+not commit their lockfile, so theirs only runs `wowlua check` (and, for
+`library`, `wowlua test`) on every push, without `--locked`, its cache keyed
+by `wowlua.json`. A Git repository is initialized when `git` is available
+and the target is not already inside one.
 
 ## 12.10 Continuous integration
 
@@ -418,7 +422,7 @@ jobs:
     permissions:
       contents: write                     # GitHub releases
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 0 }          # tags and history for build.version and changelogs
       - uses: DomenikIrrgang/wowlua/.github/actions/setup-wowlua@main   # installs the release binary
       - uses: actions/cache@v4

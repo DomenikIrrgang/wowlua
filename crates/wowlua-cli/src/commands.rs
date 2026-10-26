@@ -91,7 +91,8 @@ fn load_and_build_all(
     global: &GlobalArgs,
     request: &BuildRequest,
 ) -> Option<Built> {
-    let projects = load_projects(global, session, &load_options(out, global))?;
+    let options = load_options(out, global);
+    let projects = load_projects(global, session, &options)?;
     let single = projects.len() == 1;
     let whole = whole_workspace(global, &projects);
     let mut builds = Vec::new();
@@ -99,6 +100,21 @@ fn load_and_build_all(
         let buildable = match project.kind() {
             PackageKind::Addon => true,
             PackageKind::Library => !request.write,
+            PackageKind::LuaLibrary | PackageKind::Types if !request.write => {
+                // Checked as an addon that uses it checks it; its license
+                // is the consumers' concern (W4306).
+                let Some(consumer) = wowlua_driver::checking_consumer(session, &options, &project)
+                else {
+                    continue;
+                };
+                let build = wowlua_driver::build(session, &consumer, request);
+                session.diagnostics.retain(|d| d.code != Some("W4306"));
+                apply_lints(session, &project);
+                if let Some(b) = build {
+                    builds.push((project, b));
+                }
+                continue;
+            }
             _ => false,
         };
         if !buildable && !single {
@@ -715,7 +731,8 @@ fn test_once(
     let mut roots: Vec<PathBuf> = Vec::new();
     let mut title: Option<String> = None;
     for project in projects {
-        if project.kind() != PackageKind::Addon {
+        // A library's tests run against it built as an addon.
+        if !matches!(project.kind(), PackageKind::Addon | PackageKind::Library) {
             continue;
         }
         let test_settings = project.manifest.manifest.test.clone();

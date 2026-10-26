@@ -543,6 +543,71 @@ pub fn types_sync(
     Some(changes)
 }
 
+/// `wowlua check` of a `lua-library` or `types` package (spec CLI §12.2):
+/// such a package is never built on its own, so it is checked as an addon
+/// that uses it would check it: an addon without sources of its own, for
+/// the package's flavors, that embeds the Lua library (its entry files,
+/// their XML and load order) or types with its declarations. The addon is
+/// not written anywhere, nor is a lockfile.
+pub fn checking_consumer(
+    session: &mut Session,
+    options: &LoadOptions,
+    package: &Project,
+) -> Option<Project> {
+    let kind = package.kind();
+    let meta = package.manifest.package()?;
+    let (name, version) = (meta.name.clone(), meta.version.to_string());
+    let entry = serde_json::json!({ "path": "." });
+    let deps_key = if kind == PackageKind::Types {
+        "dev-dependencies"
+    } else {
+        "dependencies"
+    };
+    let flavors: serde_json::Map<String, serde_json::Value> = package
+        .manifest
+        .flavors
+        .iter()
+        .map(|f| (f.clone(), serde_json::json!({})))
+        .collect();
+    let text = serde_json::json!({
+        "package": { "name": format!("{name}-check"), "version": version },
+        "addon": { "name": package.addon_name() },
+        "flavors": flavors,
+        // No sources of its own: only the package is checked.
+        "build": { "src": ".wowlua-check" },
+        deps_key: { name: entry },
+    });
+    let path = package.root().join(".wowlua-check.json");
+    let options = LoadOptions {
+        lock_in_memory: true,
+        ..options.clone()
+    };
+    let manifest = parse_manifest(session, &options, &path, text.to_string())?;
+    let lock = lockfile::required(None, &manifest.flavors, &[]);
+    let deps = resolve(
+        session,
+        &options,
+        &[&manifest],
+        None,
+        &manifest.root,
+        &lock,
+        &HashMap::new(),
+    )?;
+    let interfaces = interfaces_of(&manifest, &lock);
+    Some(Project {
+        manifest,
+        lock,
+        interfaces,
+        deps,
+        workspace_root: None,
+        workspace_addons: Vec::new(),
+        external_addons: Vec::new(),
+        selected: true,
+        bundled: false,
+        features: FeatureSelection::default(),
+    })
+}
+
 /// Loads the projects a command works on: the package, or the selected
 /// members of a workspace (`-p`, the member around the current directory,
 /// `default-members`, or all members).

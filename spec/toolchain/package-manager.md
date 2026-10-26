@@ -124,8 +124,9 @@ Library modules are compiled together with the addon:
   use values that fold to constants (scalars); reading a table-valued path at
   run time is an error.
 - **Checking a library** (decision T112). `wowlua check` in a library package
-  checks it on its own, for all its flavors. `wowlua build` refuses: a
-  library is only built into the addons that depend on it.
+  checks it on its own, for all its flavors, and `wowlua test` runs its tests
+  against it built as an addon. `wowlua build` refuses: a library is only
+  built into the addons that depend on it.
 
 **`types` packages** contribute their declarations (`types.declarations`,
 default every `.d.wowlua`) to the checker, from `dependencies` and
