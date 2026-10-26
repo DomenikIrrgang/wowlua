@@ -209,7 +209,9 @@ launcher.register({
   survives a switch between the two.
 - The Addon Compartment entry, the list behind the addons button by the
   minimap, appears on clients that have one unless you pass
-  `compartment = false`.
+  `compartment = false`. When you also build for a flavor without it, the
+  build warns (W8301); `compartment = flavor == "camelot"` turns it on only
+  where it exists.
 - With `ldb = true`, the launcher is published to LibDataBroker when another
   addon has loaded it, so broker displays such as Titan Panel show it. wowlua
   depends on none of these libraries.

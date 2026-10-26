@@ -3379,10 +3379,12 @@ fn ingame_suite_builds_and_passes_in_the_mock() {
     let dir = tempfile::tempdir().unwrap();
     copy_tree(&source, dir.path());
     let stderr = build(dir.path(), "dev");
-    // W8062: its German locale lacks a key on purpose (the fallback test).
-    let unexpected = stderr
-        .lines()
-        .any(|l| (l.contains("warning[") && !l.contains("warning[W8062]")) || l.contains("error"));
+    // W8062: its German locale lacks a key on purpose (the fallback test);
+    // W8301: it tests the tooltips' and the launcher's fallbacks on vanilla.
+    let unexpected = stderr.lines().any(|l| {
+        (l.contains("warning[") && !l.contains("warning[W8062]") && !l.contains("warning[W8301]"))
+            || l.contains("error")
+    });
     assert!(!unexpected, "{stderr}");
     let out = dir.path().join("dist/dev/StdTest");
     let toc = fs::read_to_string(out.join("StdTest_Camelot.toc")).unwrap();
@@ -4269,14 +4271,14 @@ fn tooltip_post_hooks_with_and_without_the_data_system() {
 /// Tooltip kinds are checked per targeted flavor (E8330, E8300).
 #[test]
 fn tooltip_kinds_are_checked_per_flavor() {
-    let check_in = |flavors: &str, body: &str| {
+    let check_mode = |flavors: &str, mode: &str, body: &str| {
         let dir = project(&[(
             "src/main.wowlua",
             &format!("import onTooltip, hook from \"wowlua:tooltip\"\n{body}"),
         )]);
         fs::write(
             dir.path().join("wowlua.json"),
-            format!(r#"{{ "package": {{ "name": "std", "version": "1.0.0" }}, "flavors": {{ {flavors} }}, "build": {{ "flavor-mode": "split" }} }}"#),
+            format!(r#"{{ "package": {{ "name": "std", "version": "1.0.0" }}, "flavors": {{ {flavors} }}, "build": {{ "flavor-mode": "{mode}" }} }}"#),
         )
         .unwrap();
         let assert = wowlua(dir.path())
@@ -4284,6 +4286,7 @@ fn tooltip_kinds_are_checked_per_flavor() {
             .assert();
         String::from_utf8_lossy(&assert.get_output().stderr).into_owned()
     };
+    let check_in = |flavors: &str, body: &str| check_mode(flavors, "split", body);
     let both = r#""camelot": {}, "vanilla": {}"#;
     let out = check_in(both, "hook(\"Itme\", function() end)\n");
     assert!(out.contains("E8330"), "{out}");
@@ -4297,6 +4300,85 @@ fn tooltip_kinds_are_checked_per_flavor() {
         "import flavor from \"wowlua:meta\"\n@if(flavor == \"camelot\")\n@onTooltip(\"Currency\")\nlocal function f() end\nhook(\"Item\", function() end)\n",
     );
     assert!(!out.contains("E83"), "{out}");
+    // So is a call in a branch of `if flavor == …`, in split and in shared
+    // flavor mode, while the call outside the guard is reported.
+    let guarded = "import flavor from \"wowlua:meta\"\nif flavor == \"camelot\" then\n    hook(\"Mount\", function() end)\nelseif flavor ~= \"camelot\" and true then\n    hook(\"Item\", function() end)\nend\nif not (flavor == \"vanilla\") then\n    hook(\"Currency\", function() end)\nelse\n    hook(\"Spell\", function() end)\nend\n";
+    let out = check_in(both, guarded);
+    assert!(!out.contains("E83"), "{out}");
+    let out = check_mode(both, "shared", guarded);
+    assert!(!out.contains("E83") && !out.contains("error"), "{out}");
+    let out = check_mode(
+        both,
+        "shared",
+        &format!(
+            "{guarded}if flavor == \"vanilla\" then\n    hook(\"Mount\", function() end)\nend\n"
+        ),
+    );
+    assert!(out.contains("E8300") && out.contains("vanilla"), "{out}");
+}
+
+/// A reduced fallback on a targeted flavor is W8301, naming what is
+/// missing: tooltips without the tooltip data system, the launcher without
+/// the Addon Compartment. Guards and options leave it out.
+#[test]
+fn reduced_fallbacks_are_warned_per_flavor() {
+    let check_in = |flavors: &str, mode: &str, body: &str| {
+        let dir = project(&[("src/main.wowlua", body)]);
+        fs::write(
+            dir.path().join("wowlua.json"),
+            format!(r#"{{ "package": {{ "name": "std", "version": "1.0.0" }}, "flavors": {{ {flavors} }}, "build": {{ "flavor-mode": "{mode}" }} }}"#),
+        )
+        .unwrap();
+        let assert = wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .assert();
+        String::from_utf8_lossy(&assert.get_output().stderr).into_owned()
+    };
+    let both = r#""camelot": {}, "vanilla": {}"#;
+    let tooltip = "import hook from \"wowlua:tooltip\"\nhook(\"Item\", function() end)\n";
+    let out = check_in(both, "split", tooltip);
+    assert!(
+        out.contains("warning[W8301]") && out.contains("on vanilla") && out.contains("no `raw`"),
+        "{out}"
+    );
+    let out = check_in(r#""camelot": {}"#, "split", tooltip);
+    assert!(!out.contains("W8301"), "{out}");
+    let launcher = "import * as launcher from \"wowlua:launcher\"\nlauncher.register({ icon = \"i\", label = \"l\", onClick = function() end })\n";
+    for mode in ["split", "shared"] {
+        let out = check_in(both, mode, launcher);
+        assert!(
+            out.contains("warning[W8301]")
+                && out.contains("`launcher.register`")
+                && out.contains("vanilla")
+                && out.contains("no Addon Compartment entry"),
+            "{mode}: {out}"
+        );
+    }
+    let out = check_in(
+        both,
+        "split",
+        &launcher.replace("end })", "end, compartment = false })"),
+    );
+    assert!(!out.contains("W8301"), "{out}");
+    // On only where the client has it.
+    for mode in ["split", "shared"] {
+        let out = check_in(
+            both,
+            mode,
+            &format!(
+                "import flavor from \"wowlua:meta\"\n{}",
+                launcher.replace("end })", "end, compartment = flavor == \"camelot\" })")
+            ),
+        );
+        assert!(!out.contains("W8301"), "{mode}: {out}");
+    }
+    // Only where the guard keeps it.
+    let out = check_in(
+        both,
+        "shared",
+        "import * as launcher from \"wowlua:launcher\"\nimport flavor from \"wowlua:meta\"\nif flavor == \"camelot\" then\n    launcher.register({ icon = \"i\", label = \"l\", onClick = function() end })\nend\n",
+    );
+    assert!(!out.contains("W8301"), "{out}");
 }
 
 /// `wowlua:tooltip` with secrets in what the client shows: `id`, `link`
@@ -5916,10 +5998,11 @@ fn core_demo_needs_no_third_party_libraries() {
     let dir = tempfile::tempdir().unwrap();
     copy_tree(&source, dir.path());
     let stderr = build(dir.path(), "dev");
-    assert!(
-        !stderr.contains("warning[") && !stderr.contains("error"),
-        "{stderr}"
-    );
+    // W8301: vanilla, which it also targets, has no Addon Compartment.
+    let unexpected = stderr
+        .lines()
+        .any(|l| (l.contains("warning[") && !l.contains("warning[W8301]")) || l.contains("error"));
+    assert!(!unexpected, "{stderr}");
     let out = dir.path().join("dist/dev/CoreDemo");
     // No embedded libraries.
     assert!(!out.join("libs").exists());

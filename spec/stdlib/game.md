@@ -6,7 +6,13 @@ flavor mode, and with a runtime check in `shared` mode. Availability comes
 from the flavor table. When a client lacks an API and the module has no
 fallback, using the affected function for that flavor is error E8300. When a
 fallback with reduced functionality is used, warning W8301 lists the missing
-fields.
+fields. Availability is read from each targeted flavor's API declarations
+(decision S22). A call is checked for the flavors that can run it: inside an
+`if` branch whose condition compares `flavor` (`flavor == "camelot"`, `~=`,
+with `not`, `and`, `or`), only the flavors the branch keeps; a branch or
+declaration a static condition or `@if` removes is not checked. The
+functions with such a fallback are listed in their tables (`tooltip.hook`,
+`launcher.register`).
 
 All modules respect secret values ([Types §2.11](../language/02-types.md#211-secret-values)):
 values that the client may return as secrets are typed `T | Secret<T>` and are
@@ -307,7 +313,7 @@ tooltip.attach(MyAddonTooltip)       -- also apply hooks to a custom tooltip (fa
 | `hook` | `(kind: TooltipKind, fn: (tip: GameTooltip, data: TooltipData) -> ()) -> TooltipHook` | |
 | `TooltipHook` | `enable()`, `disable()`, `isEnabled()` | |
 | `attach` | `(tip: GameTooltip)` | Fallback clients only: applies all hooks to an additional tooltip frame. A no-op on clients with the tooltip data system, which covers all tooltips. |
-| `TooltipKind` | `string`: an `Enum.TooltipDataType` name (`"Item"`, `"Spell"`, `"Unit"`, `"Mount"`, …) | Checked per targeted flavor from its API declarations (decision S22): a name in no flavor's `Enum.TooltipDataType` is E8330; a kind a targeted flavor lacks is E8300 for it. A flavor has the tooltip data system when its declarations include `C_TooltipInfo`; fallback flavors have only `"Item"`, `"Spell"` and `"Unit"`. A hook under `@if` is checked only for the flavors that keep it. At run time, `hook` errors for a kind the client lacks. |
+| `TooltipKind` | `string`: an `Enum.TooltipDataType` name (`"Item"`, `"Spell"`, `"Unit"`, `"Mount"`, …) | Checked per targeted flavor from its API declarations (decision S22): a name in no flavor's `Enum.TooltipDataType` is E8330; a kind a targeted flavor lacks is E8300 for it. A flavor has the tooltip data system when its declarations include `C_TooltipInfo`; fallback flavors have only `"Item"`, `"Spell"` and `"Unit"`, and hooking one of those there is warning W8301 (only the standard tooltips are hooked; no `raw`, no `guid` for items and spells, no `link` for spells and units). A hook under `@if` or in an `if flavor == …` branch is checked only for the flavors that keep it. At run time, `hook` errors for a kind the client lacks. |
 | `TooltipData` | record | Normalized: `kind`, `id?`, `guid?` (`string \| Secret<string>`), `unit?`, `link?`, `raw?` (the client's tooltip data where available). `id`, `unit` and `link` are nil when the client's are secret; `guid` passes through. Client data addons may not index (`canaccesstable`) gives only `kind`. |
 
 - Fallback clients hook `GameTooltip`, `ItemRefTooltip` and the shopping

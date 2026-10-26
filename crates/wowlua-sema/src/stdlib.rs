@@ -7,7 +7,7 @@
 
 use crate::constant::Const;
 use crate::{Analysis, FileInput, FileKind, Target, is_compiler_known};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
 use wowlua_syntax::view::*;
@@ -26,6 +26,46 @@ pub struct StdlibConfig {
     pub tooltips: Vec<(String, FlavorTooltips)>,
     /// The targeted flavors' auras (`wowlua:aura`), by flavor.
     pub auras: Vec<(String, FlavorAuras)>,
+    /// Every targeted flavor (for `if flavor == …` guards).
+    pub flavors: Vec<String>,
+    /// The targeted flavors' client APIs among [`needed_apis`], by flavor
+    /// (from each flavor's API declarations).
+    pub apis: Vec<(String, HashSet<String>)>,
+}
+
+/// A standard-library function that uses a client API some flavor lacks
+/// (spec stdlib §8.1 "Flavor-aware"): where none of `apis` is declared,
+/// it falls back to less (`reduced`: what is missing, W8301), or there is
+/// no fallback (E8300).
+#[derive(Clone, Copy, Debug)]
+pub struct Needs {
+    /// The function's `@intrinsic` id.
+    pub id: &'static str,
+    /// The APIs it uses; any one of them is enough.
+    pub apis: &'static [&'static str],
+    /// What the fallback lacks; `None`: no fallback.
+    pub reduced: Option<&'static str>,
+    /// Only for this option: the argument index, the field, and whether it
+    /// is on when the options leave it out (`false` turns it off).
+    pub option: Option<(usize, &'static str, bool)>,
+    /// How to do without it.
+    pub help: Option<&'static str>,
+}
+
+/// The standard library's functions that need an API some flavor lacks
+/// (by each flavor's API declarations, as for tooltips and auras; decision
+/// S22). Tooltip kinds and aura containers have checks of their own.
+pub const NEEDS: &[Needs] = &[Needs {
+    id: "launcher.register",
+    apis: &["AddonCompartmentFrame"],
+    reduced: Some("no Addon Compartment entry (the minimap button and the LDB launcher work)"),
+    option: Some((0, "compartment", true)),
+    help: Some("pass `compartment = false` where you don't want the entry"),
+}];
+
+/// The client APIs [`NEEDS`] names, which the build looks up per flavor.
+pub fn needed_apis() -> impl Iterator<Item = &'static str> {
+    NEEDS.iter().flat_map(|n| n.apis.iter().copied())
 }
 
 /// What a flavor's auras offer: the filter words its client accepts
@@ -201,8 +241,24 @@ struct Ctx<'a> {
     removed: bool,
     /// The flavor of this compilation (split mode), else all targeted ones.
     flavor: Option<String>,
-    /// Statements `@if` removes in this build: calls inside are not checked.
+    /// Statements `@if` removes in this build, and blocks of `if` chains
+    /// static conditions remove: calls inside are not checked.
     removed_spans: Vec<Span>,
+    /// Blocks of the current file that run only on some flavors (`if
+    /// flavor == "…" then`), with those flavors.
+    guards: Vec<(Span, BTreeSet<String>)>,
+    /// The flavors the code being checked runs on, by its guards (`None`:
+    /// every flavor of the compilation).
+    active: Option<BTreeSet<String>>,
+    /// The current file's build metadata (`flavor` is a constant in split
+    /// mode), and its names bound to `wowlua:meta`.
+    meta: Option<&'a crate::meta::Meta>,
+    meta_kinds: HashMap<String, crate::meta::MetaKind>,
+}
+
+/// Whether span `outer` contains `inner`.
+fn contains(outer: Span, inner: Span) -> bool {
+    outer.file == inner.file && outer.start <= inner.start && inner.end <= outer.end
 }
 
 /// Whether `name` is a valid keybinding name (E8352).
@@ -325,11 +381,45 @@ impl Ctx<'_> {
         crate::constant::eval(e, &|name| self.consts.get(name).cloned())
     }
 
+    /// A constant, or a static value of the build (`flavor == "camelot"`
+    /// in split mode).
+    fn static_constant(&self, e: Expr<'_>) -> Option<Const> {
+        match self.meta {
+            Some(meta) => {
+                crate::meta::static_value(e, meta, &|n| self.meta_kinds.get(n).copied(), &|n| {
+                    self.consts.get(n).cloned()
+                })
+            }
+            None => self.constant(e),
+        }
+    }
+
     fn constant_string(&self, e: Expr<'_>) -> Option<String> {
         match self.constant(e)? {
             Const::String(s) => Some(String::from_utf8_lossy(&s).into_owned()),
             _ => None,
         }
+    }
+
+    /// Whether flavor `f` runs the code being checked: a flavor of this
+    /// compilation that its `if flavor == …` guards keep.
+    fn on(&self, f: &str) -> bool {
+        self.flavor.as_ref().is_none_or(|x| x == f)
+            && self.active.as_ref().is_none_or(|a| a.contains(f))
+    }
+
+    /// The flavors the guards around `span` keep.
+    fn active_at(&self, span: Span) -> Option<BTreeSet<String>> {
+        let mut out: Option<BTreeSet<String>> = None;
+        for (block, flavors) in &self.guards {
+            if contains(*block, span) {
+                out = Some(match out {
+                    Some(o) => o.intersection(flavors).cloned().collect(),
+                    None => flavors.clone(),
+                });
+            }
+        }
+        out
     }
 
     fn error(&mut self, code: &'static str, span: Span, message: String, label: &str) {
@@ -452,6 +542,9 @@ impl Ctx<'_> {
             let Some(id) = self.decorator(bindings, d) else {
                 continue;
             };
+            if !self.removed {
+                self.availability(&id, d.span(), d.args().map(|a| a.exprs()));
+            }
             let args: Exprs<'_> = d.args().map(|a| a.exprs()).unwrap_or_default();
             match id.as_str() {
                 "events.event" => {
@@ -652,7 +745,7 @@ impl Ctx<'_> {
         self.config
             .auras
             .iter()
-            .filter(|(f, _)| self.flavor.as_ref().is_none_or(|x| x == f))
+            .filter(|(f, _)| self.on(f))
             .collect()
     }
 
@@ -845,7 +938,7 @@ impl Ctx<'_> {
             .config
             .tooltips
             .iter()
-            .filter(|(f, _)| self.flavor.as_ref().is_none_or(|x| x == f))
+            .filter(|(f, _)| self.on(f))
             .collect();
         if flavors.is_empty() {
             return;
@@ -888,6 +981,25 @@ impl Ctx<'_> {
             }
             self.diagnostics.push(d);
         }
+        // Flavors without the tooltip data system hook the kind through
+        // the tooltips' scripts, with less (W8301).
+        let reduced: Vec<&str> = flavors
+            .iter()
+            .filter(|(f, t)| !t.data_system && !lacking.contains(&f.as_str()))
+            .map(|(f, _)| f.as_str())
+            .collect();
+        if !reduced.is_empty() {
+            self.diagnostics.push(
+                Diagnostic::warning(
+                    "W8301",
+                    format!(
+                        "`{kind}` tooltips use a reduced fallback on {}, without the tooltip data system: only `GameTooltip`, `ItemRefTooltip` and the shopping tooltips (and those given to `tooltip.attach`) are hooked; no `raw`, no `guid` for items and spells, no `link` for spells and units",
+                        reduced.join(", ")
+                    ),
+                )
+                .with_label(e.span(), "reduced on some targeted flavors"),
+            );
+        }
     }
 
     fn slash_command(&mut self, e: Expr<'_>) {
@@ -922,6 +1034,86 @@ impl Ctx<'_> {
         }
     }
 
+    /// A function of [`NEEDS`] on the flavors of this compilation that
+    /// run the code: E8300 where none of its APIs exists and it has no
+    /// fallback, W8301 where its fallback does less.
+    fn availability(&mut self, id: &str, span: Span, args: Option<Exprs<'_>>) {
+        let Some(needs) = NEEDS.iter().find(|n| n.id == id) else {
+            return;
+        };
+        let mut restrict: Option<BTreeSet<String>> = None;
+        if let Some((at, field, default)) = needs.option {
+            let given = args
+                .and_then(|a| a.get(at))
+                .and_then(|opts| match opts.kind() {
+                    ExprKind::Table(fields) => Some(fields.iter().find_map(|f| match f {
+                        TableField::Named { name, value } if name.text() == field => Some(value),
+                        _ => None,
+                    })),
+                    _ => None,
+                });
+            match given {
+                // Not a table literal: as by default.
+                None | Some(None) => {
+                    if !default {
+                        return;
+                    }
+                }
+                Some(Some(v)) => match self.static_constant(v) {
+                    Some(c) if !c.truthy() => return,
+                    Some(_) => {}
+                    // `compartment = flavor == "camelot"`: on where true.
+                    None => {
+                        let universe: BTreeSet<String> =
+                            self.config.flavors.iter().cloned().collect();
+                        let (yes, _) =
+                            narrow_flavors(v, &universe, &|n| self.meta_kinds.get(n).copied());
+                        if yes != universe {
+                            restrict = Some(yes);
+                        }
+                    }
+                },
+            }
+        }
+        let lacking: Vec<String> = self
+            .config
+            .apis
+            .iter()
+            .filter(|(f, have)| {
+                self.on(f)
+                    && restrict.as_ref().is_none_or(|r| r.contains(f))
+                    && !needs.apis.iter().any(|a| have.contains(*a))
+            })
+            .map(|(f, _)| f.clone())
+            .collect();
+        if lacking.is_empty() {
+            return;
+        }
+        let apis = needs
+            .apis
+            .iter()
+            .map(|a| format!("`{a}`"))
+            .collect::<Vec<_>>()
+            .join(" or ");
+        let flavors = lacking.join(", ");
+        let mut d = match needs.reduced {
+            None => Diagnostic::error(
+                "E8300",
+                format!("`{id}` needs {apis}, which {flavors} lack"),
+            )
+            .with_label(span, "not on every targeted flavor"),
+            Some(lost) => Diagnostic::warning(
+                "W8301",
+                format!("`{id}` uses a reduced fallback on {flavors}, without {apis}: {lost}"),
+            )
+            .with_label(span, "reduced on some targeted flavors"),
+        };
+        d = d.with_help(needs.help.unwrap_or(
+            "guard it with `if flavor == …` (or `@if(flavor == …)`) for the flavors that have it",
+        ));
+        self.diagnostics.push(d);
+    }
+
     /// A call to the standard library; `top`: a top-level call statement.
     fn call(&mut self, bindings: &HashMap<String, Bound>, e: Expr<'_>, top: bool) {
         let ExprKind::Call { callee, args } = e.kind() else {
@@ -930,6 +1122,7 @@ impl Ctx<'_> {
         let Some(id) = self.intrinsic(bindings, callee) else {
             return;
         };
+        self.availability(&id, callee.span(), Some(args.exprs()));
         let args = args.exprs();
         match id.as_str() {
             "events.on" | "events.once" => {
@@ -1256,6 +1449,117 @@ fn returns_values(block: Block<'_>) -> bool {
     walk(block.stmts())
 }
 
+/// The flavors where `cond` is true and where it is false, of `current`:
+/// `flavor == "…"` and `~=`, through `not`, `and`, `or` and parentheses;
+/// anything else may be either.
+fn narrow_flavors(
+    cond: Expr<'_>,
+    current: &BTreeSet<String>,
+    kind_of: &dyn Fn(&str) -> Option<crate::meta::MetaKind>,
+) -> (BTreeSet<String>, BTreeSet<String>) {
+    match cond.kind() {
+        ExprKind::Paren(inner) => narrow_flavors(inner, current, kind_of),
+        ExprKind::Unary {
+            op: UnOp::Not,
+            operand,
+        } => {
+            let (yes, no) = narrow_flavors(operand, current, kind_of);
+            (no, yes)
+        }
+        ExprKind::Binary {
+            op: BinOp::And,
+            lhs,
+            rhs,
+        } => {
+            let (lt, lf) = narrow_flavors(lhs, current, kind_of);
+            let (rt, rf) = narrow_flavors(rhs, &lt, kind_of);
+            (rt, lf.union(&rf).cloned().collect())
+        }
+        ExprKind::Binary {
+            op: BinOp::Or,
+            lhs,
+            rhs,
+        } => {
+            let (lt, lf) = narrow_flavors(lhs, current, kind_of);
+            let (rt, rf) = narrow_flavors(rhs, &lf, kind_of);
+            (lt.union(&rt).cloned().collect(), rf)
+        }
+        ExprKind::Binary {
+            op: op @ (BinOp::Eq | BinOp::Ne),
+            lhs,
+            rhs,
+        } => {
+            let is_flavor = |e: Expr<'_>| {
+                matches!(
+                    crate::meta::access_path(e, kind_of),
+                    Some((crate::meta::MetaKind::Flavor, path)) if path.is_empty()
+                )
+            };
+            let named = if is_flavor(lhs) {
+                string(rhs)
+            } else if is_flavor(rhs) {
+                string(lhs)
+            } else {
+                None
+            };
+            let Some(named) = named else {
+                return (current.clone(), current.clone());
+            };
+            let (with, without): (BTreeSet<String>, BTreeSet<String>) =
+                current.iter().cloned().partition(|f| *f == named);
+            if op == BinOp::Eq {
+                (with, without)
+            } else {
+                (without, with)
+            }
+        }
+        _ => (current.clone(), current.clone()),
+    }
+}
+
+/// The blocks of `if` chains that run only on some flavors of `universe`
+/// (spec stdlib "game data": a function is checked for the flavors that
+/// can call it), with those flavors.
+fn flavor_guards(
+    block: Block<'_>,
+    universe: &BTreeSet<String>,
+    kind_of: &dyn Fn(&str) -> Option<crate::meta::MetaKind>,
+) -> Vec<(Span, BTreeSet<String>)> {
+    let mut out: Vec<(Span, BTreeSet<String>)> = Vec::new();
+    wowlua_syntax::visit::walk_stmts(block, &mut |s| {
+        let StmtKind::If {
+            cond,
+            then_block,
+            elseifs,
+            else_block,
+        } = s.kind()
+        else {
+            return;
+        };
+        let mut current = universe.clone();
+        for (b, flavors) in &out {
+            if contains(*b, s.span()) {
+                current = current.intersection(flavors).cloned().collect();
+            }
+        }
+        let mut clauses = vec![(cond, then_block)];
+        clauses.extend(elseifs.iter());
+        for (c, b) in clauses {
+            let (yes, no) = narrow_flavors(c, &current, kind_of);
+            if yes != current {
+                out.push((b.span(), yes));
+            }
+            current = no;
+        }
+        if let Some(b) = else_block
+            && current.len() < universe.len()
+        {
+            out.push((b.span(), current));
+        }
+    });
+    out
+}
+
 /// The names a file's imports bind to the standard library.
 fn bindings(analysis: &Analysis, i: usize, parse: &wowlua_syntax::Parse) -> HashMap<String, Bound> {
     let mut out = HashMap::new();
@@ -1365,7 +1669,12 @@ pub fn check(
         removed: false,
         flavor: meta.and_then(|m| m.flavor.clone()),
         removed_spans: Vec::new(),
+        guards: Vec::new(),
+        active: None,
+        meta: None,
+        meta_kinds: HashMap::new(),
     };
+    let universe: BTreeSet<String> = config.flavors.iter().cloned().collect();
     for f in files {
         let Some(parse) = f.parse else { continue };
         for s in parse.view().block().stmts() {
@@ -1413,6 +1722,29 @@ pub fn check(
                 ctx.consts.insert(name.text().to_string(), c);
             }
         }
+        let info = analysis.modules[file].as_ref();
+        ctx.meta = f.meta.or(meta);
+        ctx.meta_kinds = info.map(|i| i.meta_bindings.clone()).unwrap_or_default();
+        // Branches static conditions remove (`if flavor == "…"` in split
+        // mode), and the flavors guards keep.
+        if let Some(info) = info {
+            let kind_of = |n: &str| info.meta_bindings.get(n).copied();
+            ctx.guards = if universe.is_empty() {
+                Vec::new()
+            } else {
+                flavor_guards(parse.view().block(), &universe, &kind_of)
+            };
+            let file_id = parse.view().block().span().file;
+            for (&(start, end), &kept) in &info.static_branches {
+                if !kept {
+                    ctx.removed_spans.push(Span {
+                        file: file_id,
+                        start,
+                        end,
+                    });
+                }
+            }
+        }
         let top: HashSet<Stmt<'_>> = parse.view().block().stmts().iter().collect();
         let mut stmts: Vec<Stmt<'_>> = Vec::new();
         wowlua_syntax::visit::walk_stmts(parse.view().block(), &mut |s| stmts.push(s));
@@ -1445,6 +1777,7 @@ pub fn check(
             if ctx.removed {
                 ctx.removed_spans.push(s.span());
             }
+            ctx.active = ctx.active_at(s.span());
             match inner.kind() {
                 StmtKind::LocalFunction { func, .. } | StmtKind::Function { func, .. } => {
                     ctx.decorators(&bound, s.decorators(), false, Some(func), at_top);
@@ -1491,14 +1824,20 @@ pub fn check(
             })
             .collect();
         for e in calls {
-            let removed = ctx.removed_spans.iter().any(|r| {
-                r.file == e.span().file && r.start <= e.span().start && e.span().end <= r.end
-            });
-            if !removed {
+            let removed = ctx.removed_spans.iter().any(|r| contains(*r, e.span()));
+            ctx.active = ctx.active_at(e.span());
+            // Guarded away on every flavor of the compilation.
+            let none = ctx
+                .active
+                .as_ref()
+                .is_some_and(|a| !a.iter().any(|f| ctx.flavor.as_ref().is_none_or(|x| x == f)));
+            if !removed && !none {
                 ctx.call(&bound, e, top_calls.contains(&e));
             }
         }
         ctx.removed_spans.clear();
+        ctx.guards.clear();
+        ctx.active = None;
     }
     let refs = std::mem::take(&mut ctx.keybinding_refs);
     for (name, span) in refs {

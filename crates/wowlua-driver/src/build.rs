@@ -824,6 +824,11 @@ fn build_inner(
                 })
                 .collect(),
             xml_bindings: xml_binding_names(&root),
+            flavors: flavors.clone(),
+            apis: flavors
+                .iter()
+                .filter_map(|f| Some((f.clone(), stdlib_apis(f)?)))
+                .collect(),
             auras: flavors
                 .iter()
                 .filter_map(|f| {
@@ -4367,6 +4372,51 @@ fn bindings_xml(
 }
 
 /// The binding names of the hand-written keybinding files in `root`.
+/// Which client APIs the standard library's flavor-dependent functions
+/// use (`wowlua_sema::stdlib::needed_apis`) flavor `f` declares, in its
+/// own or the shared declarations. Kept for the process: the declarations
+/// are embedded.
+fn stdlib_apis(f: &str) -> Option<HashSet<String>> {
+    use std::sync::{Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<HashMap<String, Option<HashSet<String>>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    if let Some(found) = cache.lock().ok()?.get(f) {
+        return found.clone();
+    }
+    let found = wowlua_api::declarations(f).map(|files| {
+        // Globals by their declaration lines; namespace members (`C_X.F`)
+        // need every declared name.
+        let mut names: Option<HashSet<String>> = None;
+        let declared = |api: &str, names: &mut Option<HashSet<String>>| {
+            if api.contains('.') {
+                let names = names.get_or_insert_with(|| {
+                    files
+                        .iter()
+                        .flat_map(|file| wowlua_api::declared_names(file.text))
+                        .collect()
+                });
+                return names.contains(api);
+            }
+            files.iter().any(|file| {
+                file.globals.iter().any(|g| g.name == api)
+                    || file.text.lines().any(|line| {
+                        let rest = line
+                            .strip_prefix("declare global ")
+                            .or_else(|| line.strip_prefix("declare function "));
+                        rest.and_then(|r| r.strip_prefix(api))
+                            .is_some_and(|r| r.starts_with([':', '(', '<', ' ']))
+                    })
+            })
+        };
+        wowlua_sema::stdlib::needed_apis()
+            .filter(|a| declared(a, &mut names))
+            .map(str::to_string)
+            .collect()
+    });
+    cache.lock().ok()?.insert(f.to_string(), found.clone());
+    found
+}
+
 fn xml_binding_names(root: &Path) -> HashSet<String> {
     let Ok(entries) = crate::host::read_dir(root) else {
         return HashSet::new();

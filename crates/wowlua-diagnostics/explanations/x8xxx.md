@@ -1128,10 +1128,11 @@ and for tooltip kinds (`tooltip.hook`, `@onTooltip`) a flavor lacks: clients
 without the tooltip data system only hook `"Item"`, `"Spell"` and `"Unit"`
 tooltips. In game the call would raise an error on that flavor.
 
-Keep the code to the flavors that have it with `@if(flavor == …)` on the
-declaration (in split flavor mode), or use something every flavor has, such
-as `aura.each` instead of a container. Only `@if` counts here: a call inside
-an `if flavor == … then` branch is still checked for every flavor.
+Keep the code to the flavors that have it: in an `if flavor == … then`
+branch (either flavor mode), or with `@if(flavor == …)` on the declaration
+(in split flavor mode). A call is checked only for the flavors that can run
+it. Or use something every flavor has, such as `aura.each` instead of a
+container.
 
 ```json fails title=wowlua.json
 {
@@ -1644,10 +1645,52 @@ Related: W8040
 
 ## W8301
 
-Meant for a standard-library function that falls back to a reduced version
-on a targeted flavor, with the warning listing the missing fields or
-features. The compiler doesn't report it yet: no module has such a fallback
-in this version. A function a flavor can't offer at all is E8300.
+A standard-library function falls back to a reduced version on one of the
+flavors you build for, because that client lacks an API it uses. It still
+works there, with less, and the warning lists what is missing:
+
+- `tooltip.hook` and `@onTooltip` for `"Item"`, `"Spell"` and `"Unit"` on
+  clients without the tooltip data system (the classic flavors) hook only
+  `GameTooltip`, `ItemRefTooltip` and the shopping tooltips (and those given
+  to `tooltip.attach`); the data has no `raw`, no `guid` for items and spells
+  and no `link` for spells and units.
+- `launcher.register` on clients without the Addon Compartment adds no
+  compartment entry; the minimap button and the LDB launcher work.
+
+Keep the call to the flavors that have the full version (an `if flavor == …`
+branch or `@if`), turn the feature off where it has an option
+(`compartment = false`), or accept the warning. A function a flavor can't
+offer at all is E8300.
+
+```json fails title=wowlua.json
+{
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "flavors": { "camelot": {}, "vanilla": {} }
+}
+```
+```wowlua fails title=src/main.wowlua
+import * as launcher from "wowlua:launcher"
+
+launcher.register({ icon = "Interface\\Icons\\INV_Misc_Book_09", label = "Playground", onClick = function() end })
+```
+
+```json compiles title=wowlua.json
+{
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "flavors": { "camelot": {}, "vanilla": {} }
+}
+```
+```wowlua compiles title=src/main.wowlua
+import * as launcher from "wowlua:launcher"
+import flavor from "wowlua:meta"
+
+launcher.register({
+    icon = "Interface\\Icons\\INV_Misc_Book_09",
+    label = "Playground",
+    onClick = function() end,
+    compartment = flavor == "camelot",
+})
+```
 
 Related: E8300
 

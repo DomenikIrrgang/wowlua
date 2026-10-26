@@ -265,7 +265,7 @@ launcher.register({
 
 | Surface | Availability | Implementation |
 |---------|--------------|----------------|
-| Addon Compartment | Clients with the Addon Compartment (Mainline family: `standard`, `camelot`), detected at runtime | Registered at `PLAYER_LOGIN` with `AddonCompartmentFrame:RegisterAddon({...})`: no global function and no TOC directive. `onClick` receives the mouse button name taken from the compartment's click data, and `tooltip` is called with `GameTooltip` anchored to the entry. The icon and label can change at runtime. |
+| Addon Compartment | Clients with the Addon Compartment (Mainline family: `standard`, `camelot`), detected at runtime. On a targeted flavor whose declarations lack `AddonCompartmentFrame`, `register` is warning W8301 (no compartment entry) unless `compartment` is `false` there (`compartment = flavor == "camelot"` is on only for camelot) | Registered at `PLAYER_LOGIN` with `AddonCompartmentFrame:RegisterAddon({...})`: no global function and no TOC directive. `onClick` receives the mouse button name taken from the compartment's click data, and `tooltip` is called with `GameTooltip` anchored to the entry. The icon and label can change at runtime. |
 | Minimap button | All flavors | At `PLAYER_LOGIN`: if LibDBIcon (`LibStub("LibDBIcon-1.0", true)`) is loaded, the launcher registers with it, so minimap button managers see it. Otherwise it creates a **built-in** draggable button named `<Addon>MinimapButton`, with shape-aware positioning. **Never both.** |
 | LDB data object | All flavors | Registered with LibDataBroker if it is present at `PLAYER_LOGIN`, so display addons (Titan Panel, ChocolateBar, …) can show it. No hard dependency. |
 

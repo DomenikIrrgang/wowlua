@@ -341,6 +341,13 @@ The kind must be one of the game's tooltip data types (`"Item"`, `"Spell"`,
 secret, and `raw`, the game's own tooltip data. A failing handler never
 breaks the tooltip.
 
+The classic flavors have no tooltip data system. There only `"Item"`,
+`"Spell"` and `"Unit"` work, on the game's standard tooltips (and those you
+pass to `tooltip.attach`), without `raw`; the build warns about it (W8301).
+Another kind is a build error for those flavors (E8300), unless the hook is
+kept to the flavors that have it, with `@if(flavor == …)` or inside
+`if flavor == … then`.
+
 `tooltip.hook(kind, fn)` does the same without a decorator and returns a
 handle. Hooks can't be removed, but `disable()` stops calling your function
 and `enable()` starts again. These are post-hooks only: they add to a
