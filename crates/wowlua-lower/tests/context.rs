@@ -173,3 +173,29 @@ fn an_unresolved_import_fails_without_a_second_error() {
     assert_eq!(errors.len(), 1);
     assert!(errors[0].message.contains("package context"));
 }
+
+/// Directive comments (spec §1.1.1) are the compiler's: a file with a
+/// prologue on line 1 (codegen §14.2) leaves them out, so none follows the
+/// generated code; other comments stay, and a file without a prologue keeps
+/// its directives.
+#[test]
+fn directives_do_not_follow_the_prologue() {
+    let module = Context {
+        module: Some("t".into()),
+        ..Context::default()
+    };
+    let src = "--!strict\n-- about t\nexport local x = 1 -- one\n";
+    let out = code(&lower(src, &module));
+    assert!(!out.contains("--!strict"), "{out}");
+    assert!(
+        out.starts_with("local __wl = select(2, ...).__wowlua"),
+        "{out}"
+    );
+    assert!(
+        out.contains("-- about t\n") && out.contains("-- one"),
+        "{out}"
+    );
+    assert_eq!(out.lines().count(), 3, "{out}");
+    let script = "--!strict\nlocal x = 1\nprint(x)\n";
+    assert!(code(&lower(script, &Context::default())).starts_with("--!strict\n"));
+}

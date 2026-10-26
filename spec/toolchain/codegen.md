@@ -59,6 +59,10 @@ local __wl = select(2, ...).__wowlua; local __wl_exports = __wl.module("core/cac
 
 - Files that use no runtime features and have no exports get no prologue. A pure
   Lua file therefore compiles to itself, apart from formatting.
+- A file with a prologue leaves out its directive comments
+  ([Syntax §1.1.1](../language/01-syntax.md#111-directive-comments)): they are
+  the compiler's, and on line 1 they would follow the generated code. Other
+  comments are kept.
 - The prologue declares `__wl`, `__wl_exports` (modules with exports only), the
   locals of hoisted declarations, and the hygienic global caches of §14.3 that
   the file needs. Imports add one local per imported binding on the import's

@@ -366,13 +366,14 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
             line1,
         ));
     }
+    let has_prologue = !prologue.is_empty();
     stmts.splice(0..0, prologue);
     let mut chunk = ir::Chunk {
         block: ir::Block {
             stmts,
             end: Pos::NONE,
         },
-        comments: lowerer.comments(),
+        comments: lowerer.comments(has_prologue),
     };
     upvalues::limit(&mut chunk, &lowerer.import_locals);
     wowlua_luair::hygiene::apply(&mut chunk);
@@ -772,7 +773,10 @@ impl<'a> Lowerer<'a> {
         self.pos(span.end.saturating_sub(1))
     }
 
-    fn comments(&self) -> Vec<ir::Comment> {
+    /// The file's comments. With a prologue on line 1 (codegen §14.2), the
+    /// directives (`--!strict`, spec §1.1.1) are left out: they are the
+    /// compiler's, and would follow the generated code.
+    fn comments(&self, prologue: bool) -> Vec<ir::Comment> {
         let lexed = &self.parse.lexed;
         // The trivia before the first token.
         let file = self.parse.view().span().file;
@@ -787,6 +791,9 @@ impl<'a> Lowerer<'a> {
                 _ => continue,
             };
             let text = self.src[trivia.start as usize..trivia.end as usize].to_vec();
+            if prologue && i < first && !block && text.starts_with(b"--!") {
+                continue;
+            }
             if i < first {
                 let lower = String::from_utf8_lossy(&text).to_ascii_lowercase();
                 if LICENSE_WORDS.iter().any(|w| lower.contains(w)) {
