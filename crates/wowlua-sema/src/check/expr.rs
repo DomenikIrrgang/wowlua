@@ -552,11 +552,15 @@ impl Checker<'_, '_> {
                 }
                 // A member the type lacks, in an existence test (`nil`) or
                 // in the region such a test guards (`any`).
-                let missing = (probed || guarded)
-                    && self.member_type(o, name.text(), name.span(), true) == Some(Types::ERROR);
+                let own = self.missing_in_own_open(obj, o, name.text());
+                let missing = (probed || guarded) && {
+                    self.own_open = own;
+                    self.member_type(o, name.text(), name.span(), true) == Some(Types::ERROR)
+                };
                 let t = if missing {
                     if probed { Types::NIL } else { Types::ANY }
                 } else {
+                    self.own_open = own;
                     self.member_type(o, name.text(), name.span(), false)
                         .unwrap_or(Types::ANY)
                 };
@@ -773,7 +777,12 @@ impl Checker<'_, '_> {
                 let reads = dropped.then(|| self.env.pending_reads.clone());
                 let m = match narrowed {
                     Some(t) => self.drop_first(t),
-                    None => self.method_type(o, name.text(), name.span()),
+                    None => {
+                        self.own_open = self.missing_in_own_open(obj, o, name.text());
+                        let m = self.method_type(o, name.text(), name.span());
+                        self.own_open = false;
+                        m
+                    }
                 };
                 if let Some(h) = self.hovers.as_mut() {
                     h.push((name.span(), m));
@@ -1652,6 +1661,46 @@ impl Checker<'_, '_> {
 
     // ------------------------------------------------------- members --
 
+    /// Whether `obj.name` reads a field no member of `o` (its type) has,
+    /// from an open table the file fills in (a local declared with a table
+    /// literal, or an object `setmetatable` made), that the file never
+    /// stores in that local (spec §2.4.2): a misspelling, which strict mode
+    /// reports (E2003). A field stored somewhere may be set by the time it
+    /// is read.
+    fn missing_in_own_open(&self, obj: Expr<'_>, o: TypeId, name: &str) -> bool {
+        // (`self` in `function T:m()` is the object, not `T`)
+        let ExprKind::Name(n) = obj.kind() else {
+            return false;
+        };
+        if n.text() == "self"
+            || self
+                .stored_fields
+                .get(n.text())
+                .is_some_and(|f| f.contains(name))
+        {
+            return false;
+        }
+        let Some(v) = self.lookup_var(n.text()) else {
+            return false;
+        };
+        let literal = self.literal_locals.contains(&v);
+        let members = self.env.types.members(o);
+        let mut open = false;
+        for m in members {
+            match self.env.types.get(m) {
+                Ty::Nil => {}
+                Ty::Record(r) => {
+                    if r.fields.contains_key(name) || r.indexer.is_some() {
+                        return false;
+                    }
+                    open |= r.open && (literal || self.objects.contains(&m));
+                }
+                _ => return false,
+            }
+        }
+        open
+    }
+
     /// The type of `o.name`; unknown members of declared types are E2003.
     /// `quiet`: no diagnostics (for contextual lookups).
     pub fn member_type(
@@ -1661,6 +1710,8 @@ impl Checker<'_, '_> {
         span: Span,
         quiet: bool,
     ) -> Option<TypeId> {
+        // (for this lookup only, not the ones it makes)
+        let own_open = std::mem::take(&mut self.own_open);
         let members = self.env.types.members(o);
         let mut out = Vec::new();
         for m in members {
@@ -1685,8 +1736,15 @@ impl Checker<'_, '_> {
                                 Some(Types::ANY)
                             }
                         }
-                        // Fields of open tables may be assigned later.
-                        None if r.open => Some(Types::ANY),
+                        // Fields of open tables may be assigned later; in
+                        // strict mode, not where the function that made it
+                        // reads one that no path set (decision T87).
+                        None if r.open
+                            && !(own_open && self.mode == super::query::Mode::Strict) =>
+                        {
+                            Some(Types::ANY)
+                        }
+                        None if r.open && quiet => Some(Types::ERROR),
                         None if self.mode == super::query::Mode::Strict && !quiet => {
                             let msg = format!("`{}` has no field `{name}`", self.env.display(m));
                             self.report("E2003", span, msg);
@@ -1944,6 +2002,7 @@ impl Checker<'_, '_> {
 
     /// `o:name(…)`: the method without `self`.
     fn method_type(&mut self, o: TypeId, name: &str, span: Span) -> TypeId {
+        let own_open = std::mem::take(&mut self.own_open);
         let mut out = Vec::new();
         for m in self.env.types.members(o) {
             let t = match self.env.types.get(m).clone() {
@@ -1999,6 +2058,7 @@ impl Checker<'_, '_> {
                     }
                 }
                 _ => {
+                    self.own_open = own_open;
                     let f = self.member_type(m, name, span, false).unwrap_or(Types::ANY);
                     self.drop_first(f)
                 }
@@ -4951,35 +5011,97 @@ impl Checker<'_, '_> {
     }
 
     /// The type of `setmetatable(t, mt)` (spec §2.4.6): the fields of `t`,
-    /// then those of `mt.__index` (methods included). Later additions to an
-    /// open metatable are allowed through an indexer.
+    /// then those of `mt.__index` (methods included). When `__index` is a
+    /// named table (`{ __index = C }`, `mt.__index = C`, `C.__index = C`),
+    /// the fields the file stores in it later are there too (as `any` until
+    /// they are defined), and other names are not; else later additions to
+    /// an open metatable are allowed through an indexer.
     fn with_metatable(&mut self, t: Expr<'_>, mt: Expr<'_>) -> TypeId {
         let tt = self.peek_type(t);
         let mtt = self.peek_type(mt);
-        let index = self.field_type_quiet(mtt, "__index");
         let Ty::Record(mut r) = self.env.types.get(tt).clone() else {
             return tt;
         };
+        // The table `__index` names, and its type here.
+        let named: Option<Box<str>> = match mt.kind() {
+            ExprKind::Name(n) => self
+                .lookup_var(n.text())
+                .and_then(|v| self.index_of.get(&v).cloned()),
+            ExprKind::Table(fields) => fields.iter().find_map(|f| match f {
+                TableField::Named { name, value } if name.text() == "__index" => {
+                    match value.kind() {
+                        ExprKind::Name(i) => Some(i.text().into()),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            }),
+            _ => None,
+        };
+        let index = match &named {
+            Some(i) => match self.lookup_var(i) {
+                Some(v) => Some(self.var_type(v)),
+                None => self.field_type_quiet(mtt, "__index"),
+            },
+            None => self.field_type_quiet(mtt, "__index"),
+        };
+        let stored = named
+            .as_ref()
+            .filter(|i| self.lookup_var(i).is_some())
+            .and_then(|i| self.stored_fields.get(i).cloned());
         let mut fallback: FxHashSet<Box<str>> = FxHashSet::default();
         if let Some(i) = index
             && let Ty::Record(ir) = self.env.types.get(i).clone()
         {
             for (k, f) in ir.fields.iter() {
+                if k == "__index" {
+                    continue;
+                }
                 if !r.fields.contains_key(k) {
                     r.fields.insert(k.into(), *f);
                     fallback.insert(k.into());
                 }
             }
-            if ir.open || r.indexer.is_none() {
-                r.indexer = Some((Types::STRING, Types::ANY));
+            match &stored {
+                // The names stored in it later: `any` until defined.
+                Some(names) => {
+                    let mut later: Vec<&Box<str>> = names
+                        .iter()
+                        .filter(|k| !r.fields.contains_key(k) && &***k != "__index")
+                        .collect();
+                    later.sort();
+                    for k in later {
+                        r.fields.insert(
+                            k.clone(),
+                            Field {
+                                ty: Types::ANY,
+                                optional: false,
+                                readonly: false,
+                            },
+                        );
+                        fallback.insert(k.clone());
+                    }
+                    if r.indexer.is_none() {
+                        r.indexer = ir.indexer;
+                    }
+                }
+                None if ir.open || r.indexer.is_none() => {
+                    r.indexer = Some((Types::STRING, Types::ANY));
+                }
+                None => {}
             }
         } else if index.is_some() {
             r.indexer = Some((Types::STRING, Types::ANY));
         }
-        r.open = false;
+        if stored.is_none() {
+            r.open = false;
+        }
         let t = self.env.types.record(r);
         if !fallback.is_empty() {
             self.fallback_fields.insert(t, fallback);
+        }
+        if stored.is_some() {
+            self.objects.insert(t);
         }
         t
     }

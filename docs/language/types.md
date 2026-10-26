@@ -235,7 +235,9 @@ print(#members, roleOf["Thrall"], pull.boss, frozen.id)
 
 An unannotated local that holds a table literal stays open while the function
 that made it fills it in: assigning `stats.total = 0` adds a field to its type.
-Reading a field it doesn't have yet gives `any`.
+Reading a field it doesn't have yet gives `any`. In strict mode, reading a
+field the file never stores in it, such as a misspelled `stats.deths`, is
+E2003.
 
 ## Give a type a name
 
@@ -468,19 +470,23 @@ object, and calls to them are checked.
 
 ```wowlua title=src/account.wowlua
 local Account = {}
+Account.__index = Account
 
 function Account:deposit(amount: number)
     self.balance += amount
 end
 
 function Account.new(balance: number)
-    return setmetatable({ balance = balance }, { __index = Account })
+    return setmetatable({ balance = balance }, Account)
 end
 
 local acc = Account.new(100)
 acc:deposit(5)
 ```
 
-`acc:deposit("5 gold")` is E2001. In `function Account:deposit`, `self` has
-the type of `Account`. A [class](classes.md) checks more: a misspelled method
-name, missing fields and visibility.
+`acc:deposit("5 gold")` is E2001, and `setmetatable(o, { __index = Account })`
+works the same. In `function Account:deposit`, `self` has the type of
+`Account`. The object has the methods the file defines on `Account`, also
+those after `Account.new`, so in strict mode a misspelled `acc:depositt(5)` is
+E2003. A [class](classes.md) checks more: missing fields and visibility, and a
+misspelled method name in every mode.

@@ -472,6 +472,14 @@ is open too, and a field added through the path (`API.UI.B = f` after
 seals the tables in its fields (decision T275). A field added as `nil` (`t.mode = nil`) is optional
 and `any`.
 
+Reading a field an open table does not have gives `any` in basic mode
+(decision T87). In strict mode, reading a field the file never stores in that
+table (no `t.name = …`, `function t.name()` or `function t:name()` anywhere)
+is E2003, as for a record: it is a misspelling (`stats.deths`). A field stored
+somewhere in the file may be set by the time it is read, and stays `any`
+until then. This holds for a local declared with a table literal and for an
+object `setmetatable` made (§2.4.6).
+
 Writes with non-constant keys (`t[k] = v`) to an open table add an indexer: the
 table's type becomes its known fields plus `[K]: V`, where `K` and `V` are the
 unions of all such keys and values.
@@ -573,7 +581,11 @@ fallback** of `mt`:
 - `__index` functions and other metamethods give `any` for unknown fields,
   and the checker does not try to evaluate them;
 - `mt` is usually an open module-level table, so methods assigned to it later in
-  the same module are part of its type.
+  the same module are part of its type. When `__index` names a table (`mt.__index
+  = mt`, `mt.__index = Base`, `{ __index = Base }`), the result has every field
+  the file stores in that table (methods defined after the call, fields its
+  methods set on `self`), as `any` until they are defined, and no others: in
+  strict mode a misspelled method or field is E2003.
 
 In `function Account:deposit(v)`, `self` has the type of `Account`. Calls on
 the result of `Account.new` therefore see `deposit`.

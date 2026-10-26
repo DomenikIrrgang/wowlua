@@ -111,3 +111,69 @@ fn a_secret_table_key_is_reported() {
         assert!(d.iter().any(|x| x.starts_with("W2040")), "{src}\n{d:#?}");
     }
 }
+
+const ACCOUNT: &str = "local Account = {}\nAccount.__index = Account\nfunction Account:deposit(amount: number)\n    self.balance += amount\nend\nfunction Account.new(balance: number)\n    return setmetatable({ balance = balance }, Account)\nend\nfunction Account:withdraw(amount: number)\n    self.balance -= amount\n    self.withdrawn = true\nend\nlocal acc = Account.new(100)\n";
+
+/// `setmetatable(o, C)` with `C.__index = C` gives `o` the methods of `C`
+/// (spec §2.4.6), and their calls are checked.
+#[test]
+fn setmetatable_with_a_self_index() {
+    let d = check_source(&format!("{ACCOUNT}acc:deposit(\"5 gold\")\n"), Mode::Basic);
+    assert!(
+        d.iter().any(|x| x.code == Some("E2001")),
+        "{:#?}",
+        codes(&d)
+    );
+    for mode in [Mode::Basic, Mode::Strict] {
+        let d = check_source(
+            &format!("{ACCOUNT}acc:deposit(5)\nprint(acc.balance + 1)\n"),
+            mode,
+        );
+        assert!(d.iter().all(|x| !x.is_error()), "{:#?}", codes(&d));
+    }
+}
+
+/// The methods of the `__index` table are known by name, those defined
+/// after the `setmetatable` call and the fields its methods set on `self`
+/// too, so in strict mode a misspelled one is E2003 (spec §2.4.6).
+#[test]
+fn misspelled_setmetatable_methods() {
+    strict_ok(&format!("{ACCOUNT}acc:withdraw(1)\nprint(acc.withdrawn)\n"));
+    strict_err(&format!("{ACCOUNT}acc:depositt(5)\n"), "E2003");
+    strict_err(&format!("{ACCOUNT}acc:withdrew(5)\n"), "E2003");
+    strict_err(&format!("{ACCOUNT}print(acc.balanse)\n"), "E2003");
+    // `{ __index = C }` too
+    let inline = "local Account = {}\nfunction Account:deposit(amount: number) print(amount) end\nfunction Account.new()\n    return setmetatable({}, { __index = Account })\nend\nfunction Account:withdraw(amount: number) print(amount) end\nlocal acc = Account.new()\n";
+    strict_ok(&format!("{inline}acc:deposit(1)\nacc:withdraw(2)\n"));
+    strict_err(&format!("{inline}acc:depositt(1)\n"), "E2003");
+    // a metatable whose `__index` is another table
+    let other = "local Base = {}\nfunction Base:hello() print(\"hi\") end\nlocal mt = {}\nmt.__index = Base\nlocal o = setmetatable({}, mt)\n";
+    strict_ok(&format!("{other}o:hello()\n"));
+    strict_err(&format!("{other}o:helo()\n"), "E2003");
+}
+
+/// In strict mode reading a field an open table doesn't have, and that the
+/// file never stores in it, is E2003 (decision T87 keeps it `any` in basic
+/// mode). A field stored somewhere may be set by the time it is read.
+#[test]
+fn misspelled_fields_of_open_tables() {
+    let stats =
+        "local function f()\n    local stats = { deaths = 0, kills = 0 }\n    stats.total = 0\n";
+    strict_err(
+        &format!("{stats}    print(stats.deths)\nend\nf()\n"),
+        "E2003",
+    );
+    strict_err(&format!("{stats}    stats:report()\nend\nf()\n"), "E2003");
+    strict_ok(&format!(
+        "{stats}    print(stats.deaths + stats.total)\nend\nf()\n"
+    ));
+    ok(&format!("{stats}    print(stats.deths)\nend\nf()\n"));
+    // set on some path or later in a loop: not misspelled
+    strict_ok(
+        "local function f(c: boolean)\n    local t = {}\n    if c then t.x = 1 end\n    print(t.x)\n    for i = 1, 3 do\n        if t.seen then print(i) end\n        t.seen = true\n    end\nend\nf(true)\n",
+    );
+    // another function may run after the field is set
+    strict_ok(
+        "local M = {}\nfunction M.a(): number return M.b() end\nfunction M.b(): number return 1 end\nlocal t = {}\nlocal function g() print(t.later) end\nt.later = 1\ng()\nprint(M.a())\n",
+    );
+}

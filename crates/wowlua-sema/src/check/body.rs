@@ -183,6 +183,23 @@ pub struct Checker<'e, 'p> {
     /// metatable's `__index` (spec §2.4.6). A table's own definition
     /// replaces them, as it does at run time.
     pub(crate) fallback_fields: FxHashMap<TypeId, FxHashSet<Box<str>>>,
+    /// Metatables whose `__index` was set to a named table (`mt.__index =
+    /// T`, `C.__index = C`): the metatable's local, the table's name.
+    pub(crate) index_of: FxHashMap<VarId, Box<str>>,
+    /// The next member lookup reads a field from an open table of this
+    /// function's own (strict mode reports a missing one, spec §2.4.2).
+    pub(crate) own_open: bool,
+    /// Locals declared with a table literal (`local t = { … }`): their open
+    /// tables are the ones the file fills in (spec §2.4.2).
+    pub(crate) literal_locals: FxHashSet<VarId>,
+    /// The objects `setmetatable` made whose `__index` table is known by
+    /// name (all its fields are known, spec §2.4.6).
+    pub(crate) objects: FxHashSet<TypeId>,
+    /// The fields the file stores in each named table anywhere
+    /// (`function T:m()`, `function T.f()`, `T.x = …`, and `self.x = …` in
+    /// `T`'s methods): what a `setmetatable` with `T` as `__index` falls
+    /// back to, the methods defined after it included (spec §2.4.6).
+    pub(crate) stored_fields: FxHashMap<Box<str>, FxHashSet<Box<str>>>,
     /// Name spans of accesses to renamable methods (`rename-private`), with
     /// the class that declares the method.
     pub private_methods: FxHashMap<wowlua_span::Span, DefId>,
@@ -376,6 +393,11 @@ impl<'e, 'p> Checker<'e, 'p> {
             exports: FxHashMap::default(),
             export_vars: Vec::new(),
             fallback_fields: FxHashMap::default(),
+            index_of: FxHashMap::default(),
+            own_open: false,
+            literal_locals: FxHashSet::default(),
+            objects: FxHashSet::default(),
+            stored_fields: FxHashMap::default(),
             private_methods: FxHashMap::default(),
             global_classes: FxHashSet::default(),
             reassigned,
@@ -948,6 +970,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         };
         self.fns.push(top);
         self.top_vararg = Some((Types::STRING, ns_ty));
+        self.stored_fields = stored_fields(parse.view().block());
         self.hoist(parse.view().block());
         self.block_stmts(parse.view().block());
         // Calls of methods defined further down, now that all are known.
@@ -1423,6 +1446,10 @@ impl<'e, 'p> Checker<'e, 'p> {
                 // a field, a `::` assertion) keep their type, unions of
                 // literals included (decision L64).
                 let keep: Vec<bool> = values.iter().map(typed_elsewhere).collect();
+                let literal: Vec<bool> = values
+                    .iter()
+                    .map(|v| matches!(v.kind(), ExprKind::Table(_)))
+                    .collect();
                 let spread: Vec<(Span, String)> = names
                     .iter()
                     .map(|n| (n.name.span(), n.name.text().to_string()))
@@ -1455,6 +1482,9 @@ impl<'e, 'p> Checker<'e, 'p> {
                     }
                     let id =
                         self.declare(n.name.text(), declared, value, false, Some(n.name.span()));
+                    if literal.get(i) == Some(&true) {
+                        self.literal_locals.insert(id);
+                    }
                     // The names past the last value take that call's other
                     // results (`local ok, r = pcall(f)`).
                     let kept = keep.get(i).or(keep.last()).copied().unwrap_or(false);
@@ -1492,6 +1522,17 @@ impl<'e, 'p> Checker<'e, 'p> {
                         (t.span(), name)
                     })
                     .collect();
+                // `mt.__index = T`: what `setmetatable(o, mt)` falls back to.
+                for (t, v) in targets.iter().zip(values.iter()) {
+                    if let ExprKind::Field { obj, name } = t.kind()
+                        && name.text() == "__index"
+                        && let ExprKind::Name(mt) = obj.kind()
+                        && let ExprKind::Name(index) = v.kind()
+                        && let Some(var) = self.lookup_var(mt.text())
+                    {
+                        self.index_of.insert(var, index.text().into());
+                    }
+                }
                 let values = self.expr_list_into(values, &expected, &spread);
                 // A local function assigned again may hold another
                 // function: its count no longer holds (W2062).
@@ -1813,6 +1854,9 @@ impl<'e, 'p> Checker<'e, 'p> {
                     true,
                     Some(name.span()),
                 );
+                if value.is_some_and(|v| matches!(v.kind(), ExprKind::Table(_))) {
+                    self.literal_locals.insert(id);
+                }
                 let narrowed = match declared {
                     Some(d)
                         if d != Types::ANY
@@ -2966,6 +3010,9 @@ impl<'e, 'p> Checker<'e, 'p> {
             );
             let new = self.env.types.record(r);
             self.fallback_fields.insert(new, rest);
+            if self.objects.contains(&owner) {
+                self.objects.insert(new);
+            }
             self.retype_owner(owner, new);
             return;
         }
@@ -2992,6 +3039,9 @@ impl<'e, 'p> Checker<'e, 'p> {
         let new = self.env.types.record(r);
         if let Some(rest) = self.fallback_fields.get(&owner).cloned() {
             self.fallback_fields.insert(new, rest);
+        }
+        if self.objects.contains(&owner) {
+            self.objects.insert(new);
         }
         self.retype_owner(owner, new);
     }
@@ -3450,4 +3500,50 @@ fn overload_set_of(
         1 => Some(sigs[0]),
         _ => Some(types.intern(Ty::Intersection(sigs))),
     }
+}
+
+/// The fields `block` stores in each named table, at any depth: `function
+/// T:m()`, `function T.f()`, `T.x = …`, and `self.x = …` in a method
+/// `function T:m()` (see [`Checker::stored_fields`]).
+fn stored_fields(block: Block<'_>) -> FxHashMap<Box<str>, FxHashSet<Box<str>>> {
+    let mut out: FxHashMap<Box<str>, FxHashSet<Box<str>>> = FxHashMap::default();
+    let add = |out: &mut FxHashMap<Box<str>, FxHashSet<Box<str>>>, t: &str, f: &str| {
+        out.entry(t.into()).or_default().insert(f.into());
+    };
+    wowlua_syntax::visit::walk_stmts(block, &mut |s| match s.kind() {
+        StmtKind::Function { name, func } => {
+            let path = name.path();
+            let table = path.at(0).text();
+            match (path.len(), name.method()) {
+                (1, Some(m)) => {
+                    add(&mut out, table, m.text());
+                    // the fields its methods set on `self`
+                    wowlua_syntax::visit::walk_stmts(func.body(), &mut |inner| {
+                        if let StmtKind::Assign { targets, .. } = inner.kind() {
+                            for t in targets.iter() {
+                                if let ExprKind::Field { obj, name } = t.kind()
+                                    && matches!(obj.kind(), ExprKind::Name(n) if n.text() == "self")
+                                {
+                                    add(&mut out, table, name.text());
+                                }
+                            }
+                        }
+                    });
+                }
+                (2, None) => add(&mut out, table, path.at(1).text()),
+                _ => {}
+            }
+        }
+        StmtKind::Assign { targets, .. } => {
+            for t in targets.iter() {
+                if let ExprKind::Field { obj, name } = t.kind()
+                    && let ExprKind::Name(n) = obj.kind()
+                {
+                    add(&mut out, n.text(), name.text());
+                }
+            }
+        }
+        _ => {}
+    });
+    out
 }
