@@ -227,3 +227,104 @@ fn types_declared_in_a_block() {
         "type Q = string\ndo\n    type Q = number\n    local n: Q = 1\n    print(n)\nend\nlocal s: Q = \"x\"\nprint(s)\n",
     );
 }
+
+/// The codes of `src`'s diagnostics checked in basic mode.
+fn codes_of(src: &str) -> Vec<&'static str> {
+    check_source(src, Mode::Basic)
+        .iter()
+        .filter_map(|x| x.code)
+        .collect()
+}
+
+/// E2053: an alias that refers to itself outside a table or function type
+/// (spec §2.3).
+#[test]
+fn unguarded_recursive_aliases() {
+    for src in [
+        "type A = A | nil\n",
+        "type B = C\ntype C = B\n",
+        "type D = string | (D)?\n",
+        "local function f()\n    type E = E | number\nend\nf()\n",
+    ] {
+        assert!(
+            codes_of(src).contains(&"E2053"),
+            "{src}: {:?}",
+            codes_of(src)
+        );
+    }
+    for src in [
+        "type Tree = { value: number, children: Tree[] }\n",
+        "type F = (f: F) -> F\n",
+        "type L = L[]\n",
+        "type N = { next: N? } | nil\n",
+        "type Box<T> = { v: T }\ntype R = Box<R> | number\n",
+    ] {
+        assert!(
+            !codes_of(src).contains(&"E2053"),
+            "{src}: {:?}",
+            codes_of(src)
+        );
+    }
+}
+
+/// E2054: merged `declare interface` declarations give a field two types
+/// (spec §2.4.7).
+#[test]
+fn conflicting_merged_interface_fields() {
+    let d = check_with(
+        "print(1)\n",
+        Mode::Basic,
+        Some(
+            "declare interface AddonNamespace\n    db: string\n    n: number\nend\ndeclare interface AddonNamespace\n    db: number\n    n: number\nend\n",
+        ),
+        None,
+    );
+    let e: Vec<_> = d.iter().filter(|x| x.code == Some("E2054")).collect();
+    assert_eq!(e.len(), 1, "{:#?}", codes(&d));
+    assert!(e[0].message.contains("`db`"), "{}", e[0].message);
+}
+
+/// E2056: a type pack where only one type can stand (spec §2.2.10).
+#[test]
+fn type_packs_in_invalid_positions() {
+    for src in [
+        "local function f<T...>(...: T...): T\n    return (...)\nend\nprint(f(1))\n",
+        "local function g<T...>(x: T, ...: T...)\n    print(x, ...)\nend\ng(1)\n",
+        "type P<T...> = { items: T[] }\nlocal p: P<number>? = nil\nprint(p)\n",
+        "type Box<T> = { v: T }\nlocal function h<T...>(b: Box<T>, ...: T...)\n    print(b, ...)\nend\nh({ v = 1 })\n",
+    ] {
+        assert!(
+            codes_of(src).contains(&"E2056"),
+            "{src}: {:?}",
+            codes_of(src)
+        );
+    }
+    for src in [
+        "local function retry<A..., R...>(f: (A...) -> R..., ...: A...): R...\n    return f(...)\nend\nprint(retry(function(x: number): number return x end, 1))\n",
+        "local function first<T...>(...: T...): ...any\n    return ...\nend\nprint(first(1, 2))\n",
+        "type Fn<A...> = (A...) -> ()\nlocal function wrap<A...>(f: Fn<A>): Fn<A>\n    return f\nend\nprint(wrap(function(x: number) end))\n",
+    ] {
+        assert!(
+            !codes_of(src).contains(&"E2056"),
+            "{src}: {:?}",
+            codes_of(src)
+        );
+    }
+}
+
+/// E2058: one name declared as an event and as a message; E2059: a
+/// default value in their parameters (spec §2.9).
+#[test]
+fn event_and_message_declarations() {
+    assert!(
+        codes_of("declare event MY_THING(a: string)\ndeclare message MY_THING(a: string)\n")
+            .contains(&"E2058")
+    );
+    assert!(!codes_of("declare message MY_OTHER(a: string)\n").contains(&"E2058"));
+    for src in [
+        "declare message MY_CHANGED(key: string = \"a\")\n",
+        "declare event MY_EVENT(unit: string, n: number = 1)\n",
+    ] {
+        assert_eq!(codes_of(src), ["E2059"], "{src}");
+    }
+}

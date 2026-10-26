@@ -194,6 +194,8 @@ pub struct Env<'p> {
     /// The `type` and `interface` declarations of the blocks being checked
     /// (spec §1.3: scoped to their block), innermost last.
     block_types: Vec<(Box<str>, DefId)>,
+    /// Type arguments being resolved (where a pack parameter may stand).
+    type_arg_depth: u32,
     /// Aliases whose bodies are not resolved yet (while building), with the
     /// module of their scope.
     lazy_aliases: FxHashMap<DefId, (TypeAlias<'p>, Option<usize>)>,
@@ -453,6 +455,16 @@ impl<'p> Env<'p> {
             env.module_namespaces
                 .insert(src.index, src.namespaces.iter().cloned().collect());
         }
+        // Aliases that are their own body, through no table or function
+        // type (E2053).
+        let aliases: Vec<(DefId, TypeAlias<'_>, Scope)> = pending
+            .iter()
+            .filter_map(|(def, p)| match p {
+                Pending::Alias(a, m) => Some((*def, *a, env.scope_of(*m, sources))),
+                _ => None,
+            })
+            .collect();
+        env.report_alias_cycles(&aliases);
         // Type parameters exist before any body refers to a definition
         // (a generic class of another module may be resolved later).
         for (def, p) in &pending {
@@ -880,6 +892,26 @@ impl<'p> Env<'p> {
                     if optional {
                         t = self.types.optional(t);
                     }
+                    // Merged declarations agree on a field (spec §2.4.7).
+                    if let Some(existing) = self.def(def).members.get(name.text())
+                        && existing.kind == MemberKind::Field
+                        && existing.span != Some(name.span())
+                        && existing.ty != t
+                    {
+                        let msg = format!(
+                            "the merged declarations of `{}` give the field `{}` two types: `{}` and `{}`",
+                            self.def(def).name,
+                            name.text(),
+                            self.display(existing.ty),
+                            self.display(t)
+                        );
+                        let mut d = Diagnostic::error("E2054", msg)
+                            .with_label(name.span(), "declared again");
+                        if let Some(first) = existing.span {
+                            d = d.with_label(first, "first declared here");
+                        }
+                        self.diagnostics.push(d);
+                    }
                     (
                         name,
                         Member {
@@ -939,6 +971,11 @@ impl<'p> Env<'p> {
                 _ => {}
             }
         }
+        let cycles: Vec<(DefId, TypeAlias<'_>, Scope)> = aliases
+            .iter()
+            .map(|&(id, a)| (id, a, scope.clone()))
+            .collect();
+        self.report_alias_cycles(&cycles);
         // (twice: an alias may name one declared after it)
         for _ in 0..2 {
             for &(id, a) in &aliases {
@@ -951,6 +988,101 @@ impl<'p> Env<'p> {
             self.resolve_interface(id, i, scope.clone());
         }
         mark
+    }
+
+    /// E2053 for each of `aliases` that refers to itself outside a table or
+    /// function type, directly or through the others (spec §2.3): it never
+    /// becomes a type.
+    fn report_alias_cycles(&mut self, aliases: &[(DefId, TypeAlias<'_>, Scope)]) {
+        let index: FxHashMap<DefId, usize> =
+            aliases.iter().enumerate().map(|(i, a)| (a.0, i)).collect();
+        let edges: Vec<Vec<usize>> = aliases
+            .iter()
+            .map(|(_, a, scope)| {
+                let own: Vec<&str> = a.type_params().iter().map(|p| p.name.text()).collect();
+                let mut out = Vec::new();
+                self.unguarded_refs(a.ty(), scope, &own, &mut out);
+                out.iter().filter_map(|d| index.get(d).copied()).collect()
+            })
+            .collect();
+        for (i, (_, a, _)) in aliases.iter().enumerate() {
+            // The shortest way back to `i`, if there is one.
+            let mut from: Vec<Option<usize>> = vec![None; aliases.len()];
+            let mut queue = std::collections::VecDeque::from([i]);
+            let mut found = false;
+            while let Some(n) = queue.pop_front() {
+                for &next in &edges[n] {
+                    if next == i {
+                        from[i] = Some(n);
+                        found = true;
+                        break;
+                    }
+                    if from[next].is_none() && next != i {
+                        from[next] = Some(n);
+                        queue.push_back(next);
+                    }
+                }
+                if found {
+                    break;
+                }
+            }
+            if !found {
+                continue;
+            }
+            let mut path = vec![i];
+            let mut at = from[i].expect("found");
+            while at != i {
+                path.push(at);
+                at = from[at].expect("on the path");
+            }
+            path.push(i);
+            path.reverse();
+            let names: Vec<String> = path
+                .iter()
+                .map(|&n| format!("`{}`", aliases[n].1.name().text()))
+                .collect();
+            let msg = format!(
+                "the type alias `{}` refers to itself outside a table or function type ({}), so it never becomes a type",
+                a.name().text(),
+                names.join(" → ")
+            );
+            self.diagnostics
+                .push(Diagnostic::error("E2053", msg).with_label(
+                    a.name().span(),
+                    "write the recursion inside `{ … }` or a function type",
+                ));
+        }
+    }
+
+    /// The aliases `t` names where no table or function type holds the
+    /// name (type arguments count as held), but its own type parameters.
+    fn unguarded_refs(&self, t: Type<'_>, scope: &Scope, own: &[&str], out: &mut Vec<DefId>) {
+        match t.kind() {
+            TypeKind::Ref { path, .. } if path.len() == 1 => {
+                let name = path.at(0).text();
+                if own.contains(&name) || scope.params.iter().any(|(n, _)| &**n == name) {
+                    return;
+                }
+                if let Some(d) = self.lookup_type(name, scope)
+                    && self.def(d).kind == DefKind::Alias
+                {
+                    out.push(d);
+                }
+            }
+            TypeKind::Paren(inner) | TypeKind::Optional(inner) | TypeKind::KeyOf(inner) => {
+                self.unguarded_refs(inner, scope, own, out)
+            }
+            TypeKind::Index { object, key } => {
+                self.unguarded_refs(object, scope, own, out);
+                self.unguarded_refs(key, scope, own, out);
+            }
+            TypeKind::Union(ms) | TypeKind::Intersection(ms) => {
+                for m in ms.iter() {
+                    self.unguarded_refs(m, scope, own, out);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Ends the block of [`Env::push_block_types`]'s `mark`.
@@ -1555,7 +1687,45 @@ impl<'p> Env<'p> {
                         ..f
                     },
                 );
-                if matches!(d.kind(), DeclareKind::Event { .. }) {
+                let event = matches!(d.kind(), DeclareKind::Event { .. });
+                // Events and messages share one set of names (spec §2.9).
+                let other = if event { &self.messages } else { &self.events };
+                if other.contains_key(name.text()) {
+                    let (this, that) = if event {
+                        ("an event", "a message")
+                    } else {
+                        ("a message", "an event")
+                    };
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E2058",
+                            format!(
+                                "`{}` is declared as {this} here and as {that} elsewhere: events and messages share one set of names",
+                                name.text()
+                            ),
+                        )
+                        .with_label(name.span(), "declared twice"),
+                    );
+                }
+                // A default has no meaning in a payload (spec §2.9).
+                for p in params.params().iter() {
+                    if let Some(default) = p.default() {
+                        self.diagnostics.push(
+                            Diagnostic::error(
+                                "E2059",
+                                format!(
+                                    "the parameter `{}` of {} `{}` has a default value: the payload is what the {} gives",
+                                    p.name().text(),
+                                    if event { "the event" } else { "the message" },
+                                    name.text(),
+                                    if event { "game" } else { "sender" }
+                                ),
+                            )
+                            .with_label(default.span(), "remove the default"),
+                        );
+                    }
+                }
+                if event {
                     self.events.insert(name.text().into(), pack);
                 } else {
                     self.messages.insert(name.text().into(), pack);
@@ -1892,6 +2062,26 @@ impl<'p> Env<'p> {
         span: Span,
         scope: &Scope,
     ) -> TypeId {
+        // (a pack parameter may be a type argument, for a pack parameter:
+        // checked once the definition is known)
+        let pack_args: Vec<(usize, Span)> = args
+            .iter()
+            .enumerate()
+            .filter_map(|(i, a)| match a {
+                TypeArg::Type(t) => match t.kind() {
+                    TypeKind::Ref { path, args } if path.len() == 1 && args.is_empty() => scope
+                        .params
+                        .iter()
+                        .rev()
+                        .find(|(n, _)| n.as_ref() == path.at(0).text())
+                        .filter(|(_, id)| self.params[id.0 as usize].pack)
+                        .map(|_| (i, t.span())),
+                    _ => None,
+                },
+                TypeArg::Pack(_) => None,
+            })
+            .collect();
+        self.type_arg_depth += 1;
         let arg_types: Vec<TypeId> = args
             .iter()
             .map(|a| match a {
@@ -1899,6 +2089,7 @@ impl<'p> Env<'p> {
                 TypeArg::Pack(_) => Types::ANY,
             })
             .collect();
+        self.type_arg_depth -= 1;
         if self.completing.is_some()
             && path
                 .last()
@@ -1910,6 +2101,21 @@ impl<'p> Env<'p> {
         if path.len() == 1 {
             let name = path.at(0).text();
             if let Some((_, id)) = scope.params.iter().rev().find(|(n, _)| n.as_ref() == name) {
+                // A pack stands for a sequence of types: only in parameter
+                // and result lists (`(T...) -> R...`, `...: T...`) and as a
+                // type argument (spec §2.2.10).
+                if self.params[id.0 as usize].pack && self.type_arg_depth == 0 {
+                    self.diagnostics.push(
+                        Diagnostic::error(
+                            "E2056",
+                            format!(
+                                "`{name}` is a type pack, which stands for several types: write `{name}...` in a parameter or result list, or `...: {name}...`"
+                            ),
+                        )
+                        .with_label(span, "a single type is expected here"),
+                    );
+                    return Types::ANY;
+                }
                 return self.types.intern(Ty::Param(*id));
             }
             let builtin = match name {
@@ -2025,6 +2231,25 @@ impl<'p> Env<'p> {
             );
             return Types::ERROR;
         };
+        for &(i, at) in &pack_args {
+            let for_pack = self
+                .def(def)
+                .params
+                .get(i)
+                .is_some_and(|p| self.params[p.0 as usize].pack);
+            if !for_pack {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        "E2056",
+                        format!(
+                            "a type pack is given for a type parameter of `{}` that takes one type",
+                            self.def(def).name
+                        ),
+                    )
+                    .with_label(at, "a single type is expected here"),
+                );
+            }
+        }
         let expected = self.def(def).params.len();
         if !args.is_empty() && args.len() != expected {
             self.diagnostics.push(

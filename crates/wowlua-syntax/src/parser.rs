@@ -81,6 +81,9 @@ pub(crate) struct Parser<'a> {
     /// The next parameter list is a constructor's: its parameters may be
     /// parameter properties (`private sink: Sink`, decision L35).
     ctor_params: bool,
+    /// The next parameter list is a `declare event` or `declare message`
+    /// payload: a default is parsed, for the checker to report (E2059).
+    payload_params: bool,
 }
 
 fn is_block_follow(kind: TokenKind) -> bool {
@@ -211,6 +214,7 @@ impl<'a> Parser<'a> {
             keep_tree: true,
             unsure: false,
             ctor_params: false,
+            payload_params: false,
         }
     }
 
@@ -1911,6 +1915,7 @@ impl<'a> Parser<'a> {
     fn param_list(&mut self, declaration: bool) -> PResult<(Range, Option<(Sp, u32)>)> {
         let mut params = Vec::new();
         let ctor = std::mem::take(&mut self.ctor_params);
+        let payload = std::mem::take(&mut self.payload_params);
         if self.check(T::RParen) {
             return Ok((Range::default(), None));
         }
@@ -1965,7 +1970,7 @@ impl<'a> Parser<'a> {
             } else {
                 NONE
             };
-            let default = if !declaration && self.eat(T::Eq) {
+            let default = if (!declaration || payload) && self.eat(T::Eq) {
                 let e = self.expr()?;
                 self.push_expr(e)
             } else {
@@ -2888,7 +2893,10 @@ impl<'a> Parser<'a> {
             }
             "event" | "message" => {
                 let name = self.name()?;
-                let params = self.signature(true)?;
+                self.payload_params = true;
+                let params = self.signature(true);
+                self.payload_params = false;
+                let params = params?;
                 Ok(if word == "event" {
                     DeclareData::Event { name, params }
                 } else {

@@ -274,7 +274,8 @@ getter like `get` above: `get(DEFAULTS, "scael")` is E2014, and the result of
 Add `export` to use an alias in other files (`export type Settings = …`, see
 [Modules](modules.md)). A `type` or `interface` declared inside a function or
 a `do` block belongs to that block, like a `local`. An alias may refer to itself inside a table or
-function type, as in `type Tree = { value: number, children: Tree[] }`.
+function type, as in `type Tree = { value: number, children: Tree[] }`;
+anywhere else (`type Node = Node | nil`) it is E2053.
 
 ## Allow only certain values
 

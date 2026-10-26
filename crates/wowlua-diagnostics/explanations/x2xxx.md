@@ -565,7 +565,17 @@ becomes a type: `type A = A | nil`, or two aliases that name each other
 (`type B = C`, `type C = B`). A recursive alias is fine inside a table or
 function type: `type Tree = { value: number, children: Tree[] }`.
 
-The checker doesn't report this code yet.
+```wowlua fails
+type Node = Node | nil
+local n: Node = nil
+print(n)
+```
+
+```wowlua compiles
+type Node = { value: number, next: Node? }
+local n: Node = { value = 1 }
+print(n.value)
+```
 
 ## E2054
 
@@ -574,7 +584,27 @@ Two `declare interface` declarations of the same name (such as
 with conflicting types. Give the field one type in every declaration, or
 rename one of them.
 
-The checker doesn't report this code yet.
+```wowlua fails
+declare interface AddonNamespace
+    db: { scale: number }
+end
+declare interface AddonNamespace
+    db: string
+end
+local _, ns = ...
+print(ns.db)
+```
+
+```wowlua compiles
+declare interface AddonNamespace
+    db: { scale: number }
+end
+declare interface AddonNamespace
+    version: string
+end
+local _, ns = ...
+print(ns.db.scale, ns.version)
+```
 
 ## E2056
 
@@ -582,7 +612,19 @@ A type pack (`T...`, a generic pack parameter) is used where only a single
 type can stand. A pack belongs in a function type's parameters or results, as
 a type argument for a pack parameter, or as the expansion `...: T...`.
 
-The checker doesn't report this code yet.
+```wowlua fails
+local function first<T...>(...: T...): T
+    return (...)
+end
+print(first(1, 2))
+```
+
+```wowlua compiles
+local function all<T...>(...: T...): T...
+    return ...
+end
+print(all(1, 2))
+```
 
 ## E2058
 
@@ -590,14 +632,33 @@ A name is declared both as `declare event` (a WoW event) and as
 `declare message` (an addon message). Events and messages share one set of
 names, so one of them has to be renamed.
 
-The checker doesn't report this code yet.
+```wowlua fails
+declare event MYADDON_READY()
+declare message MYADDON_READY()
+print("ready")
+```
+
+```wowlua compiles
+declare event MYADDON_READY()
+declare message MYADDON_SETTINGS_CHANGED(key: string)
+print("ready")
+```
 
 ## E2059
 
 A parameter of `declare event` or `declare message` has a default value.
 The parameters describe the payload the game or the sender gives, so a
-default has no meaning there; remove it. The parser currently rejects such a
-default as a syntax error (E0101).
+default has no meaning there; remove it.
+
+```wowlua fails
+declare message MYADDON_CHANGED(key: string = "scale")
+print("changed")
+```
+
+```wowlua compiles
+declare message MYADDON_CHANGED(key: string)
+print("changed")
+```
 
 ## E2060
 
