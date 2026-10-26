@@ -1948,7 +1948,7 @@
               "text": "const MAX = 5\nMAX = 6\n"
             }
           ],
-          "output": "error[E2010]: cannot assign to `MAX`\n  ┌─ src/main.wowlua:2:1\n  │\n2 │ MAX = 6\n  │ ^^^ here"
+          "output": "error[E2010]: cannot assign to the constant `MAX`\n  ┌─ src/main.wowlua:2:1\n  │\n2 │ MAX = 6\n  │ ^^^ here"
         },
         {
           "compiles": true,
@@ -2323,14 +2323,60 @@
     },
     "E2053": {
       "area": "types",
-      "text": "A type alias refers to itself outside a table or function type, so it never\nbecomes a type: `type A = A | nil`, or two aliases that name each other\n(`type B = C`, `type C = B`). A recursive alias is fine inside a table or\nfunction type: `type Tree = { value: number, children: Tree[] }`.\n\nThe checker doesn't report this code yet.",
-      "examples": [],
+      "text": "A type alias refers to itself outside a table or function type, so it never\nbecomes a type: `type A = A | nil`, or two aliases that name each other\n(`type B = C`, `type C = B`). A recursive alias is fine inside a table or\nfunction type: `type Tree = { value: number, children: Tree[] }`.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "type Node = Node | nil\nlocal n: Node = nil\nprint(n)\n"
+            }
+          ],
+          "output": "error[E2053]: the type alias `Node` refers to itself outside a table or function type (`Node` → `Node`), so it never becomes a type\n  ┌─ src/main.wowlua:1:6\n  │\n1 │ type Node = Node | nil\n  │      ^^^^ write the recursion inside `{ … }` or a function type"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "type Node = { value: number, next: Node? }\nlocal n: Node = { value = 1 }\nprint(n.value)\n"
+            }
+          ],
+          "output": null
+        }
+      ],
       "related": []
     },
     "E2054": {
       "area": "types",
-      "text": "Two `declare interface` declarations of the same name (such as\n`AddonNamespace`) merge into one interface, and they declare the same field\nwith conflicting types. Give the field one type in every declaration, or\nrename one of them.\n\nThe checker doesn't report this code yet.",
-      "examples": [],
+      "text": "Two `declare interface` declarations of the same name (such as\n`AddonNamespace`) merge into one interface, and they declare the same field\nwith conflicting types. Give the field one type in every declaration, or\nrename one of them.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "declare interface AddonNamespace\n    db: { scale: number }\nend\ndeclare interface AddonNamespace\n    db: string\nend\nlocal _, ns = ...\nprint(ns.db)\n"
+            }
+          ],
+          "output": "error[E2054]: the merged declarations of `AddonNamespace` give the field `db` two types: `{ scale: number }` and `string`\n  ┌─ src/main.wowlua:5:5\n  │\n2 │     db: { scale: number }\n  │     -- first declared here\n  ·\n5 │     db: string\n  │     ^^ declared again"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "declare interface AddonNamespace\n    db: { scale: number }\nend\ndeclare interface AddonNamespace\n    version: string\nend\nlocal _, ns = ...\nprint(ns.db.scale, ns.version)\n"
+            }
+          ],
+          "output": null
+        }
+      ],
       "related": []
     },
     "W2055": {
@@ -2366,8 +2412,31 @@
     },
     "E2056": {
       "area": "types",
-      "text": "A type pack (`T...`, a generic pack parameter) is used where only a single\ntype can stand. A pack belongs in a function type's parameters or results, as\na type argument for a pack parameter, or as the expansion `...: T...`.\n\nThe checker doesn't report this code yet.",
-      "examples": [],
+      "text": "A type pack (`T...`, a generic pack parameter) is used where only a single\ntype can stand. A pack belongs in a function type's parameters or results, as\na type argument for a pack parameter, or as the expansion `...: T...`.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "local function first<T...>(...: T...): T\n    return (...)\nend\nprint(first(1, 2))\n"
+            }
+          ],
+          "output": "error[E2056]: `T` is a type pack, which stands for several types: write `T...` in a parameter or result list, or `...: T...`\n  ┌─ src/main.wowlua:1:40\n  │\n1 │ local function first<T...>(...: T...): T\n  │                                        ^ a single type is expected here"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "local function all<T...>(...: T...): T...\n    return ...\nend\nprint(all(1, 2))\n"
+            }
+          ],
+          "output": null
+        }
+      ],
       "related": []
     },
     "W2057": {
@@ -2403,14 +2472,60 @@
     },
     "E2058": {
       "area": "types",
-      "text": "A name is declared both as `declare event` (a WoW event) and as\n`declare message` (an addon message). Events and messages share one set of\nnames, so one of them has to be renamed.\n\nThe checker doesn't report this code yet.",
-      "examples": [],
+      "text": "A name is declared both as `declare event` (a WoW event) and as\n`declare message` (an addon message). Events and messages share one set of\nnames, so one of them has to be renamed.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "declare event MYADDON_READY()\ndeclare message MYADDON_READY()\nprint(\"ready\")\n"
+            }
+          ],
+          "output": "error[E2058]: `MYADDON_READY` is declared as a message here and as an event elsewhere: events and messages share one set of names\n  ┌─ src/main.wowlua:2:17\n  │\n2 │ declare message MYADDON_READY()\n  │                 ^^^^^^^^^^^^^ declared twice"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "declare event MYADDON_READY()\ndeclare message MYADDON_SETTINGS_CHANGED(key: string)\nprint(\"ready\")\n"
+            }
+          ],
+          "output": null
+        }
+      ],
       "related": []
     },
     "E2059": {
       "area": "types",
-      "text": "A parameter of `declare event` or `declare message` has a default value.\nThe parameters describe the payload the game or the sender gives, so a\ndefault has no meaning there; remove it. The parser currently rejects such a\ndefault as a syntax error (E0101).",
-      "examples": [],
+      "text": "A parameter of `declare event` or `declare message` has a default value.\nThe parameters describe the payload the game or the sender gives, so a\ndefault has no meaning there; remove it.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "declare message MYADDON_CHANGED(key: string = \"scale\")\nprint(\"changed\")\n"
+            }
+          ],
+          "output": "error[E2059]: the parameter `key` of the message `MYADDON_CHANGED` has a default value: the payload is what the sender gives\n  ┌─ src/main.wowlua:1:47\n  │\n1 │ declare message MYADDON_CHANGED(key: string = \"scale\")\n  │                                               ^^^^^^^ remove the default"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "declare message MYADDON_CHANGED(key: string)\nprint(\"changed\")\n"
+            }
+          ],
+          "output": null
+        }
+      ],
       "related": []
     },
     "E2060": {
@@ -3561,7 +3676,7 @@
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"config\": {\n        \"maxHistory\": 50\n    },\n    \"profiles\": {\n        \"dev\": { \"config\": { \"maxHistory\": \"500\" } }\n    }\n}\n"
             }
           ],
-          "output": "error[E4012]: profile `dev`: config key `maxHistory` has type a string but the top-level `config` defines a number\n   ┌─ wowlua.json:14:30\n   │\n14 │         \"dev\": { \"config\": { \"maxHistory\": \"500\" } }\n   │                              ^^^^^^^^^^^^ invalid config key"
+          "output": "error[E4012]: profile `dev`: config key `maxHistory` is a string but the top-level `config` defines a number\n   ┌─ wowlua.json:14:30\n   │\n14 │         \"dev\": { \"config\": { \"maxHistory\": \"500\" } }\n   │                              ^^^^^^^^^^^^ invalid config key"
         },
         {
           "compiles": true,

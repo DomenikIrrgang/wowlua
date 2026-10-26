@@ -9,11 +9,15 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua explain` explains every error and warning: what triggers it, how to fix it, an example that reports it and one that compiles, and related codes. The same explanations are on each code's page on wowlua.dev.
 - Every WoW event and many more API functions now have a description, which the editor shows on hover and wowlua.dev's new WoW API reference shows on each entry's page with how far `wowlua test` emulates it.
 - W8301 warns when a standard-library function does less on a flavor you build for: Item, Spell and Unit tooltip hooks on the classic flavors, `launcher.register` without the Addon Compartment.
+- E2053, E2054, E2056, E2058 and E2059 are reported: recursive aliases, conflicting merged interface fields, misplaced type packs, an event and a message with the same name, defaults in event and message parameters.
+- In strict mode a misspelled field of a table you fill in (`stats.deths`) or of a `setmetatable` object's methods is E2003.
 
 ### Changed
 
 - `if flavor == …` branches count for E8300, E8310 and E8330: a call is checked only for the flavors that run it.
 - The router's help and `Usage:` lines start with the slash command (`/mya scale <number>`).
+- Using a possibly secret value as a table key is E2040 (W2040 in basic mode).
+- In strict mode a table returned from a function is sealed: adding a new field to it is E2051 and reading an unknown one is E2003.
 
 ### Fixed
 
@@ -27,6 +31,14 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - W8430 finds yields inside metamethods.
 - E8340 rejects store fields that aren't a `FramePosition?`.
 - Two `launcher.register` calls in an if/else are no longer E8080.
+- Assigning to a `const` reports one E2010 instead of two errors and an E2001.
+- `interface` and `type` declared inside a function or `do` block can be used there.
+- `setmetatable(o, C)` with `C.__index = C` gives `o` the methods of `C`, and their calls are checked.
+- Comparing a possibly secret value in basic mode is only the warning W2040.
+- Calls of a global function are checked against its `overload` signatures.
+- `if r.maybe then` on a record no longer reports E2003 in strict mode.
+- A misspelled method says "has no method", and messages name `self` in `function T:m()` as `T`.
+- E4012 and E0101 (wowlua syntax in a `.lua` file) read as sentences.
 
 ## 0.12.0 (2026-10-26)
 
