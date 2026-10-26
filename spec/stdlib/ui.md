@@ -31,8 +31,8 @@ locales/
 - Each file is a JSON object of strings (E8115 otherwise).
 - The **base locale** (default `enUS`, configurable with `build.locale-base`)
   defines the set of keys. A missing base-locale file is error E8106. Keys are
-  `[A-Z0-9_]+` (E8060). A key starting with a digit is reachable only as
-  `L["1ST"]` and is not part of `L`'s type.
+  `[A-Z0-9_]+` (E8060). A key starting with a digit is no name, so it is
+  read only as `L["1ST"]`: `L`'s type has it as the field `["1ST"]`.
 - Other locales may omit keys, and the base string is used. Unknown keys are
   error E8061, and missing keys are warning W8062 with a per-locale summary.
 - File names must be a valid locale code plus `.json` (E8105). Valid codes:
@@ -54,7 +54,9 @@ print(L.KILLS({ count = kills, zone = GetZoneText() }))
 ```
 
 - `L` has a generated type. A key without placeholders is a `string`. A key with
-  placeholders is a function `(params: { name: any, … }) -> string`. If any
+  placeholders is a function `(params: { name: any, … }) -> string`. The
+  argument has exactly the key's placeholders (intrinsic check): a missing one
+  is E2001, and a table literal's key that is no placeholder is E2003. If any
   argument's static type may be secret, the result is
   `string | Secret<string>` (intrinsic check), because concatenating a secret
   yields a secret.

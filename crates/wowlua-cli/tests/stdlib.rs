@@ -3629,11 +3629,11 @@ end
 const LOCALE_FILES: &[(&str, &str)] = &[
     (
         "locales/enUS.json",
-        r#"{ "TITLE": "Kill Tracker", "WELCOME": "Welcome back, {name}!", "KILLS": "{count} kills in {zone}", "BRACES": "{{x}} \"q\"\nline", "COLOR": "|cffff0000red|r" }"#,
+        r#"{ "TITLE": "Kill Tracker", "WELCOME": "Welcome back, {name}!", "KILLS": "{count} kills in {zone}", "BRACES": "{{x}} \"q\"\nline", "COLOR": "|cffff0000red|r", "1ST": "first" }"#,
     ),
     (
         "locales/deDE.json",
-        r#"{ "TITLE": "Abschusszähler", "WELCOME": "Willkommen zurück, {name}!", "KILLS": "{zone}: {count} Abschüsse ({count})" }"#,
+        r#"{ "TITLE": "Abschusszähler", "WELCOME": "Willkommen zurück, {name}!", "KILLS": "{zone}: {count} Abschüsse ({count})", "1ST": "erste" }"#,
     ),
     ("locales/enGB.json", r#"{ "TITLE": "Kill Tracker (GB)" }"#),
 ];
@@ -3644,6 +3644,8 @@ print(L.WELCOME({ name = "Sua" }))
 print(L.KILLS({ count = 3, zone = "Elwynn" }))
 print(L.BRACES)
 print(L.COLOR)
+-- A key starting with a digit, by its name.
+print(L["1ST"])
 "#;
 
 #[test]
@@ -3658,7 +3660,8 @@ fn locale_strings_follow_the_client_language() {
             "Welcome back, Sua!",
             "3 kills in Elwynn",
             "{x} \"q\"\nline",
-            "|cffff0000red|r"
+            "|cffff0000red|r",
+            "first"
         ],
         "{out:?}"
     );
@@ -3695,7 +3698,7 @@ fn locale_files_load_first_with_their_client_tags() {
     let stderr = build(dir.path(), "dev");
     // deDE lacks two keys.
     assert!(
-        stderr.contains("W8062") && stderr.contains("`deDE` lacks 2 of 5"),
+        stderr.contains("W8062") && stderr.contains("`deDE` lacks 2 of 6"),
         "{stderr}"
     );
     let toc = fs::read_to_string(dir.path().join("dist/dev/Std/Std.toc")).unwrap();
@@ -3828,6 +3831,15 @@ fn locale_checks() {
         ("print(L.TITEL)\n", "E2003"),
         ("print(L.WELCOME())\n", "E2007"),
         ("local n: number = L.TITLE\nprint(n)\n", "E2001"),
+        // Exactly the key's placeholders.
+        ("print(L.KILLS({ count = 3 }))\n", "E2001"),
+        ("local p = { count = 3 }\nprint(L.KILLS(p))\n", "E2001"),
+        (
+            "print(L.KILLS({ count = 3, zone = \"Elwynn\", extra = 1 }))\n",
+            "E2003",
+        ),
+        ("print(L.WELCOME({}))\n", "E2001"),
+        ("local n: number = L[\"1ST\"]\nprint(n)\n", "E2001"),
         // A secret value makes a secret string.
         (
             "local s: string = L.WELCOME({ name = UnitName(\"player\") })\nprint(s)\n",

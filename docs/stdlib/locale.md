@@ -35,7 +35,8 @@ That is `enUS.json`. `deDE.json` translates two of its keys:
 ```
 
 - Each file is a JSON object of strings (E8115 otherwise).
-- Keys are upper case letters, digits and underscores (E8060).
+- Keys are upper case letters, digits and underscores (E8060). Read a key that
+  starts with a digit by its name: `L["1ST"]`.
 - Values may contain the game's escape sequences, such as colors
   (`|cffff8800…|r`) and textures (`|T…|t`), and newlines.
 - A file's name is a locale code and `.json` (E8105): `enUS`, `enGB`, `deDE`,
@@ -72,7 +73,14 @@ error: aborting due to 1 previous error
 ```
 
 Calling a plain string, or passing something other than a table to a key with
-placeholders, is a type error too.
+placeholders, is a type error too. So is leaving out a placeholder (E2001), or
+passing a key the string has no placeholder for (E2003):
+
+```wowlua fragment fails=E2001
+import L from "wowlua:locale"
+
+print(L.KILLS({ count = 12 }))   -- the placeholder `zone` is missing
+```
 
 ## Placeholders
 

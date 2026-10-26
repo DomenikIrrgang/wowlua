@@ -1760,6 +1760,12 @@ impl Checker<'_, '_> {
                                 .member_type(p, name, span, true)
                                 .filter(|&t| t != Types::ERROR && t != Types::ANY),
                         });
+                    if found.is_none() && !quiet && self.closed_parts(&parts, name) {
+                        let msg =
+                            format!("`{}` has no field or method `{name}`", self.env.display(m));
+                        self.report("E2003", span, msg);
+                        return Some(Types::ERROR);
+                    }
                     Some(found.unwrap_or(Types::ANY))
                 }
                 Ty::Secret(_) => {
@@ -1784,6 +1790,31 @@ impl Checker<'_, '_> {
             return Some(Types::NIL);
         }
         Some(self.env.types.union(&out))
+    }
+
+    /// Whether no part of an intersection can have the field `name`: each
+    /// is an interface or class of the program without it and without an
+    /// indexer, or a closed record without it, and one is an interface or
+    /// class (`L`'s `WowluaLocale & { ["1ST"]: string }`, spec stdlib
+    /// "locale"). Reading such a field is E2003 as on the interface alone.
+    fn closed_parts(&mut self, parts: &[TypeId], name: &str) -> bool {
+        let mut declared = false;
+        for &p in parts {
+            match self.env.types.get(p).clone() {
+                Ty::Named(d, args)
+                    if !self.env.view(d).native()
+                        && self.env.view(d).kind() != DefKind::Enum
+                        && self.env.instance_member(d, &args, name).is_none()
+                        && self.env.indexer_of(d).is_none() =>
+                {
+                    declared = true;
+                }
+                Ty::Record(r) if !r.open && r.indexer.is_none() && !r.fields.contains_key(name) => {
+                }
+                _ => return false,
+            }
+        }
+        declared
     }
 
     fn check_visibility(&mut self, v: Visibility, owner: DefId, name: &str, span: Span) {
@@ -3033,6 +3064,9 @@ impl Checker<'_, '_> {
         let Some(id) = self.intrinsic_of(callee) else {
             return;
         };
+        if id.starts_with("locale.L.") {
+            self.check_locale_params(callee, args);
+        }
         if id.starts_with("hooks.") {
             self.check_hook_target(&id, args.exprs(), false);
         }
@@ -3079,6 +3113,82 @@ impl Checker<'_, '_> {
                         "the defaults of `saved.bind` contain a `Secret<…>` type{at}: secret values cannot be compared or saved"
                     );
                     self.report("E8104", value.span(), msg);
+                }
+            }
+        }
+    }
+
+    /// `L.KEY(params)` of `wowlua:locale`: `params` has exactly the key's
+    /// placeholders (spec stdlib "locale"). A missing one is E2001, as for
+    /// a missing field; a table literal's key that is no placeholder is
+    /// E2003.
+    fn check_locale_params(&mut self, callee: Expr<'_>, args: Args<'_>) {
+        let Some(&f) = self
+            .expr_types
+            .get(&(callee.span().start, callee.span().end))
+        else {
+            return;
+        };
+        let Ty::Func(f) = self.env.types.get(f).clone() else {
+            return;
+        };
+        let Some(params) = f.params.first().map(|p| p.ty) else {
+            return;
+        };
+        let Ty::Record(wanted) = self.env.types.get(params).clone() else {
+            return;
+        };
+        let Some(arg) = args.exprs().first() else {
+            return;
+        };
+        let key = match callee.kind() {
+            ExprKind::Field { name, .. } => name.text().to_string(),
+            _ => return,
+        };
+        let given: Vec<(String, Span)> = match arg.kind() {
+            ExprKind::Table(fields) => fields
+                .iter()
+                .filter_map(|f| match f {
+                    TableField::Named { name, .. } => Some((name.text().to_string(), name.span())),
+                    TableField::Keyed { key, .. } => match key.kind() {
+                        ExprKind::String(lit) => Some((
+                            String::from_utf8_lossy(&lit.value()).into_owned(),
+                            key.span(),
+                        )),
+                        _ => None,
+                    },
+                    TableField::Positional(_) => None,
+                })
+                .collect(),
+            _ => {
+                let Some(&t) = self.expr_types.get(&(arg.span().start, arg.span().end)) else {
+                    return;
+                };
+                match self.env.types.get(t).clone() {
+                    Ty::Record(r) if r.indexer.is_none() => r
+                        .fields
+                        .keys()
+                        .map(|k| (k.to_string(), arg.span()))
+                        .collect(),
+                    _ => return,
+                }
+            }
+        };
+        let literal = matches!(arg.kind(), ExprKind::Table(_));
+        for name in wanted.fields.keys() {
+            if !given.iter().any(|(g, _)| g == name) {
+                let msg = format!(
+                    "the placeholder `{name}` is missing: `L.{key}` takes `{}`",
+                    self.env.display(params)
+                );
+                self.report("E2001", arg.span(), msg);
+            }
+        }
+        if literal {
+            for (name, span) in &given {
+                if !wanted.fields.contains_key(name) {
+                    let msg = format!("`L.{key}` has no placeholder `{name}`");
+                    self.report("E2003", *span, msg);
                 }
             }
         }

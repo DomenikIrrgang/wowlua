@@ -417,24 +417,33 @@ pub fn declaration(locales: Option<&Locales>) -> String {
         return out;
     };
     out.push_str("interface WowluaLocale\n");
+    // Keys starting with a digit are no names: fields `["1ST"]` of a
+    // record beside the interface, read as `L["1ST"]`.
+    let mut digit_keys: Vec<String> = Vec::new();
     for (key, parts) in &locales.list[0].entries {
-        // Keys starting with a digit are only reachable as `L["1ST"]`.
-        if key.starts_with(|c: char| c.is_ascii_digit()) {
-            continue;
-        }
         let names = params(parts);
-        if names.is_empty() {
-            let _ = writeln!(out, "    {key}: string");
+        let ty = if names.is_empty() {
+            "string".to_string()
         } else {
             let fields: Vec<String> = names.iter().map(|n| format!("{n}: any")).collect();
-            let _ = writeln!(
-                out,
-                "    {key}: (params: {{ {} }}) -> string",
-                fields.join(", ")
-            );
+            format!("(params: {{ {} }}) -> string", fields.join(", "))
+        };
+        if key.starts_with(|c: char| c.is_ascii_digit()) {
+            digit_keys.push(format!("[\"{key}\"]: {ty}"));
+        } else {
+            let _ = writeln!(out, "    {key}: {ty}");
         }
     }
-    out.push_str("end\n@intrinsic(\"locale.L\")\ndeclare global L: WowluaLocale\n");
+    out.push_str("end\n@intrinsic(\"locale.L\")\n");
+    if digit_keys.is_empty() {
+        out.push_str("declare global L: WowluaLocale\n");
+    } else {
+        let _ = writeln!(
+            out,
+            "declare global L: WowluaLocale & {{ {} }}",
+            digit_keys.join(", ")
+        );
+    }
     out
 }
 
