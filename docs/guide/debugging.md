@@ -106,10 +106,49 @@ and the default error frame still get every error.
 
 ### Exporting a recording
 
-Right-click a recording and choose **Mark for export**. The window saves it in
-`WowluaDevDB_<Addon>` and reminds you that WoW writes it on `/reload` or when
-you log out. `wowlua prof report` then makes an HTML page of it on your
-computer.
+The dev window is small, and a recording ends with the session. To look at a
+boss pull at full size, or send it to someone, export it: the recording
+leaves the game through the addon's SavedVariables, and
+`wowlua prof report` turns it into one HTML page on your computer.
+
+1. **Run a dev build in the game** Build, install and log in as usual.
+   `wowlua dev`
+2. **Switch on call paths** Open the dev window, pick your addon in its
+   selector and, in the performance tab, switch on **Call paths** for the
+   call tree and the flame graph (and **Garbage per function** for the garbage
+   per function). Do it before the pull: a recording only has what was on
+   while it ran. `/wl`
+3. **Pull the boss** The window starts a recording when the encounter starts
+   and ends it when the encounter ends, win or wipe. It is listed as `pull 1`
+   with the boss's name. `pull 1`
+4. **Mark it and reload** Right-click the recording, choose **Mark for
+   export**, then reload. WoW writes SavedVariables only on a reload or when
+   you log out, and the window's footer reminds you until you do. `/reload`
+5. **Open the report** In your addon's folder on your computer: it finds
+   your WoW installation as `wowlua dev` does, reads the exported recordings
+   and opens the page in your browser. `wowlua prof report`
+
+The page is `dist/reports/<Name>-<date>.html` (`--out` names another file,
+`--no-open` only writes it). It shows every exported recording, or the ones
+you name with `--recording "pull 1"`: its hints, the functions table, the
+time by event, the call tree and flame graph, the frame timeline against the
+frame budget, the slow calls with their stacks and the garbage. Locations in
+the stacks are mapped back to your source lines as `wowlua trace` does, with
+the build each recording was made with. The page is self-contained and
+nothing is uploaded.
+
+The command looks in every client folder (`_retail_`, `_classic_`, …) and
+every account under `WTF/Account/`. When more than one has exported
+recordings of the addon, it lists them and asks which one; in a script, pick
+one with `--client` and `--account`:
+
+```console
+$ wowlua prof report --client _retail_ --account MYACCOUNT
+```
+
+A recording stays marked for export after the reload, so the next reload
+saves it again. Right-click it and choose **Unmark for export** when you no
+longer need it.
 
 ### From chat
 
