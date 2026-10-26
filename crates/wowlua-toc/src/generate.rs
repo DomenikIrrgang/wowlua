@@ -478,6 +478,35 @@ mod tests {
         }
     }
 
+    /// E4302 (§14.9.3): two flavors of a family whose clients know no game
+    /// suffix of theirs would both need the family suffix. The shipped
+    /// table has none such, so this one takes `_Mists` and `_Cata` away.
+    #[test]
+    fn flavors_without_a_name_of_their_own_are_indistinguishable() {
+        let json = include_str!("../../wowlua-flavors/data/flavors.json")
+            .replace(r#""game-suffixes": ["_Mists"]"#, r#""game-suffixes": []"#)
+            .replace(r#""game-suffixes": ["_Cata"]"#, r#""game-suffixes": []"#);
+        let table: FlavorTable = serde_json::from_str(&json).unwrap();
+        let both = input(&["standard", "mists", "cata"]);
+        match per_flavor_names(&table, &both) {
+            Err(errors) => assert!(
+                matches!(
+                    errors.as_slice(),
+                    [TocError::Indistinguishable { flavors }] if flavors == &["mists", "cata"]
+                ),
+                "{errors:?}"
+            ),
+            Ok(names) => panic!("{names:?}"),
+        }
+        // One of them alone takes the family suffix.
+        assert_eq!(
+            per_flavor_names(&table, &input(&["standard", "mists"])).unwrap(),
+            ["MyAddon_Mainline.toc", "MyAddon_Classic.toc"]
+        );
+        // The shipped table names them apart.
+        assert!(per_flavor_names(wowlua_flavors::table(), &both).is_ok());
+    }
+
     #[test]
     fn one_flavor_gives_a_plain_toc() {
         let generated = generate(&input(&["standard"])).unwrap();
