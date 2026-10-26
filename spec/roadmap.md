@@ -184,7 +184,7 @@ Notes on the delivered state:
 
 - Sources: git (bare clones, exported per commit), SVN (system `svn`,
   pinned to a revision), path and archive (`https`, `file://`); the registry
-  waits for its server (T104), and the wow-api types stay embedded.
+  came with M10 (T104), and the wow-api types stay embedded.
 - The exit check (`packager-compat` workflow, T119): thirty-six addons built
   with the BigWigs packager, at pinned commits, packaged by the packager the
   way their CI does (multi-version, `-S`, or game by game with `-g`/`-m`)
@@ -503,10 +503,22 @@ Released as 0.10.0, together with M12.
 
 ## M10: Registry
 
-- Registry server (separate repository), `publish --target registry`,
-  `package --registry`, registry sources in the resolver, owners and yanking.
+- Registry server (in the workspace: `crates/wowlua-registry`, decision
+  T104), `publish --target registry`, `package --registry`, registry
+  sources in the resolver, owners and yanking.
 
 **Exit:** libraries can be published and consumed by version requirement.
+
+**Status: done (2026-10-26)**, released as 0.13.0. The registry runs at
+`https://registry.wowlua.dev`, a container on the project's droplet behind
+its Traefik, with its data in one volume; accounts are GitHub sign-ins.
+Checked natively (`crates/wowlua-registry/tests/server.rs`, and
+`crates/wowlua-cli/tests/registry.rs`, the `wowlua` binary against the
+server in the test's process): publish, resolve, lock, download, yank and
+W4322, owners and 403, 409 for an existing version, reserved names, 413 and
+E4230. Not yet: the `wow-api-<flavor>` types packages on the registry (they
+stay embedded, T83), search (`package.keywords`), and registry dependencies
+in the browser's playground (M14), which has no downloads.
 
 ## M11: Performance optimization
 

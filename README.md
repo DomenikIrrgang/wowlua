@@ -165,7 +165,7 @@ The specification lives in [`spec/`](spec/README.md); implementation follows the
 | M7 | Optimization and publishing | done · 2026-10-13 |
 | M8 | Standard library | done · 2026-10-15 |
 | M9 | Test runner, language server, formatter | done · 2026-10-25 (0.10.0) |
-| M10 | Registry | planned |
+| M10 | Registry | done · 2026-10-26 (0.13.0) |
 | M11 | Performance optimization | planned |
 | M12 | Debugger, profiler, screenshots, 3D models, MCP for AI agents | done · 2026-10-25 (0.10.0) |
 | M13 | Game data and rendering | done · 2026-10-25 (0.11.0) |
@@ -201,8 +201,9 @@ Using a feature of a later milestone reports that milestone.
   the BigWigs packager's (`compat` settings, read from `.pkgmeta` and the
   project's CI workflows).
 - `wowlua add` / `remove` / `update` / `fetch` / `tree` / `outdated` /
-  `cache clean`: manage dependencies (`git`, `svn`, `path`, `archive`;
-  the registry comes later). `-p <package>` selects a workspace member.
+  `cache clean`: manage dependencies (`git`, `svn`, `path`, `archive`, and
+  libraries of the [wowlua registry](https://registry.wowlua.dev) by version
+  requirement). `-p <package>` selects a workspace member.
 - `wowlua build [--release] [--flavor …] [--stats]`: a complete AddOn in
   `dist/<profile>/<Name>/` with generated TOC(s) for every flavor, Lua 5.1
   syntax checks, XML reference checks and output validation. `.wowlua` files

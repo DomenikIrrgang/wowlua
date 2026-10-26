@@ -82,13 +82,13 @@ bundling work as in `wowlua build`.
 
 | Command | Description |
 |---------|-------------|
-| `wowlua add <name>[@<req>] [--git <url> [--tag\|--branch\|--rev <x>] [--subdir <d>]] [--svn <url> [--rev <n>]] [--path <p>] [--archive <url> --sha256 <h> [--strip-prefix <p>]] [--kind <k>] [--files <a,b>] [--install-path <p>] [--dev] [--optional] [--flavors <f,…>] [--features <a,b>] [--no-default-features]` | Add (or replace) a dependency and update the lockfile. If the dependency cannot be resolved, `wowlua.json` is left unchanged |
+| `wowlua add <name>[@<req>] [--git <url> [--tag\|--branch\|--rev <x>] [--subdir <d>]] [--svn <url> [--rev <n>]] [--path <p>] [--archive <url> --sha256 <h> [--strip-prefix <p>]] [--kind <k>] [--files <a,b>] [--install-path <p>] [--dev] [--optional] [--flavors <f,…>] [--features <a,b>] [--no-default-features]` | Add (or replace) a dependency and update the lockfile. If the dependency cannot be resolved, `wowlua.json` is left unchanged. `<name>` without a source is a registry dependency; without `@<req>` it is written as `^<the resolved version>` |
 | `wowlua add --addon <Name> [--optional]` | Add an `addon-dependencies` entry |
 | `wowlua remove <name> [--dev]` | Remove a dependency |
-| `wowlua update [<name>…] [--precise <pin>]` | Move locked pins within their declarations: branches and default branches to their newest commit, SVN sources without `rev` to their newest revision. Tags and explicit revisions are pinned by the manifest. `--precise` pins one dependency to a given git commit or SVN revision |
+| `wowlua update [<name>…] [--precise <pin>]` | Move locked pins within their declarations: registry versions to the newest the requirement allows (never a yanked one), branches and default branches to their newest commit, SVN sources without `rev` to their newest revision. Tags and explicit revisions are pinned by the manifest. `--precise` pins one dependency to a given git commit, SVN revision or registry version |
 | `wowlua fetch` | Download all dependencies into the cache |
 | `wowlua tree [--flavor <f>] [--invert <name>]` | Show the dependency graph |
-| `wowlua outdated` | List dependencies with newer tags (by SemVer), newer commits on their branch, or newer SVN revisions, and what to change |
+| `wowlua outdated` | List dependencies with newer registry versions, newer tags (by SemVer), newer commits on their branch, or newer SVN revisions, and what to change |
 | `wowlua cache clean [--all]` | Remove cache entries not used by any fetch or build for 30 days; `--all` empties the cache (decision T109) |
 | `wowlua types sync [--flavor <f>…]` | Refresh the flavor table, the pinned interface numbers and the locked `wow-api-<flavor>` types packages after a game patch ([Package manager §10.9](package-manager.md#109-types-packages)) |
 | `wowlua types convert <path> [--out <dir>]` | Convert LuaLS `---@` annotations into `.d.wowlua` declarations |
@@ -100,9 +100,9 @@ indentation and line endings are preserved, and only the affected entries change
 
 | Command | Description |
 |---------|-------------|
-| `wowlua package [--target <t>] [--flavor <f>…] [--registry]` | Build and package zips into `dist/packages/`. `--registry` creates the registry archive of a library package instead ([Package manager §10.10.3](package-manager.md#10103-package-archive)). |
+| `wowlua package [--target <t>] [--flavor <f>…] [--registry]` | Build and package zips into `dist/packages/`. `--registry` creates the registry archive of a library package instead, `dist/packages/<name>-<version>.tar.gz` ([Package manager §10.10.3](package-manager.md#10103-package-archive); E4230 for an addon). |
 | `wowlua publish [--target <t>…] [--dry-run] [--tag <tag>] [--release-type <t>] [--allow-dirty] [--no-test]` | Package and upload ([Publishing §11.9](publishing.md#119-the-publish-command)) |
-| `wowlua login <type> [--token <t>] [--no-verify]` | Store an API token for a site type (`curseforge`, `wago`, `wowinterface`, `github`, `registry`) in the OS credential store ([Package manager §10.11](package-manager.md#1011-security)). The token comes from `--token`, from stdin when piped, or from a hidden prompt. CurseForge and GitHub tokens are checked with a read-only request first, and a rejected token is not saved. |
+| `wowlua login <type> [--token <t>] [--no-verify]` | Store an API token for a site type (`curseforge`, `wago`, `wowinterface`, `github`, `registry`) in the OS credential store ([Package manager §10.11](package-manager.md#1011-security)). The token comes from `--token`, from stdin when piped, or from a hidden prompt. CurseForge and GitHub tokens are checked with a read-only request first, and a rejected token is not saved. A registry token is created on the registry's page (`https://registry.wowlua.dev/login`, signing in with GitHub). |
 | `wowlua logout <type>` | Remove a saved API token |
 
 ## 12.5 WoW installation integration
@@ -363,6 +363,10 @@ files wait, and one larger than the cap is compiled alone. Projects under
 `build.compile-cache` (default `true`) keeps Lua compile results between
 runs, within `build.compile-cache-size` MiB (default 256; [Package manager
 §10.7](package-manager.md#107-cache)).
+
+`registries` maps names to registry URLs: a dependency's `registry` may
+name one, and `default` replaces the default registry
+(`https://registry.wowlua.dev`; [Package manager §10.3](package-manager.md#103-sources)).
 
 API tokens live in the OS credential store (`wowlua login`). Only when no
 credential store is available does `wowlua login` write a `tokens` object into

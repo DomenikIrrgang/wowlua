@@ -385,14 +385,14 @@ Related: E4102, E4321
 
 A dependency cannot be found: a `path` that does not exist, a git repository
 without the given tag, branch, commit or `subdir`, an archive without the
-`strip-prefix` folder, a source whose `wowlua.json` names another package, or
-a registry dependency (a bare version requirement such as `"^1.0"`). The
-wowlua registry is not available yet, so registry dependencies are always this
-error for now.
+`strip-prefix` folder, a source whose `wowlua.json` names another package, a
+registry package the registry does not have, or a registry requirement (such
+as `"^2.0"`) that no version matches. Yanked versions count as missing for a
+new requirement; the notes list the newest versions there are.
 
-Check the source in the dependency entry. For a library you cannot get from a
-registry, use a `git`, `svn`, `path` or `archive` source. The error comes from
-dependency resolution, so it has no example here.
+Check the name and the requirement in the dependency entry. For a library the
+registry does not have, use a `git`, `svn`, `path` or `archive` source. The
+error comes from dependency resolution, so it has no example here.
 
 Related: E4101, E4105
 
@@ -576,6 +576,22 @@ packages. Players get addons from the addon sites, so publish an addon with a
 `curseforge`, `wago`, `wowinterface` or `github` target instead.
 
 The rule belongs to publishing, so it has no example here.
+
+Related: E4231
+
+## E4231
+
+A package for the wowlua registry depends on a library from a `git`, `svn`,
+`path` or `archive` source. The registry resolves a package's dependencies
+from its index, by version, so every dependency of a published package must be
+on a registry as well. `dev-dependencies` are not published, so they may come
+from anywhere.
+
+Publish the dependency to the registry first and depend on it by version
+(`"lib-b": "^1.0"`), or copy its files into your package. The rule belongs to
+publishing, so it has no example here.
+
+Related: E4230
 
 ## E4300
 

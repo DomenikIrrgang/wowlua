@@ -2,7 +2,7 @@
 
 Turn your project into the release build players download, and upload it to
 CurseForge, Wago, WoWInterface and GitHub with one command, from your machine
-or from CI on every tag.
+or from CI on every tag. Libraries go to the wowlua registry the same way.
 
 ## Dev builds and release builds
 
@@ -185,13 +185,14 @@ $ wowlua login curseforge
 $ wowlua login wago
 $ wowlua login wowinterface
 $ wowlua login github
+$ wowlua login registry      # for libraries: a token from registry.wowlua.dev
 ```
 
 `login` asks for the token in a hidden prompt, or reads it from standard
 input or `--token`. CurseForge and GitHub tokens are checked with a
 read-only request before they are saved. In CI, set environment variables
-instead: `CF_API_TOKEN`, `WAGO_API_TOKEN`, `WOWI_API_TOKEN` and
-`GITHUB_TOKEN`. All but the last are the names the BigWigs packager uses, so
+instead: `CF_API_TOKEN`, `WAGO_API_TOKEN`, `WOWI_API_TOKEN`,
+`GITHUB_TOKEN` and `WOWLUA_REGISTRY_TOKEN`. All but the last are the names the BigWigs packager uses, so
 the secrets you have keep working.
 
 ## Publish
@@ -229,6 +230,61 @@ $ wowlua package                    # just the zips, in dist/packages/
 creates the tag on GitHub. Without a tag, the GitHub target creates no
 release and warns (W4329). The command and every site's protocol are in
 [Publishing](../../spec/toolchain/publishing.md).
+
+## Publish a library to the registry
+
+Libraries (`library`, `lua-library` and `types` packages) go to the
+[wowlua registry](https://registry.wowlua.dev), where other packages depend
+on them by version (`"your-lib": "^1.0"`, see
+[Libraries and dependencies](packages.md#libraries-from-the-wowlua-registry)).
+Addons don't: players get them from the addon sites, so publishing an addon
+to the registry is error E4230.
+
+1. **Sign in** Open the registry's sign-in page, sign in with GitHub and
+   create an API token on your account page. `https://registry.wowlua.dev/login`
+2. **Save the token** Paste it into the hidden prompt; in CI, set
+   `WOWLUA_REGISTRY_TOKEN` instead. `wowlua login registry`
+3. **Look first** See what the registry would get, without uploading.
+   `wowlua publish --dry-run`
+4. **Publish** Commit, tag the version if you like, and upload.
+   `wowlua publish`
+
+A library needs no publish target: it has an implicit one named `registry`,
+so `wowlua publish` (or `wowlua publish --target registry`) uploads it.
+Declare a target with `"type": "registry"` to name another registry with
+its `registry` URL. `wowlua package --registry` makes the same archive in
+`dist/packages/<name>-<version>.tar.gz` without uploading it: your
+`wowlua.json` without `dev-dependencies`, `publish` and `workspace`, and every
+other file of the package except `dist/`, your tests (`tests/` and
+`*.test.wowlua`), files and folders whose names start with `.`, `wowlua.lock`
+and what `build.exclude` leaves out.
+
+```console
+$ wowlua package --registry
+    Packaged lib-tooltip-1.2.3.tar.gz (registry; 4 files, sha256-84d7…) → dist/packages/lib-tooltip-1.2.3.tar.gz
+$ wowlua publish
+    Packaged lib-tooltip-1.2.3.tar.gz (registry) → dist/packages/lib-tooltip-1.2.3.tar.gz
+    Uploaded lib-tooltip-1.2.3.tar.gz → registry: lib-tooltip 1.2.3 (sha256-84d7…)
+```
+
+What the registry checks:
+
+- **Names** are lowercase letters, digits and `-`, 2 to 64 characters, and
+  first come, first served. The names of well-known WoW libraries (`libstub`,
+  `ace3`, `libsharedmedia-3-0`, …) are reserved for their authors: if you
+  maintain one, ask the registry's admins to assign it to your GitHub
+  account.
+- **Versions** never change. Publishing a version that exists fails (HTTP
+  409); publish a new one. A version with a serious bug can be **yanked** on
+  your account page: lockfiles that have it keep working (with W4322), but
+  nobody gets it anew.
+- **Owners.** Whoever publishes a name first owns it. Add the GitHub logins
+  of co-maintainers on your account page; only owners publish new versions
+  (HTTP 403 for anybody else).
+- **Dependencies** must come from a registry too: a `git`, `svn`, `path` or
+  `archive` dependency of a published package is error E4231 (your
+  `dev-dependencies` stay out of the archive, so they may be anything).
+- **Size.** An archive may be 10 MiB at most (HTTP 413).
 
 ## Publish from CI on every tag
 
@@ -274,8 +330,9 @@ need. `--message-format github` turns errors and failed tests into
 annotations on the pull request. The tests run in wowlua's emulated client, so
 the runner needs no game and no display. Releasing is then
 `git tag v1.4.2 && git push origin v1.4.2`. A library's workflow (`--kind
-library`, `lua-library` or `types`) only checks and tests: a library is not
-published on its own.
+library`, `lua-library` or `types`) only checks and tests; to publish a
+library from CI, add a `wowlua publish` step with `WOWLUA_REGISTRY_TOKEN` in
+its `env` ([above](#publish-a-library-to-the-registry)).
 
 ## When players report errors
 

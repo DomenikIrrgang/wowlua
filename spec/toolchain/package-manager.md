@@ -44,7 +44,7 @@ can be used directly: the dependency declaration supplies `kind:
 
 | Source | Fields | Notes |
 |--------|--------|-------|
-| Registry | `"<semver req>"` or `{ "version": "…", "registry": "…" }` | Default registry: `https://registry.wowlua.dev` ([§10.10](#1010-registry)). Not available until the registry exists: error E4102 (decision T104). |
+| Registry | `"<semver req>"` or `{ "version": "…", "registry": "…" }` | Default registry: `https://registry.wowlua.dev` ([§10.10](#1010-registry)), or `registries.default` in `config.json`. `registry` is a URL or a name under `registries` in `config.json` ([CLI §12.7](cli.md#127-configuration)). Locked to a version, `registry+<url>` in the lockfile. A package the registry does not have, or no version matching the requirement, is E4102. |
 | Git | `git`, plus one of `tag`, `branch`, `rev`; optional `subdir`, `submodules` (default `false`) | Locked to a commit hash. Uses the system `git`, so credentials and SSH work as usual. Submodules are only fetched with `"submodules": true`; their commits are fixed by the locked parent commit. `"tag": "latest"` names the newest tag among the last 50 commits of the default branch, re-resolved by `wowlua update` (decision T149). |
 | Path | `path` | Relative to the manifest. Never locked by checksum. For workspaces and local development. |
 | Archive | `archive` (URL to `.zip` / `.tar.gz`; `https://`, or `file://` for a local archive, decision T108), `sha256` (required, of the archive file), optional `strip-prefix` | For release downloads. Without `strip-prefix`, an archive holding a single folder (a GitHub archive) has that folder as its root (decision T152). |
@@ -88,6 +88,15 @@ Common fields:
   highest compatible version, or the locked version if one exists and still
   satisfies all requirements. Yanked versions are never chosen by a new
   resolution. A locked yanked version keeps working with warning W4322.
+  `wowlua update` lets locked versions move; `--precise <version>` pins a
+  registry dependency to one version.
+- **Registry indexes** are cached (§10.7). A resolution reads the
+  registry's index of a package once per command with `If-None-Match`,
+  unless the cached index has the root's locked version and it still
+  matches: then the cache serves, so a build with an up-to-date lockfile
+  needs no network. `fetch`, `update`, `add` and `outdated` always read the
+  indexes again (and so report W4322 for a version yanked since). When the
+  registry cannot be reached, a cached index serves.
 - Git and archive dependencies without a `wowlua.json` have version
   `0.0.0+<commit or sha>`. With a manifest, they have its version.
 
@@ -249,7 +258,7 @@ libraries.
 | `…/cache/git/<name>-<hash>/` | Bare clones |
 | `…/cache/checkouts/<kind>-<name>-<hash>-<pin>/` | Exported trees: one per git commit, SVN revision; without version-control metadata |
 | `…/cache/archives/<sha256>`, `…/cache/archives/<sha256>.d/` | Downloaded archives and their extracted trees |
-| `…/cache/registry/<registry>/<name>/<version>/` | Unpacked registry packages and index cache |
+| `…/cache/registry/<registry>/<name>/<version>/` | Unpacked registry packages; beside them `<name>/.index` (the index file) and `.index.etag`, and `<registry>/config.json`. `<registry>` is the registry's host (`registry.wowlua.dev`; a port joins it with `_`, a path adds a hash) |
 | `…/cache/compile/<hash>` | Lua 5.1 compile results (see below) |
 | `…/maps/<build id>/` | Archived source maps of published builds ([Code generation §14.6](codegen.md#146-source-maps)) |
 | `…/config.json` | Global configuration: WoW install paths, registries (see [CLI](cli.md#127-configuration)). Tokens are not stored here unless the OS keychain is unavailable (§10.11). |
@@ -469,9 +478,10 @@ tuples, literals and dotted names. Other tags are ignored.
 ## 10.10 Registry
 
 The wowlua registry hosts `library`, `lua-library` and `types` packages.
-Addons are distributed through addon sites instead. It is a later
-milestone ([Roadmap](../roadmap.md)). The protocol is specified now so that
-clients and servers can be built independently.
+Addons are distributed through addon sites instead. It runs at
+`https://registry.wowlua.dev`; its server is the workspace's
+`wowlua-registry` crate, which shares the manifest validation and the
+archive rules of this section with the client (decision T104).
 
 ### 10.10.1 Index (sparse HTTP)
 
@@ -480,11 +490,17 @@ clients and servers can be built independently.
   published version:
   `{"name":"wowlua-ui","vers":"0.4.2","deps":[{"name":"libstub","req":"^1.0","kind":"normal"}],"cksum":"sha256-…","features":{},"yanked":false,"wowlua":">=0.3"}`
 - Index files are cacheable and support `ETag` / `If-None-Match`.
+- `cksum` is the checksum of the package's file tree (§10.6), which the
+  server computes from the archive: the lockfile's `checksum`. `deps` are
+  the manifest's `dependencies` (kind `normal`; `"optional": true` for an
+  optional one, `"registry": "<url>"` for one from another registry);
+  `dev-dependencies` are not published.
 
 ### 10.10.2 Download and publish
 
-All registry traffic uses HTTPS. Authenticated requests send
-`Authorization: Bearer <token>`.
+All registry traffic uses HTTPS; plain HTTP only to a registry on the same
+computer (`localhost`, `127.0.0.1`, `[::1]`: a registry run locally, and
+tests). Authenticated requests send `Authorization: Bearer <token>`.
 
 | Request | Meaning | Success |
 |---------|---------|---------|
@@ -500,14 +516,55 @@ Errors use HTTP status 400 (invalid package), 401 (missing or bad token), 403
 `{"errors": [{"code": "<machine code>", "detail": "<message>"}]}`.
 
 - Versions are immutable. A published version can be yanked, never replaced.
+  A yanked version stays downloadable.
 - Package names: lowercase `[a-z0-9-]`, 2–64 characters, first come first served.
-  Names of well-known WoW libraries are reserved for their authors.
+  Names of well-known WoW libraries are reserved for their authors: the
+  server's data file lists them (`crates/wowlua-registry/data/reserved.json`),
+  and its admins extend it and assign each name to GitHub logins
+  (`GET {api}/v1/reserved`, and for admins `PUT` / `DELETE
+  {api}/v1/reserved/<name>` with `{"users": [...], "note": "…"}`). Until
+  assigned, only admins may publish a reserved name (403).
+- **Accounts.** Users are GitHub logins: the registry's page
+  (`{registry}/login`) signs in with GitHub and creates and revokes API
+  tokens, which the server stores as their SHA-256 only. The publisher of a
+  new package is its owner; owners added must be GitHub users. The last
+  owner cannot be removed. Admins may act as an owner of every package.
+- **Checks of a publish.** The manifest is validated with the manifest rules
+  of the server's version (a package whose `package.wowlua` excludes that
+  version is checked for the fields below only); the URL's name and version
+  must match it and the archive's `wowlua.json` (400 otherwise); the kind
+  must be a library kind (400, E4230); every dependency must come from a
+  registry (400, E4231); the archive must follow §10.10.3 (400). The
+  machine codes are `invalid-name`, `invalid-version`, `invalid-manifest`,
+  `manifest-mismatch`, `invalid-archive`, `addon`, `dependency-source`,
+  `unknown-user`, `last-owner`, `invalid-request`, `unauthorized`,
+  `not-owner`, `reserved`, `not-admin`, `not-found`, `version-exists` and
+  `too-large`. The size limit is the server's setting (10 MiB by default).
 
 ### 10.10.3 Package archive
 
 `wowlua package --registry` (or `wowlua publish --target registry`) creates a
 `.tar.gz` containing `wowlua.json`, sources, `.d.wowlua` files and license
-files, but no `dist/`, tests or dev files.
+files, but no `dist/`, tests or dev files. Precisely (decision T104):
+
+- `wowlua.json` is the normalized manifest: the package's, without
+  `dev-dependencies`, `publish` and `workspace`, a registry dependency's
+  `registry` name replaced by its URL, pretty-printed. It is also the
+  publish request's `manifest` field.
+- Every other file of the package, except the build output (`build.out`),
+  the tests (the `tests/` folder and `*.test.wowlua` files), dev files (a
+  file or folder whose name starts with `.`, `wowlua.lock`) and what
+  `build.exclude` excludes. Links are not followed.
+- Entries are regular files at the archive's root, sorted, with mode 0644
+  and the time `SOURCE_DATE_EPOCH` (else the commit time, else 0), so the
+  archive is reproducible. It is written to
+  `dist/packages/<name>-<version>.tar.gz`.
+- Extraction takes regular files and folders only: a link, an absolute
+  path or `..` is E4323; more than 10,000 files or 256 MiB unpacked is
+  refused.
+- An addon is E4230; a dependency from a `git`, `svn`, `path` or `archive`
+  source is E4231 (consumers resolve a registry package's dependencies from
+  its index).
 
 ## 10.11 Security
 
@@ -519,7 +576,8 @@ files, but no `dist/`, tests or dev files.
   containing `..`, and symlinks or hardlinks that point outside the package
   (E4323). Git submodules are only fetched when opted in (§10.3).
 - **Integrity.** Checksums are verified on every fetch (E4103). Registry and
-  archive downloads require HTTPS.
+  archive downloads require HTTPS (a registry on the same computer may use
+  HTTP, §10.10.2).
 - **Tokens.** `wowlua login <type>` stores tokens in the OS credential store
   (macOS Keychain, Windows Credential Manager, Secret Service on Linux; service
   `wowlua`, account = the site type); `wowlua logout <type>` removes them.

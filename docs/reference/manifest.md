@@ -246,13 +246,19 @@ The key names the dependency; the object says where it comes from:
 
 | Source | Fields |
 |--------|--------|
+| registry | `version` (a version requirement), optional `registry` |
 | git | `git`, plus one of `tag`, `branch` or `rev`; optional `subdir`, and `submodules` (default `false`) |
 | svn | `svn`, optional `rev` and `submodules` |
 | path | `path`, relative to the manifest |
 | archive | `archive` (a `https://` or `file://` URL of a `.zip` or `.tar.gz`), `sha256`, optional `strip-prefix` |
 
-A plain string such as `"^0.4"` asks the wowlua registry, which does not exist
-yet: such a dependency is error E4102 for now.
+A plain string such as `"^0.4"` is a version requirement against the
+[wowlua registry](https://registry.wowlua.dev) (`^1.2`, `~1.2.3`, `=1.2.3`,
+`>=1.0, <2.0`, `*`, as in Cargo). The object form `{ "version": "^0.4",
+"registry": "…" }` names another registry: its URL, or a name under
+`registries` in `~/.wowlua/config.json`. A package or version the registry
+doesn't have is error E4102. A package published to the registry depends
+on registry packages only (E4231).
 
 Every dependency may also have these fields:
 
@@ -569,7 +575,10 @@ and may change the profile, the minification and more:
 | `prerelease` | github | `"auto"` or bool | `"auto"`: a prerelease unless the release type is `release` |
 | `registry` | registry | URL | the default registry |
 
-A target without its required field is error E4002. `"enabled": false` turns a
+A `library`, `lua-library` or `types` package that declares no `registry`
+target has one anyway, named `registry`; an addon with a `registry` target
+is error E4230 when it publishes. A target without its required field is
+error E4002. `"enabled": false` turns a
 target off, for example one a workspace shares.
 
 ```json

@@ -132,6 +132,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E4202 | Upload rejected by the site (the site's response is included) |
 | E4210 | CurseForge upload without a changelog |
 | E4230 | Addons cannot be published to the wowlua registry |
+| E4231 | A package for the wowlua registry depends on a non-registry source (`git`, `svn`, `path`, `archive`) |
 | E4300 | Running compiler does not satisfy `package.wowlua` (checked before schema validation) |
 | E4301 | `toc-layout: "single"` forced, but a targeted client lacks a needed TOC feature |
 | E4302 | Per-flavor TOC names cannot distinguish the targeted flavors |

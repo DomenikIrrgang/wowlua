@@ -102,16 +102,59 @@ classic folder name, and `install-path` on a dependency to rename its folder.
 A dependency with `"bundle": false` keeps its own files even in bundled
 release builds.
 
+## Libraries from the wowlua registry
+
+Libraries published to the [wowlua registry](https://registry.wowlua.dev)
+need no URL: add them by name, with a version requirement after `@`.
+
+```console
+$ wowlua add lib-tooltip@^1.2
+    Updating https://registry.wowlua.dev index
+ Downloading lib-tooltip 1.2.3
+      Adding lib-tooltip@^1.2 to dependencies
+     Locking lib-tooltip 1.2.3
+```
+
+The entry is just the requirement:
+
+```json
+"dependencies": {
+  "lib-tooltip": "^1.2"
+}
+```
+
+Without `@`, `wowlua add lib-tooltip` writes `^` and the newest version.
+Requirements work like Cargo's: `^1.2` takes any `1.x` from `1.2.0` on,
+`~1.2.3` any `1.2.x` from `1.2.3`, `=1.2.3` exactly that version, and
+`>=1.0, <2.0` a range. wowlua picks the newest version that every
+requirement allows, fetches the library's own registry dependencies too,
+and checks every download against the checksum the registry published.
+
+To use another registry, give its URL, or a name you define under
+`registries` in `~/.wowlua/config.json`:
+
+```json
+"dependencies": {
+  "lib-tooltip": { "version": "^1.2", "registry": "https://registry.example.com" }
+}
+```
+
+Sometimes an author **yanks** a version, usually because of a serious bug.
+If your lockfile has it, it keeps working and wowlua warns with W4322 until
+you run `wowlua update lib-tooltip`; a new resolution never picks a yanked
+version.
+
 ## The lockfile and staying up to date
 
-`wowlua.lock` records the exact commit, SVN revision or archive hash of every
-dependency, so every machine and your CI build the same AddOn. Commit it.
+`wowlua.lock` records the exact commit, SVN revision, archive hash or
+registry version of every dependency, so every machine and your CI build the
+same AddOn. Commit it.
 Fetched code lives in a shared cache in `~/.wowlua/cache`, so a second addon
 that uses the same library downloads nothing.
 
 ```console
-$ wowlua outdated            # newer tags, commits or revisions, and what to change
-$ wowlua update              # move branch and trunk pins to their newest commit
+$ wowlua outdated            # newer versions, tags, commits or revisions, and what to change
+$ wowlua update              # move registry versions and branch and trunk pins forward
 $ wowlua update ace3         # just one
 $ wowlua tree                # the dependency graph
 $ wowlua remove libstub
@@ -122,9 +165,14 @@ $ wowlua cache clean         # drop cache entries unused for 30 days
 `outdated` compares tags as version numbers, so it doesn't see newer tags
 that aren't versions, such as Ace3's `Release-r1403`. A dependency on a tag
 or an explicit revision stays there until you change it in `wowlua.json`;
-`update` only moves branches, default branches and SVN sources without a
-revision. In CI, pass `--locked` so that a build fails instead of quietly
-changing the lockfile, or `--frozen` to stay offline too.
+`update` moves registry dependencies to the newest version their
+requirement allows, and branches, default branches and SVN sources without
+a revision to their newest commit. `wowlua update lib-tooltip --precise
+1.2.0` pins one registry dependency to a version. Builds read the
+registry's index from the cache when it has the locked versions; `fetch`,
+`update`, `add` and `outdated` ask the registry again. In CI, pass
+`--locked` so that a build fails instead of quietly changing the lockfile,
+or `--frozen` to stay offline too.
 
 ## Depending on another addon
 
@@ -175,7 +223,9 @@ end
 ```
 
 A path dependency is handy while you work on both. When the library has its
-own repository, switch the entry to `git` with a tag. `wowlua check` in the
+own repository, switch the entry to `git` with a tag, or
+[publish it to the registry](publishing.md#publish-a-library-to-the-registry)
+and depend on it by version. `wowlua check` in the
 library's folder checks it on its own, for every flavor it supports, and
 `wowlua test` runs its tests. The other templates are `--kind lua-library`
 for a plain Lua library that others embed, and `--kind types` for type

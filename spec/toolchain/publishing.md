@@ -46,6 +46,9 @@ All target fields, with types and defaults, are listed in
   with different settings never overwrite each other or the profile builds in
   `dist/<profile>/`.
 - `wowlua publish` implies `--locked`: a publish never changes `wowlua.lock`.
+  A library package's lockfile is not committed ([Package manager
+  §10.6](package-manager.md#106-lockfile)), so its publish
+  resolves without one and leaves `wowlua.lock` as it is.
 
 ### 11.1.2 Release type
 
@@ -309,7 +312,27 @@ It is read by addon managers such as WowUp:
 
 For `library`, `lua-library` and `types` packages. Uploads the package archive
 described in [Package manager §10.10](package-manager.md#1010-registry). Addons
-cannot be published to the registry (E4230).
+cannot be published to the registry (E4230): an addon with a `registry`
+target, or `wowlua publish --target registry` of an addon, stops the
+publish before anything is uploaded.
+
+- **Target.** A library-kind package that declares no `registry` target
+  has an implicit one named `registry` (the default registry), so
+  `wowlua publish` and `wowlua publish --target registry` publish it. A
+  declared target's `registry` names another registry, its `api-url` the
+  API base instead of `config.json`'s.
+- **Upload.** `GET {registry}/config.json` gives the API base, then
+  `PUT {api}/v1/packages/<name>/<version>` sends the normalized manifest
+  and the archive (`multipart/form-data`, `manifest` and `archive`), with
+  the token as `Authorization: Bearer`. 201 is success; any other status is
+  E4202 with the registry's error details (409 for an existing version,
+  403 for a user who is not an owner or a reserved name, 413 for an archive
+  too large).
+- **Token.** `WOWLUA_REGISTRY_TOKEN`, or what `wowlua login registry` saved
+  (§11.1.3); a token comes from the registry's page (`{registry}/login`,
+  signing in with GitHub). E4201 names both.
+- `--dry-run` writes the archive and prints the request, its file count,
+  size and checksum, without a request to the registry.
 
 ## 11.9 The publish command
 

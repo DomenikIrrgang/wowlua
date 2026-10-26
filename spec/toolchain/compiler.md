@@ -37,6 +37,7 @@ wowlua/
 │   ├── wowlua-xml/                 # WoW UI XML: well-formedness, Script/Include references, path rewriting
 │   ├── wowlua-pkg/                 # resolver, sources (path/git/archive/registry), cache, lockfile
 │   ├── wowlua-publish/             # packaging (zip), uploaders (CurseForge, Wago, WoWI, GitHub, registry)
+│   ├── wowlua-registry/            # the registry server (§10.10): index, downloads, publish, accounts
 │   ├── wowlua-types-gen/           # wow-api generator (Blizzard docs + LuaLS converter) → .d.wowlua
 │   ├── wowlua-test/                # test runner on an embedded Lua 5.1 VM + WoW mock environment
 │   ├── wowlua-fmt/                 # formatter

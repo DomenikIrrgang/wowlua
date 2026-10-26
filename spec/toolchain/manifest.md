@@ -539,7 +539,7 @@ Target objects:
 | `release-json` | github | bool | `true` |
 | `draft` | github | bool | `false` |
 | `prerelease` | github | `"auto"` \| bool | `"auto"` (true unless the release type is `release`) |
-| `registry` | registry | URL | default registry |
+| `registry` | registry | URL | default registry. A library-kind package that declares no `registry` target has an implicit one named `registry` ([Publishing §11.8](publishing.md#118-wowlua-registry)) |
 
 ## 9.12 `meta`
 
