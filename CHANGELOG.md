@@ -32,6 +32,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - The dev window shows the addon's own garbage rate next to all addons'.
 - Profile settings `profile-call-paths`, `profile-garbage`, `frame-budget` and `slow-call`.
 - The monitor also times slash commands.
+- **Performance report**: `wowlua prof report` turns the recordings you marked for export in the dev window into one HTML page: hints, functions, time by event, call tree and flame graph, the frame timeline against the frame budget, slow calls with their stacks mapped to your source, and garbage. It finds them in your WoW installation's SavedVariables, asks which account or client when several have some (`--account`, `--client`), and opens the page in your browser (`--no-open`, `--out`, `--recording`).
 
 ### Changed
 
