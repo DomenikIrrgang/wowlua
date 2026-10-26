@@ -302,10 +302,13 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Comments on the source line where the last statement ended.
+    /// Comments on the source line where the last statement ended, when
+    /// what follows (`before`) comes after them. Generated code (`before`
+    /// unknown, or still before the comment on its line) leaves them for
+    /// the end of what their source line lowers to.
     fn flush_trailing(&mut self, before: Pos) {
         while let Some(c) = self.comments.get(self.next_comment).copied() {
-            if c.pos.line != self.last_src_line || (before.is_some() && c.pos >= before) {
+            if c.pos.line != self.last_src_line || !before.is_some() || c.pos >= before {
                 break;
             }
             self.next_comment += 1;
@@ -381,6 +384,11 @@ impl<'a> Emitter<'a> {
     /// The statements of a nested block and its closing keyword.
     fn block(&mut self, b: &Block, close: &str) {
         self.depth += 1;
+        if !self.preserve() {
+            // A comment after `then` or `do` stays on that line.
+            let first = b.stmts.first().map(|s| s.pos).unwrap_or(b.end);
+            self.flush_trailing(first);
+        }
         self.stmts(&b.stmts);
         if !self.preserve() {
             self.flush_trailing(b.end);

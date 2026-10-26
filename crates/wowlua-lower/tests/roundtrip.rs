@@ -181,3 +181,40 @@ fn debugging_decorators_check_their_targets() {
         ]
     );
 }
+
+/// Statement and pretty modes keep a trailing comment after everything its
+/// source line lowers to, not on a generated line inside it (spec codegen
+/// §14.5); a comment after `then` stays on the `if` line.
+#[test]
+fn trailing_comments_follow_their_whole_line() {
+    let src = "local db = {}\nlocal cache = {}\nlocal show = db.show ?? true -- false stays false\nlocal function sample(unit)\n    cache[unit] ??= {} -- create once\n    print(cache[unit])\nend\nlocal x = 1 -- plain\nif x then -- after then\n    print(x) -- inside\nend -- after end\nif x then print(x) end -- one line\nprint(show) -- last\n";
+    for mode in [LineMode::Statement, LineMode::Pretty] {
+        let out = String::from_utf8(compile(src, mode, CommentMode::All)).unwrap();
+        let line_of = |text: &str| -> &str {
+            out.lines()
+                .find(|l| l.contains(text))
+                .unwrap_or_else(|| panic!("{mode:?}: no {text}\n{out}"))
+                .trim()
+        };
+        assert_eq!(
+            line_of("false stays false"),
+            "local show = __wl_t1 -- false stays false",
+            "{mode:?}\n{out}"
+        );
+        assert_eq!(
+            line_of("create once"),
+            "end -- create once",
+            "{mode:?}\n{out}"
+        );
+        assert_eq!(line_of("plain"), "local x = 1 -- plain", "{mode:?}\n{out}");
+        assert_eq!(
+            line_of("after then"),
+            "if x then -- after then",
+            "{mode:?}\n{out}"
+        );
+        assert_eq!(line_of("inside"), "print(x) -- inside", "{mode:?}\n{out}");
+        assert_eq!(line_of("after end"), "end -- after end", "{mode:?}\n{out}");
+        assert_eq!(line_of("one line"), "end -- one line", "{mode:?}\n{out}");
+        assert_eq!(line_of("last"), "print(show) -- last", "{mode:?}\n{out}");
+    }
+}

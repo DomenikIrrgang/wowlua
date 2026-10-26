@@ -94,9 +94,9 @@ print(showMinimap, title)
 ```lua
 local __wl_t1 = db.showMinimap
 if __wl_t1 == nil then
-	__wl_t1 = true -- false stays false
+	__wl_t1 = true
 end
-local showMinimap = __wl_t1
+local showMinimap = __wl_t1 -- false stays false
 ```
 
 - `b` is only evaluated when `a` is `nil`.
