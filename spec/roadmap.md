@@ -754,7 +754,7 @@ with the tests' controls (DAP `wowlua/world`, MCP `world`, the page's
 and in Chrome: a link opened in its profile, the world's money changed
 from the page and seen by the addon.
 
-**Status: done (2026-10-26).** Not yet: dependencies other than the
+**Status: done (2026-10-26)**, released as 0.12.0. Not yet: dependencies other than the
 standard library in the page (M10's registry), Blizzard's UI for flavors
 other than camelot (the engine runs camelot's), the timing of
 `SETTINGS_PANEL_OPEN` (`tests/ingame/PROBES.md`); the IDE's needs are M15.

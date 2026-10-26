@@ -49,7 +49,7 @@ fn a_project_in_memory_checks_builds_and_formats() {
     ));
     memory.insert(
         "/play/wowlua.json",
-        &br#"{ "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.11" }, "flavors": { "camelot": {} } }"#[..],
+        &br#"{ "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" }, "flavors": { "camelot": {} } }"#[..],
     );
     memory.insert(
         "/play/src/main.wowlua",

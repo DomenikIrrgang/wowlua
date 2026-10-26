@@ -35,7 +35,7 @@ pub const TEMPLATE: &[(&str, &str)] = &[
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.11"
+        "wowlua": "^0.12"
     },
     "flavors": {
         "camelot": {}

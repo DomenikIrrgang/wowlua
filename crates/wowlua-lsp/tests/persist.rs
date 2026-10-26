@@ -14,7 +14,7 @@ fn a_new_checker_takes_what_an_earlier_one_kept() {
     let root = wowlua_lsp::text::canonical(dir.path());
     std::fs::write(
         root.join("wowlua.json"),
-        r#"{ "package": { "name": "lsp-persist", "version": "0.1.0", "wowlua": "^0.11" }, "flavors": { "camelot": {} } }"#,
+        r#"{ "package": { "name": "lsp-persist", "version": "0.1.0", "wowlua": "^0.12" }, "flavors": { "camelot": {} } }"#,
     )
     .unwrap();
     std::fs::create_dir_all(root.join("src")).unwrap();
