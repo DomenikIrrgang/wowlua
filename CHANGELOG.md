@@ -26,6 +26,12 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua data pull` reads your WoW installation's game data into wowlua's cache, so `wowlua test --game-data` works without the installation.
 - `wowlua build --watch` builds again after every change.
 - `wowlua build --reproducible` takes `build.time` from `SOURCE_DATE_EPOCH` or the commit time instead of the clock.
+- **Performance tab**: recordings of every combat and boss pull, `/wl record`, eight views (functions, tree, flame, by event, timeline, slow, garbage, bench) and comparing recordings per minute.
+- **Hints**: P7101, P7102, P7201 and P7301 in the dev window and in `/wl hints`, explained by `wowlua explain P7301`.
+- The HUD (`/wl hud`), the error toast, `/wl bench`, and exporting recordings for `wowlua prof report`.
+- The dev window shows the addon's own garbage rate next to all addons'.
+- Profile settings `profile-call-paths`, `profile-garbage`, `frame-budget` and `slow-call`.
+- The monitor also times slash commands.
 
 ### Changed
 
@@ -44,6 +50,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `flavors.<id>.types` must accept the API version wowlua ships (E4318).
 - `frames.movable` with `editMode` warns W8301 when you build for Cata Classic, which has no Edit Mode.
 - Shared flavor mode checks members of Blizzard's utility tables per flavor: `ChatFrameUtil.SendTell` without a guard is E2030 when you build for cata.
+- The dev window uses the wowlua design system and its fonts.
+- `@event` handlers and the standard library's timers show in the monitor.
 
 ### Fixed
 
@@ -97,6 +105,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Tooltip hooks (`tooltip.hook`, `@onTooltip`) run on the classic flavors again, through the tooltips' scripts.
 - `STANDARD_TEXT_FONT`, `GENERAL_CHAT_DOCK`, `LE_PARTY_CATEGORY_INSTANCE`, `LE_EXPANSION_LEVEL_CURRENT` and other client constants are declared for every flavor that has them.
 - Messages show record keys that aren't identifiers as written: `{ ["1ST"]: string }`.
+- `wowlua explain W2001` (and every plain-Lua warning form) no longer reports "unknown diagnostic code".
 
 ## 0.12.0 (2026-10-26)
 

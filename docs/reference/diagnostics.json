@@ -5314,6 +5314,39 @@
       ],
       "related": []
     },
+    "P7101": {
+      "area": "debugging",
+      "text": "A performance hint from the dev window, not the compiler. A handler ran very\noften in the recording, in bursts: the same event arrived many times within a\nshort time and the handler did its full work for each one. Events such as\n`UNIT_AURA`, `BAG_UPDATE` or `COMBAT_LOG_EVENT_UNFILTERED` can fire dozens of\ntimes in one frame, while the addon usually only needs the last state.\n\nCollapse a burst into one call: decorate the function that does the work with\n`@throttle(0.1)` or `@debounce(0.1)` from `wowlua:timer`, or mark it\n`@nextFrame` so that many calls in one frame run it once. Keep the handler\nitself cheap, and filter on the event's arguments (the unit, the bag) before\ndoing anything else.",
+      "examples": [],
+      "related": [
+        "P7301"
+      ]
+    },
+    "P7102": {
+      "area": "debugging",
+      "text": "A performance hint from the dev window, not the compiler. An `OnUpdate`\nscript ran in nearly every frame while its frame showed nothing: the frame\nhas no size or is fully transparent, as a frame made only to run code usually\nis. `OnUpdate` runs once per rendered frame, 60 to 240 times a second, for as\nlong as the frame is shown, so a script that only waits or polls costs time\nin every frame.\n\nWhen the work is needed every few tenths of a second, use `every` or\n`repeating` from `wowlua:timer` instead, which run on `C_Timer` and cost\nnothing in between. When the script only matters while some UI is open, set\nit in that UI's `OnShow` and clear it with `SetScript(\"OnUpdate\", nil)` in\n`OnHide`, or hide the frame that carries it.",
+      "examples": [],
+      "related": [
+        "P7101"
+      ]
+    },
+    "P7201": {
+      "area": "debugging",
+      "text": "A performance hint from the dev window, not the compiler. A single function\ncreated a large share of the garbage the addon's functions made in the\nrecording. Garbage is every table, closure and new string that is created\nand dropped again; the game collects it in steps, and the collection costs\nframe time, for every addon.\n\nReuse tables instead of creating them per call (clear them with `wipe`),\nmove closures that capture nothing out of loops and handlers, cache results\nthat don't change, and build strings once instead of in every frame. The hint\nneeds garbage per function, which the dev window's switch or the profile's\n`profile-garbage` turns on.",
+      "examples": [],
+      "related": [
+        "P7301"
+      ]
+    },
+    "P7301": {
+      "area": "debugging",
+      "text": "A performance hint from the dev window, not the compiler. A single call took\nlonger than the frame budget (`frame-budget`, 1 ms by default), so that frame\nwas late because of one piece of work. The hint names the function and the\nslowest call; the slow view of the dev window has its stack.\n\nSpread the work across frames: run it as a job of `wowlua:jobs` and call\n`ctx:check()` in its loop, which yields when the frame's share of time is\nused up. Work that does not need to happen at once, such as rebuilding an\nindex, can also wait for the end of combat. If the budget is too strict for\nthe addon, raise `frame-budget` in the profile or in the window.",
+      "examples": [],
+      "related": [
+        "P7101",
+        "P7201"
+      ]
+    },
     "E8001": {
       "area": "stdlib",
       "text": "`send` from `wowlua:events` dispatches a message to your own addon's handlers.\nWoW events such as `PLAYER_LOGIN` come from the game client and can't be sent\nby an addon, so passing one to `send` is an error.\n\nDeclare your own message with `declare message` and send that instead;\nhandlers subscribe to it with `on` like to any event.",
