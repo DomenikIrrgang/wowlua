@@ -89,7 +89,7 @@ into one. On top of that, you choose a minification level with `minify`:
 | `strip` | Removes comments and extra whitespace and applies safe simplifications; names stay. The release default. |
 | `compact` | Also the tightest layout within each line, and shorter literals |
 | `rename` | Also shortens local names and hoists repeated strings |
-| `max` | Also renames private and protected methods, and the fields of tables private to a module |
+| `max` | Also renames private and protected methods, and the fields of tables private to a module, where the name occurs nowhere else (not in a string, an API, XML or a library). Instance fields keep their names, since saved variables use them |
 
 Every level keeps at least one line break per statement, so an error from a
 player still points at one statement, and
