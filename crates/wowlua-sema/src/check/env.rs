@@ -194,6 +194,8 @@ pub struct Env<'p> {
     /// The `type` and `interface` declarations of the blocks being checked
     /// (spec §1.3: scoped to their block), innermost last.
     block_types: Vec<(Box<str>, DefId)>,
+    /// Tables messages show by name: `self` in `function T:m()` is `T`.
+    pub table_names: FxHashMap<TypeId, Box<str>>,
     /// Type arguments being resolved (where a pack parameter may stand).
     type_arg_depth: u32,
     /// Aliases whose bodies are not resolved yet (while building), with the

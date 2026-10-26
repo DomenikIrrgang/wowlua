@@ -2211,7 +2211,14 @@ impl<'e, 'p> Checker<'e, 'p> {
             ),
             _ => None,
         };
-        let self_ty = if method { owner } else { None };
+        let self_ty = if method {
+            match (owner, name.path().len()) {
+                (Some(o), 1) => Some(self.table_self(o, name.path().at(0).text())),
+                _ => owner,
+            }
+        } else {
+            None
+        };
         // A method of a file-level table: its count by table and name.
         let table = (name.path().len() == if method { 1 } else { 2 })
             .then(|| self.lookup_var(name.path().at(0).text()))
@@ -2287,7 +2294,10 @@ impl<'e, 'p> Checker<'e, 'p> {
                 .method()
                 .unwrap_or_else(|| name.path().last().expect("a name"));
             // A method stored in a table takes `self` first.
-            let stored = if method { self.env.with_self(t, o) } else { t };
+            let stored = match self_ty {
+                Some(st) if method => self.env.with_self(t, st),
+                _ => t,
+            };
             self.extend_open(o, last.text(), stored);
         }
     }
@@ -3015,6 +3025,33 @@ impl<'e, 'p> Checker<'e, 'p> {
                 }
             }
         }
+    }
+
+    /// `self` in `function T:m()`: the table `T` with every field the file
+    /// stores in it (`any` where not defined yet), named `T` in messages,
+    /// not the table as it is where the method is defined (spec §2.4.6).
+    fn table_self(&mut self, owner: TypeId, table: &str) -> TypeId {
+        let Ty::Record(mut r) = self.env.types.get(owner).clone() else {
+            return owner;
+        };
+        if let Some(names) = self.stored_fields.get(table) {
+            let mut later: Vec<&Box<str>> =
+                names.iter().filter(|n| !r.fields.contains_key(n)).collect();
+            later.sort();
+            for n in later {
+                r.fields.insert(
+                    n.clone(),
+                    Field {
+                        ty: Types::ANY,
+                        optional: false,
+                        readonly: false,
+                    },
+                );
+            }
+        }
+        let t = self.env.types.record(r);
+        self.env.table_names.insert(t, table.into());
+        t
     }
 
     /// `t` with an open table sealed, and the open tables in its fields.

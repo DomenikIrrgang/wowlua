@@ -65,6 +65,7 @@ impl Env<'_> {
                 _ => format!("{}[]", d(*e)),
             },
             Ty::Map(k, v) => format!("{{ [{}]: {} }}", d(*k), d(*v)),
+            Ty::Record(_) if self.table_names.contains_key(&t) => self.table_names[&t].to_string(),
             Ty::Record(r) => {
                 let mut parts: Vec<String> = r
                     .fields

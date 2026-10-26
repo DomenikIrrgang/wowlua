@@ -380,3 +380,26 @@ fn missing_methods_are_named_methods() {
     let d = errors(&format!("{r}print(r.greet)\n"), Mode::Strict);
     assert_eq!(d, ["E2003: `{ name: string }` has no field `greet`"]);
 }
+
+/// `self` in `function T:m()` is `T` with every field the file stores in
+/// it, and messages name it `T` (not the table as it was at that line).
+#[test]
+fn self_of_a_table_method_is_named() {
+    let src = "local Account = {}\nAccount.__index = Account\nfunction Account:deposit(amount: number)\n    self.balance += amount\n    local s: string = self\n    self:withdraw(1)\nend\nfunction Account:withdraw(amount: number)\n    self.balance -= amount\nend\nprint(Account)\n";
+    let d = errors(src, Mode::Basic);
+    assert_eq!(
+        d,
+        ["E2001: `Account` is not assignable to `string`"],
+        "{d:#?}"
+    );
+    // the method as the table holds it
+    let d = errors(
+        &format!("{src}local n: number = Account.deposit\n"),
+        Mode::Basic,
+    );
+    assert!(
+        d.iter()
+            .any(|x| x.contains("(self: Account, amount: number) -> ()")),
+        "{d:#?}"
+    );
+}
