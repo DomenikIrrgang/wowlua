@@ -196,7 +196,10 @@ impl Playground {
                 tests,
                 left_out: Vec::new(),
             };
-            wowlua_driver::build(&mut session, &project, &request)
+            let built = wowlua_driver::build(&mut session, &project, &request);
+            // (`check.lints`, W2063 off by default: as the CLI reports)
+            project.apply_lints(&mut session);
+            built
         });
         let ok = built.is_some() && !session.has_errors();
         let files: Vec<Json> = built
@@ -299,8 +302,10 @@ impl Playground {
             left_out: Vec::new(),
         };
         let built = wowlua_driver::build(&mut session, &project, &request);
+        project.apply_lints(&mut session);
+        let failed = session.has_errors();
         let found = diagnostics(&mut session);
-        let Some(build) = built.filter(|_| !session.has_errors()) else {
+        let Some(build) = built.filter(|_| !failed) else {
             if let Some(setup) = options.debug {
                 let shared = wowlua_debug::Shared::new(
                     setup.link,
