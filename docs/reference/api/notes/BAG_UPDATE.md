@@ -99,7 +99,8 @@ end
 
 `mock.setBag` changes a bag and fires the events as the client would.
 `mock.fireEvent` fires a single event. Its payload is checked against the
-documentation, so leaving out the bag or passing an extra value is an error.
+documentation, so leaving out the bag, passing an extra value or a bag that
+isn't a number is an error.
 
 ```wowlua title=tests/bags.test.wowlua
 import test, expect from "wowlua:test"

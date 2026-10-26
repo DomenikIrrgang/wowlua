@@ -395,7 +395,8 @@ text, and changes its world while it runs with a script of the controls
 
 **Raw events.** `mock.fireEvent(name, ...)` and `mock.fireUnitEvent(name,
 unit, ...)` fire any event the flavor documents, the payload checked against
-its documentation (count, types, and secrets where the documentation says);
+its documentation (count, types, an enumeration's value a number, and
+secrets where the documentation says);
 an event the flavor does not document is an error (decision T202). A plain
 table in the payload reaches the handlers as the client's would: a copy with
 its fields written securely, so Blizzard's handlers reading it stay secure

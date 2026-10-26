@@ -89,11 +89,17 @@ fn check_payload(
             }
             continue;
         }
+        let api = &engine(vm).api;
         let expected = match ty {
             "bool" => Some("boolean"),
             "cstring" | "string" | "UnitToken" | "WOWGUID" => Some("string"),
-            "number" | "luaIndex" => Some("number"),
+            "number" | "luaIndex" | "fileID" | "time_t" | "BigInteger" | "BigUInteger"
+            | "WOWMONEY" => Some("number"),
             "table" => Some("table"),
+            // An enumeration's value is its number (`BAG_UPDATE`'s
+            // `BagIndex`); a structure is a table.
+            _ if api.enum_names.contains(ty) => Some("number"),
+            _ if api.structures.contains(ty) => Some("table"),
             _ => None,
         };
         if let Some(e) = expected

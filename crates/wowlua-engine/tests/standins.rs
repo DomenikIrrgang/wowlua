@@ -249,3 +249,23 @@ return known.itemName, known.iconFileID, known.hyperlink ~= nil,
     );
     assert_eq!(r, ["Linen Cloth", "132889", "true", "nil", "987654"]);
 }
+
+/// `mock.fireEvent` checks an enumeration's payload value as a number.
+#[test]
+fn fire_event_checks_an_enumerations_payload() {
+    let mut vm = vm("camelot");
+    for bad in ["true", "'x'", "{}"] {
+        let e = fails(&mut vm, &format!("mock.fireEvent('BAG_UPDATE', {bad})"));
+        assert!(e.contains("BAG_UPDATE's `bagID` is BagIndex"), "{e}");
+    }
+    let r = run(
+        &mut vm,
+        "local got
+local f = CreateFrame('Frame')
+f:RegisterEvent('BAG_UPDATE')
+f:SetScript('OnEvent', function(_, _, bag) got = bag end)
+mock.fireEvent('BAG_UPDATE', Enum.BagIndex.Backpack)
+return got",
+    );
+    assert_eq!(r, ["0"]);
+}
