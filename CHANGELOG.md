@@ -53,6 +53,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Shared flavor mode checks members of Blizzard's utility tables per flavor: `ChatFrameUtil.SendTell` without a guard is E2030 when you build for cata.
 - The dev window uses the wowlua design system and its fonts.
 - `@event` handlers and the standard library's timers show in the monitor.
+- A local declared with a value keeps that value's type: after `local count = 0`, `count = "none"` is E2001 (W2001 in a plain Lua file), as with `local count: number = 0`. Code that reuses a local for another type now reports E2001: annotate it (`local count: number | string = 0`) or use a second local.
+- In strict mode `nil` no longer fits a local declared with a non-optional value: write `local timer: TimerHandle? = …` for one you clear later.
+- `pcall` and `xpcall` results are typed as the game returns them: test the first result (`if ok then`) before using the others; until then the second value may be the error (`unknown`).
 
 ### Fixed
 

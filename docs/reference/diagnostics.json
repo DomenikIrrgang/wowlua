@@ -1687,7 +1687,7 @@
     },
     "E2001": {
       "area": "types",
-      "text": "A value's type doesn't fit where it is used: an argument, an assignment to an\nannotated local or field, or a return value. The same code covers an operator\nused on a type it doesn't take, such as comparing a number with a string or\ndoing arithmetic on a boolean. Change the value, or widen the annotation if\nthe value is right.\n\nIn a plain Lua file (no wowlua syntax, no `--!strict`) the checker reports the\nwarning with the same number, W2001, so existing code keeps building.",
+      "text": "A value's type doesn't fit where it is used: an argument, an assignment to a\nlocal or field, or a return value. The same code covers an operator used on a\ntype it doesn't take, such as comparing a number with a string or doing\narithmetic on a boolean. Change the value, or widen the annotation if the\nvalue is right.\n\nA local without an annotation takes the type of the value it is declared with\n(`local test = 3` is a `number`), and later assignments must fit that type as\nif it were written out. To hold other values too, annotate it\n(`local test: number | string = 3`). A local declared without a value, or with\n`nil`, holds whatever is assigned to it.\n\nIn a plain Lua file (no wowlua syntax, no `--!strict`) the checker reports the\nwarning with the same number, W2001, so existing code keeps building.",
       "examples": [
         {
           "compiles": false,
@@ -1707,6 +1707,28 @@
               "path": "src/main.wowlua",
               "lang": "wowlua",
               "text": "local count: number = 3\nprint(count)\n"
+            }
+          ],
+          "output": null
+        },
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "local test = 3\ntest = \"hello world\"\nprint(`test: {test}`)\n"
+            }
+          ],
+          "output": "error[E2001]: `\"hello world\"` is not assignable to `number`\n  ┌─ src/main.wowlua:2:1\n  │\n2 │ test = \"hello world\"\n  │ ^^^^ here\n  │\n  = help: `test` has the type `number` from the value it is declared with; to hold other values too, annotate it (`local test: number | … = …`)"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "local test: number | string = 3\ntest = \"hello world\"\nprint(`test: {test}`)\n"
             }
           ],
           "output": null
