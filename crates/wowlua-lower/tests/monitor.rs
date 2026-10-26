@@ -52,3 +52,58 @@ f:RegisterEvent("PLAYER_LOGIN", print)
         "{code}"
     );
 }
+
+/// Slash command handlers stored in `SlashCmdList` are timed too: the
+/// command is the root of the work it starts (spec §7.3.2, §7.9).
+#[test]
+fn slash_commands_are_routed() {
+    let code = monitored(
+        r#"SlashCmdList.MINE = print
+SlashCmdList["OTHER"] = print
+local t = {}
+t.MINE = print
+"#,
+    );
+    let lines: Vec<&str> = code.lines().collect();
+    assert_eq!(
+        lines[0..4],
+        [
+            "local __wl = select(2, ...).__wowlua SlashCmdList.MINE = __wl.mon.slash(print, \":1\")",
+            "SlashCmdList[\"OTHER\"] = __wl.mon.slash(print, \":2\")",
+            "local t = {}",
+            "t.MINE = print",
+        ],
+        "{code}"
+    );
+}
+
+/// The standard library's own handler installations are routed as well:
+/// its dispatch frames run the addon's `@event` handlers and timers.
+#[test]
+fn compiler_known_modules_are_routed() {
+    let src = "local f = CreateFrame(\"Frame\")\nf:SetScript(\"OnEvent\", print)\n";
+    let mut db = SourceDb::new();
+    let file = db.add("t.lua", src.to_string());
+    let parse = wowlua_syntax::parse(src.as_bytes(), file);
+    let ctx = Context {
+        tools: Tools {
+            monitor: true,
+            ..Tools::default()
+        },
+        compiler_known: true,
+        ..Context::default()
+    };
+    let chunk = wowlua_lower::lower_with(&parse, src.as_bytes(), &ctx).expect("lowers");
+    let code = String::from_utf8(emit(&chunk, &EmitOptions::default()).text).unwrap();
+    assert!(
+        code.contains("__wl.mon.setScript(f, \"OnEvent\", print"),
+        "{code}"
+    );
+    let dependency = Context {
+        dependency: true,
+        ..ctx
+    };
+    let chunk = wowlua_lower::lower_with(&parse, src.as_bytes(), &dependency).expect("lowers");
+    let code = String::from_utf8(emit(&chunk, &EmitOptions::default()).text).unwrap();
+    assert!(!code.contains("__wl.mon"), "{code}");
+}

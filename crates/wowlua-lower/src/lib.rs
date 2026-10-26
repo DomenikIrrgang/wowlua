@@ -2103,6 +2103,11 @@ impl<'a> Lowerer<'a> {
             ir_targets.push(ir::Expr::new(kind, tpos));
         }
         let mut ir_values: Vec<ir::Expr> = lowered.collect();
+        if targets.len() == 1
+            && let (Some(target), [value]) = (targets.iter().next(), ir_values.as_mut_slice())
+        {
+            self.monitor_slash(target, value);
+        }
         self.set_separators(values, &mut ir_values);
         self.set_separators(targets, &mut ir_targets);
         vec![stmt(

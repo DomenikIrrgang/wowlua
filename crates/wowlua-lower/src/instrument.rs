@@ -269,8 +269,40 @@ impl<'a> Lowerer<'a> {
     /// The monitor's routing of a call (spec §7.9): `frame:SetScript(…)`,
     /// `frame:HookScript(…)` and the global `C_Timer` functions become calls
     /// of `__wl.mon` helpers with the call's location.
+    /// The monitor's routing of a slash command (spec §7.9):
+    /// `SlashCmdList.KEY = fn` and `SlashCmdList[key] = fn` store
+    /// `__wl.mon.slash(fn, location)`, so the command is the root of the work
+    /// it starts (spec §7.3.2).
+    pub(crate) fn monitor_slash(&mut self, target: Expr<'a>, value: &mut ir::Expr) {
+        if !self.ctx.tools.monitor || self.ctx.dependency {
+            return;
+        }
+        let obj = match target.kind() {
+            ExprKind::Field { obj, .. } | ExprKind::Index { obj, .. } => obj,
+            _ => return,
+        };
+        if !matches!(obj.kind(), ExprKind::Name(n) if n.text() == "SlashCmdList")
+            || self.is_local("SlashCmdList")
+        {
+            return;
+        }
+        let pos = value.pos;
+        let location = self.string(&self.location(target.span()), pos);
+        self.uses_runtime = true;
+        self.slices.insert(Slice::Monitor);
+        let wl = self.runtime_ref(pos);
+        let inner = std::mem::replace(value, lit(ir::ExprKind::Nil, pos));
+        *value = call(
+            field(field(wl, "mon", pos), "slash", pos),
+            vec![inner, location],
+            pos,
+        );
+    }
+
+    /// The standard library's modules are routed too: their dispatch frames
+    /// (`@event`, timers, jobs) are where an addon's handlers run.
     pub(crate) fn monitor_call(&mut self, e: Expr<'a>) -> Option<ir::Expr> {
-        if !self.ctx.tools.monitor || self.ctx.compiler_known || self.ctx.dependency {
+        if !self.ctx.tools.monitor || self.ctx.dependency {
             return None;
         }
         let (helper, items, arity): (&str, Vec<Expr<'a>>, usize) = match e.kind() {
