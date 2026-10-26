@@ -154,9 +154,11 @@ icon:SetTexture("Interface\\AddOns\\MyAddon\\media\\icon.tga")
 
 - `path` must be a string literal (or constant), relative to the package root,
   using `/`.
-- The file must be part of the package's assets (`build.assets`), otherwise
-  error E1038 at compile time. Case must match exactly. Output validation checks
-  again that the asset is present in the build (E4307).
+- The file must be part of the package's assets (`build.assets`, without
+  `build.exclude`), otherwise error E1038 at compile time. Case must match
+  exactly. Output validation checks again that the asset is present in the
+  build (E4307): the profile's `exclude` and `build.flavor-files` can leave a
+  package asset out of a build.
 - The result uses the addon's folder name and its location in the output
   layout, so it survives renaming the addon. Inside a library, `path` is relative
   to the library's root and resolves to the library's location in the consuming

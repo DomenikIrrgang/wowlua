@@ -708,10 +708,16 @@ An `asset()` path from `wowlua:meta` does not name an asset of the build.
 `asset("media/icon.tga")` becomes the file's in-game path, so a file missing
 from the output would be a missing texture in game.
 
-The compiler already reports a path that is not in `build.assets` as E1038
-while it checks the code, so this second check of the finished output does
-not fire in practice. Add the file to `build.assets`, with its case exactly as
-in the call.
+A path that is not in `build.assets` at all is E1038 while the code is
+checked. This second check of the finished output finds the assets of the
+package that a build leaves out although its code uses them: those the
+profile's `exclude` drops (`"profiles": { "release": { "exclude":
+["media/debug.tga"] } }`), and those `build.flavor-files` gives only to
+flavors the build does not target.
+
+Ship the asset in that build, or do not use it there (put the call under
+`@if(build.debug)` or a flavor check). `wowlua build` reports it, not
+`wowlua check`, so it has no example here.
 
 Related: E1038
 

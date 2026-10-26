@@ -1506,6 +1506,74 @@ fn a_flavor_needs_a_types_package() {
     wowlua(dir.path()).arg("check").assert().success();
 }
 
+/// `asset()` (spec §6.2.1): a path that is no package asset is E1038 while
+/// compiling; a package asset that a build leaves out (the profile's
+/// `exclude`, `build.flavor-files`) is E4307 in output validation.
+#[test]
+fn assets_a_build_leaves_out_are_e4307() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "art", "version": "1.0.0" },
+  "flavors": { "standard": {}, "vanilla": {} },
+  "build": { "assets": ["media/**"], "flavor-files": { "media/classic.tga": ["vanilla"] } },
+  "profiles": { "release": { "exclude": ["media/debug.tga"] } } }
+"#,
+            ),
+            ("media/icon.tga", "tga"),
+            ("media/debug.tga", "tga"),
+            ("media/classic.tga", "tga"),
+            (
+                "src/main.wowlua",
+                "import asset from \"wowlua:meta\"\nprint(asset(\"media/icon.tga\"), asset(\"media/debug.tga\"))\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "error[E4307]: `asset(\"media/debug.tga\")` names an asset this build leaves out",
+        ))
+        .stderr(predicate::str::contains("E1038").not());
+    // An asset of one flavor, used by every flavor's code.
+    write(
+        dir.path(),
+        &[(
+            "src/main.wowlua",
+            "import asset from \"wowlua:meta\"\nprint(asset(\"media/classic.tga\"))\n",
+        )],
+    );
+    wowlua(dir.path())
+        .args(["build", "--flavor", "vanilla"])
+        .assert()
+        .success();
+    wowlua(dir.path())
+        .args(["build", "--flavor", "standard"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E4307]"));
+    // Not a package asset at all.
+    write(
+        dir.path(),
+        &[(
+            "src/main.wowlua",
+            "import asset from \"wowlua:meta\"\nprint(asset(\"media/missing.tga\"))\n",
+        )],
+    );
+    wowlua(dir.path())
+        .arg("check")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E1038]"))
+        .stderr(predicate::str::contains("E4307").not());
+}
+
 #[test]
 fn parallel_builds_equal_sequential_builds() {
     let dir = tempfile::tempdir().unwrap();
