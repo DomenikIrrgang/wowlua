@@ -736,6 +736,15 @@ impl Casc {
                 let dir = format!("{folder}/Cache/{kind}");
                 for locale in self.storage.list(&dir) {
                     for name in self.storage.list(&format!("{dir}/{locale}")) {
+                        // the hotfix cache, the WDB caches (not the
+                        // client's temporary files)
+                        let wanted = match kind {
+                            "ADB" => name == "DBCache.bin",
+                            _ => name.to_ascii_lowercase().ends_with(".wdb"),
+                        };
+                        if !wanted {
+                            continue;
+                        }
                         let rel = format!("Cache/{kind}/{locale}/{name}");
                         if !seen.insert(rel.clone()) {
                             continue;

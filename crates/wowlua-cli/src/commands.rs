@@ -829,6 +829,18 @@ fn test_once(
                 },
                 args.profile_out.as_ref().map(|_| start_profile),
             );
+            // `--game-data`: the game data `wowlua data pull` read, else the
+            // installation's.
+            if args.game_data {
+                let (camera, pulled) = crate::data::with_pulled(suite.camera.take(), &flavor);
+                suite.camera = camera;
+                if !pulled {
+                    out.status(
+                        "Note",
+                        format!("no game data pulled for {flavor} (`wowlua data pull`): reading the installation's"),
+                    );
+                }
+            }
             if let Some(dir) = &args.profile_out {
                 let dir = cwd().join(dir);
                 let mapper = wowlua_test::chunk_mapper(&suite);

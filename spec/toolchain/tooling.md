@@ -417,9 +417,11 @@ answers nothing for it, as the client does while an item's data has not
 arrived. Optionally, tests can run with the real client's
 data: `wowlua test --game-data` answers from the WoW installation's own
 tables where a test defines nothing (items, creatures, appearances, models:
-decisions T321, T327; T366), and `wowlua data pull --wow <path to the WoW
-installation>` will read the flavor's game data into a local cache (nothing
-is distributed with wowlua, M13). Off by default, so a test gives the same
+decisions T321, T327; T366). `wowlua data pull` reads the flavor's game data
+from the installation into a local cache once (nothing is distributed with
+wowlua, M13); `--game-data` answers from that cache when there is one, so
+it needs no installation then, and from the installation otherwise. Off by
+default, so a test gives the same
 result on every machine and in CI; a debug session and `wowlua screenshot`
 show the game as the installation has it. Screenshots draw the
 installation's textures either way.

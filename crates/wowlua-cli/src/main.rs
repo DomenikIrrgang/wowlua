@@ -2,6 +2,7 @@
 //! AddOns. See the specification in `spec/` (chapter 12 for the CLI).
 
 mod commands;
+mod data;
 mod debug;
 mod output;
 mod screenshot;
@@ -426,6 +427,11 @@ enum Command {
         #[command(subcommand)]
         command: CacheCommand,
     },
+    /// Game data from your WoW installation, for `wowlua test --game-data`
+    Data {
+        #[command(subcommand)]
+        command: DataCommand,
+    },
     /// Type declaration tools
     Types {
         #[command(subcommand)]
@@ -435,6 +441,21 @@ enum Command {
     Explain {
         /// For example E4002
         code: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum DataCommand {
+    /// Read the flavors' game data (tables, hotfixes, the client's caches)
+    /// from your WoW installation into wowlua's local cache
+    Pull {
+        /// The WoW installation directory
+        #[arg(long, value_name = "PATH")]
+        wow: Option<PathBuf>,
+        /// These flavors (default: the package's, outside a package every
+        /// flavor the installation has)
+        #[arg(long, value_delimiter = ',')]
+        flavor: Vec<String>,
     },
 }
 
@@ -730,6 +751,9 @@ fn run() -> ExitCode {
             command: TypesCommand::Sync { flavor },
         } => commands::types_sync(&out, &cli.global, &flavor),
         Command::Explain { code } => commands::explain(&out, &code),
+        Command::Data {
+            command: DataCommand::Pull { wow, flavor },
+        } => data::pull(&out, wow.as_deref(), &flavor),
     };
     if ok {
         ExitCode::SUCCESS

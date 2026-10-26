@@ -5286,3 +5286,76 @@ fn doc_comment_examples_run_as_tests() {
     assert!(out.contains("src/math.wowlua:8:11"), "{out}");
     assert!(out.contains("does not compile"), "{out}");
 }
+
+/// `wowlua data pull` (spec CLI §12.1, decision T203) reads a flavor's game
+/// data into wowlua's cache, and `wowlua test --game-data` answers from it
+/// without the installation: an item the test does not define has the
+/// client's name. Skipped without a WoW installation with camelot's client.
+#[test]
+fn pulled_game_data_answers_game_data_tests() {
+    let install = std::env::var_os("WOWLUA_WOW_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| "/Applications/World of Warcraft".into());
+    if !install.join("_classic_beta_").is_dir() {
+        eprintln!("no WoW installation with camelot's client: skipped");
+        return;
+    }
+    let dir = project(
+        "\"camelot\": {}",
+        &[
+            ("src/main.wowlua", "print(1)\n"),
+            (
+                "tests/item.test.wowlua",
+                "import test, expect from \"wowlua:test\"\n@test(\"the client's item\")\nlocal function clientItem()\n    expect(C_Item.GetItemNameByID(277714)).toBe(\"Spectral Bear Cub\")\nend\n",
+            ),
+        ],
+    );
+    let nowhere = dir.path().join("no-installation");
+    // Without pulled data or an installation the item is unknown.
+    wowlua(dir.path())
+        .env("WOWLUA_WOW_PATH", &nowhere)
+        .args(["test", "--game-data"])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("no game data pulled for camelot"));
+    wowlua(dir.path())
+        .args(["data", "pull", "--wow"])
+        .arg(&install)
+        .assert()
+        .success()
+        .stderr(predicates::str::contains("Pulled camelot game data"));
+    assert!(
+        dir.path()
+            .join(".wowlua-home/data/camelot/.pulled")
+            .is_file()
+    );
+    wowlua(dir.path())
+        .env("WOWLUA_WOW_PATH", &nowhere)
+        .args(["test", "--game-data"])
+        .assert()
+        .success();
+    // Without `--game-data` a test sees only what it defines.
+    wowlua(dir.path())
+        .env("WOWLUA_WOW_PATH", &nowhere)
+        .arg("test")
+        .assert()
+        .failure();
+}
+
+/// `wowlua data pull` names what it cannot read.
+#[test]
+fn data_pull_reports_a_missing_installation_or_flavor() {
+    let dir = project("\"camelot\": {}", &[("src/main.wowlua", "print(1)\n")]);
+    wowlua(dir.path())
+        .args(["data", "pull", "--wow"])
+        .arg(dir.path().join("nowhere"))
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("does not exist"));
+    wowlua(dir.path())
+        .args(["data", "pull", "--flavor", "nope", "--wow"])
+        .arg(dir.path())
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("unknown flavor `nope`"));
+}

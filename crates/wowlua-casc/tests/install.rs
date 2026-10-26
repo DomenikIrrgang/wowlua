@@ -600,6 +600,9 @@ fn pulled_game_data_reads_as_the_installation() {
     let name = |t: &wowlua_casc::tables::Table| t.row(6948).and_then(|r| r.string("Display_lang"));
     assert_eq!(name(&a), name(&b));
     assert_eq!(name(&b).as_deref(), Some("Hearthstone"));
+    // a record only the hotfixes have on camelot
+    let cub = |t: &wowlua_casc::tables::Table| t.row(277714).and_then(|r| r.string("Display_lang"));
+    assert_eq!(cub(&a), cub(&b));
     assert_eq!(
         pulled.file_by_path("Fonts\\FRIZQT__.TTF"),
         live.file_by_path("Fonts\\FRIZQT__.TTF")
