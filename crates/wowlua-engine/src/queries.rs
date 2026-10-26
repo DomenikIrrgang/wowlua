@@ -412,9 +412,9 @@ fn transmog_class_filter(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `C_TransmogCollection.GetValidAppearanceSourcesForClass(appearance,
 /// class, category, location)`: as recorded for the class; for a class not
-/// recorded, all the appearance's sources (unverified); else none, and
-/// nothing for an appearance the recordings do not hold (the full probe,
-/// 1.60.1: appearance 1 nothing).
+/// recorded, all the appearance's sources (unverified); else none; an
+/// appearance the recordings do not hold, its sources in the client's
+/// tables, else nothing (the full probe, 1.60.1: appearance 1 nothing).
 fn class_appearance_sources(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Some(visual), Some(class)) = (num(c.arg(1)), num(c.arg(2))) else {
         return Ok(vec![]);
@@ -436,7 +436,15 @@ fn class_appearance_sources(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         return Ok(v);
     }
-    if !crate::collections::appearance_known(visual) {
+    // Neither recorded for a class nor at all: the client's tables' sources
+    // (decision T462).
+    if !crate::collections::appearance_recorded(visual)
+        && let Some(list) = crate::collections::appearance_source_list(vm, visual)
+    {
+        crate::collected::patch_sources(vm, list);
+        return Ok(vec![list]);
+    }
+    if !crate::collections::appearance_known(vm, visual) {
         return Ok(vec![]);
     }
     Ok(vec![Value::Table(vm.new_table())])

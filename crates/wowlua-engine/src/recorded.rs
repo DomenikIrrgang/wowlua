@@ -42,10 +42,68 @@ fn platform_answers(platform: crate::Platform) -> &'static HashMap<&'static str,
 /// A call's recorded answer on this VM's machine: the platform's, else the
 /// one every machine gave.
 pub(crate) fn answer(vm: &Vm, call: &str) -> Option<&'static str> {
+    // The client's tables', where at hand (decision T464).
+    if let Some(a) = crate::clientdata::answer(vm, call) {
+        return Some(intern(a));
+    }
     platform_answers(engine(vm).platform)
         .get(call)
         .or_else(|| answers().get(call))
         .copied()
+}
+
+/// A text kept for the program's life, once.
+pub(crate) fn intern(text: String) -> &'static str {
+    static TEXTS: OnceLock<std::sync::Mutex<std::collections::HashSet<&'static str>>> =
+        OnceLock::new();
+    let mut texts = TEXTS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some(t) = texts.get(text.as_str()) {
+        return t;
+    }
+    let t: &'static str = Box::leak(text.into_boxed_str());
+    texts.insert(t);
+    t
+}
+
+/// The recorded answers to the calls starting with `prefix` again from the
+/// client's tables (decision T464): the calls compared (those the tables
+/// answer) and those that differ (numbers to a part in 10,000).
+pub fn compare_with_client(
+    data: &dyn crate::clientdata::ClientData,
+    prefix: &str,
+) -> (usize, Vec<String>) {
+    use crate::traits::Rv;
+    fn close(a: &Rv, b: &Rv) -> bool {
+        match (a, b) {
+            (Rv::Num(x), Rv::Num(y)) => (x - y).abs() <= 1e-4 * x.abs().max(y.abs()).max(1.0),
+            (Rv::Table(x), Rv::Table(y)) => {
+                x.len() == y.len()
+                    && x.iter()
+                        .all(|(k, v)| y.iter().any(|(ky, vy)| ky == k && close(v, vy)))
+            }
+            _ => a == b,
+        }
+    }
+    let mut calls: Vec<(&&str, &&str)> = answers()
+        .iter()
+        .filter(|(k, _)| k.starts_with(prefix))
+        .collect();
+    calls.sort();
+    let (mut checked, mut wrong) = (0, Vec::new());
+    for (call, theirs) in calls {
+        let Some(ours) = data.answer(call) else {
+            continue;
+        };
+        checked += 1;
+        let (a, b) = (Rv::answer(&ours), Rv::answer(theirs));
+        if a.len() != b.len() || !a.iter().zip(&b).all(|(x, y)| close(x, y)) {
+            wrong.push(format!("{call}\n  ours:   {ours}\n  theirs: {theirs}"));
+        }
+    }
+    (checked, wrong)
 }
 
 /// The trainers' recorded answers (`/stdtest engine trainer`,

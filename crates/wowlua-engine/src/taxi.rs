@@ -315,8 +315,11 @@ fn get_all_taxi_nodes(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(out)])
 }
 
-/// `C_TaxiMap.GetTaxiNodesForMap(mapID)`: every node the map shows. A
-/// world map's are the client's (`/stdtest engine maps`, every map of
+/// `C_TaxiMap.GetTaxiNodesForMap(mapID)`: every node the map shows. Where
+/// the client's tables are at hand, a world map's are theirs (decision
+/// T463: the nodes of the continents the map is assigned to, shown to a
+/// faction, the file's then the hotfixed ones). Else a world map's are the
+/// client's (`/stdtest engine maps`, every map of
 /// Forever's world recorded): each map of a continent lists all of that
 /// continent's nodes (Kalimdor's 38, the Eastern Kingdoms' 36, both
 /// factions', none undiscovered), Azeroth (947) both continents', Alterac
@@ -326,6 +329,36 @@ fn get_all_taxi_nodes(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// undiscovered nodes; a world map's answer while a flight master's map is
 /// open (recorded closed).
 fn get_taxi_nodes_for_map(vm: &mut Vm, c: NativeCall) -> Ret {
+    // A world map's: the client's tables' where at hand (decision T463).
+    if let Value::Num(map) = vm.hidden(c.arg(1))
+        && let Some(nodes) = crate::clientdata::taxi_nodes(vm, map as i64)
+    {
+        let out = vm.new_table();
+        for (i, n) in nodes.iter().enumerate() {
+            let e = vm.new_table();
+            let atlas = match n.faction {
+                1 => "TaxiNode_Horde",
+                2 => "TaxiNode_Alliance",
+                _ => "TaxiNode_Neutral",
+            };
+            let (name, atlas) = (vm.str(&n.name), vm.str(atlas));
+            set(vm, e, "name", name);
+            set(vm, e, "nodeID", Value::Num(f64::from(n.id)));
+            set(vm, e, "atlasName", atlas);
+            set(vm, e, "faction", Value::Num(f64::from(n.faction)));
+            set(vm, e, "isUndiscovered", Value::Bool(false));
+            let p = vm.new_table();
+            set(vm, p, "x", Value::Num(n.x));
+            set(vm, p, "y", Value::Num(n.y));
+            let p = position(vm, p);
+            set(vm, e, "position", p);
+            let _ = vm
+                .heap
+                .table_mut(out)
+                .set(Value::Num((i + 1) as f64), Value::Table(e));
+        }
+        return Ok(vec![Value::Table(out)]);
+    }
     if let Some(values) = crate::recorded::lookup(vm, "C_TaxiMap.GetTaxiNodesForMap", &c) {
         return Ok(values);
     }
@@ -346,6 +379,69 @@ fn get_taxi_nodes_for_map(vm: &mut Vm, c: NativeCall) -> Ret {
             .set(Value::Num((i + 1) as f64), Value::Table(e));
     }
     Ok(vec![Value::Table(out)])
+}
+
+/// The recorded world maps' flight paths again from the client's tables
+/// (decision T463): the nodes compared and those that differ (a position
+/// to 0.0001).
+pub fn compare_with_recording(data: &dyn crate::clientdata::ClientData) -> (usize, Vec<String>) {
+    use crate::traits::Rv;
+    let mut calls: Vec<(&&str, &&str)> = crate::recorded::answers()
+        .iter()
+        .filter(|(k, _)| k.starts_with("C_TaxiMap.GetTaxiNodesForMap("))
+        .collect();
+    calls.sort();
+    let (mut checked, mut wrong) = (0, Vec::new());
+    for (call, answer) in calls {
+        let Some(map) = call
+            .strip_prefix("C_TaxiMap.GetTaxiNodesForMap(")
+            .and_then(|r| r.strip_suffix(')'))
+            .and_then(|m| m.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        let theirs: Vec<Rv> = match Rv::answer(answer).into_iter().next() {
+            Some(Rv::Table(f)) => {
+                let mut f: Vec<(f64, Rv)> = f
+                    .into_iter()
+                    .filter_map(|(k, v)| Some((k.parse().ok()?, v)))
+                    .collect();
+                f.sort_by(|a, b| a.0.total_cmp(&b.0));
+                f.into_iter().map(|(_, v)| v).collect()
+            }
+            _ => Vec::new(),
+        };
+        let ours = data.taxi_nodes(map).unwrap_or_default();
+        if ours.len() != theirs.len() {
+            wrong.push(format!(
+                "map {map}: {} nodes / {}",
+                ours.len(),
+                theirs.len()
+            ));
+            continue;
+        }
+        for (o, t) in ours.iter().zip(&theirs) {
+            checked += 1;
+            let num = |k: &str| match t.get(k) {
+                Some(Rv::Num(n)) => *n,
+                _ => f64::NAN,
+            };
+            let pos = |k: &str| match t.get("position").and_then(|p| p.get(k)) {
+                Some(Rv::Num(n)) => *n,
+                _ => f64::NAN,
+            };
+            let name = matches!(t.get("name"), Some(Rv::Str(n)) if *n == o.name);
+            if f64::from(o.id) != num("nodeID")
+                || f64::from(o.faction) != num("faction")
+                || !name
+                || (o.x - pos("x")).abs() > 1e-4
+                || (o.y - pos("y")).abs() > 1e-4
+            {
+                wrong.push(format!("map {map}: {o:?} / {t:?}"));
+            }
+        }
+    }
+    (checked, wrong)
 }
 
 /// `CloseTaxiMap()`: `TAXIMAP_CLOSED()`, the interaction's hides.

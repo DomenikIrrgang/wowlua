@@ -91,6 +91,10 @@ fn library_of(casc: &Arc<Casc>) -> Arc<Mutex<Library>> {
     m.entry(key).or_default().clone()
 }
 
+/// A part of a map in the world (`UiMapAssignment`): its ID, continent,
+/// its part of the map (minimum, maximum) and its world rectangle.
+type Part = (u32, u32, [f64; 2], [f64; 2], Vec<f32>);
+
 /// The talent trees of a build's `Trait` tables (decision T435); `None`
 /// where the build has no trees.
 pub fn trait_tables(casc: &Casc) -> Option<TraitTables> {
@@ -462,6 +466,8 @@ pub struct CascClientData {
     spells: OnceLock<Option<wowlua_casc::spells::SpellTables>>,
     /// The talent trees, read on first use.
     traits: OnceLock<Option<Arc<TraitTables>>>,
+    /// The answers the tables give (decision T464), read on first use.
+    answers: OnceLock<Option<crate::answers::Answers>>,
     /// The client's fonts by their file's name (lower case), read on first
     /// use; `None` for one the storage lacks.
     fonts: std::sync::Mutex<std::collections::HashMap<String, Option<Arc<fontdue::Font>>>>,
@@ -479,6 +485,7 @@ impl CascClientData {
             casc: OnceLock::new(),
             spells: OnceLock::new(),
             traits: OnceLock::new(),
+            answers: OnceLock::new(),
             fonts: Default::default(),
             glyphs: Default::default(),
         }
@@ -667,6 +674,123 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
         })
     }
 
+    fn transmog_source(&self, source: u32) -> Option<wowlua_engine::clientdata::TransmogSource> {
+        self.with(|lib, casc| {
+            let (item, visual, item_mod, source_type) = {
+                let r = lib.table(casc, "ItemModifiedAppearance")?.row(source)?;
+                (
+                    r.int("ItemID"),
+                    r.int("ItemAppearanceID"),
+                    r.int("ItemAppearanceModifierID"),
+                    r.int("TransmogSourceTypeEnum"),
+                )
+            };
+            let r = lib.table(casc, "Item")?.row(item)?;
+            Some(wowlua_engine::clientdata::TransmogSource {
+                source,
+                visual,
+                item,
+                item_mod,
+                source_type,
+                class: r.int("ClassID"),
+                subclass: r.int("SubclassID"),
+                inventory_type: r.int("InventoryType"),
+            })
+        })
+    }
+
+    fn appearance_sources(&self, visual: u32) -> Vec<u32> {
+        self.with(|lib, casc| {
+            let mut ids: Vec<u32> = lib
+                .table(casc, "ItemModifiedAppearance")?
+                .rows_where("ItemAppearanceID", visual)
+                .iter()
+                .map(|r| r.id())
+                .collect();
+            ids.sort_unstable();
+            Some(ids)
+        })
+        .unwrap_or_default()
+    }
+
+    fn taxi_nodes(&self, ui_map: u32) -> Option<Vec<wowlua_engine::clientdata::TaxiNode>> {
+        self.with(|lib, casc| {
+            // A world map (`Enum.UIMapSystem.World`), not a flight map.
+            if lib.table(casc, "UiMap")?.row(ui_map)?.int("System") != 0 {
+                return None;
+            }
+            let mut assignments: Vec<Part> = lib
+                .table(casc, "UiMapAssignment")?
+                .rows_where("UiMapID", ui_map)
+                .iter()
+                .map(|r| {
+                    let ui = |c: &str| {
+                        let v = r.floats(c);
+                        [
+                            f64::from(v.first().copied().unwrap_or(0.0)),
+                            f64::from(v.get(1).copied().unwrap_or(0.0)),
+                        ]
+                    };
+                    (
+                        r.id(),
+                        r.int("MapID"),
+                        ui("UiMin"),
+                        ui("UiMax"),
+                        r.floats("Region"),
+                    )
+                })
+                .collect();
+            // By ID (recorded: Azeroth lists the Eastern Kingdoms' first,
+            // whose assignment's order index is the second).
+            assignments.sort_by_key(|a| a.0);
+            let nodes = lib.table(casc, "TaxiNodes")?;
+            // The file's records, then those the server changed (recorded:
+            // Stormwind's, last on every map showing it).
+            let mut rows: Vec<_> = nodes.rows().collect();
+            rows.sort_by_key(|r| r.hotfixed());
+            let mut out = Vec::new();
+            for (_, continent, ui_min, ui_max, region) in &assignments {
+                let &[min_x, min_y, _, max_x, max_y, _] = region.as_slice() else {
+                    continue;
+                };
+                let (min_x, min_y, max_x, max_y) = (
+                    f64::from(min_x),
+                    f64::from(min_y),
+                    f64::from(max_x),
+                    f64::from(max_y),
+                );
+                for r in &rows {
+                    // Shown to the Alliance (1), the Horde (2) or both.
+                    let faction = match r.int("Flags") & 3 {
+                        1 => 2,
+                        2 => 1,
+                        3 => 0,
+                        _ => continue,
+                    };
+                    if r.int("ContinentID") != *continent {
+                        continue;
+                    }
+                    let pos = r.floats("Pos");
+                    let (px, py) = (
+                        f64::from(pos.first().copied().unwrap_or(0.0)),
+                        f64::from(pos.get(1).copied().unwrap_or(0.0)),
+                    );
+                    // The world's X runs north, its Y west.
+                    let fx = (max_y - py) / (max_y - min_y);
+                    let fy = (max_x - px) / (max_x - min_x);
+                    out.push(wowlua_engine::clientdata::TaxiNode {
+                        id: r.id(),
+                        name: r.string("Name_lang").unwrap_or_default(),
+                        faction,
+                        x: ui_min[0] + fx * (ui_max[0] - ui_min[0]),
+                        y: ui_min[1] + fy * (ui_max[1] - ui_min[1]),
+                    });
+                }
+            }
+            Some(out)
+        })
+    }
+
     fn transmog_camera(&self, race: u32, gender: u32, slot: u32, variation: u32) -> Option<u32> {
         self.with(|lib, casc| {
             let t = lib.table(casc, "UiCamFbackTransmogChrRace")?;
@@ -717,6 +841,16 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
 
     fn traits(&self) -> Option<Arc<TraitTables>> {
         self.trait_tables()
+    }
+
+    fn answer(&self, call: &str) -> Option<String> {
+        self.answers
+            .get_or_init(|| {
+                let casc = self.casc.get_or_init(|| (self.open)()).as_ref()?;
+                Some(crate::answers::Answers::open(casc))
+            })
+            .as_ref()?
+            .answer(call)
     }
 
     fn spell(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientSpell> {

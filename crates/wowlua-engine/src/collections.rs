@@ -1083,7 +1083,142 @@ fn appearances() -> &'static BTreeMap<i64, &'static str> {
 
 fn source(vm: &Vm, c: &NativeCall, n: usize) -> Option<&'static str> {
     let id = num(vm, c, n)? as i64;
-    sources().get(&id).copied()
+    source_by_id(vm, id)
+}
+
+/// A source: as recorded, else as the client's tables give it.
+fn source_by_id(vm: &Vm, id: i64) -> Option<&'static str> {
+    sources()
+        .get(&id)
+        .copied()
+        .or_else(|| client_source(vm, id))
+}
+
+/// `Enum.TransmogCollectionType` of an item (its class, subclass and
+/// inventory type), as the client's sources have it (recorded: every one of
+/// the 73 kinds the 5,359 recorded sources hold): armor by its slot, a
+/// shield and an off-hand by theirs, weapons by their subclass; none for
+/// the others (thrown, fishing poles, miscellaneous weapons).
+fn transmog_category(class: u32, subclass: u32, inventory_type: u32) -> Option<u32> {
+    Some(match (class, subclass, inventory_type) {
+        (4, 6, _) => 18,
+        (4, _, 1) => 1,
+        (4, _, 3) => 2,
+        (4, _, 16) => 3,
+        (4, _, 5 | 20) => 4,
+        (4, _, 4) => 5,
+        (4, _, 19) => 6,
+        (4, _, 9) => 7,
+        (4, _, 10) => 8,
+        (4, _, 6) => 9,
+        (4, _, 7) => 10,
+        (4, _, 8) => 11,
+        (4, _, 23) => 19,
+        (2, 19, _) => 12,
+        (2, 0, _) => 13,
+        (2, 7, _) => 14,
+        (2, 4, _) => 15,
+        (2, 15, _) => 16,
+        (2, 13, _) => 17,
+        (2, 1, _) => 20,
+        (2, 8, _) => 21,
+        (2, 5, _) => 22,
+        (2, 10, _) => 23,
+        (2, 6, _) => 24,
+        (2, 2, _) => 25,
+        (2, 3, _) => 26,
+        (2, 18, _) => 27,
+        (2, 9, _) => 28,
+        _ => return None,
+    })
+}
+
+/// A source the recordings lack, as the client's tables give it (decision
+/// T462), in the recordings' form: its item, appearance, slot (the API's
+/// inventory type, one more than the table's), category and source type
+/// (the API's: the table's 7 and 8 are 5 and 6, its 0 and 5 none;
+/// recorded: 5,359 of 5,359); not collected (unless a test collects it),
+/// its item not loaded (the client's flags then: recorded, 4,702 of 5,359
+/// sources all false).
+fn client_source(vm: &Vm, id: i64) -> Option<&'static str> {
+    client_source_text(crate::clientdata::transmog_source(vm, id)?).map(crate::recorded::intern)
+}
+
+fn client_source_text(s: crate::clientdata::TransmogSource) -> Option<String> {
+    let category = transmog_category(s.class, s.subclass, s.inventory_type)?;
+    let kind = match s.source_type {
+        0 | 5 => String::new(),
+        7 => ",sourceType=number 5".into(),
+        8 => ",sourceType=number 6".into(),
+        t => format!(",sourceType=number {t}"),
+    };
+    Some(format!(
+        "{{canDisplayOnPlayer=boolean false,categoryID=number {category},invType=number {},\
+         isCollected=boolean false,isValidSourceForPlayer=boolean false,itemID=number {},\
+         itemModID=number {},playerCanCollect=boolean false,sourceID=number {}{kind},\
+         visualID=number {}}}",
+        s.inventory_type + 1,
+        s.item,
+        s.item_mod,
+        s.source,
+        s.visual
+    ))
+}
+
+/// The recorded sources again from the client's tables (decision T462):
+/// the number compared and those that differ (the recorded flags and the
+/// loaded item's fields aside, which are the character's and its client's
+/// cache).
+pub fn compare_sources_with_recording(
+    data: &dyn crate::clientdata::ClientData,
+) -> (usize, Vec<String>) {
+    let flags = [
+        "canDisplayOnPlayer",
+        "isCollected",
+        "isValidSourceForPlayer",
+        "playerCanCollect",
+        // the item's, once loaded (`collected::fill_item`)
+        "name",
+        "quality",
+        "isHideVisual",
+        "useError",
+        "useErrorType",
+    ];
+    let keep = |entry: &str| -> Vec<(String, String)> {
+        fields(entry)
+            .into_iter()
+            .filter(|(k, _)| !flags.contains(k))
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    };
+    let mut wrong = Vec::new();
+    for (id, entry) in sources() {
+        let ours = u32::try_from(*id)
+            .ok()
+            .and_then(|i| data.transmog_source(i))
+            .and_then(client_source_text);
+        let ours = ours.as_deref().map(keep);
+        let theirs = Some(keep(entry));
+        if ours != theirs {
+            wrong.push(format!("source {id}: {ours:?} / {theirs:?}"));
+        }
+    }
+    (sources().len(), wrong)
+}
+
+/// An appearance's sources by ID: as recorded, else as the client's
+/// tables give them (each source its entry).
+fn visual_sources(vm: &Vm, visual: i64) -> Vec<(i64, &'static str)> {
+    if let Some(ids) = appearance_sources().get(&visual) {
+        return ids
+            .iter()
+            .filter_map(|id| Some((*id, sources().get(id).copied()?)))
+            .collect();
+    }
+    crate::clientdata::appearance_sources(vm, visual)
+        .into_iter()
+        .filter_map(|id| Some((i64::from(id), client_source(vm, i64::from(id))?)))
+        .collect()
 }
 
 /// `C_TransmogCollection.GetSourceInfo(sourceID)`: the source as recorded
@@ -1117,32 +1252,29 @@ fn entry_collected(vm: &Vm, entry: &str) -> bool {
 /// Whether an appearance is collected: one of its sources as a test set,
 /// else as recorded (the appearance's, else its sources').
 pub(crate) fn appearance_collected(vm: &Vm, visual: i64) -> bool {
-    let siblings = appearance_sources().get(&visual);
+    let siblings = visual_sources(vm, visual);
     if crate::collected::sources_set(vm) {
-        return siblings.is_some_and(|s| {
-            s.iter()
-                .any(|id| crate::collected::source_collected(vm, Some(*id as f64), false))
-        });
+        return siblings
+            .iter()
+            .any(|(id, _)| crate::collected::source_collected(vm, Some(*id as f64), false));
     }
     match appearances().get(&visual) {
         Some(a) => field_bool(a, "isCollected"),
-        None => siblings.is_some_and(|s| {
-            s.iter()
-                .filter_map(|id| sources().get(id))
-                .any(|e| field_bool(e, "isCollected"))
-        }),
+        None => siblings.iter().any(|(_, e)| field_bool(e, "isCollected")),
     }
 }
 
-/// Every recorded source of an appearance, as `GetAppearanceSources`'
-/// list (`AppearanceSourceInfo`, by source ID); none for an appearance the
-/// recordings do not hold.
+/// Every source of an appearance, as `GetAppearanceSources`' list
+/// (`AppearanceSourceInfo`, by source ID): the recorded ones, else the
+/// client's tables'; none for an appearance neither holds.
 pub(crate) fn appearance_source_list(vm: &mut Vm, visual: i64) -> Option<Value> {
-    let ids = appearance_sources().get(&visual)?;
-    let entries: Vec<&'static str> = ids
-        .iter()
-        .filter_map(|id| sources().get(id).copied())
+    let entries: Vec<&'static str> = visual_sources(vm, visual)
+        .into_iter()
+        .map(|(_, e)| e)
         .collect();
+    if entries.is_empty() {
+        return None;
+    }
     let values: Vec<Value> = entries.iter().map(|e| entry_value(vm, e)).collect();
     Some(list(vm, values))
 }
@@ -1250,13 +1382,13 @@ fn can_collect_source(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_TransmogCollection.GetAllAppearanceSources(appearanceID)`: its
-/// recorded sources.
+/// sources (recorded, else the client's tables').
 fn get_all_appearance_sources(vm: &mut Vm, c: NativeCall) -> Ret {
     let visual = num(vm, &c, 1).unwrap_or(0.0) as i64;
-    let ids: Vec<Value> = appearance_sources()
-        .get(&visual)
-        .map(|s| s.iter().map(|id| Value::Num(*id as f64)).collect())
-        .unwrap_or_default();
+    let ids: Vec<Value> = visual_sources(vm, visual)
+        .into_iter()
+        .map(|(id, _)| Value::Num(id as f64))
+        .collect();
     Ok(vec![list(vm, ids)])
 }
 
@@ -1268,14 +1400,10 @@ fn get_appearance_info_by_source(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let visual = field_num(entry, "visualID").unwrap_or(0.0);
-    let siblings: Vec<&'static str> = appearance_sources()
-        .get(&(visual as i64))
-        .map(|s| {
-            s.iter()
-                .filter_map(|id| sources().get(id).copied())
-                .collect()
-        })
-        .unwrap_or_default();
+    let siblings: Vec<&'static str> = visual_sources(vm, visual as i64)
+        .into_iter()
+        .map(|(_, e)| e)
+        .collect();
     let appearance = appearances().get(&(visual as i64)).copied();
     let source_collected = entry_collected(vm, entry);
     let appearance_collected = appearance_collected(vm, visual as i64);
@@ -1628,8 +1756,13 @@ pub(crate) fn transmog_class_filter(vm: &mut Vm) -> Option<f64> {
 }
 
 /// Whether the wardrobe's recorded appearances hold the appearance.
-pub(crate) fn appearance_known(visual: i64) -> bool {
+/// Whether the recordings hold an appearance.
+pub(crate) fn appearance_recorded(visual: i64) -> bool {
     appearances().contains_key(&visual) || appearance_sources().contains_key(&visual)
+}
+
+pub(crate) fn appearance_known(vm: &Vm, visual: i64) -> bool {
+    appearances().contains_key(&visual) || !visual_sources(vm, visual).is_empty()
 }
 
 /// `C_TransmogCollection.IsValidTransmogSource(source)`: every

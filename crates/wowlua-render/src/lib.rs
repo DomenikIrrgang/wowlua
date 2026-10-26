@@ -6,6 +6,7 @@
 //! the GPU; a frame is one vertex buffer and a draw call per run of quads
 //! sharing a texture, mask, blend mode and clip rectangle.
 
+mod answers;
 pub mod client;
 mod combiners;
 pub mod compare;

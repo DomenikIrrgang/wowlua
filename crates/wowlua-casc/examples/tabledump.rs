@@ -1,5 +1,6 @@
 //! `cargo run -p wowlua-casc --example tabledump -- <product> <table> <col>…`:
-//! a table's records' columns, tab-separated (the ID first).
+//! a table's records' columns, tab-separated (the ID first); `Col[f]` an
+//! array of floats, `Col[]` of integers.
 
 fn main() {
     let a: Vec<String> = std::env::args().collect();
@@ -13,7 +14,13 @@ fn main() {
         let cols: Vec<String> = a[3..]
             .iter()
             .map(|c| {
-                if c.ends_with("_lang") || c == "InternalName" {
+                if let Some(c) = c.strip_suffix("[f]") {
+                    let f: Vec<String> = row.floats(c).iter().map(|v| v.to_string()).collect();
+                    f.join(",")
+                } else if let Some(c) = c.strip_suffix("[]") {
+                    let f: Vec<String> = row.ints(c).iter().map(|v| v.to_string()).collect();
+                    f.join(",")
+                } else if c.ends_with("_lang") || c == "InternalName" {
                     row.string(c).unwrap_or_default()
                 } else {
                     row.signed(c).to_string()

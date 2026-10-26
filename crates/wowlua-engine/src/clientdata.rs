@@ -131,6 +131,25 @@ pub trait ClientData: Send + Sync {
     fn item_source(&self, _item: u32) -> Option<(u32, u32)> {
         None
     }
+    /// A transmog source as the client's tables have it (decision T462).
+    fn transmog_source(&self, _source: u32) -> Option<TransmogSource> {
+        None
+    }
+    /// An appearance's (visual's) transmog sources, by ID.
+    fn appearance_sources(&self, _visual: u32) -> Vec<u32> {
+        Vec::new()
+    }
+    /// A call's answer as the client's tables give it, written as the
+    /// recordings write answers (`1: {flags=number 2,…}`; decision T464):
+    /// taken where a recorded answer would be.
+    fn answer(&self, _call: &str) -> Option<String> {
+        None
+    }
+    /// The flight paths a world map shows (decision T463); `None` for a
+    /// map the client's tables lack or a flight map (the taxi system's).
+    fn taxi_nodes(&self, _ui_map: u32) -> Option<Vec<TaxiNode>> {
+        None
+    }
     /// The UI camera the wardrobe shows a weapon with
     /// (`UiCamFbackTransmogWeapon`): by item class, subclass and inventory
     /// type.
@@ -267,6 +286,57 @@ pub struct TraitCondition {
     pub spent: u32,
     /// "Spend %d more |4point:points; in %s …" (its `SharedString`).
     pub tooltip: Option<String>,
+}
+
+/// A transmog source (`ItemModifiedAppearance`) and its item's kind
+/// (`Item`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TransmogSource {
+    pub source: u32,
+    /// Its appearance (`ItemAppearance`, the API's visual).
+    pub visual: u32,
+    pub item: u32,
+    pub item_mod: u32,
+    /// `TransmogSourceTypeEnum` as the table has it.
+    pub source_type: u32,
+    pub class: u32,
+    pub subclass: u32,
+    pub inventory_type: u32,
+}
+
+/// A flight path on a world map (`TaxiNodes`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TaxiNode {
+    pub id: u32,
+    pub name: String,
+    /// `Enum.FlightPathFaction`: 0 neutral, 1 Horde, 2 Alliance.
+    pub faction: u32,
+    /// Where it is on the map (0 to 1 across it; beyond for one off it).
+    pub x: f64,
+    pub y: f64,
+}
+
+/// The flight paths a world map shows, as the client's tables give them.
+pub(crate) fn taxi_nodes(vm: &Vm, ui_map: i64) -> Option<Vec<TaxiNode>> {
+    data(vm)?.taxi_nodes(u32::try_from(ui_map).ok()?)
+}
+
+/// A call's answer as the client's tables give it (decision T464).
+pub(crate) fn answer(vm: &Vm, call: &str) -> Option<String> {
+    data(vm)?.answer(call)
+}
+
+/// A transmog source as the client's tables give it.
+pub(crate) fn transmog_source(vm: &Vm, source: i64) -> Option<TransmogSource> {
+    data(vm)?.transmog_source(u32::try_from(source).ok()?)
+}
+
+/// An appearance's transmog sources as the client's tables give them.
+pub(crate) fn appearance_sources(vm: &Vm, visual: i64) -> Vec<u32> {
+    match (data(vm), u32::try_from(visual)) {
+        (Some(d), Ok(v)) => d.appearance_sources(v),
+        _ => Vec::new(),
+    }
 }
 
 /// The client's talent trees, where its tables are at hand.

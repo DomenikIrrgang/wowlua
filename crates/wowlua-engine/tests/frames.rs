@@ -1742,6 +1742,188 @@ return list[4].appearanceID, table.concat(Told, ' '), C_TransmogCollection.GetSo
     assert_eq!(r, ["156906", "156906@4+", "2575"]);
 }
 
+/// The client's transmog tables: appearance 999001, which no recording
+/// holds, with sources 999102 and 999101 of item 2575 (a shirt), one a
+/// vendor's, one crafted.
+struct Wardrobe;
+
+impl wowlua_engine::clientdata::ClientData for Wardrobe {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn transmog_source(&self, source: u32) -> Option<wowlua_engine::clientdata::TransmogSource> {
+        let source_type = match source {
+            999101 => 3,
+            999102 => 8,
+            _ => return None,
+        };
+        Some(wowlua_engine::clientdata::TransmogSource {
+            source,
+            visual: 999001,
+            item: 2575,
+            item_mod: 0,
+            source_type,
+            class: 4,
+            subclass: 0,
+            inventory_type: 4,
+        })
+    }
+    fn appearance_sources(&self, visual: u32) -> Vec<u32> {
+        if visual == 999001 {
+            vec![999101, 999102]
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+/// An appearance and source the recordings lack answer from the client's
+/// tables (decision T462): in source order, the shirt category, the API's
+/// slot and source types, not collected.
+#[test]
+fn transmog_sources_come_from_the_client_tables() {
+    let mut vm = vm();
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Wardrobe));
+    let r = run(
+        &mut vm,
+        "local list = C_TransmogCollection.GetAppearanceSources(999001)
+local a, b = list[1], list[2]
+local info = C_TransmogCollection.GetSourceInfo(999102)
+return #list, a.sourceID, a.categoryID, a.invType, a.sourceType, b.sourceType,
+    tostring(a.isCollected), info.itemID, info.visualID,
+    #C_TransmogCollection.GetAllAppearanceSources(999001),
+    C_TransmogCollection.GetCategoryForItem(999101)",
+    );
+    assert_eq!(
+        r,
+        [
+            "2", "999101", "5", "5", "3", "6", "false", "2575", "999001", "2", "5"
+        ]
+    );
+}
+
+/// The client's flight paths: Durotar (1411) shows Orgrimmar and a
+/// neutral node off the map.
+struct Flights;
+
+impl wowlua_engine::clientdata::ClientData for Flights {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn taxi_nodes(&self, ui_map: u32) -> Option<Vec<wowlua_engine::clientdata::TaxiNode>> {
+        (ui_map == 1411).then(|| {
+            vec![
+                wowlua_engine::clientdata::TaxiNode {
+                    id: 23,
+                    name: "Orgrimmar, Durotar".into(),
+                    faction: 1,
+                    x: 0.45,
+                    y: 0.1,
+                },
+                wowlua_engine::clientdata::TaxiNode {
+                    id: 80,
+                    name: "Ratchet, The Barrens".into(),
+                    faction: 0,
+                    x: -0.2,
+                    y: 0.9,
+                },
+            ]
+        })
+    }
+}
+
+/// A world map's flight paths are the client's tables' (decision T463):
+/// in their order, the faction's icon, a position vector.
+#[test]
+fn flight_paths_come_from_the_client_tables() {
+    let mut vm = vm();
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Flights));
+    let r = run(
+        &mut vm,
+        "local list = C_TaxiMap.GetTaxiNodesForMap(1411)
+local a, b = list[1], list[2]
+return #list, a.nodeID, a.name, a.atlasName, b.atlasName, b.faction, b.position.x,
+    tostring(a.isUndiscovered)",
+    );
+    assert_eq!(
+        r,
+        [
+            "2",
+            "23",
+            "Orgrimmar, Durotar",
+            "TaxiNode_Horde",
+            "TaxiNode_Neutral",
+            "0",
+            "-0.2",
+            "false"
+        ]
+    );
+}
+
+/// A client whose tables answer `C_Map.GetMapInfo(5000)`, a map no
+/// recording has, and Durotar's name otherwise.
+struct MapTables;
+
+impl wowlua_engine::clientdata::ClientData for MapTables {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn answer(&self, call: &str) -> Option<String> {
+        match call {
+            "C_Map.GetMapInfo(5000)" => Some(
+                "1: {flags=number 0,mapID=number 5000,mapType=number 3,name=string New Land,parentMapID=number 947}".into(),
+            ),
+            "C_Map.GetMapInfo(1411)" => Some(
+                "1: {flags=number 2,mapID=number 1411,mapType=number 3,name=string Durotar (client),parentMapID=number 1414}".into(),
+            ),
+            _ => None,
+        }
+    }
+}
+
+/// The client's tables answer a call before the recordings do (decision
+/// T464): a map the recordings lack, and a recorded one.
+#[test]
+fn the_client_tables_answer_before_the_recordings() {
+    let mut vm = vm();
+    let before = run(&mut vm, "return C_Map.GetMapInfo(1411).name");
+    assert_eq!(before, ["Durotar"]);
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(MapTables));
+    let r = run(
+        &mut vm,
+        "return C_Map.GetMapInfo(5000).name, C_Map.GetMapInfo(5000).parentMapID,
+    C_Map.GetMapInfo(1411).name, C_Map.GetMapInfo(1412).name",
+    );
+    assert_eq!(r, ["New Land", "947", "Durotar (client)", "Mulgore"]);
+}
+
 /// `BNGetInfo()` answers the account; given an argument, nothing (both
 /// recorded).
 #[test]

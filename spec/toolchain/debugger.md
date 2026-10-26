@@ -432,6 +432,45 @@ T310).
   nodes the build changed since the recording. Unverified: costs of a
   node's own besides its tree's, conditions of quests, achievements or
   levels (camelot's have none: they count as met).
+
+  A transmog source or appearance the recordings lack (decision T462) is
+  the client's: a source's item, appearance, modifier and source type
+  (`ItemModifiedAppearance`; the API's source type renumbers the table's 7
+  and 8 as 5 and 6 and has none for its 0 and 5), its slot (the item's
+  inventory type plus one) and category (`Enum.TransmogCollectionType`:
+  armor by its slot, shields and off-hands by theirs, weapons by their
+  subclass), an appearance's sources by ID; `GetAppearanceSources`,
+  `GetAllAppearanceSources`, `GetValidAppearanceSourcesForClass`,
+  `GetSourceInfo`, `GetCategoryForItem` and the collection checks answer
+  for them, not collected unless the test collects them, with the flags of
+  an item not loaded (all false). A recorded appearance keeps its recorded
+  sources and a category its recorded appearances: the client listed what
+  the server let it (the tables hold 2.4 times the appearances and more
+  sources for half of them, and no field of theirs tells which are shown).
+  Checked against the 5,359 recorded sources: the same, their character's
+  flags and loaded items' names aside.
+
+  A world map's flight paths (`C_TaxiMap.GetTaxiNodesForMap`, decision
+  T463) are the client's: the `TaxiNodes` of each continent the map is
+  assigned to (`UiMapAssignment`, by its ID), shown to the Alliance, the
+  Horde or both (its flags' 1 and 2: the faction and its icon), the
+  file's records then those the server changed, each placed by the
+  assignment's world rectangle and its part of the map (off the map
+  beyond 0 to 1); never undiscovered (recorded; unverified for a
+  character that has not found them). A flight map (the taxi system's)
+  stays the open flight master's. Checked against the 1,960 nodes of the
+  58 recorded world maps: the same, positions to 0.0001.
+
+  Calls whose answers are the client's tables' (decision T464) are
+  answered from them where a recorded answer would be taken, before the
+  recordings: a world map's info, children (of a type, all descendants
+  after each), rectangle on another map of its continent (else zeros),
+  world size (its first part by order, each extent over the other axis's
+  part of the map, as the client gives Azeroth's), art ID, art layers and
+  their tiles (row by row), art text positions and whether it has art
+  (`UiMap`, `UiMapAssignment`, `UiMapXMapArt`, `UiMapArt`,
+  `UiMapArtStyleLayer`, `UiMapArtTile`). Checked against the 809 recorded
+  answers of these calls: the same.
 - **Fonts**: the client's TrueType fonts from the installation; without
   them, the bundled stand-in fonts (open licenses), at the same pixel
   heights. Glyph positions follow the engine's measured widths (§17.6), so

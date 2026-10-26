@@ -335,6 +335,11 @@ impl Db2 {
         self.records[i].id
     }
 
+    /// Whether record `i` is one the server changed or added (a hotfix).
+    pub fn is_hot(&self, i: usize) -> bool {
+        self.records[i].hot
+    }
+
     /// Record `i`'s parent ID from the relationship map (0: none).
     pub fn relation(&self, i: usize) -> u32 {
         self.records[i].relation

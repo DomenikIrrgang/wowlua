@@ -58,6 +58,7 @@ const FILES: &[(&str, u32)] = &[
     ("SpellPower", 982806),
     ("SpellRadius", 1134584),
     ("SpellRange", 1146820),
+    ("TaxiNodes", 1068100),
     ("TextureFileData", 982459),
     ("TraitCond", 4543085),
     ("TraitCost", 4420295),
@@ -81,10 +82,18 @@ const FILES: &[(&str, u32)] = &[
     ("UiCamFbackTransmogChrRace", 1261406),
     ("UiCamFbackTransmogWeapon", 1261407),
     ("UiCamera", 1120287),
+    ("UiMap", 1957206),
+    ("UiMapArt", 1957202),
+    ("UiMapArtStyleLayer", 1957208),
+    ("UiMapArtTile", 1957210),
+    ("UiMapAssignment", 1957219),
+    ("UiMapXMapArt", 1957217),
     ("UiModelScene", 1548215),
     ("UiModelSceneActor", 1548214),
     ("UiModelSceneActorDisplay", 1548216),
     ("UiModelSceneCamera", 1548213),
+    ("WorldMapOverlay", 1134579),
+    ("WorldMapOverlayTile", 1957212),
 ];
 
 /// The file IDs of the tables the engine reads (`wowlua data pull`).
@@ -222,6 +231,12 @@ impl Table {
 impl Row<'_> {
     pub fn id(&self) -> u32 {
         self.table.db.id(self.index)
+    }
+
+    /// Whether the server changed or added the record (a hotfix): the
+    /// client lists those after its file's (recorded: `TaxiNodes`).
+    pub fn hotfixed(&self) -> bool {
+        self.table.db.is_hot(self.index)
     }
 
     /// A column as an integer (0 when the layout lacks it).
