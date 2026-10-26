@@ -104,6 +104,16 @@ indentation and line endings are preserved, and only the affected entries change
 | `wowlua publish [--target <t>…] [--dry-run] [--tag <tag>] [--release-type <t>] [--allow-dirty] [--no-test]` | Package and upload ([Publishing §11.9](publishing.md#119-the-publish-command)) |
 | `wowlua login <type> [--token <t>] [--no-verify]` | Store an API token for a site type (`curseforge`, `wago`, `wowinterface`, `github`, `registry`) in the OS credential store ([Package manager §10.11](package-manager.md#1011-security)). The token comes from `--token`, from stdin when piped, or from a hidden prompt. CurseForge and GitHub tokens are checked with a read-only request first, and a rejected token is not saved. A registry token is created on the registry's page (`https://registry.wowlua.dev/login`, signing in with GitHub). |
 | `wowlua logout <type>` | Remove a saved API token |
+| `wowlua yank <name>@<version> [--undo] [--registry <r>]` | Yank a version of a registry package (`DELETE {api}/v1/packages/<name>/<version>`), or undo it (`PUT …/unyank`); an owner's token, as for publishing ([Package manager §10.10.2](package-manager.md#10102-download-and-publish)) |
+| `wowlua owner list <name> [--registry <r>]` | Print a registry package's owners, one GitHub login a line |
+| `wowlua owner add\|remove <name> <login>… [--registry <r>]` | Add or remove owners (GitHub logins; added ones must exist on GitHub, the last owner stays); an owner's token |
+| `wowlua search <words>… [--page <n>] [--limit <n>] [--registry <r>]` | Search the registry's packages by name, description and keywords (`GET {api}/v1/search`): one line per package with its newest version that is not yanked and its description, best match first, `--limit` (default 20, at most 100) a page |
+
+`--registry` names the registry by URL or by a name of `config.json`'s
+`registries` (§12.7); without it, the default registry. A token is
+`WOWLUA_REGISTRY_TOKEN`, else what `wowlua login registry` saved; E4201
+without one. A request the registry refuses is an error with its status and
+error details.
 
 ## 12.5 WoW installation integration
 

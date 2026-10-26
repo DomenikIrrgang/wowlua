@@ -509,11 +509,40 @@ tests). Authenticated requests send `Authorization: Bearer <token>`.
 | `DELETE {api}/v1/packages/<name>/<version>` | Yank: the version stays downloadable for existing lockfiles but is never chosen by new resolutions | 200 |
 | `PUT {api}/v1/packages/<name>/<version>/unyank` | Undo a yank | 200 |
 | `GET` / `PUT` / `DELETE {api}/v1/packages/<name>/owners` | List, add, remove owners (body: `{"users": [...]}`) | 200 |
+| `GET {api}/v1/search?q=<words>&page=<n>&per_page=<n>` | Search (below); no token | 200 |
 
 Errors use HTTP status 400 (invalid package), 401 (missing or bad token), 403
-(not an owner), 404 (unknown package), 409 (version already exists) and 413
-(archive too large), with the body
+(not an owner), 404 (unknown package), 409 (version already exists), 413
+(archive too large) and 429 (rate limit, with `Retry-After` in seconds), with the body
 `{"errors": [{"code": "<machine code>", "detail": "<message>"}]}`.
+
+**Search.** `q` holds words separated by spaces (at most 10); a package
+matches when every word occurs, case-insensitively, in its name, its
+keywords (`package.keywords`) or its description (`package.description`),
+as its newest version has them. Each word scores 100 for the exact name, 60
+for a name that starts with it, 40 for one that contains it, plus 30 for an
+exact keyword (15 for a keyword that contains it) and 10 for the
+description; results are ordered by the sum, then by name. An empty `q`
+lists every package by name. A package whose versions are all yanked is not
+found. `page` counts from 1, `per_page` defaults to 20 (at most 100); 400
+for one that is not a number from 1. The answer:
+
+```json
+{ "packages": [ { "name": "lib-tooltip", "vers": "1.2.3", "description": "Tooltips for frames",
+                  "keywords": ["ui"], "kind": "library", "score": 110 } ],
+  "total": 1, "page": 1, "per_page": 20 }
+```
+
+`vers` is the newest version that is not yanked.
+
+**Rate limits.** The server limits requests per client address with a token
+bucket per class: publishes (by default 30 an hour), sign-ins (the GitHub
+redirect and callback, 10 a minute), other changes (yank, owners, account
+forms; 120 an hour) and reads (600 a minute); `/health` is not limited.
+Behind a proxy, the client's address is the last `X-Forwarded-For` entry that
+is not a trusted proxy, read only when the connection comes from one (the
+server's `WOWLUA_REGISTRY_TRUSTED_PROXIES`); otherwise it is the
+connection's. Over a limit is 429 `rate-limited` with `Retry-After`.
 
 - Versions are immutable. A published version can be yanked, never replaced.
   A yanked version stays downloadable.
@@ -538,8 +567,8 @@ Errors use HTTP status 400 (invalid package), 401 (missing or bad token), 403
   machine codes are `invalid-name`, `invalid-version`, `invalid-manifest`,
   `manifest-mismatch`, `invalid-archive`, `addon`, `dependency-source`,
   `unknown-user`, `last-owner`, `invalid-request`, `unauthorized`,
-  `not-owner`, `reserved`, `not-admin`, `not-found`, `version-exists` and
-  `too-large`. The size limit is the server's setting (10 MiB by default).
+  `not-owner`, `reserved`, `not-admin`, `not-found`, `version-exists`,
+  `too-large` and `rate-limited`. The size limit is the server's setting (10 MiB by default).
 
 ### 10.10.3 Package archive
 

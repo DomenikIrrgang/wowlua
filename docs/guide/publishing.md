@@ -275,16 +275,23 @@ What the registry checks:
   maintain one, ask the registry's admins to assign it to your GitHub
   account.
 - **Versions** never change. Publishing a version that exists fails (HTTP
-  409); publish a new one. A version with a serious bug can be **yanked** on
-  your account page: lockfiles that have it keep working (with W4322), but
-  nobody gets it anew.
-- **Owners.** Whoever publishes a name first owns it. Add the GitHub logins
-  of co-maintainers on your account page; only owners publish new versions
-  (HTTP 403 for anybody else).
+  409); publish a new one. A version with a serious bug can be **yanked**,
+  with `wowlua yank lib-tooltip@1.2.3` or on your account page: lockfiles
+  that have it keep working (with W4322), but nobody gets it anew.
+  `--undo` takes the yank back.
+- **Owners.** Whoever publishes a name first owns it. Add co-maintainers by
+  their GitHub login, with `wowlua owner add lib-tooltip their-login` or on
+  your account page; `wowlua owner list lib-tooltip` shows them. Only owners
+  publish new versions (HTTP 403 for anybody else).
 - **Dependencies** must come from a registry too: a `git`, `svn`, `path` or
   `archive` dependency of a published package is error E4231 (your
   `dev-dependencies` stay out of the archive, so they may be anything).
 - **Size.** An archive may be 10 MiB at most (HTTP 413).
+- **Rate.** At most 30 publishes an hour from one address (HTTP 429 says
+  when to try again).
+
+Give your library a `description` and `keywords` in `package`: `wowlua
+search` finds packages by them and by name.
 
 ## Publish from CI on every tag
 

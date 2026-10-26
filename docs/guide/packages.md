@@ -105,7 +105,16 @@ release builds.
 ## Libraries from the wowlua registry
 
 Libraries published to the [wowlua registry](https://registry.wowlua.dev)
-need no URL: add them by name, with a version requirement after `@`.
+need no URL. Find one with `wowlua search`, by its name, description and
+keywords:
+
+```console
+$ wowlua search tooltip
+lib-tooltip  1.2.3  Tooltips for frames
+       Found 1 package, 1–1 shown
+```
+
+Then add it by name, with a version requirement after `@`.
 
 ```console
 $ wowlua add lib-tooltip@^1.2
