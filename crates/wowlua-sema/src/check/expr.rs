@@ -578,6 +578,7 @@ impl Checker<'_, '_> {
                 let opt = matches!(e.kind(), ExprKind::OptIndex { .. });
                 let o = if opt { self.env.types.non_nil(o) } else { o };
                 let k = self.infer(key);
+                self.check_secret(k, key.span());
                 let t = self.index_type(o, k, key, e.span());
                 single(if opt || chained {
                     self.chain_end(e, t)
@@ -1210,6 +1211,7 @@ impl Checker<'_, '_> {
             ExprKind::Index { obj, key } => {
                 let o = self.infer(obj);
                 let k = self.infer(key);
+                self.check_secret(k, key.span());
                 if let ExprKind::String(s) = key.kind() {
                     let name = String::from_utf8_lossy(&s.value()).into_owned();
                     let declared = self.declared_of(obj);
@@ -1535,6 +1537,7 @@ impl Checker<'_, '_> {
                 }
                 TableField::Keyed { key, value, .. } => {
                     let k = self.infer(key);
+                    self.check_secret(k, key.span());
                     let want = match &exp_ty {
                         Some(Ty::Map(_, v)) => Some(*v),
                         Some(Ty::Array(e)) => Some(*e),
@@ -2248,6 +2251,8 @@ impl Checker<'_, '_> {
                 let r = self.infer(rhs);
                 self.check_secret(l, lhs.span());
                 self.check_secret(r, rhs.span());
+                // A secret is E2040 / W2040 above, not also E2001.
+                let (l, r) = (self.without_secrets(l), self.without_secrets(r));
                 let ln = self.env.assignable(l, Types::NUMBER, self.mode);
                 let ls = self.env.assignable(l, Types::STRING, self.mode);
                 let rn = self.env.assignable(r, Types::NUMBER, self.mode);
@@ -2410,6 +2415,21 @@ impl Checker<'_, '_> {
             .members(t)
             .iter()
             .any(|&m| matches!(self.env.types.get(m), Ty::Secret(_)))
+    }
+
+    /// `t` without its `Secret<…>` members (`never` for a secret only).
+    pub fn without_secrets(&mut self, t: TypeId) -> TypeId {
+        if !self.is_secret(t) {
+            return t;
+        }
+        let rest: Vec<TypeId> = self
+            .env
+            .types
+            .members(t)
+            .into_iter()
+            .filter(|&m| !matches!(self.env.types.get(m), Ty::Secret(_)))
+            .collect();
+        self.env.types.union(&rest)
     }
 
     /// A forbidden operation on a possibly secret value (spec §2.11).

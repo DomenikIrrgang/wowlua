@@ -59,3 +59,55 @@ fn assigning_an_import_is_e1010() {
         ]
     );
 }
+
+/// The diagnostics of `src` checked in `mode` with the extra declarations
+/// `extra`, as `code: message`.
+fn with_decls(src: &str, mode: Mode, extra: &'static str) -> Vec<String> {
+    check_with(src, mode, Some(extra), None)
+        .iter()
+        .map(|x| format!("{}: {}", x.code.unwrap_or("-"), x.message))
+        .collect()
+}
+
+const SECRET_HEALTH: &str = "declare function UnitHealth(unit: string): number | Secret<number>\n";
+
+/// A forbidden use of a possibly secret value is W2040 in basic mode
+/// (E2040 in strict mode), and only that: comparing it is not also E2001
+/// (spec §2.11).
+#[test]
+fn comparing_a_secret_is_only_the_secret_diagnostic() {
+    let secret = "`number | Secret<number>` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first";
+    for (mode, code) in [(Mode::Basic, "W2040"), (Mode::Strict, "E2040")] {
+        assert_eq!(
+            with_decls(
+                "local hp = UnitHealth(\"target\")\nif hp < 1000 then print(hp) end\n",
+                mode,
+                SECRET_HEALTH
+            ),
+            [format!("{code}: {secret}")]
+        );
+    }
+    // the readable part is still compared as usual
+    let d = with_decls(
+        "local hp = UnitHealth(\"target\")\nif hp < \"x\" then print(hp) end\n",
+        Mode::Basic,
+        SECRET_HEALTH,
+    );
+    assert!(
+        d.iter().any(|x| x.starts_with("E2001: cannot compare")),
+        "{d:#?}"
+    );
+}
+
+/// A secret used as a table key, read or written, is reported too.
+#[test]
+fn a_secret_table_key_is_reported() {
+    for src in [
+        "local hp = UnitHealth(\"target\")\nlocal t = {}\nt[hp] = 1\n",
+        "local hp = UnitHealth(\"target\")\nlocal t: { [number]: string } = {}\nprint(t[hp])\n",
+        "local hp = UnitHealth(\"target\")\nprint({ [hp] = true })\n",
+    ] {
+        let d = with_decls(src, Mode::Basic, SECRET_HEALTH);
+        assert!(d.iter().any(|x| x.starts_with("W2040")), "{src}\n{d:#?}");
+    }
+}
