@@ -16,10 +16,10 @@ local perf = wl.perf
 local child = {}
 local childGarbage = {}
 local function record(name, location, elapsed, own)
-	local s = prof.stats[name]
+	local __wl_stats = prof.stats local s = __wl_stats[name]
 	if not s then
 		s = {calls = 0, total = 0, self = 0, max = 0, avg = 0, errors = 0, location = location}
-		prof.stats[name] = s
+		__wl_stats[name] = s
 	end
 	s.calls = s.calls + 1
 	s.total = s.total + elapsed
@@ -38,7 +38,7 @@ local function memoryKiB()
 	return collectgarbage("count")
 end
 -- The garbage a call made: all of it, and without profiled callees'.
-local function garbage(s, depth, before)
+local function garbage(s, depth, before) local childGarbage = childGarbage
 	local made = memoryKiB() - before
 	if made < 0 then
 		-- A collection step ran during the call.
@@ -56,7 +56,7 @@ local function garbage(s, depth, before)
 end
 -- `frame0`: the frame the call started in (a call that ends in a later
 -- frame was suspended: a coroutine yielded inside it).
-local function finish(name, location, start, depth, frame0, node, before, ...)
+local function finish(name, location, start, depth, frame0, node, before, ...) local child, perf = child, perf
 	local elapsed = clock() - start
 	local inner = child[depth] or 0
 	for i = #child, depth, -1 do
@@ -76,7 +76,7 @@ local function finish(name, location, start, depth, frame0, node, before, ...)
 end
 -- Errors are counted with `xpcall` (an allocation per call), only when
 -- asked for (`profile-errors`, `@profile({ errors = true })`).
-local function failed(name, location, depth, start, frame0, node, message)
+local function failed(name, location, depth, start, frame0, node, message) local child, perf = child, perf
 	for i = #child, depth, -1 do
 		child[i] = nil
 	end
@@ -95,7 +95,7 @@ local function finishTracked(name, location, start, depth, frame0, node, before,
 	return finish(name, location, start, depth, frame0, node, before, ...)
 end
 -- A call starts: its slot for callees' time, and what perf counts.
-local function enter(name)
+local function enter(name) local perf = perf
 	local depth = #child + 1
 	child[depth] = 0
 	if not perf then
@@ -157,9 +157,9 @@ function prof.time(label)
 	prof.timers[label] = clock()
 end
 function prof.timeEnd(label)
-	local start = prof.timers[label]
+	local __wl_timers = prof.timers local start = __wl_timers[label]
 	if start then
-		prof.timers[label] = nil
+		__wl_timers[label] = nil
 		local elapsed = clock() - start
 		record(label, nil, elapsed, elapsed)
 	end
@@ -172,7 +172,7 @@ function prof.reset()
 	end
 end
 -- Between frames nothing runs: the slots an error left open are cleared.
-function prof.unwind()
+function prof.unwind() local child, childGarbage = child, childGarbage
 	for i = #child, 1, -1 do
 		child[i] = nil
 	end

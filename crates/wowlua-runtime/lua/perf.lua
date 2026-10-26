@@ -100,7 +100,7 @@ local function rootNode(label, kind)
 end
 
 -- Adds `elapsed` to the frame being measured, under `label`.
-local function addToFrame(label, elapsed)
+local function addToFrame(label, elapsed) local curNames, curTimes = curNames, curTimes
 	cur = cur + elapsed
 	for i = 1, curN do
 		if curNames[i] == label then
@@ -117,7 +117,7 @@ local function addToFrame(label, elapsed)
 	end
 end
 
-local function logSlow(name, location, elapsed)
+local function logSlow(name, location, elapsed) local perf = perf
 	local open = perf.open
 	local rec = open[#open]
 	do
@@ -158,7 +158,7 @@ perf.push = push
 -- stack), and at the top the garbage the work made. A `suspended` call (it
 -- ended in a later frame: a coroutine yielded inside it) counts its time,
 -- but is no slow call and not over the budget. The depth after it.
-local function pop(label, location, elapsed, suspended, stat)
+local function pop(label, location, elapsed, suspended, stat) local logged, perf = logged, perf
 	local d = perf.depth
 	if not suspended then
 		if elapsed > perf.frameBudget then
@@ -186,7 +186,7 @@ local function pop(label, location, elapsed, suspended, stat)
 end
 
 -- A profiled call starts: with call paths, its node below the running one.
-function perf.enter(name)
+function perf.enter(name) local perf = perf
 	local __wl_t7 = perf.node if __wl_t7 == nil then local __wl_t5 = perf.root if __wl_t5 == nil then __wl_t5 = "other" end local __wl_t6 = perf.rootKind if __wl_t6 == nil then __wl_t6 = "other" end __wl_t7 = rootNode(__wl_t5, __wl_t6) end local parent = __wl_t7
 	local node = parent.kids[name]
 	if not node then
@@ -200,7 +200,7 @@ end
 
 -- A profiled call of `name` ended after `elapsed` ms (`own` without
 -- profiled callees); `stat` is its statistics entry.
-function perf.done(name, location, elapsed, own, node, stat, suspended)
+function perf.done(name, location, elapsed, own, node, stat, suspended) local perf = perf
 	local depth = pop(name, location, elapsed, suspended, stat)
 	local __wl_t8 = perf.root if __wl_t8 == nil then __wl_t8 = "other" end local label = __wl_t8
 	local __wl_t10 = perf.roots[label] if __wl_t10 == nil then local __wl_t9 = perf.rootKind if __wl_t9 == nil then __wl_t9 = "other" end __wl_t10 = rootNode(label, __wl_t9) end local r = __wl_t10
@@ -231,7 +231,7 @@ function perf.done(name, location, elapsed, own, node, stat, suspended)
 end
 
 -- A monitored handler starts: at the top, it is the root of the work.
-function perf.begin(label, kind)
+function perf.begin(label, kind) local perf = perf
 	if perf.depth <= 0 then
 		perf.depth = 0
 		push()
@@ -244,7 +244,7 @@ function perf.begin(label, kind)
 end
 
 -- A monitored handler ended; `stat` is its monitor entry.
-function perf.finish(top, label, kind, location, elapsed, stat)
+function perf.finish(top, label, kind, location, elapsed, stat) local perf = perf
 	pop(label, location, elapsed, false, stat)
 	if top then
 		local r = rootNode(label, kind)
@@ -275,7 +275,7 @@ end
 local FN_FIELDS = {"calls", "total", "self", "errors", "garbage", "selfGarbage", "over"}
 local MON_FIELDS = {"count", "total", "over", "bursts", "frames"}
 local NODE_FIELDS = {"calls", "total", "self"}
-local function snapshot()
+local function snapshot() local MON_FIELDS, perf = MON_FIELDS, perf
 	local prof, mon = wl.prof, wl.mon
 	local roots = {}
 	for label, r in pairs(perf.roots) do
@@ -342,7 +342,7 @@ local function plus(a, b, fields)
 end
 
 -- The figures of the recordings since `base` (nil: since load).
-local function delta(snap, base)
+local function delta(snap, base) local MON_FIELDS = MON_FIELDS
 
 	local __wl_t14 = base if __wl_t14 ~= nil then __wl_t14 = __wl_t14.functions end local __wl_t16 = minus(snap.functions, __wl_t14, FN_FIELDS, "calls")
 	local __wl_t15 = base if __wl_t15 ~= nil then __wl_t15 = __wl_t15.events end local __wl_t18 = minus(snap.events, __wl_t15, MON_FIELDS, "count")
@@ -369,7 +369,7 @@ local function delta(snap, base)
 	end
 	return d
 end
-local function add(into, more)
+local function add(into, more) local MON_FIELDS = MON_FIELDS
 	if not more then
 		return
 	end
@@ -431,7 +431,7 @@ local function showsNothing(f)
 end
 
 -- The data of a recording in the export format (§7.7.9), from its figures.
-local function render(rec, d, maxima, ended)
+local function render(rec, d, maxima, ended) local perf = perf
 	local prof, mon = wl.prof, wl.mon
 	local info = wl.devInfo or {}
 	local data = {
@@ -476,7 +476,7 @@ local function render(rec, d, maxima, ended)
 	for node, s in pairs(d.nodes) do
 		s.path = pathOf(node)
 		do local __wl_t46 = maxima if __wl_t46 then local __wl_t45 = maxima.path[node] if __wl_t45 == nil then __wl_t45 = 0 end __wl_t46 = (__wl_t45) end s.max = __wl_t46 or node.max end
-		data.paths[#data.paths + 1] = s
+		local __wl_paths = data.paths __wl_paths[#__wl_paths + 1] = s
 	end
 	for label, s in pairs(d.roots) do
 		local top, topSelf = nil, 0
@@ -513,8 +513,8 @@ local function render(rec, d, maxima, ended)
 	end
 	local sec = perf.seconds
 	do local __wl_t66 = rec.second if __wl_t66 == nil then __wl_t66 = 1 end for i = math.max(__wl_t66, sec.first), sec.last do
-			local n = #data.seconds.frames + 1
-			data.seconds.frames[n] = sec.frames[i]
+			local __wl_frames = data.seconds.frames local n = #__wl_frames + 1
+			__wl_frames[n] = sec.frames[i]
 			data.seconds.time[n] = sec.time[i]
 			data.seconds.max[n] = sec.max[i]
 			data.seconds.over[n] = sec.over[i]
@@ -525,13 +525,13 @@ local function render(rec, d, maxima, ended)
 	for i, kb in ipairs(samples) do
 		local at = times[i]
 		if at and at >= rec.at and at <= ended then
-			data.memory[#data.memory + 1] = {at = at - rec.at, kb = kb}
+			local __wl_memory = data.memory __wl_memory[#__wl_memory + 1] = {at = at - rec.at, kb = kb}
 		end
 	end
 	for i = #perf.slow, 1, -1 do
 		local s = perf.slow[i]
 		if s.at >= rec.at and s.at <= ended then
-			data.slow[#data.slow + 1] = {
+			local __wl_slow = data.slow __wl_slow[#__wl_slow + 1] = {
 			at = s.at - rec.at,
 			ms = s.ms,
 			name = s.name,
@@ -579,13 +579,13 @@ function perf.frameAt(id)
 	return ring.time[slot], ring.garbage[slot], ring.at[slot], ring.names[slot], ring.times[slot], ring.garbageAll[slot]
 end
 
-local function counted(kind)
+local function counted(kind) local perf = perf
 	do local __wl_t69 = perf.counts[kind] if __wl_t69 == nil then __wl_t69 = 0 end perf.counts[kind] = (__wl_t69) + 1 end
 	return perf.counts[kind]
 end
 
 -- Starts a recording (`kind`: combat, pull, manual).
-function perf.start(kind, name, detail)
+function perf.start(kind, name, detail) local perf = perf
 	local rec = {
 	kind = kind,
 	name = name or (kind == "manual" and "recording " .. counted(kind) or kind .. " " .. counted(kind)),
@@ -606,7 +606,7 @@ function perf.start(kind, name, detail)
 end
 
 -- The open recording of `kind`, newest first.
-function perf.running(kind)
+function perf.running(kind) local perf = perf
 	for i = #perf.open, 1, -1 do
 		if perf.open[i].kind == kind then
 			return perf.open[i]
@@ -615,7 +615,7 @@ function perf.running(kind)
 	return nil
 end
 
-local function writeExports()
+local function writeExports() local perf = perf
 	local db = perf.db
 	if not db then
 		return
@@ -634,7 +634,7 @@ perf.writeExports = writeExports
 
 -- Ends a recording; `name` renames it. The oldest automatic recordings
 -- beyond the last 20 are dropped.
-function perf.stop(rec, name)
+function perf.stop(rec, name) local perf = perf
 	if not rec.running then
 		return
 	end
@@ -677,7 +677,7 @@ end
 
 -- Clears statistics (`what`: "prof", "mon", or nil for everything):
 -- `live` starts again, the open recordings keep what they counted so far.
-function perf.reset(what)
+function perf.reset(what) local perf = perf
 	local snap = snapshot()
 	for _, rec in ipairs(perf.open) do
 		local so = delta(snap, rec.base)
@@ -723,7 +723,7 @@ function perf.set(key, value)
 		db.settings[key] = value
 	end
 end
-function perf.resetSettings()
+function perf.resetSettings() local defaults, perf = defaults, perf
 	for _, k in ipairs({"callPaths", "garbage", "frameBudget", "slowCall"}) do
 		(perf)[k] = (defaults)[k]
 	end
@@ -744,7 +744,7 @@ running = true
 }
 
 -- Closes a second: its figures, and every 4 seconds the functions' trends.
-local function closeSecond(t)
+local function closeSecond(t) local perf = perf
 	local sec = perf.seconds
 	local i = sec.last + 1
 	sec.last = i
@@ -773,7 +773,7 @@ local function closeSecond(t)
 end
 
 -- The frame mark: closes the frame being measured.
-local function mark()
+local function mark() local curNames, curTimes, logged, perf = curNames, curTimes, logged, perf
 	local t = now()
 	-- All addons' garbage: the whole Lua state's count since the last mark
 	-- (a collection step in between: nothing); the addon's own, from its
@@ -847,7 +847,7 @@ if type(CreateFrame) == "function" then
 		pcall(f.RegisterEvent, f, e)
 	end
 	local pulls = {}
-	f:SetScript("OnEvent", function(_, event, ...)
+	f:SetScript("OnEvent", function(_, event, ...) local perf, pulls = perf, pulls
 		if event == "ADDON_LOADED" and ... == addonName then
 			local name = "WowluaDevDB_" .. addonName:gsub("[^%w_]", "_")
 			local db = _G[name]

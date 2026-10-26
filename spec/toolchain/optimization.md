@@ -52,7 +52,7 @@ settings it leaves out keep the profile's.
 `inline`, `cache-globals` and `dead-code` apply to compiled code and to the
 project's plain Lua files (like minification, §15.4.1), before
 minification. The optimizations of §15.2.3 apply to compiled code only:
-plain Lua files stay as they are (decision T426).
+plain Lua files stay as they are (decision T438).
 
 **`cache-globals: "safe"`** hoists, the most used first, names read at least
 twice and never assigned in the file: Lua 5.1's base functions (`pairs`,
@@ -80,7 +80,7 @@ at the call), arguments past the parameters must be literals or names, the
 body must fit the budgets of §15.2.2 where it goes, and a body of more than
 12 statements (nested ones counted) is inlined only into its one call.
 Unbundled builds (`line-mode` `"preserve"`), which keep every instruction
-on its source line, inline no statement bodies (decision T434).
+on its source line, inline no statement bodies (decision T446).
 
 Neither kind inlines a function that uses levels of the call stack
 (`setfenv`, `getfenv`, `error` with a level, `debugstack`, `debuglocals`,
@@ -94,7 +94,7 @@ functions; on anything else (a body that returns early or returns values
 from statements, one that uses stack levels, a recursive or escaping function, a statement body none of
 whose calls is a statement, a long one called more than once, a function
 that is not local, a public or protected method) it is ignored with W3031
-(decisions T166, T434).
+(decisions T166, T446).
 
 An `@inline` private method, with either kind of body, is inlined the same
 way where its class calls it: `obj:m(args)` (any instance: a private method is the class's own, which
@@ -155,7 +155,7 @@ optimizes little, so these optimizations shape the source it compiles
 types hold where the type checker proved them in a strict-mode file
 (decision L28: basic-mode types may be wrong at runtime), so basic mode
 keeps its tables and operators as written, and `any` values too. What the
-checker proves (decision T427):
+checker proves (decision T439):
 
 - **A plain table**: a value, never `nil`, whose reads and writes run no
   code. An array, a map, a record or interface value, a namespace, a
@@ -187,11 +187,11 @@ number, a string of at most 40 bytes on one line) and never assigned is
 that constant wherever it is read, but as an object or a callee; a
 declaration whose every read became the constant goes. Reads in other
 functions become constants instead of upvalues, and Lua folds arithmetic of
-constants (`LIMIT * 2`) (decision T433).
+constants (`LIMIT * 2`) (decision T445).
 
 **`cache-fields`.** A chain of field reads from a local (`self.frame`,
 `self.frame.texture`), each from a plain table, is read once into a local
-(`__wl_texture`) where nothing can change it in between (decision T428).
+(`__wl_texture`) where nothing can change it in between (decision T440).
 Something can change a chain where code may run, or a write may reach it:
 
 - a call, but of the library functions that run no code of the addon's and
@@ -231,20 +231,20 @@ function in a loop, or at least three times, while nothing ever assigns it
 after its declaration, starts with `local name = name` and reads its copy
 (a register, not an upvalue). Reads as a callee do not count: a call copies
 the function into a register either way. A copy of a generated local is
-generated too (decision T432).
+generated too (decision T444).
 
 **`numeric-loops`.** `for i, v in ipairs(t)` over a plain array becomes
 `for i = 1, 2 ^ 53 do local v = t[i] if v == nil then break end … end`: it
 reads `t[i]` as `ipairs` does and stops at the first `nil` wherever that is,
 also when the body grows or shrinks the array, and `t` is evaluated once
 (into a local when it is not one). Without the index variable, the loop's
-variable is a generated one (decision T429).
+variable is a generated one (decision T441).
 
 **`table-insert`.** A call statement `table.insert(t, v)` or `tinsert(t,
 v)` with two arguments, of a plain table `t` that is a local or a chain of
 plain fields, and a `v` that runs no code and is one value, becomes
 `t[#t + 1] = v`: Lua 5.1's `table.insert` writes raw at `#t + 1`, which an
-assignment to a plain table does (decision T430).
+assignment to a plain table does (decision T442).
 
 **`hoist-closures`.** A function made in a loop that captures nothing the
 loop declares is made once, before it, where its identity cannot be seen:
@@ -254,7 +254,7 @@ function passed to a call that calls it and keeps nothing of it (`pcall`,
 and WoW's `sort`, `gsub`, `foreach`, `foreachi`). A loop inside a loop
 gives its closures to the outermost loop they capture nothing from.
 Unbundled builds (`line-mode` `"preserve"`) keep closures where they are:
-moved, their lines would move (decision T431).
+moved, their lines would move (decision T443).
 
 `wowlua bench` ([Tooling §16.1.7](tooling.md#1617-benchmarks-wowlua-bench))
 measures what they change; the benchmark suite in `tests/bench/` of the

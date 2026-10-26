@@ -66,7 +66,7 @@ do
 		local v = f:IsShown()
 		return v == true
 	end
-	function K.font(fs, kind, size)
+	function K.font(fs, kind, size) local K = K
 		if not fs:SetFont(K.FONTS[kind] or K.FONTS.body, size, "") then
 			fs:SetFont(K.FALLBACK, size, "")
 		end
@@ -85,7 +85,7 @@ do
 		return t
 	end
 	-- A 1px border inside `frame`.
-	function K.border(frame, color)
+	function K.border(frame, color) local K = K
 		local edges = {}
 		for i = 1, 4 do
 			edges[i] = K.fill(frame, color, "BORDER")
@@ -115,7 +115,7 @@ do
 		return t
 	end
 	-- A quiet button, or `primary` (the one action of a view, in amber).
-	function K.button(parent, label, onClick, primary)
+	function K.button(parent, label, onClick, primary) local K = K
 		local C = K.C
 		local b = CreateFrame("Button", nil, parent)
 		b:SetHeight(26)
@@ -145,7 +145,7 @@ do
 	function K.toggle(parent, label, onClick)
 		local C = K.C
 		local b = K.button(parent, label, onClick)
-		function b:SetOn(on)
+		function b:SetOn(on) local C = C
 			self.bg:SetColorTexture(unpack(on and C.selected or C.raised))
 			K.recolor(self.edges, on and C.accent or C.line)
 			self.label:SetTextColor(unpack(on and C.accent or C.muted))
@@ -156,7 +156,7 @@ do
 		return b
 	end
 	-- A field on the sunk surface.
-	function K.field(parent, width, placeholder, onEnter)
+	function K.field(parent, width, placeholder, onEnter) local K = K
 		local C = K.C
 		local box = CreateFrame("EditBox", nil, parent)
 		box:SetSize(width, 26)
@@ -186,7 +186,7 @@ do
 		return box
 	end
 	-- Two to eight named options; the chosen one in amber.
-	function K.segmented(parent, options, onPick)
+	function K.segmented(parent, options, onPick) local K = K
 		local C = K.C
 		local f = CreateFrame("Frame", nil, parent)
 		f:SetHeight(26)
@@ -211,10 +211,10 @@ do
 				f:Select(opt.value)
 				onPick(opt.value)
 			end)
-			f.buttons[#f.buttons + 1] = b
+			local __wl_buttons = f.buttons __wl_buttons[#__wl_buttons + 1] = b
 		end
 		f:SetWidth(x + 1)
-		function f:Select(value)
+		function f:Select(value) local C = C
 			for _, b in ipairs(self.buttons) do
 				local chosen = b.value == value
 				b.on:SetShown(chosen)
@@ -334,7 +334,7 @@ local function newHints(d)
 	return n
 end
 
-local function buildDevWindow(console, reg)
+local function buildDevWindow(console, reg) local K = K
 	local C, plain = K.C, K.plain
 
 
@@ -433,7 +433,7 @@ local function buildDevWindow(console, reg)
 	chevron:SetText("↓")
 	local selected = reg.order[1]
 	local function current()
-		return reg.addons[selected] or reg.addons[reg.order[1]]
+		local __wl_addons = reg.addons return __wl_addons[selected] or __wl_addons[reg.order[1]]
 	end
 	U.current = current
 	-- The open list, directly under the field.
@@ -445,7 +445,7 @@ local function buildDevWindow(console, reg)
 	listBg:SetAllPoints()
 	K.border(addonList, C.line)
 	local addonRows = {}
-	local function openAddonList()
+	local function openAddonList() local C, K, addonList, addonRows, reg = C, K, addonList, addonRows, reg
 		local y = -4
 		for i, name in ipairs(reg.order) do
 			local b = addonRows[i]
@@ -544,7 +544,7 @@ local function buildDevWindow(console, reg)
 		end)
 		tabButtons[i] = b
 	end
-	local function layoutTabs()
+	local function layoutTabs() local K = K
 		local tx = 0
 		for _, b in ipairs(tabButtons) do
 			local w = plain(b.fs:GetStringWidth(), 60) + 4
@@ -580,7 +580,7 @@ local function buildDevWindow(console, reg)
 	scroll:EnableMouseWheel(true)
 	local thumb = K.fill(body, C.lineStrong, "OVERLAY")
 	thumb:SetWidth(3)
-	local function layoutThumb()
+	local function layoutThumb() local scroll, thumb = scroll, thumb
 		local view, total = plain(scroll:GetHeight(), 1), plain(list:GetHeight(), 1)
 		if total <= view + 1 then
 			thumb:Hide()
@@ -611,7 +611,7 @@ local function buildDevWindow(console, reg)
 
 	-- Lays the body out: `left` leaves room for the recordings, `bars` is
 	-- the number of toolbars, `chart` the canvas's height.
-	local function layout(left, bars, chart)
+	local function layout(left, bars, chart) local canvas, scroll, toolbar, toolbar2 = canvas, scroll, toolbar, toolbar2
 		local lx = left and 202 or 0
 		recPanel:SetShown(left)
 		toolbar:ClearAllPoints()
@@ -651,7 +651,7 @@ local function buildDevWindow(console, reg)
 		ReloadUI()
 	end)
 	reload:SetPoint("RIGHT")
-	local hudSwitch = K.toggle(footer, "HUD", function()
+	local hudSwitch = K.toggle(footer, "HUD", function() local console = console
 		if not console.hud then
 			console.buildHud()
 		end
@@ -687,7 +687,7 @@ local function buildDevWindow(console, reg)
 	menuBg:SetAllPoints()
 	K.border(menu, C.line)
 	local menuItems = {}
-	local function openMenu(items)
+	local function openMenu(items) local C, K, menu, menuItems = C, K, menu, menuItems
 		for _, b in ipairs(menuItems) do
 			b:Hide()
 		end
@@ -737,7 +737,7 @@ local function buildDevWindow(console, reg)
 	copyBox:SetScript("OnEditFocusLost", function(self)
 		self:Hide()
 	end)
-	local function copy(value)
+	local function copy(value) local copyBox = copyBox
 		copyBox:SetText(value)
 		copyBox:Show()
 		copyBox:SetFocus()
@@ -747,7 +747,7 @@ local function buildDevWindow(console, reg)
 
 	-- Rows: a pool of frames with cells at column offsets.
 	local rows = {}
-	local function row(i)
+	local function row(i) local C, K = C, K
 		local r = rows[i]
 		if not r then
 			r = CreateFrame("Button", nil, list)
@@ -809,7 +809,7 @@ local function buildDevWindow(console, reg)
 		return fs
 	end
 	-- A row's trend: up to 15 bars in a cell.
-	local function bars(r, values, x0, w, h)
+	local function bars(r, values, x0, w, h) local C, K = C, K
 		local most = 0
 		for _, v in ipairs(values or {}) do
 			most = math.max(most, v)
@@ -837,7 +837,7 @@ local function buildDevWindow(console, reg)
 	-- { cells = {}, subs = {}, colors = {}, fonts = {}, badge, indent,
 	--   tall, notes = {}, trend = {} (in the column `trendColumn`),
 	--   onClick, onRightClick }.
-	local function render(columns, data, trendColumn)
+	local function render(columns, data, trendColumn) local C, K, S, rows = C, K, S, rows
 		width = plain(scroll:GetWidth(), 880 - 40)
 		list:SetWidth(width)
 		local fixed = 0
@@ -886,7 +886,7 @@ local function buildDevWindow(console, reg)
 		for _, fs in ipairs(hr.notes) do
 			fs:Hide()
 		end
-		hr.onClick = function()
+		hr.onClick = function() local S, console = S, console
 			-- Sorting: the column under the cursor.
 			local cx = GetCursorPosition() / plain(UIParent:GetEffectiveScale(), 1) - plain(hr:GetLeft(), 0)
 			for j, c in ipairs(columns) do
@@ -975,7 +975,7 @@ local function buildDevWindow(console, reg)
 
 	-- Toolbar widgets per tab (created once, shown when their tab is open).
 	local tools = {}
-	local function tool(name, make)
+	local function tool(name, make) local tools = tools
 		if not tools[name] then
 			tools[name] = make()
 		end
@@ -994,7 +994,7 @@ local function buildDevWindow(console, reg)
 
 	-- The canvas: pooled textures, labels and click areas, cleared per draw.
 	local paint = {tex = {}, fs = {}, nt = 0, nf = 0}
-	local function clearCanvas()
+	local function clearCanvas() local paint = paint
 		for i = 1, paint.nt do
 			paint.tex[i]:Hide()
 		end
@@ -1003,7 +1003,7 @@ local function buildDevWindow(console, reg)
 		end
 		paint.nt, paint.nf = 0, 0
 	end
-	local function rect(xpos, ypos, w, h, color)
+	local function rect(xpos, ypos, w, h, color) local paint = paint
 		paint.nt = paint.nt + 1
 		local t = paint.tex[paint.nt]
 		if not t then
@@ -1017,7 +1017,7 @@ local function buildDevWindow(console, reg)
 		t:Show()
 		return t
 	end
-	local function label(xpos, ypos, s, color, w)
+	local function label(xpos, ypos, s, color, w) local paint = paint
 		paint.nf = paint.nf + 1
 		local fs = paint.fs[paint.nf]
 		if not fs then
@@ -1034,7 +1034,7 @@ local function buildDevWindow(console, reg)
 	end
 	U.clearCanvas, U.rect, U.label, U.canvas = clearCanvas, rect, label, canvas
 	-- Where the cursor is on the canvas (x from the left, y from the bottom).
-	function U.cursor()
+	function U.cursor() local canvas = canvas
 		local cx, cy = GetCursorPosition()
 		local scale = plain(canvas:GetEffectiveScale(), 1)
 		return cx / scale - plain(canvas:GetLeft(), 0), cy / scale - plain(canvas:GetBottom(), 0)
@@ -1076,7 +1076,7 @@ local function buildDevWindow(console, reg)
 
 	local views = {}
 	U.views = views
-	function views.overview(d)
+	function views.overview(d) local C = C
 		layout(false, 1, 90)
 		showTools({})
 		local data = {}
@@ -1133,7 +1133,7 @@ local function buildDevWindow(console, reg)
 		U.canvasClick, U.canvasWheel = nil, nil
 		render({{title = "Build", width = 200}, {title = "", width = 0}}, data)
 	end
-	function views.monitor(d)
+	function views.monitor(d) local C, K, S = C, K, S
 		layout(false, 1, 0)
 		local seg = tool("monSeg", function()
 			local s = K.segmented(toolbar, {
@@ -1186,7 +1186,7 @@ local function buildDevWindow(console, reg)
 		}, data)
 	end
 	local LEVEL_RANK = {trace = 0, debug = 1, info = 2, warn = 3, error = 4}
-	function views.log(d)
+	function views.log(d) local C, LEVEL_RANK, S = C, LEVEL_RANK, S
 		layout(false, 1, 0)
 		local seg = tool("logSeg", function()
 			local s = K.segmented(toolbar, {
@@ -1228,7 +1228,7 @@ local function buildDevWindow(console, reg)
 		{title = "Location", width = 180}
 		}, data)
 	end
-	function views.errors(d)
+	function views.errors(d) local C, S = C, S
 		layout(false, 1, 0)
 		tool("errClear", function()
 			local b = K.button(toolbar, "Clear", function()
@@ -1274,7 +1274,7 @@ local function buildDevWindow(console, reg)
 		end
 		render({{title = "Error", width = 0}, {title = "", width = 48, align = "RIGHT"}, {title = "", width = 70, align = "RIGHT"}}, data)
 	end
-	local function valueText(ok, v)
+	local function valueText(ok, v) local C = C
 		if not ok then
 			return tostring(v), C.error
 		end
@@ -1288,7 +1288,7 @@ local function buildDevWindow(console, reg)
 		local shown = console.show(v)
 		return shown, shown == "<secret>" and C.muted or C.ink
 	end
-	function views.watch(d)
+	function views.watch(d) local C = C
 		layout(false, 1, 0)
 		local input = tool("watchInput", function()
 			local f = K.field(toolbar, 520, "Lua expression: ns.db.profile.scale, UnitHealth(\"player\")", function(expression)
@@ -1354,7 +1354,7 @@ local function buildDevWindow(console, reg)
 		showTools({})
 		local data = {}
 		local ok, root = pcall(inspected.get)
-		local function walk(value, path, name, depth, seen, getter)
+		local function walk(value, path, name, depth, seen, getter) local C = C
 			local open = S.expanded[path]
 			local isTable = type(value) == "table" and not (issecretvalue and issecretvalue(value))
 			local shown, color = valueText(true, value)
@@ -1419,7 +1419,7 @@ local function buildDevWindow(console, reg)
 		end
 		render({{title = "Key", width = 0}, {title = "Value", width = 300}, {title = "Type", width = 80}}, data)
 	end
-	function views.hints(d)
+	function views.hints(d) local C = C
 		layout(false, 1, 0)
 		tool("hintsRestore", function()
 			local b = K.button(toolbar, "Show dismissed", function()
@@ -1459,7 +1459,7 @@ local function buildDevWindow(console, reg)
 				{label = "Dismiss", run = function()
 					console.dismissHint(d, x)
 				end},
-				{label = "Copy", run = function()
+				{label = "Copy", run = function() local x = x
 					copy("hint[" .. tostring(x.code) .. "] " .. tostring(x.subject) .. ": " .. tostring(x.evidence) .. ". " .. tostring(x.fix) .. ". (wowlua explain " .. tostring(x.code) .. ")")
 				end}
 				})
@@ -1476,7 +1476,7 @@ local function buildDevWindow(console, reg)
 		end
 	end
 
-	function console.refresh(_)
+	function console.refresh(_) local C, K, S, reg = C, K, S, reg
 		local d = current()
 		if not d then
 			return
@@ -1557,7 +1557,7 @@ local function buildDevWindow(console, reg)
 	end
 	U.S, U.tabButtons = S, tabButtons
 
-	function console.saveState()
+	function console.saveState() local win = win
 		local point, _, _, px, py = win:GetPoint(1)
 		local saved = {
 		point = K.plainText(point), x = plain(px, 0), y = plain(py, 0),
@@ -1604,7 +1604,7 @@ local function buildDevWindow(console, reg)
 			console.refresh()
 		end
 	end)
-	win:SetScript("OnShow", function()
+	win:SetScript("OnShow", function() local console = console
 		sinceHints = 5
 		if console.updateHud then
 			console.updateHud()
@@ -1613,7 +1613,7 @@ local function buildDevWindow(console, reg)
 			console.hideToast()
 		end
 	end)
-	win:SetScript("OnHide", function()
+	win:SetScript("OnHide", function() local console = console
 		menu:Hide()
 		addonList:Hide()
 		console.saveState()
@@ -1637,7 +1637,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 
 	-- The recordings list.
 	local recRows = {}
-	local function recRow(i)
+	local function recRow(i) local C, K = C, K
 		local b = recRows[i]
 		if not b then
 			b = CreateFrame("Button", nil, U.recPanel)
@@ -1687,7 +1687,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 		end
 		return nil
 	end
-	local function drawRecordings(d, perf, rec, cmp)
+	local function drawRecordings(d, perf, rec, cmp) local C, K, S, recRows = C, K, S, recRows
 		local y = -4
 		local shown = 0
 		local fits = math.max(1, math.floor((plain(U.recPanel:GetHeight(), 500) - 44) / 38))
@@ -1725,7 +1725,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 					S.recOf[d.name] = r
 					console.refresh(true)
 				end
-				b.onRightClick = function()
+				b.onRightClick = function() local r = r
 					local items = {}
 					if r ~= rec then
 						items[#items + 1] = {label = "Compare with this", run = function()
@@ -1750,7 +1750,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 						end}
 					end
 					if r.kind ~= "live" and not r.running then
-						items[#items + 1] = {label = "Delete", run = function()
+						items[#items + 1] = {label = "Delete", run = function() local perf, r = perf, r
 							for j, x in ipairs(perf.recordings) do
 								if x == r then
 									table.remove(perf.recordings, j)
@@ -1888,7 +1888,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 		return cmp ~= nil
 	end
 
-	function views.performance(d)
+	function views.performance(d) local S = S
 		local perf = d.runtime.perf
 		if not perf then
 			layout(false, 1, 0)
@@ -1961,7 +1961,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 	end
 
 	-- functions: the profiler table, with garbage and a 60-second trend.
-	function sub.functions(_, perf, rec, data, other, names)
+	function sub.functions(_, perf, rec, data, other, names) local C, K, S = C, K, S
 		layout(true, 2, 0)
 		U.clearCanvas()
 		local filter = tool("perfFilter", function()
@@ -1995,7 +1995,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 			end
 		end
 		local key = S.sort == "avg" and "avg" or S.sort
-		table.sort(rows, function(a, b)
+		table.sort(rows, function(a, b) local key = key
 			local __wl_t32 = key == "avg" and a.s.total / math.max(a.s.calls, 1) if not __wl_t32 then local __wl_t31 = a.s[key] if __wl_t31 == nil then __wl_t31 = 0 end __wl_t32 = (__wl_t31) end local x = __wl_t32
 			local __wl_t34 = key == "avg" and b.s.total / math.max(b.s.calls, 1) if not __wl_t34 then local __wl_t33 = b.s[key] if __wl_t33 == nil then __wl_t33 = 0 end __wl_t34 = (__wl_t33) end local y = __wl_t34
 			return x > y
@@ -2123,7 +2123,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 		local top = tree(data)
 		local cmpTop = other and tree(other)
 		local out = {}
-		local function walk(node)
+		local function walk(node) local C, K, S, cmpTop, data, other, out = C, K, S, cmpTop, data, other, out
 			for _, kid in ipairs(node.order) do
 				local open = S.treeOpen[kid.key]
 				local has = #kid.order > 0
@@ -2167,7 +2167,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 	end
 
 	-- flame: the paths by total time, zoomable.
-	function sub.flame(_, perf, _, data, other, _)
+	function sub.flame(_, perf, _, data, other, _) local K, U = K, U
 		layout(true, 2, 250)
 		U.clearCanvas()
 		if not data.callPaths and #(data.paths or {}) == 0 then
@@ -2182,7 +2182,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 		local ch = plain(U.canvas:GetHeight(), 250)
 
 		local spots = {}
-		local function draw(node, xpos, w, level)
+		local function draw(node, xpos, w, level) local C, K = C, K
 			if w < 1 or level * 18 > ch - 24 then
 				return
 			end
@@ -2216,7 +2216,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 			draw(zoom, 0, cw, 0)
 		end
 		U.label(8, ch - 18, zoom == top and "all roots · click a bar to zoom, right-click to zoom out" or (zoom.key:gsub("\n", " > ") .. " · right-click to zoom out"), C.muted, cw - 8)
-		U.canvasClick = function(mouse)
+		U.canvasClick = function(mouse) local S, console = S, console
 			if mouse == "RightButton" then
 				S.flameZoom = zoom.parent and zoom.parent.key or nil
 				console.refresh(true)
@@ -2243,7 +2243,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 	end
 
 	-- by event: time per root, with the function that took most of it.
-	function sub.events(_, _, _, data, other, _)
+	function sub.events(_, _, _, data, other, _) local C, K = C, K
 		layout(true, 2, 0)
 		U.clearCanvas()
 		local rows = {}
@@ -2285,7 +2285,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 
 	-- timeline: time per frame against the budget, garbage, combats and
 	-- pulls; a frame selected lists what ran in it.
-	function sub.timeline(_, perf, rec, data, other, _)
+	function sub.timeline(_, perf, rec, data, other, _) local C, K, S, U = C, K, S, U
 		layout(true, 2, 170)
 		U.clearCanvas()
 		local cw = math.max(plain(U.canvas:GetWidth(), 600) - 8, 100)
@@ -2320,21 +2320,21 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 			mostGc = math.max(mostGc, it.garbage)
 		end
 
-		local base = 44
+
 		for i, it in ipairs(items) do
 			local xpos = 4 + (i - 1) * 3
 			local color = it.time > budget and C.error or C.lineStrong
 			if (S.tlFrame and it.id == S.tlFrame) or (S.tlSecond and it.second == S.tlSecond) then
 				color = C.accent
 			end
-			U.rect(xpos, base, 2, it.time / most * 110, color)
+			U.rect(xpos, 44, 2, it.time / most * 110, color)
 			if mostGc > 0 then
 				U.rect(xpos, 14, 2, it.garbage / mostGc * 18, C.noteSoft)
 			end
 		end
-		U.rect(4, base + budget / most * 110, cw, 1, C.warning)
-		U.label(cw - 120, base + budget / most * 110 + 2, "budget " .. tostring(K.ms(budget)) .. " ms", C.warning, 120)
-		U.label(8, base + 110 + 4, inRing and "frames · " .. tostring(K.ms(most)) .. " ms at the top · wheel to scroll" or "per second (slowest frame) · the frames left the ring", C.muted, cw - 140)
+		U.rect(4, 44 + budget / most * 110, cw, 1, C.warning)
+		U.label(cw - 120, 44 + budget / most * 110 + 2, "budget " .. tostring(K.ms(budget)) .. " ms", C.warning, 120)
+		U.label(8, 44 + 110 + 4, inRing and "frames · " .. tostring(K.ms(most)) .. " ms at the top · wheel to scroll" or "per second (slowest frame) · the frames left the ring", C.muted, cw - 140)
 		U.label(8, 2, "garbage, this addon", C.note, 160)
 		-- Combats and pulls in view.
 		if inRing and #items > 0 then
@@ -2375,7 +2375,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 			out[#out + 1] = {cells = {"second " .. tostring(i), K.ms(s.time[i]), K.kb(s.garbage[i])}, colors = {C.accent}}
 			out[#out + 1] = {cells = {tostring(K.count(s.frames[i])) .. " frames, " .. tostring(K.count(s.over[i])) .. " over budget, slowest " .. tostring(K.ms(s.max[i])) .. " ms", "", ""}, indent = 16, fonts = {"body"}}
 		end
-		local function summary(name, a, b, fmt)
+		local function summary(name, a, b, fmt) local C = C
 			local cells = {name, fmt(a), ""}
 			local colors = {C.muted, C.ink, C.ink}
 			if b then
@@ -2395,7 +2395,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 	end
 
 	-- slow: the slow calls, newest first.
-	function sub.slow(_, _, _, data, other, _)
+	function sub.slow(_, _, _, data, other, _) local C, K, S = C, K, S
 		layout(true, 2, 0)
 		U.clearCanvas()
 		local out = {}
@@ -2416,7 +2416,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 				console.refresh(true)
 			end,
 			onRightClick = function()
-				U.openMenu({{label = "Copy", run = function()
+				U.openMenu({{label = "Copy", run = function() local s = s
 					U.copy(tostring(s.name) .. " " .. tostring(K.ms(s.ms)) .. " ms\n" .. tostring(s.stack))
 				end}})
 			end
@@ -2440,7 +2440,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 	end
 
 	-- garbage: the rate and memory over time, then per function.
-	function sub.garbage(_, perf, _, data, other, _)
+	function sub.garbage(_, perf, _, data, other, _) local C, K, U = C, K, U
 		layout(true, 2, 120)
 		U.clearCanvas()
 		local cw = math.max(plain(U.canvas:GetWidth(), 600) - 8, 100)
@@ -2521,7 +2521,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 	end
 
 	-- bench: runs of an expression (§7.7.6).
-	function sub.bench(d, _, _, _, _, names)
+	function sub.bench(d, _, _, _, _, names) local C, K = C, K
 		layout(true, 2, 0)
 		U.clearCanvas()
 		local expr = tool("benchExpr", function()
@@ -2582,7 +2582,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 end
 
 -- The HUD (§7.7.8): a row per loaded dev build, from their frame rings.
-local function buildHud(console, reg)
+local function buildHud(console, reg) local K = K
 	local C, plain = K.C, K.plain
 	local hud = CreateFrame("Frame", nil, UIParent)
 	hud:SetSize(330, 24)
@@ -2601,7 +2601,7 @@ local function buildHud(console, reg)
 	head:SetText("addon                 frame    avg   garbage  errors")
 	local rows = {}
 	local state = {wanted = false, cinematic = false}
-	local function save()
+	local function save() local K, state = K, state
 		local point, _, _, px, py = hud:GetPoint(1)
 		for _, n in ipairs(reg.order) do
 			devDB(n).hud = {shown = state.wanted, point = K.plainText(point), x = plain(px, 0), y = plain(py, 0)}
@@ -2618,7 +2618,7 @@ local function buildHud(console, reg)
 		local windowOpen = console.window and K.isShown(console.window)
 		hud:SetShown(state.wanted and not windowOpen and not state.cinematic)
 	end
-	local function draw()
+	local function draw() local C, K, hud, reg, rows = C, K, hud, reg, rows
 		local t = GetTime()
 		local y = -20
 		local n = 0
@@ -2712,7 +2712,7 @@ end
 -- The error toast (§7.10): new errors while the window is closed; bursts
 -- within 2 seconds collapse, it hides after 8 (not while the cursor is on
 -- it), waits for the end of combat and makes no sound.
-local function buildToast(console)
+local function buildToast(console) local K = K
 	local C = K.C
 	local toast = CreateFrame("Button", nil, UIParent)
 	toast:SetSize(440, 58)
@@ -2735,14 +2735,14 @@ local function buildToast(console)
 	action:SetPoint("BOTTOMRIGHT", -12, 7)
 	action:SetText("Open errors →")
 	local st = {left = 0, at = -10, count = 0, hover = false, pending = nil}
-	local function show()
+	local function show() local st = st
 		local e = st.error
 		head:SetText(st.count > 1 and tostring(st.addon) .. " · " .. tostring(st.count) .. " new errors" or tostring(st.addon) .. " · new error")
 		msg:SetText((tostring(e.message):match("^[^\n]*")))
 		st.left = 8
 		toast:Show()
 	end
-	function console.errorCaptured(addon, e)
+	function console.errorCaptured(addon, e) local st = st
 		if console.window and K.isShown(console.window) then
 			return
 		end
@@ -2773,7 +2773,7 @@ local function buildToast(console)
 		toast:Hide()
 		console.openOn(st.addon, 5, st.error)
 	end)
-	toast:SetScript("OnUpdate", function(_, dt)
+	toast:SetScript("OnUpdate", function(_, dt) local st = st
 		if not st.hover then
 			st.left = st.left - (dt or 0)
 			if st.left <= 0 then
@@ -2807,7 +2807,7 @@ schema = 1,
 runtime = wl,
 -- A watch from code (`debug.watch`): `fn()` shown live under `label`.
 watch = function(label, fn)
-	dev.watches[#dev.watches + 1] = {label = label, fn = fn, source = "code"}
+	local __wl_watches = dev.watches __wl_watches[#__wl_watches + 1] = {label = label, fn = fn, source = "code"}
 end
 }
 wl.dev = dev
@@ -2817,10 +2817,10 @@ if type(shared) ~= "table" then
 	WOWLUA_DEV = shared
 end
 local reg = shared
-if not reg.addons[addonName] then
-	reg.order[#reg.order + 1] = addonName
+local __wl_addons2 = reg.addons if not __wl_addons2[addonName] then
+	local __wl_order = reg.order __wl_order[#__wl_order + 1] = addonName
 end
-reg.addons[addonName] = dev
+__wl_addons2[addonName] = dev
 
 local __wl_t94 = wl.devInfo if __wl_t94 ~= nil then __wl_t94 = __wl_t94.runtime end local __wl_t95 = __wl_t94 if __wl_t95 == nil then __wl_t95 = 0 end local VERSION = __wl_t95
 
@@ -2857,10 +2857,10 @@ local function install()
 
 	-- The addon a command names: exact, then by prefix, case-insensitive; the
 	-- only loaded one when none is named.
-	function console.find(name)
+	function console.find(name) local reg = reg
 		if not name or name == "" then
-			if #reg.order == 1 then
-				return reg.addons[reg.order[1]]
+			local __wl_order2 = reg.order if #__wl_order2 == 1 then
+				return reg.addons[__wl_order2[1]]
 			end
 			return nil
 		end
@@ -2926,7 +2926,7 @@ local function install()
 	local commands = {}
 	console.commands = commands
 
-	function commands.list()
+	function commands.list() local reg = reg
 		for _, n in ipairs(reg.order) do
 			local i = (reg.addons[n]).info
 			do local __wl_t112 = i.version if __wl_t112 == nil then __wl_t112 = "?" end local __wl_t113 = i.profile if __wl_t113 == nil then __wl_t113 = "?" end local __wl_t114 = i.build if __wl_t114 == nil then __wl_t114 = "?" end say(n .. " " .. tostring(__wl_t112) .. " · " .. tostring(__wl_t113) .. " · build " .. tostring(__wl_t114)) end
@@ -3065,7 +3065,7 @@ local function install()
 		if not chunk then
 			return nil, problem
 		end
-		local env = setmetatable({ns = d.runtime.ns, modules = d.runtime.modules}, {__index = _G})
+		local __wl_runtime = d.runtime local env = setmetatable({ns = __wl_runtime.ns, modules = __wl_runtime.modules}, {__index = _G})
 		setfenv(chunk, env)
 		return chunk
 	end
@@ -3080,7 +3080,7 @@ local function install()
 		return tostring(v)
 	end
 
-	function commands.watch(args)
+	function commands.watch(args) local console = console
 		local d = console.find(args[1])
 		local expression = table.concat(args, " ", 2)
 		if not d or expression == "" then
@@ -3122,7 +3122,7 @@ local function install()
 
 	-- Bench (§7.7.6): an expression n times, in chunks of at most 50 ms per
 	-- frame, never in combat; the last 20 runs per addon.
-	function console.bench(d, expression, n, onDone)
+	function console.bench(d, expression, n, onDone) local console = console
 		if InCombatLockdown and InCombatLockdown() then
 			say("bench does not run in combat")
 			return nil
@@ -3143,7 +3143,7 @@ local function install()
 			return run
 		end
 		local clock = debugprofilestop
-		local function stop(status)
+		local function stop(status) local console, run = console, run
 			run.status = status
 			console.benchRun = nil
 			if console.benchFrame then
@@ -3161,7 +3161,7 @@ local function install()
 				onDone(run)
 			end
 		end
-		local function chunk()
+		local function chunk() local fn, run = fn, run
 			if InCombatLockdown and InCombatLockdown() then
 				return stop("stopped: combat")
 			end
@@ -3190,7 +3190,7 @@ local function install()
 		return run
 	end
 
-	function commands.bench(args)
+	function commands.bench(args) local console = console
 		local d = console.find(args[1])
 		if not d or not args[2] then
 			return say("/wl bench <addon> <expression> [n]")
@@ -3235,7 +3235,7 @@ local function install()
 		end
 	end
 
-	function commands.hud()
+	function commands.hud() local console = console
 		if not console.hud and type(CreateFrame) == "function" then
 			buildHud(console, reg)
 		end
@@ -3272,7 +3272,7 @@ local function install()
 	end
 	-- `/wl`: the dev window, built when first opened; the HUD and the toast.
 	if type(CreateFrame) == "function" then
-		local function window()
+		local function window() local console = console
 			if not console.window then
 				console.window = buildDevWindow(console, reg)
 			end
@@ -3291,7 +3291,7 @@ local function install()
 		-- the console that serves then; the toast at the first error.
 		-- (Quietly: a missing HUD must not stop the addon; `/wl hud` builds
 		-- it again and says why.)
-		local function hud()
+		local function hud() local console = console
 			if reg.console == console and not console.hud then
 				pcall(buildHud, console, reg)
 			end

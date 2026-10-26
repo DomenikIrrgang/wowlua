@@ -53,7 +53,7 @@ function trace.wrap(fn, name, location, opts)
 		return fn
 	end
 	local __wl_t1 = opts if __wl_t1 ~= nil then __wl_t1 = __wl_t1.args end local args = __wl_t1 ~= false
-	return function(...)
+	return function(...) local trace = trace
 		local indent = string.rep("  ", trace.depth)
 		out(indent .. "> " .. name .. (args and ("(" .. list(...) .. ")") or ""))
 		trace.depth = trace.depth + 1

@@ -32,7 +32,7 @@ local function shorten(s)
 	end
 	return s
 end
-function errors.record(message, stack)
+function errors.record(message, stack) local errors = errors
 	message = tostring(message)
 	if not mine(message, stack) then
 		return
@@ -64,8 +64,8 @@ function errors.record(message, stack)
 	if console and console.errorCaptured then
 		console.errorCaptured(addonName, e)
 	end
-	if #errors.list > 50 then
-		local old = table.remove(errors.list)
+	local __wl_list = errors.list if #__wl_list > 50 then
+		local old = table.remove(__wl_list)
 		if old then
 			errors.byMessage[old.message] = nil
 		end

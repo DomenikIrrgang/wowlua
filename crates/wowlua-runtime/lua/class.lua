@@ -64,10 +64,10 @@ local function readOnly(cls, k)
 	error("property '" .. tostring(k) .. "' of " .. tostring(cls.__name) .. " is read-only", 3)
 end
 -- Completes a class after its members are defined.
-function wl.finalize(cls)
+function wl.finalize(cls) local METAMETHODS = METAMETHODS
 	local super = rawget(cls, "__super")
 	if super then
-		for _, k in ipairs(METAMETHODS) do
+		for _ = 1, 2 ^ 53 do local k = METAMETHODS[_] if k == nil then break end
 			if rawget(cls, k) == nil and super[k] ~= nil then
 				rawset(cls, k, super[k])
 			end

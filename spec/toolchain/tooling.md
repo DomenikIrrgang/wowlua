@@ -547,7 +547,7 @@ wowlua bench [filter…] [--flavor <f>] [--profile <name>] [--samples <n>] [--ba
 the `@bench` functions of the test files run on the embedded Lua 5.1 (the
 test runner's VM, §16.1.2) in two test builds that differ in their
 `optimize` settings only, and the report puts their times side by side
-(decision T425).
+(decision T437).
 
 ```wowlua fragment
 @bench("auras: filter")

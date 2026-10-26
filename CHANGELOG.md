@@ -33,6 +33,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Profile settings `profile-call-paths`, `profile-garbage`, `frame-budget` and `slow-call`.
 - The monitor also times slash commands.
 - **Performance report**: `wowlua prof report` turns the recordings you marked for export in the dev window into one HTML page: hints, functions, time by event, call tree and flame graph, the frame timeline against the frame budget, slow calls with their stacks mapped to your source, and garbage. It finds them in your WoW installation's SavedVariables, asks which account or client when several have some (`--account`, `--client`), and opens the page in your browser (`--no-open`, `--out`, `--recording`).
+- **Faster release builds**: release builds reshape the Lua they write for WoW's Lua 5.1. Fields such as `self.config.scale` are read once before a loop that can't change them, and once for repeated reads; `ipairs` over arrays becomes a numeric loop and `table.insert(t, v)` becomes `t[#t + 1] = v`; outer locals read in loops are copied into locals; closures made in a loop that need nothing from it are made once; locals holding a constant become the constant. The type-based ones apply in strict-mode files only, plain `.lua` stays as it is, and each has a switch under `optimize`.
+- `optimize.inline` also inlines functions and `@inline` private methods whose body is statements, where they're called as a statement.
+- **`wowlua bench`**: `@bench` functions in test files are benchmarks. `wowlua bench` runs them optimized and unoptimized and shows both times and the speed-up (`--profile`, `--samples`, `--batch-ms`, `--json`).
 
 ### Changed
 
@@ -57,6 +60,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A local declared with a value keeps that value's type: after `local count = 0`, `count = "none"` is E2001 (W2001 in a plain Lua file), as with `local count: number = 0`. Code that reuses a local for another type now reports E2001: annotate it (`local count: number | string = 0`) or use a second local.
 - In strict mode `nil` no longer fits a local declared with a non-optional value: write `local timer: TimerHandle? = …` for one you clear later.
 - `pcall` and `xpcall` results are typed as the game returns them: test the first result (`if ok then`) before using the others; until then the second value may be the error (`unknown`).
+- W3031 now names the new reasons a function isn't inlined.
+- `@inline` on a private method with a statement body is no longer W3031.
+- `wowlua init` turns the new optimizations off in an adopted addon's release profile.
 
 ### Fixed
 
@@ -112,6 +118,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Messages show record keys that aren't identifiers as written: `{ ["1ST"]: string }`.
 - `wowlua explain W2001` (and every plain-Lua warning form) no longer reports "unknown diagnostic code".
 - `wowlua build --watch`, `check --watch` and `test --watch` no longer run twice for one save when the file watcher reports it twice under load.
+- In strict mode, the fast forms (`??` as `or`, `?.` as `and`, interpolation without `tostring`) now also apply inside class methods, constructors and accessors.
 
 ## 0.12.0 (2026-10-26)
 

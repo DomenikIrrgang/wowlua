@@ -18,7 +18,7 @@ local function scriptList(cls)
 		for _, entry in ipairs(rawget(chain[i], "__scripts") or {}) do
 			local replaced = false
 			if not entry[3] then
-				for j, other in ipairs(list) do
+				for j = 1, 2 ^ 53 do local other = list[j] if other == nil then break end
 					if other[1] == entry[1] and not other[3] then
 						list[j] = entry
 						replaced = true
@@ -65,7 +65,7 @@ function wl.script(cls, script, method, hook)
 	list[#list + 1] = {script, method, hook or false}
 end
 -- The methods of a widget class and its superclasses, flattened.
-local function flatten(cls)
+local function flatten(cls) local SKIP = SKIP
 	local list, c = {}, cls
 	while c do
 		list[#list + 1] = c
@@ -97,7 +97,7 @@ function wl.adopted(cls)
 end
 function wl.widgetClass(name, super)
 	local cls = class(name, super)
-	cls.new = function(...)
+	cls.new = function(...) local cls = cls
 		-- (an adoption of this class that failed before its frame was taken)
 		if adopting and adopting.cls == cls then
 			adopting = nil
@@ -106,7 +106,7 @@ function wl.widgetClass(name, super)
 		installScripts(self, cls)
 		return self
 	end
-	cls.adopt = function(frame, ...)
+	cls.adopt = function(frame, ...) local cls = cls
 		adopting = {frame = frame, cls = cls}
 		local self = cls.__ctor(cls, ...)
 		installScripts(self, cls)
@@ -140,7 +140,7 @@ function wl.xmlMixin(cls)
 		m[k] = v
 	end
 	local onLoad = m.OnLoad
-	m.OnLoad = function(self, ...)
+	m.OnLoad = function(self, ...) local cls = cls
 		local list, c = {}, cls
 		while c do
 			list[#list + 1] = c

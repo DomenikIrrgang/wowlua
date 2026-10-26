@@ -103,7 +103,7 @@ local function wrap(frame, script, fn, location)
 	end
 	local key = label(frame, location) .. " · " .. script
 	local update = script == "OnUpdate"
-	return function(...)
+	return function(...) local key = key
 		local s = entry(mon.scripts, key, location)
 		s.script = script
 		local top = false
@@ -128,7 +128,7 @@ local function timer(kind, fn, location)
 		return fn
 	end
 	local key = kind .. " at " .. location
-	return function(...)
+	return function(...) local key = key
 		local s = entry(mon.timers, key, location)
 		local top = perf and perf.begin(key, "timer") or false
 		return timed(s, "tm", key, clock(), top, fn(...))
@@ -168,7 +168,7 @@ end
 function mon.newTicker(seconds, fn, iterations, location)
 	return C_Timer.NewTicker(seconds, timer("C_Timer.NewTicker", fn, location), iterations)
 end
-function mon.reset()
+function mon.reset() local mon = mon
 	if perf then
 		perf.reset("mon")
 	else
@@ -178,15 +178,15 @@ end
 wl.mon = mon
 -- Memory every 5 seconds outside combat, the last 10 minutes.
 if C_Timer and C_Timer.NewTicker and UpdateAddOnMemoryUsage and GetAddOnMemoryUsage then
-	C_Timer.NewTicker(5, function()
+	C_Timer.NewTicker(5, function() local mon = mon
 		if InCombatLockdown and InCombatLockdown() then
 			return
 		end
 		UpdateAddOnMemoryUsage()
-		mon.memory[#mon.memory + 1] = GetAddOnMemoryUsage(addonName)
-		mon.memoryAt[#mon.memoryAt + 1] = GetTime and GetTime() or 0
-		if #mon.memory > 120 then
-			table.remove(mon.memory, 1)
+		local __wl_memory = mon.memory __wl_memory[#__wl_memory + 1] = GetAddOnMemoryUsage(addonName)
+		local __wl_memoryAt = mon.memoryAt __wl_memoryAt[#__wl_memoryAt + 1] = GetTime and GetTime() or 0
+		local __wl_memory2 = mon.memory if #__wl_memory2 > 120 then
+			table.remove(__wl_memory2, 1)
 			table.remove(mon.memoryAt, 1)
 		end
 	end)
