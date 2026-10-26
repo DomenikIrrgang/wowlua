@@ -35,7 +35,9 @@ handle:reset()                                -- back to the frame's original an
 
 Semantics:
 
-- `store[key]` must have type `FramePosition?` (E8340). The store is a
+- `store[key]` must have type `FramePosition?` (E8340): optional, and its
+  value type assignable to and from `FramePosition` (the same fields under
+  another name pass; `string?` or `{ x: number }?` do not). The store is a
   `wowlua:saved` binding (a plain table works too). Positions are restored
   once the store is loaded (decision S3), so calling `movable` at module top
   level is fine, and again when the store's profile changes.

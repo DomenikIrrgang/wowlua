@@ -3091,7 +3091,7 @@ impl Checker<'_, '_> {
         if id == "frames.movable"
             && let Some(opts) = args.exprs().get(1)
         {
-            self.check_movable(opts);
+            self.check_movable(callee, opts);
         }
         if id == "saved.bind"
             && let Some(opts) = args.exprs().get(1)
@@ -3228,9 +3228,10 @@ impl Checker<'_, '_> {
     }
 
     /// `frames.movable(frame, { store = …, key = "…" })`: the store's field
-    /// holds an optional position (E8340): `nil`, or a table with
-    /// `point`, `relativePoint`, `x` and `y`.
-    fn check_movable(&mut self, opts: Expr<'_>) {
+    /// is a `FramePosition?` (E8340): optional, and of the position's type
+    /// both ways (the module stores one and reads it back), as `movable`'s
+    /// own `onChange` parameter has it.
+    fn check_movable(&mut self, callee: Expr<'_>, opts: Expr<'_>) {
         let ExprKind::Table(fields) = opts.kind() else {
             return;
         };
@@ -3255,13 +3256,24 @@ impl Checker<'_, '_> {
             Ty::Record(r) => r.fields.get(key.as_str()).map(|f| f.ty),
             _ => return,
         };
+        let position = self.movable_position(callee);
         let fits = found.is_some_and(|t| {
             let value = self.env.types.non_nil(t);
-            matches!(self.env.types.get(value), Ty::Any | Ty::Unknown | Ty::Error)
-                || (self.env.types.is_optional(t)
-                    && ["point", "relativePoint", "x", "y"].iter().all(|m| {
-                        matches!(self.member_type(value, m, key_expr.span(), true), Some(t) if t != Types::ERROR)
-                    }))
+            if matches!(self.env.types.get(value), Ty::Any | Ty::Unknown | Ty::Error) {
+                return true;
+            }
+            if !self.env.types.is_optional(t) {
+                return false;
+            }
+            match position {
+                Some(p) => {
+                    self.env.assignable(p, value, self.mode)
+                        && self.env.assignable(value, p, self.mode)
+                }
+                None => ["point", "relativePoint", "x", "y"].iter().all(|m| {
+                    matches!(self.member_type(value, m, key_expr.span(), true), Some(t) if t != Types::ERROR)
+                }),
+            }
         });
         if !fits {
             let shown = found.map_or("missing".to_string(), |t| {
@@ -3272,6 +3284,27 @@ impl Checker<'_, '_> {
             );
             self.report("E8340", key_expr.span(), msg);
         }
+    }
+
+    /// `FramePosition` of `wowlua:frames`, from `movable`'s type: the
+    /// parameter of its options' `onChange`.
+    fn movable_position(&mut self, callee: Expr<'_>) -> Option<TypeId> {
+        let &f = self
+            .expr_types
+            .get(&(callee.span().start, callee.span().end))?;
+        let Ty::Func(f) = self.env.types.get(f).clone() else {
+            return None;
+        };
+        let opts = self.env.types.non_nil(f.params.get(1)?.ty);
+        let Ty::Record(r) = self.env.types.get(opts).clone() else {
+            return None;
+        };
+        let on_change = self.env.types.non_nil(r.fields.get("onChange")?.ty);
+        let Ty::Func(h) = self.env.types.get(on_change).clone() else {
+            return None;
+        };
+        let p = self.env.types.non_nil(h.params.first()?.ty);
+        (!matches!(self.env.types.get(p), Ty::Any | Ty::Unknown | Ty::Error)).then_some(p)
     }
 
     /// `settings.register({ store = …, controls = { … } })`: every control's

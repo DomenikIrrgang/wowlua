@@ -4475,6 +4475,22 @@ fn frames_store_field_is_checked() {
     );
     let out = check(&source("pos?: FramePosition", "other"));
     assert!(out.contains("E8340"), "{out}");
+    // A string, or a table that lacks the position's fields, is no
+    // `FramePosition`.
+    for field in [
+        "pos?: string",
+        "pos?: { x: number }",
+        "pos?: { point: string, x: number }",
+    ] {
+        let out = check(&source(field, "pos"));
+        assert!(out.contains("E8340"), "{field}: {out}");
+    }
+    // The same shape under another name is.
+    let out = check(&source(
+        "pos?: { point: FramePoint, relativePoint: FramePoint, x: number, y: number, width: number?, height: number?, scale: number?, layouts: { [string]: FramePosition }? }",
+        "pos",
+    ));
+    assert!(!out.contains("E8340"), "{out}");
 }
 
 /// `wowlua:frames`: a saved position is applied once the store loads.
