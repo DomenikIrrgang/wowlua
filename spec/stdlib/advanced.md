@@ -399,9 +399,10 @@ object, so `import log from "wowlua:log"` (`log.info(…)`) and
 declare module "wowlua:log"
     enum Level { Trace = "trace", Debug = "debug", Info = "info", Warn = "warn", Error = "error", Off = "off" }
     type LevelValue = Level | "trace" | "debug" | "info" | "warn" | "error" | "off"
+    type MessageTarget = MessageFrame | ScrollingMessageFrameMixin   -- chat windows, `CreateFrame("ScrollingMessageFrame")`
     type Printer = ((...any) -> ()) & {
         color: (hex: string, ...any) -> (),
-        to: (frame: ScrollingMessageFrame, ...any) -> (),
+        to: (frame: MessageTarget?, ...any) -> (),
     }
 
     function trace(...: unknown)
@@ -428,7 +429,7 @@ end
 | `configure(opts)` | Chat output. `prefix` starts every chat line of the default sink and of `print` instead of the addon's colored name (`"\|cff33ff99MyAddon\|r "`, and `"…\|r: "` for `print`). `chatLevel` is the lowest level the default sink writes to chat (`"warn"` by default, `"off"` for none; entries below the runtime level never reach a sink). Fields left out keep their value. |
 | `history(n?)` | Entries from the ring buffer. The default size is 500, configurable with the manifest key `stdlib.log.history-size`. Shown by `/wl log` in dev builds. |
 | `print(...)` | Prints to the default chat frame with the addon's colored name prefix. `print` is a callable value with fields (an intersection type). |
-| `print.color(hex, ...)`, `print.to(frame, ...)` | Colored output, or output to a specific chat frame |
+| `print.color(hex, ...)`, `print.to(frame, ...)` | Colored output, or output to a specific chat frame: a chat window (`ChatFrame3`, `chat.window(…)`), any scrolling message frame or message frame; `nil` is the default chat frame |
 
 Color and link formatting helpers live in [`wowlua:color`](interface.md#color)
 and [`wowlua:item`](game.md#item).

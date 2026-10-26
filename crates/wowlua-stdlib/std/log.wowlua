@@ -163,7 +163,11 @@ wl.logs = {
     setLevel = setRank,
 }
 
-local function say(frame: MessageFrame?, message: string)
+--- Where `print.to` writes: a message frame, or a chat window or other
+--- scrolling message frame (`ChatFrame3`, `CreateFrame("ScrollingMessageFrame")`).
+export type MessageTarget = MessageFrame | ScrollingMessageFrameMixin
+
+local function say(frame: MessageTarget?, message: string)
     local line = (prefix ?? "|cff33ff99" .. addonName .. "|r: ") .. message
     if frame then
         frame:AddMessage(line)
@@ -180,7 +184,7 @@ export const print = setmetatable({
     color = function(hex: string, ...: any)
         say(chatFrame(), "|cff" .. hex .. text(...) .. "|r")
     end,
-    to = function(frame: MessageFrame?, ...: any)
+    to = function(frame: MessageTarget?, ...: any)
         say(frame, text(...))
     end,
 }, {

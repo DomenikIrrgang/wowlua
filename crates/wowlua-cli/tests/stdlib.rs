@@ -8055,6 +8055,40 @@ print(#Mock.sent, StdLast)
 
 // ---------------------------------------------------- debug, log, reflect --
 
+/// `print.to` takes the game's chat windows and message frames of the
+/// addon's own: `ChatFrame3`, `chat.window(…)`, a `ScrollingMessageFrame`,
+/// `SELECTED_CHAT_FRAME`; nil prints to the default chat frame.
+#[test]
+fn print_to_chat_windows() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import print from "wowlua:log"
+import * as chat from "wowlua:chat"
+
+print.to(ChatFrame3, "to", 3)
+print.to(nil, "default")
+local function others()
+    local w = chat.window("ChatFrame4")
+    if w then
+        print.to(w, "window")
+    end
+    print.to(CreateFrame("ScrollingMessageFrame"), "own")
+    print.to(SELECTED_CHAT_FRAME, "selected")
+end
+_G.StdOthers = others
+"#,
+        )],
+        "ChatFrame3 = { AddMessage = function(_: any, msg: string) print(\"frame 3:\", msg) end } :: any",
+        "",
+    );
+    assert_eq!(
+        out,
+        ["frame 3: |cff33ff99Std|r: to 3", "|cff33ff99Std|r: default"],
+        "{out:?}"
+    );
+}
+
 /// Secrets are logged as `<secret>`; reflection finds no class, metadata or
 /// enum member for one.
 #[test]

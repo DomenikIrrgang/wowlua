@@ -17,6 +17,7 @@ print("Hello!")                              -- MyAddon: Hello!
 print("scale", UIParent:GetScale())          -- several values, joined with spaces
 print.color("ff7262", "Import failed.")      -- in a color, as "rrggbb"
 print.to(SELECTED_CHAT_FRAME, "Loot:", 3)    -- to the chat window whose tab is selected
+print.to(ChatFrame3, "Loot:", 3)             -- to another chat window, or a message frame of your own
 ```
 
 To use a prefix of your own instead of the name, set it once with
