@@ -1,5 +1,20 @@
 # wowlua for VS Code
 
+[wowlua](https://github.com/DomenikIrrgang/wowlua) is a typed language,
+compiler, test runner and emulated client for World of Warcraft addons.
+This extension needs the `wowlua` command on your `PATH` (or its path in
+the `wowlua.path` setting). Install it, then reload VS Code:
+
+```sh
+# macOS and Linux
+curl -fsSL https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.sh | sh
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.ps1 | iex
+```
+
 Colors `.wowlua` files (keywords, strings and their `{…}` expressions,
 decorators, declared names, type annotations as types), toggles `--`
 comments with `Cmd+/`, closes brackets and indents blocks.
