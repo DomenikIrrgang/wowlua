@@ -263,6 +263,8 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         aliases: BTreeMap::new(),
         literal_sets: Vec::new(),
         errors: Vec::new(),
+        statement_callee: None,
+        conditional: 0,
         unresolved: false,
         loops: Vec::new(),
         func_depth: 0,
@@ -685,6 +687,12 @@ struct Lowerer<'a> {
     /// (spec §7.5), made once in the prologue: name, Lua literals.
     literal_sets: Vec<(String, Vec<String>)>,
     errors: Vec<Diagnostic>,
+    /// The callee name of the call statement being lowered.
+    statement_callee: Option<Span>,
+    /// Inside code another build may remove (a static condition's branch,
+    /// an `@if` or `@debugOnly` declaration): E3032 for a kept `@debugOnly`
+    /// function used as a value is left to the build without debug.
+    conditional: u32,
     /// An import did not resolve: the module analysis reported it (E1015),
     /// and the file is not lowered.
     unresolved: bool,
@@ -972,13 +980,31 @@ impl<'a> Lowerer<'a> {
         if !s.decorators().is_empty() && !self.kept_by_if(s) {
             return Vec::new();
         }
-        if s.decorators()
-            .iter()
-            .any(|d| wowlua_sema::meta::if_condition(d).is_none())
-        {
-            return grow(|| self.decorated_stmt(s));
-        }
-        grow(|| self.stmt_inner(s))
+        let conditional = s.decorators().iter().any(|d| {
+            let path = d.path();
+            path.len() == 1 && matches!(path.at(0).text(), "if" | "debugOnly")
+        });
+        self.conditional_if(conditional, |l| {
+            if s.decorators()
+                .iter()
+                .any(|d| wowlua_sema::meta::if_condition(d).is_none())
+            {
+                return grow(|| l.decorated_stmt(s));
+            }
+            grow(|| l.stmt_inner(s))
+        })
+    }
+
+    /// Runs `f` as code another build may remove, when `conditional`.
+    pub(crate) fn conditional_if<R>(
+        &mut self,
+        conditional: bool,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        self.conditional += conditional as u32;
+        let out = f(self);
+        self.conditional -= conditional as u32;
+        out
     }
 
     /// `@if(condition)` (spec §6.4.3): a declaration whose static condition
@@ -1085,7 +1111,16 @@ impl<'a> Lowerer<'a> {
                     l.optional_chain(e, true);
                     Vec::new()
                 } else {
-                    vec![stmt(K::Call(l.expr(e)), pos)]
+                    // A `@debugOnly` function may be called here.
+                    let saved = l.statement_callee.take();
+                    if let ExprKind::Call { callee, .. } = e.kind()
+                        && let ExprKind::Name(n) = callee.kind()
+                    {
+                        l.statement_callee = Some(n.span());
+                    }
+                    let call = l.expr(e);
+                    l.statement_callee = saved;
+                    vec![stmt(K::Call(call), pos)]
                 }
             }),
             StmtKind::Do(b) => vec![stmt(K::Do(self.block(b)), pos)],
@@ -1490,16 +1525,29 @@ impl<'a> Lowerer<'a> {
         // lowered); a true branch becomes the final one.
         let mut kept: Vec<(Expr<'a>, Block<'a>)> = Vec::new();
         let mut last = else_block;
+        let mut conditional = false;
         for &(c, b) in clauses {
             match self.static_condition(c) {
                 Some(v) if v.truthy() => {
+                    conditional = true;
                     last = Some(b);
                     break;
                 }
-                Some(_) => {}
+                Some(_) => conditional = true,
                 None => kept.push((c, b)),
             }
         }
+        self.conditional_if(conditional, |l| l.if_kept(kept, last, pos))
+    }
+
+    /// The clauses of an `if` that static conditions keep, and the final
+    /// block.
+    fn if_kept(
+        &mut self,
+        kept: Vec<(Expr<'a>, Block<'a>)>,
+        last: Option<Block<'a>>,
+        pos: Pos,
+    ) -> Vec<ir::Stmt> {
         if kept.is_empty() {
             return match last {
                 Some(b) => vec![stmt(ir::StmtKind::Do(self.block(b)), pos)],
@@ -1668,6 +1716,26 @@ impl<'a> Lowerer<'a> {
         stmts
     }
 
+    /// E3032 for a `@debugOnly` function a debug build keeps, used other
+    /// than as the callee of a call statement (spec §4.3): the build
+    /// without debug removes it.
+    fn check_debug_only_value(&mut self, n: Name<'a>) {
+        if self.ctx.debug
+            && self.conditional == 0
+            && self.statement_callee != Some(n.span())
+            && self.scopes.is_debug_only(n.text())
+        {
+            self.error(
+                "E3032",
+                n.span(),
+                format!(
+                    "`{}` is `@debugOnly`: it can only be called as a statement (the calls are removed from release builds)",
+                    n.text()
+                ),
+            );
+        }
+    }
+
     /// A call statement of a removed `@debugOnly` function (spec §4.3).
     fn is_removed_call(&self, e: Expr<'a>) -> bool {
         if !self.scopes.seen().non_local {
@@ -1702,8 +1770,27 @@ impl<'a> Lowerer<'a> {
     }
 
     /// An import (spec §5.2, §5.5): one local per binding, on the import's
-    /// line; folded constants are inlined; types are erased.
+    /// line; folded constants are inlined; types are erased. A `@debugOnly`
+    /// export a debug build keeps is remembered for E3032.
     fn import(&mut self, import: Import<'a>, span: Span, pos: Pos) -> Vec<ir::Stmt> {
+        let out = self.import_bindings(import, span, pos);
+        let ctx = self.ctx;
+        if ctx.debug
+            && !import.internal()
+            && let Some(ImportContext::Module { attrs, .. }) = ctx.imports.get(&span.start)
+            && let ImportClause::Names(specs) = &import.clause()
+        {
+            for spec in specs {
+                if attrs.get(spec.name.text()).is_some_and(|a| a.debug_only) {
+                    let local_name = spec.alias.unwrap_or(spec.name);
+                    self.scopes.mark_debug_only(local_name.text());
+                }
+            }
+        }
+        out
+    }
+
+    fn import_bindings(&mut self, import: Import<'a>, span: Span, pos: Pos) -> Vec<ir::Stmt> {
         if import.type_only() {
             return Vec::new();
         }
@@ -2222,6 +2309,7 @@ impl<'a> Lowerer<'a> {
                     K::Nil
                 }
                 Some(Binding::LazyImport { table, name }) => {
+                    self.check_debug_only_value(n);
                     return field(name_expr(generated(&table, pos)), &name, pos);
                 }
                 Some(Binding::Removed(decl)) => {
@@ -2251,7 +2339,10 @@ impl<'a> Lowerer<'a> {
                     );
                     K::Name(self.ident(n))
                 }
-                _ => K::Name(self.ident(n)),
+                _ => {
+                    self.check_debug_only_value(n);
+                    K::Name(self.ident(n))
+                }
             },
             ExprKind::Index { obj, key }
                 if matches!(key.kind(), ExprKind::String(_))
@@ -2481,7 +2572,7 @@ impl<'a> Lowerer<'a> {
                         _ => c == Const::Nil,
                     };
                     return if use_rhs {
-                        self.expr(rhs)
+                        self.conditional_if(true, |l| l.expr(rhs))
                     } else {
                         c.to_expr(pos)
                     };

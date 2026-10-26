@@ -4,13 +4,15 @@
 //! binding are skipped there: a large data addon looks millions of names up.
 
 use super::Binding;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Default)]
 struct Scope {
     names: HashMap<Box<str>, Binding>,
     /// `@deprecated` bindings of this scope: their messages.
     deprecated: HashMap<Box<str>, Option<String>>,
+    /// `@debugOnly` functions of this scope that the build keeps.
+    debug_only: HashSet<Box<str>>,
 }
 
 /// Which kinds of binding the file has declared. Set only by
@@ -33,6 +35,8 @@ pub(crate) struct Seen {
     pub enums: bool,
     /// A `@deprecated` binding.
     pub deprecated: bool,
+    /// A kept `@debugOnly` function.
+    pub debug_only: bool,
 }
 
 pub(crate) struct Scopes {
@@ -104,11 +108,11 @@ impl Scopes {
             | Binding::DebugOnlyRemoved => {}
         }
         seen.non_local |= !matches!(binding, Binding::Local);
-        self.stack
-            .last_mut()
-            .expect("a scope")
-            .names
-            .insert(name.into(), binding);
+        let scope = self.stack.last_mut().expect("a scope");
+        if seen.debug_only {
+            scope.debug_only.remove(name);
+        }
+        scope.names.insert(name.into(), binding);
     }
 
     pub fn lookup(&self, name: &str) -> Option<&Binding> {
@@ -128,6 +132,33 @@ impl Scopes {
             .expect("a scope")
             .deprecated
             .insert(name.into(), message);
+    }
+
+    /// Remembers a `@debugOnly` function of the current scope that the
+    /// build keeps (its uses as a value are E3032 still).
+    pub fn mark_debug_only(&mut self, name: &str) {
+        self.seen.debug_only = true;
+        self.stack
+            .last_mut()
+            .expect("a scope")
+            .debug_only
+            .insert(name.into());
+    }
+
+    /// `name` refers to a kept `@debugOnly` function.
+    pub fn is_debug_only(&self, name: &str) -> bool {
+        if !self.seen.debug_only {
+            return false;
+        }
+        for scope in self.stack.iter().rev() {
+            if scope.debug_only.contains(name) {
+                return true;
+            }
+            if scope.names.contains_key(name) {
+                return false;
+            }
+        }
+        false
     }
 
     /// The `@deprecated` message of the binding `name` refers to, if any.

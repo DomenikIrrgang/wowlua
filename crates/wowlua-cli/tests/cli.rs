@@ -1619,6 +1619,56 @@ fn strict_mode_lowers_to_fast_forms() {
     );
 }
 
+/// A `@debugOnly` function used as a value is E3032 in every build, also
+/// where debug keeps it (spec §4.3); call statements are fine.
+#[test]
+fn debug_only_values_are_reported_in_every_build() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"dbg\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import build from \"wowlua:meta\"\nimport dumpAll from \"./tools\"\n@debugOnly\nlocal function dump(x: any)\n    print(x)\nend\n\
+                 dump(1)\ndumpAll()\nlocal function run(f: (x: any) -> ())\n    f(2)\nend\nrun(dump)\nlocal later = dumpAll\nprint(later)\n\
+                 do\n    local dump = print\n    run(dump)\nend\n\
+                 -- only where debug keeps them\nif build.debug then\n    run(dump)\nend\nlocal hook = build.debug and dumpAll\n\
+                 @if(build.debug)\nlocal function hookAll()\n    run(dump)\nend\n\
+                 @debugOnly\nlocal function nested()\n    run(dump)\nend\n",
+            ),
+            (
+                "src/tools.wowlua",
+                "@debugOnly\nexport function dumpAll()\n    print(\"all\")\nend\n",
+            ),
+        ],
+    );
+    for args in [&["check"][..], &["check", "--release"], &["build"]] {
+        let assert = wowlua(dir.path())
+            .args(args)
+            .args(["--message-format", "short"])
+            .assert()
+            .code(1);
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert_eq!(
+            stderr.matches("error[E3032]").count(),
+            2,
+            "{args:?}: {stderr}"
+        );
+        assert!(
+            stderr.contains("main.wowlua:12:5: error[E3032]"),
+            "{args:?}: {stderr}"
+        );
+        assert!(
+            stderr.contains("main.wowlua:13:15: error[E3032]"),
+            "{args:?}: {stderr}"
+        );
+    }
+}
+
 /// Code `@if` removes may use the names of an import `@if` removes too
 /// (spec §6.4.3): a release build checks clean, kept code gets E1020.
 #[test]

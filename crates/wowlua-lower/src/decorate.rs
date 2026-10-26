@@ -430,6 +430,9 @@ impl<'a> Lowerer<'a> {
                 {
                     self.mark_deprecated(name.path().at(0).text(), message.clone());
                 }
+                if deco.debug_only && name.path().len() == 1 && name.method().is_none() {
+                    self.scopes.mark_debug_only(name.path().at(0).text());
+                }
                 out.extend(export);
                 out
             }
@@ -471,6 +474,9 @@ impl<'a> Lowerer<'a> {
                 self.finish_function(&mut out, target, name.text(), &deco, end);
                 if let Some(message) = &deco.deprecated {
                     self.mark_deprecated(name.text(), message.clone());
+                }
+                if deco.debug_only {
+                    self.scopes.mark_debug_only(name.text());
                 }
                 out
             }

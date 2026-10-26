@@ -424,8 +424,9 @@ Related: E3021
 A `@debugOnly` function is used in a way that can't be removed. Release
 builds remove the function and every call statement to it, so it can't return
 values and its calls can't be used as values (`local x = report(1)`). Make it
-return nothing, and call it on its own line. A call used as a value is
-reported when checking or building without `debug` (`wowlua check --release`).
+return nothing, and call it on its own line. A use as a value is reported in
+every build, also where `debug` keeps the function, but not in code that only
+debug builds keep (`if build.debug then … end`, `@if(build.debug)`).
 
 ```wowlua fails
 @debugOnly
@@ -433,6 +434,15 @@ local function check(n: number): boolean
     return n > 0
 end
 check(1)
+```
+
+```wowlua fails
+@debugOnly
+local function report(n: number)
+    print(n)
+end
+C_Timer.After(1, function() report(1) end)
+local later = report
 ```
 
 ```wowlua compiles

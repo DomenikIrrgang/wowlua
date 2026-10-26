@@ -343,7 +343,11 @@ impl<'a> Lowerer<'a> {
                         self.next_fn_name = Some(format!("{name}{sep}{}", mname.text()));
                         let public = !has(m, Modifier::Private) && !has(m, Modifier::Protected);
                         self.member_marks(&class_marks, exported && public);
-                        self.func(func, !is_static)
+                        let conditional = d.debug_only
+                            || m.decorators()
+                                .iter()
+                                .any(|d| wowlua_sema::meta::if_condition(d).is_some());
+                        self.conditional_if(conditional, |l| l.func(func, !is_static))
                     };
                     if let Some(helper) = self
                         .inline_helpers
