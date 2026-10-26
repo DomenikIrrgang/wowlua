@@ -382,6 +382,78 @@ end
     );
 }
 
+/// The window used with the mouse: a recording's menu marks it for export
+/// and compares it, the switches switch, a hint is dismissed.
+#[test]
+fn window_by_mouse() {
+    run(
+        "",
+        r#"
+-- The shown button whose text (a region's) is `text`.
+local function button(text: string): any
+    for _, f in ipairs(mock.frames()) do
+        local b: any = f
+        if b:IsVisible() and b.GetRegions then
+            for _, r in ipairs({ b:GetRegions() }) do
+                local region: any = r
+                if region.GetText and region:GetText() == text then
+                    return b
+                end
+            end
+        end
+    end
+    error("no button " .. text)
+end
+
+@test
+local function clicks()
+    hooks.work = function() mock.spend(3) end
+    mock.player:enterCombat()
+    mock.fireEvent("BAG_UPDATE", 0)
+    mock.player:leaveCombat()
+    mock.slash("/wl")
+    local console = dev.console
+    console.setTab(2)
+    local perf = probe().runtime.perf
+    local combat = perf.recordings[2]
+    mock.click(button("combat 1"), "RightButton")
+    mock.click(button("Mark for export"))
+    expect(combat.export).toBe(true)
+    mock.click(button("combat 1"), "RightButton")
+    mock.click(button("Compare with this"))
+    expect(console.U.S.compareOf.Probe).toBe(combat)
+    console.refresh(true)
+    mock.click(button("Call paths"))
+    expect(perf.callPaths).toBe(true)
+    mock.click(button("✓ Call paths"))
+    expect(perf.callPaths).toBe(false)
+    -- A manual recording, named when stopped.
+    mock.click(button("Record"))
+    expect(perf.running("manual") ~= nil).toBe(true)
+    mock.click(button("Stop"))
+    expect(perf.running("manual")).toBe(nil)
+    -- The timeline's frames are clickable.
+    console.U.S.compareOf.Probe = nil
+    console.U.S.view = "timeline"
+    console.refresh(true)
+    mock.click(console.U.canvas)
+    console.refresh(true)
+    -- The footer's HUD switch.
+    mock.click(button("HUD"))
+    expect(console.hudShown()).toBe(true)
+    -- A hint dismissed from its menu.
+    mock.nextFrame()
+    console.setTab(8)
+    mock.click(button("hint[P7301] heavy"))
+    mock.click(button("Dismiss"))
+    for _, x in ipairs(probe().hintState.list) do
+        expect(x.id ~= "P7301 heavy").toBe(true)
+    end
+end
+"#,
+    );
+}
+
 /// Bench (§7.7.6): n runs in chunks of at most 50 ms per frame, not in
 /// combat, the last 20 runs kept.
 #[test]
@@ -411,6 +483,10 @@ local function runs()
     mock.slash("/wl bench Probe 1 + 1")
     expect(#d.benches).toBe(2)
     mock.player:leaveCombat()
+    -- A last number belongs to the expression when the rest is none.
+    mock.slash("/wl bench Probe 1 + 1")
+    expect(d.benches[1].expr).toBe("1 + 1")
+    expect(d.benches[1].n).toBe(10000)
     for _ = 1, 25 do
         mock.slash("/wl bench Probe 1 10")
     end

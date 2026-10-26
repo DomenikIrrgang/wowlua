@@ -1883,6 +1883,7 @@ local function buildPerformance(console: any, U: any, PERF_VIEWS: any[], layout:
 			slow:SetText(tostring(perf.slowCall))
 		end
 		vs:SetLabel(cmp and ("vs " .. cmp.name .. " ×") or "")
+		vs:SetShown(cmp ~= nil)
 		local _ = d
 		return cmp ~= nil
 	end
@@ -1914,8 +1915,11 @@ local function buildPerformance(console: any, U: any, PERF_VIEWS: any[], layout:
 		local other = cmp and perf.data(cmp)
 		local names = { "perfViews", "recName", "recButton" }
 		if S.view ~= "bench" then
-			for _, n in ipairs({ "swPaths", "swGarbage", "swBudget", "swSlow", "swReset", "swCompare" }) do
+			for _, n in ipairs({ "swPaths", "swGarbage", "swBudget", "swSlow", "swReset" }) do
 				names[#names + 1] = n
+			end
+			if cmp then
+				names[#names + 1] = "swCompare"
 			end
 		end
 		;(sub[S.view] or sub.functions)(d, perf, rec, data, other, names)
@@ -1942,6 +1946,18 @@ local function buildPerformance(console: any, U: any, PERF_VIEWS: any[], layout:
 	end
 	local function fnName(name: string?): string
 		return name ?? "?"
+	end
+
+	-- A ring of 15 trend slots, oldest first.
+	local function ordered(ring: number[]?, last: number): number[]?
+		if not ring then
+			return nil
+		end
+		local out = {}
+		for i = 1, 15 do
+			out[i] = ring[(last + i - 1) % 15 + 1] ?? 0
+		end
+		return out
 	end
 
 	-- functions: the profiler table, with garbage and a 60-second trend.
@@ -2009,7 +2025,7 @@ local function buildPerformance(console: any, U: any, PERF_VIEWS: any[], layout:
 					colors = { C.ink, C.ink, C.ink, C.ink, over and C.warning or C.ink, C.ink, C.ink },
 					subs = { s.location },
 					tall = s.location ~= nil,
-					trend = rec.kind == "live" and perf.trend[r.name] or nil,
+					trend = rec.kind == "live" and ordered(perf.trend[r.name], perf.trendSlot) or nil,
 					badge = over and { text = "over budget", color = C.warning } or nil,
 				}
 			end
@@ -3168,13 +3184,17 @@ local function install()
 		if not d or not args[2] then
 			return say("/wl bench <addon> <expression> [n]")
 		end
+		-- A last number is n when the rest is an expression (`1 + 1` is not
+		-- `1 +` run once).
 		local n = 10000
-		local last = #args
-		if last > 2 and tonumber(args[last]) then
-			n = tonumber(args[last]) :: number
-			last -= 1
+		local expression = table.concat(args, " ", 2)
+		local count = tonumber(args[#args])
+		if #args > 2 and count then
+			local rest = table.concat(args, " ", 2, #args - 1)
+			if console.compile(d, rest) then
+				n, expression = count, rest
+			end
 		end
-		local expression = table.concat(args, " ", 2, last)
 		console.bench(d, expression, n, function(run: any)
 			if run.status == "done" then
 				say(string.format("%s bench %s ×%d: min %s µs, median %s µs, max %s µs, total %s ms", d.name, run.expr, run.n,
