@@ -74,7 +74,7 @@ const message = {
     color: 0xffb547, // amber: a new version is the one thing here to act on
     fields: [{
       name: "Update",
-      value: `Run the installer again ([install ↗](https://wowlua.dev/docs/install#update-or-pin-a-version)), or download it from [github ↗](${releaseUrl}).`,
+      value: `Run the installer again ([install ↗](https://wowlua.dev/docs/guide/install#update-or-pin-a-version)), or download it from [github ↗](${releaseUrl}).`,
     }],
     footer: { text: prerelease ? "[wl] Pre-release: things can still change." : "[wl] Release." },
     timestamp: new Date().toISOString(),

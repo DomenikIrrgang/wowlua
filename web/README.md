@@ -26,7 +26,7 @@ const diagnostics = await wowlua.call("check");
 
 Install it from a release (`wowlua-web-<version>.tgz` on GitHub). The
 guide is
-[docs/embedding.md](https://github.com/DomenikIrrgang/wowlua/blob/main/docs/embedding.md);
+[docs/reference/embedding.md](https://github.com/DomenikIrrgang/wowlua/blob/main/docs/reference/embedding.md);
 the repository's `web/demo/` is a bare page that uses all of it.
 
 Blizzard's UI code is fetched by the page from a public mirror and the

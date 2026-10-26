@@ -682,7 +682,7 @@ with its own design); wowlua provides what the page embeds:
   Built 2026-10-26: `crates/wowlua-web` (the playground's API, tested
   natively: `tests/playground.rs`), the language server embedded (the
   editor's services are `wowlua lsp`'s, over messages), `web/` (the
-  JavaScript API, a Web Worker and its client) and `docs/embedding.md`.
+  JavaScript API, a Web Worker and its client) and `docs/reference/embedding.md`.
   Checked in Node (`web/test/smoke.mjs`, in CI) and in Chrome through the
   Web Worker (`web/demo/`): a check takes about 50 ms, the module 7.5 MB
   with gzip. Share links carry the files only (world profiles come with
@@ -724,7 +724,7 @@ with its own design); wowlua provides what the page embeds:
   client's tables, a texture and a font) and in Chrome: camelot's client
   opened from 501 files in 0.3 s, the default UI drawn with its art
   (minimap, portrait, frames, Friz Quadrata).
-- S6 A bare test page that uses only the package, `docs/embedding.md` for
+- S6 A bare test page that uses only the package, `docs/reference/embedding.md` for
   the website, and the package built and attached to each release.
   The test page (`web/demo/`) and the guide came with S2.
   Built 2026-10-26 (T399): the release workflow builds the package (the

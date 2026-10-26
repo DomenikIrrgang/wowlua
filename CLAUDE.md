@@ -5,6 +5,30 @@ addons. The spec (`spec/`) is the source of truth: a change that differs from
 it updates it too (the section, and a row in `spec/appendix/decisions.md`),
 with tests for the new rule.
 
+## Documentation
+
+`docs/` is the documentation for addon authors, and wowlua.dev renders it as
+it is on GitHub: `docs/guide/install.md` is `/docs/guide/install`, and the
+sidebar follows the `##` sections and links of `docs/README.md`. Write it so it
+reads well on GitHub too, for addon authors, in plain language; the spec stays
+the normative text behind it. Links between docs are relative `.md` links;
+links to anything else in the repository go to GitHub on the site.
+
+Blocks the site draws as the design's components, and GitHub as plain Markdown:
+
+- ` ```console ` with `$ ` command lines: a terminal; the other lines are output.
+- ` ```text ` that starts with `error[` or `warning[`: compiler output.
+- ` ```wowlua title=src/main.wowlua `: the file name in the code block's bar.
+  `fragment` marks a block that is not a whole file, `fails=E2001` one that
+  must report that code.
+- An ordered list whose items are `**Title**`, a sentence and an inline
+  `` `command` ``: numbered steps.
+- `> [!NOTE]`, `> [!TIP]`, `> [!WARNING]`: callouts.
+
+`node scripts/check-doc-examples.mjs` compiles every wowlua example in `docs/`
+(`WOWLUA=target/release/wowlua` for a local build). Fix a failing example in
+the text, unless the compiler is wrong.
+
 ## Versions
 
 wowlua follows [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
@@ -44,8 +68,8 @@ Before setting a tag:
 2. Choose the next version by the rules above. Set it in `Cargo.toml`
    (`workspace.package.version`; `cargo metadata` updates `Cargo.lock`), in
    `web/package.json` (the playground's package, attached to the release),
-   in `README.md`'s roadmap line and in `docs/install.md`'s and
-   `docs/embedding.md`'s examples.
+   in `README.md`'s roadmap line and in `docs/guide/install.md`'s and
+   `docs/reference/embedding.md`'s examples.
 3. Write the changelog section as above: rename `## Unreleased` and check it
    against the log.
 4. Check it: `TAG=v<version> node .github/scripts/discord-release.mjs --dry-run`

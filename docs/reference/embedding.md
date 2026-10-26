@@ -1,9 +1,10 @@
 # Embedding wowlua in a web page
 
 `@wowlua/web` (the `web/` folder) is wowlua's compiler, checker, formatter
-and language server as WebAssembly, over a package held in memory. It is
-what the playground on wowlua.dev embeds; it brings no editor and no page
-design of its own.
+and language server as WebAssembly, over a package held in memory, with the
+emulated client that runs and draws the addon and the debugger. It is what
+the playground on wowlua.dev embeds; it brings no editor and no page design
+of its own.
 
 ## Install
 
@@ -30,6 +31,9 @@ the worker from there:
 import { connect } from "@wowlua/web/client";
 const wowlua = connect(new Worker("/wowlua/worker.js", { type: "module" }));
 ```
+
+The worker loads `pkg/wowlua_web_bg.wasm` next to it; `connect(worker, {
+wasm: url })` loads the module from another URL.
 
 ## Build
 
@@ -65,14 +69,16 @@ p.files();                       // { "wowlua.json": "…", "src/main.wowlua": "
 ```
 
 Ranges are the Language Server Protocol's: lines and UTF-16 columns from
-0, which CodeMirror and Monaco both take.
+0, which CodeMirror and Monaco both take. A built file that is not text,
+such as an image, comes as URL-safe `base64` instead of `text`.
 
 ## Share links
 
 `p.share()` gives the package's files as a link's fragment (deflated JSON,
 URL-safe base64): put it after the `#` so it never reaches the server.
-`p.openShared(location.href)` opens one; it returns `false` and changes
-nothing for anything else.
+`p.openShared(location.href)` opens one and returns how it runs (below; `{}`
+when the link does not say). For anything else it returns `null` and changes
+nothing.
 
 ## The language server
 
@@ -130,7 +136,7 @@ const png = await wowlua.call("snapshot", 1);     // the screen as a PNG Blob
   (about 4,500 files, 36 MB for camelot: what loading it reads, then the
   addons it loads on demand, such as the settings and the spellbook). The
   browser caches the files: a first load takes about a minute, later ones
-  a few seconds. `background: true` starts runs after the first 2,450
+  a few seconds. `background: true` starts runs after the first 2,450 or so
   files and fetches the rest meanwhile; an addon Blizzard loads on demand
   before its files came is then missing. Pass `base` to fetch from
   another place with the same paths. Without it (`blizzardUI: false`) the
@@ -197,7 +203,8 @@ everything works with placeholders.
 
 ## Debugging
 
-The debugger of `wowlua debug` (spec chapter 18) runs in the page too:
+The debugger of `wowlua debug`
+([spec chapter 18](../../spec/toolchain/debugger.md)) runs in the page too:
 breakpoints (lines, functions, events, scripts, exceptions), stepping,
 the stack, variables and evaluating code where it stopped, the frame
 tree. When it stops, the worker waits for the page's next request on a
@@ -237,10 +244,10 @@ const { variable } = await wowlua.debug.request("evaluate", { expression: "count
 ```
 
 Requests and answers are wowlua's debugger protocol
-(`crates/wowlua-debug/src/protocol.rs`): a request is `{ command, … }`,
-an answer `{ kind, … }`. The answer to `continue` or a step means the
-game runs on until the next `stopped`; `terminated` ends the session (a
-`stop`, or the run ended). While it is stopped the game does not move or
+([`crates/wowlua-debug/src/protocol.rs`](../../crates/wowlua-debug/src/protocol.rs)):
+a request is `{ command, … }`, an answer `{ kind, … }`. The answer to
+`continue` or a step means the game runs on until the next `stopped`;
+`terminated` ends the session (a `stop`, or the run ended). While it is stopped the game does not move or
 draw, and calls to the worker wait until it runs on. Sources are the
 package's paths; frames in Blizzard's code name its files
 (`Interface/AddOns/…`), which the page can show with `readFile`.
@@ -267,6 +274,6 @@ gone, so keep the editor's texts and write them again.
 
 ## Not yet
 
-Dependencies other than the standard library, world profiles in share
-links and Blizzard's UI for flavors other than camelot are not in the
-playground yet (`spec/roadmap.md`).
+Dependencies other than the standard library and Blizzard's UI for flavors
+other than camelot are not in the playground yet (see the
+[roadmap](../../spec/roadmap.md)).

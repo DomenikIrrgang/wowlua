@@ -51,7 +51,7 @@ to debug, and the Debug Console names the flavor that runs.
 
 Also `"addon": true` to run the addon itself,
 `"clock": "manual"`, `"stopOnEntry": true`, `"debugBlizzardUI": true`.
-See [Debugging in the emulator](../../docs/debugging-in-the-emulator.md).
+See [Debugging in the emulator](../../docs/guide/debugging.md).
 
 ## Debugging the addon itself
 
