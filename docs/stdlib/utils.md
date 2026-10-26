@@ -209,7 +209,7 @@ import * as format from "wowlua:format"
 
 print(format.duration(3900))                     -- "1 Hr 5 Min"
 print(format.short(95))                          -- one unit, as aura timers show it
-print(format.clock(187))                         -- "3:07"
+print(format.clock(187))                         -- "03:07"
 print(format.ago(7200))                          -- "2 h ago"
 print(format.money(123456))                      -- gold, silver and copper with coin icons
 print(format.money(123456, { short = true }))    -- "12g 34s 56c"

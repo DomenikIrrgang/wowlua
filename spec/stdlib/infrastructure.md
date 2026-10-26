@@ -329,7 +329,7 @@ supported client has.
 |-----|-----------|-------|
 | `duration` | `(seconds: number, opts?: { noSeconds?, long?, units? }) -> string` | "1 Hr 5 Min" (`long`: unit words; `units` at most, default 2). Secret options count as unset. |
 | `short` | `(seconds: number) -> string` | The largest unit, like aura and cooldown times |
-| `clock` | `(seconds: number, hours?: boolean) -> string` | "3:07", "1:03:07" |
+| `clock` | `(seconds: number, hours?: boolean) -> string` | "03:07", "01:03:07" |
 | `ago` | `(seconds: number, opts?: { long?, from? }) -> string` | How long ago, from the seconds since, in the largest unit rounded down: "5 min ago", "2 h ago", "45 d ago"; `long` words it ("1 hour ago", "3 days ago") and goes on to months (30 days) and years (365 days); under the smallest unit "just now", or with `from = "hour"` "less than an hour ago" ("< 1 h ago"). English, like the other `format` texts that are not the client's own (decision S44). |
 | `date` | `(at?: number) -> string` | The locale's short date (default today) |
 | `money` | `(copper: number, opts?: { text?, separate?, short? }) -> string` | Coin icons, with `text` the client's words, or with `short` letters (`"12g 5s 3c"`, decision S42); units at zero are left out, copper stays when all are. Secret options count as unset. |

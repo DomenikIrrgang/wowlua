@@ -356,13 +356,15 @@ By where the function is listed:
 |------|----------:|------:|---------:|--------:|----------:|
 | Blizzard's API documentation | 5,111 | 1,055 | 356 | 3,700 | 0 |
 | the client's other C functions (`/stdtest inventory`) | 2,064 | 591 | 83 | 1,390 | 0 |
-| the engine's own, in neither list | 6 | 5 | 0 | 1 | 0 |
+| the engine's own, in neither list | 15 | 14 | 0 | 1 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
 functions in the client's inventory, its deprecation files' wrappers of the `C_`
 functions); the engine's natives stand in for them until that code loads:
-`GetActionText`, `GetActionTexture`, `HasAction`, `IsAttackAction`,
-`IsPlayerSpell`, `IsUsableAction`.
+`CancelEmote`, `DoEmote`, `FormatLargeNumber`, `FormatShortDate`,
+`GetActionText`, `GetActionTexture`, `GetMoneyString`, `HasAction`,
+`IsAttackAction`, `IsPlayerSpell`, `IsUsableAction`, `SecondsToClock`,
+`SecondsToTime`, `SecondsToTimeAbbrev`, `SendChatMessage`.
 
 The modules that answer, by how many functions and methods:
 
@@ -441,6 +443,7 @@ The modules that answer, by how many functions and methods:
 | `gossip` | model | 9 |
 | `itemlocation` | model | 9 |
 | `loot` | model | 9 |
+| `standins` | model | 9 |
 | `timeline` | model | 9 |
 | `auras` | model | 8 |
 | `chat` | model | 7 |

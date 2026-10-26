@@ -23,11 +23,12 @@ end
 --- The single largest unit, the way the client shows aura and cooldown
 --- times ("5 m", "30 s").
 export function short(seconds: number): string
-    const text = SecondsToTimeAbbrev(math.max(0, seconds))
-    return text
+    -- The client's answer is the unit's format string and the count.
+    local unit, count = SecondsToTimeAbbrev(math.max(0, seconds))
+    return unit:format(count)
 end
 
---- "3:07", or "1:03:07" from an hour on (`hours` always shows them).
+--- "03:07", or "01:03:07" from an hour on (`hours` always shows them).
 export function clock(seconds: number, hours: boolean?): string
     return SecondsToClock(math.max(0, seconds), hours)
 end

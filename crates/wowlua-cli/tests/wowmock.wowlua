@@ -1402,10 +1402,11 @@ function SecondsToTime(seconds: number, noSeconds: boolean?, notAbbreviated: boo
     end
     return table.concat(parts, " ")
 end
+-- The unit's format string and the count, as the client's.
 function SecondsToTimeAbbrev(seconds: number): (string, number)
-    if seconds >= 3600 then return `{math.floor(seconds / 3600)} h`, 0 end
-    if seconds >= 60 then return `{math.floor(seconds / 60)} m`, 0 end
-    return `{math.floor(seconds)} s`, 0
+    if seconds >= 3600 then return "%d h", math.ceil(seconds / 3600) end
+    if seconds >= 60 then return "%d m", math.ceil(seconds / 60) end
+    return "%d s", seconds
 end
 function SecondsToClock(seconds: number, hours: boolean?): string
     local h, m, sec = math.floor(seconds / 3600), math.floor(seconds / 60) % 60, math.floor(seconds) % 60

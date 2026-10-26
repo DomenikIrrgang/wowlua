@@ -27,11 +27,13 @@ The setters for the bag settings (sorting direction, insert order, autosort,
 slot flags) accept their argument but don't keep it, so the getters keep
 returning the same fixed answer.
 
-`NUM_TOTAL_EQUIPPED_BAG_SLOTS` comes from Blizzard's UI code, which the
-emulator only loads when the manifest sets `test.blizzard-ui`. Without it the
-constant is `nil` in a test, so a loop up to it fails there. The examples on
-these pages loop from `Enum.BagIndex.Backpack` to `Enum.BagIndex.ReagentBag`,
-which works either way.
+`NUM_BAG_SLOTS` and `NUM_TOTAL_EQUIPPED_BAG_SLOTS` come from Blizzard's UI
+code. The emulator defines them even when the manifest doesn't set
+`test.blizzard-ui`: on camelot they are 4 and 5, as in the client. On a
+flavor whose numbers wowlua hasn't recorded, they are `nil` without
+Blizzard's UI. The examples on these pages loop from
+`Enum.BagIndex.Backpack` to `Enum.BagIndex.ReagentBag`, which works either
+way.
 
 ## Example
 

@@ -82,6 +82,7 @@ pub mod replies;
 pub mod scene;
 pub mod social;
 pub mod spellinfo;
+pub mod standins;
 pub mod stats;
 pub mod systeminfo;
 pub mod targeting;
@@ -687,6 +688,9 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         }
     }
     widgets::create(vm, "Frame", Some("WorldFrame".into()), None);
+    // What Blizzard's UI code defines that addons use as the client's
+    // (until that code loads).
+    standins::install(vm);
     // The errors the client drops without a report are the engine's
     // errors too (`ui::DROPPED`).
     vm.on_dropped_error = Some(ui::dropped_error);
@@ -1181,6 +1185,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
             ],
         ),
         Behaviours::new("framescript", framescript::functions()),
+        Behaviours::new("standins", standins::behaviours()),
     ]
 }
 

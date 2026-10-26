@@ -419,6 +419,22 @@ The WoW API the VM's code calls, per flavor.
   (Tooling §16.1.4), so gaps are visible instead of silently returning nil.
 - **Engine-side Lua.** Lua the client defines in its engine (not FrameXML) is
   provided as secure code.
+- **What addons use of Blizzard's UI code.** Until Blizzard's UI code loads
+  (without `test.blizzard-ui`, never), the engine has the parts of it that
+  addons and wowlua's standard library use as the client's:
+  `SecondsToTime`, `SecondsToTimeAbbrev`, `SecondsToClock`,
+  `FormatShortDate`, `GetMoneyString` and `FormatLargeNumber`, as
+  Blizzard's `TimeUtil.lua` and `FormattingUtil.lua` write them (from the
+  global strings they read, the client's enUS text where those are not
+  loaded); `SendChatMessage`, `DoEmote` and `CancelEmote`, which call the
+  `C_ChatInfo` functions as Blizzard's deprecation file does; the coins'
+  constants (`COPPER_PER_SILVER`, `SILVER_PER_GOLD`, `COPPER_PER_GOLD`)
+  and global strings (`GOLD_AMOUNT`, `SILVER_AMOUNT`, `COPPER_AMOUNT`);
+  and the container constants Blizzard's `Constants.lua` makes from
+  `Constants.InventoryConstants` (`NUM_BAG_SLOTS`, `NUM_REAGENTBAG_SLOTS`,
+  `NUM_TOTAL_EQUIPPED_BAG_SLOTS`, …) where the flavor's `Constants` has
+  their values (camelot's are recorded). Blizzard's code defines its own
+  in their place as it loads.
 
 ## 17.7 Blizzard's UI code
 
