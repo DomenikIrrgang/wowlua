@@ -2811,11 +2811,12 @@ watch = function(label, fn)
 end
 }
 wl.dev = dev
-local reg = WOWLUA_DEV
-if type(reg) ~= "table" then
-	reg = {addons = {}, order = {}}
-	WOWLUA_DEV = reg
+local shared = WOWLUA_DEV
+if type(shared) ~= "table" then
+	shared = {addons = {}, order = {}}
+	WOWLUA_DEV = shared
 end
+local reg = shared
 if not reg.addons[addonName] then
 	reg.order[#reg.order + 1] = addonName
 end
@@ -2927,8 +2928,8 @@ local function install()
 
 	function commands.list()
 		for _, n in ipairs(reg.order) do
-			local i = reg.addons[n].info
-			do local __wl_t112 = i.version if __wl_t112 == nil then __wl_t112 = "?" end local __wl_t113 = i.profile if __wl_t113 == nil then __wl_t113 = "?" end local __wl_t114 = i.build if __wl_t114 == nil then __wl_t114 = "?" end say(tostring(n) .. " " .. tostring(__wl_t112) .. " · " .. tostring(__wl_t113) .. " · build " .. tostring(__wl_t114)) end
+			local i = (reg.addons[n]).info
+			do local __wl_t112 = i.version if __wl_t112 == nil then __wl_t112 = "?" end local __wl_t113 = i.profile if __wl_t113 == nil then __wl_t113 = "?" end local __wl_t114 = i.build if __wl_t114 == nil then __wl_t114 = "?" end say(n .. " " .. tostring(__wl_t112) .. " · " .. tostring(__wl_t113) .. " · build " .. tostring(__wl_t114)) end
 		end
 	end
 
@@ -3266,7 +3267,7 @@ local function install()
 	if type(SlashCmdList) == "table" then
 		_G.SLASH_WOWLUA1 = "/wl"
 		SlashCmdList.WOWLUA = function(msg)
-			reg.console.command(msg)
+			(reg.console).command(msg)
 		end
 	end
 	-- `/wl`: the dev window, built when first opened; the HUD and the toast.
@@ -3315,6 +3316,6 @@ local function install()
 	end
 	dev.console = console
 end
-do local __wl_t115 = reg.version if __wl_t115 == nil then __wl_t115 = -1 end if (__wl_t115) < VERSION then
-		install()
-	end end
+if (reg.version or -1) < VERSION then
+	install()
+end

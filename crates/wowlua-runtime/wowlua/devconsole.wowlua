@@ -2811,11 +2811,12 @@ dev = {
 	end,
 }
 wl.dev = dev
-local reg = WOWLUA_DEV
-if type(reg) ~= "table" then
-	reg = { addons = {}, order = {} }
-	WOWLUA_DEV = reg
+local shared = WOWLUA_DEV
+if type(shared) ~= "table" then
+	shared = { addons = {}, order = {} }
+	WOWLUA_DEV = shared
 end
+const reg: WowluaDevRegistry = shared
 if not reg.addons[addonName] then
 	reg.order[#reg.order + 1] = addonName
 end
@@ -2927,7 +2928,7 @@ local function install()
 
 	function commands.list()
 		for _, n in ipairs(reg.order) do
-			local i = reg.addons[n].info
+			local i = (reg.addons[n] :: WowluaDev).info
 			say(`{n} {i.version ?? "?"} · {i.profile ?? "?"} · build {i.build ?? "?"}`)
 		end
 	end
@@ -3266,7 +3267,7 @@ local function install()
 	if type(SlashCmdList) == "table" then
 		_G.SLASH_WOWLUA1 = "/wl"
 		SlashCmdList.WOWLUA = function(msg: string)
-			reg.console.command(msg)
+			(reg.console :: WowluaConsole).command(msg)
 		end
 	end
 	-- `/wl`: the dev window, built when first opened; the HUD and the toast.
