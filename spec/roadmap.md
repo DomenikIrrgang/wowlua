@@ -686,7 +686,16 @@ with its own design); wowlua provides what the page embeds:
   Checked in Node (`web/test/smoke.mjs`, in CI) and in Chrome through the
   Web Worker (`web/demo/`): a check takes about 50 ms, the module 7.5 MB
   with gzip. Share links carry the files only (world profiles come with
-  S3).
+  S3). The files the page writes are the package, as the disk is for the
+  CLI: check, build, run and format read them (the editor's open
+  documents do not reach them) and report what `wowlua check` and
+  `wowlua build` report, with the manifest's `check.lints`; the language
+  server reads the editor's open documents over them, as `wowlua lsp`
+  reads unsaved texts over the disk, and checks again when the page
+  writes, deletes or replaces files, as after files changed on disk
+  (fixed in 0.12.1: the open documents' texts reached the package's
+  calls, the lints were not applied, the server did not see the page's
+  writes).
 - S3 Run and draw: the built addon runs in the engine with a world profile
   and camelot's Blizzard UI (fetched by the page), drawn on a canvas by the
   renderer, with mouse and keyboard input, printed output and errors.

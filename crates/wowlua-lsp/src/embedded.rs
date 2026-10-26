@@ -3,12 +3,15 @@
 //! editor's messages and gets the server's back, and runs the checks that
 //! are due when [`Embedded::wait`] says, on its own thread. The clock is
 //! the program's ([`Embedded::set_time`]); checks keep their caches
-//! between runs in memory.
+//! between runs in memory. The program's own changes to the files (its
+//! host) reach the server as an editor's report of files changed on disk
+//! ([`Embedded::files_changed`]).
 
 use crate::{Failure, Job, Server, check, on_checked, on_message, start_due, transport};
 use serde_json::Value as Json;
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
+use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -19,6 +22,16 @@ pub struct Embedded {
     now: Rc<Cell<Duration>>,
     warm: check::Warm,
     exited: bool,
+    /// The editor said `initialize`.
+    started: bool,
+}
+
+/// How the program changed a file ([`Embedded::files_changed`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Change {
+    Created,
+    Changed,
+    Deleted,
 }
 
 impl Default for Embedded {
@@ -46,6 +59,7 @@ impl Embedded {
             now,
             warm: check::Warm::default(),
             exited: false,
+            started: false,
         }
     }
 
@@ -58,12 +72,43 @@ impl Embedded {
     /// Takes one of the editor's messages (a JSON-RPC object); returns the
     /// server's answers and notifications.
     pub fn message(&mut self, message: &Json) -> Vec<Json> {
+        if message["method"] == "initialize" {
+            self.started = true;
+        }
         let mut out = Vec::new();
         if let Ok(true) = on_message(&mut self.server, message, &mut out) {
             self.exited = true;
         }
         start_due(&mut self.server);
         messages(&out)
+    }
+
+    /// Files the program changed itself (created, changed, deleted: a
+    /// folder deleted is one change), as `workspace/didChangeWatchedFiles`
+    /// reports files changed on disk: their packages are checked again,
+    /// those that depend on them too. A document the editor has open keeps
+    /// the editor's text. Nothing before the editor's `initialize`.
+    pub fn files_changed(&mut self, changes: &[(&Path, Change)]) {
+        if !self.started || self.exited || changes.is_empty() {
+            return;
+        }
+        let changes: Vec<Json> = changes
+            .iter()
+            .map(|(path, change)| {
+                let kind = match change {
+                    Change::Created => 1,
+                    Change::Changed => 2,
+                    Change::Deleted => 3,
+                };
+                serde_json::json!({ "uri": crate::text::uri_of(path), "type": kind })
+            })
+            .collect();
+        // (a notification: the server answers nothing)
+        self.message(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "workspace/didChangeWatchedFiles",
+            "params": { "changes": changes },
+        }));
     }
 
     /// How long until [`run_due`](Self::run_due) has a check to run; `None`

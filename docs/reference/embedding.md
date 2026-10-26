@@ -68,6 +68,13 @@ p.format("src/main.wowlua");     // { text } (written) or { diagnostics }
 p.files();                       // { "wowlua.json": "…", "src/main.wowlua": "…" }
 ```
 
+The files you write are the package, as files on disk are for the
+command line: `check`, `build`, `run` and `format` read them, and report
+what `wowlua check` and `wowlua build` report for the same files (the
+manifest's `check.lints` apply, so W2063 stays off until you turn it on).
+Write the editor's text with `writeFile` before you check, build or run
+it.
+
 Ranges are the Language Server Protocol's: lines and UTF-16 columns from
 0, which CodeMirror and Monaco both take. A built file that is not text,
 such as an image, comes as URL-safe `base64` instead of `text`.
@@ -105,6 +112,13 @@ rename, formatting and the outline. Documents are
 lead into wowlua's built-in declarations (the game's API, the standard
 library), whose URIs are `file:///.wowlua-<version>/…`: read them with
 `call("readFile", path)` and show them read-only.
+
+The server works as in an editor on disk: it reads the documents the
+editor has open from the editor (`didOpen`, `didChange`) and the other
+files as you wrote them. When you write, delete or replace files
+(`writeFile`, `deleteFile`, `reset`, `openShared`, `format`), it checks
+the package again, as after files changed on disk; a document the editor
+has open keeps the editor's text there until the editor changes it.
 
 Any LSP client works over this transport, for example
 `@codemirror/lsp-client` or `monaco-languageclient`.

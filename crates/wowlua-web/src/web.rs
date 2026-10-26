@@ -59,7 +59,7 @@ impl WebPlayground {
     }
 
     #[wasm_bindgen(js_name = writeFile)]
-    pub fn write_file(&self, path: &str, text: &str) {
+    pub fn write_file(&mut self, path: &str, text: &str) {
         self.0.write_file(path, text);
     }
 
@@ -69,7 +69,7 @@ impl WebPlayground {
     }
 
     #[wasm_bindgen(js_name = deleteFile)]
-    pub fn delete_file(&self, path: &str) {
+    pub fn delete_file(&mut self, path: &str) {
         self.0.delete_file(path);
     }
 
@@ -85,7 +85,7 @@ impl WebPlayground {
     }
 
     /// Replaces the package's files with `{ "<path>": "<text>", … }`.
-    pub fn reset(&self, files: &str) -> Result<(), JsError> {
+    pub fn reset(&mut self, files: &str) -> Result<(), JsError> {
         let value: Json = serde_json::from_str(files)?;
         let map = value
             .as_object()
@@ -108,7 +108,7 @@ impl WebPlayground {
     }
 
     /// `{ text }` or `{ diagnostics }`.
-    pub fn format(&self, path: &str) -> String {
+    pub fn format(&mut self, path: &str) -> String {
         self.0.format(path).to_string()
     }
 
@@ -122,7 +122,7 @@ impl WebPlayground {
     /// Opens a shared package: how it runs (JSON, `{}` when the link does
     /// not say), or `undefined` when `link` is none.
     #[wasm_bindgen(js_name = openShared)]
-    pub fn open_shared(&self, link: &str) -> Option<String> {
+    pub fn open_shared(&mut self, link: &str) -> Option<String> {
         self.0.open_shared(link).map(|r| r.to_string())
     }
 

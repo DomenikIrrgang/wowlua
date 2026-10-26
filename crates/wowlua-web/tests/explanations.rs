@@ -9,7 +9,7 @@ use wowlua_web::{Playground, TEMPLATE};
 
 #[test]
 fn every_example_reports_its_code_or_compiles() {
-    let p = Playground::new();
+    let mut p = Playground::new();
     let mut failures = Vec::new();
     let mut checked = 0;
     for info in all_codes() {

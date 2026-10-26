@@ -62,7 +62,14 @@ async function fetchAll(items, limit, each) {
 export class Playground {
     constructor() {
         this.raw = new Raw();
+        // (the language servers' timers, set again when the files change)
+        this.servers = new Set();
         this.tick();
+    }
+
+    /** The files changed: the language server's checks of them are due. */
+    changed() {
+        for (const schedule of this.servers) schedule();
     }
 
     /** Passes the clocks in (WebAssembly has none it can read). */
@@ -77,11 +84,20 @@ export class Playground {
 
     /** Replaces every file with `files` (`{ "<path>": "<text>" }`). */
     reset(files) {
+        this.tick();
         this.raw.reset(JSON.stringify(files));
+        this.changed();
     }
 
+    /**
+     * Writes a file of the package, as on disk: `check`, `build`, `run` and
+     * `format` read it, and the language server checks again (a document
+     * the editor has open keeps the editor's text there).
+     */
     writeFile(path, text) {
+        this.tick();
         this.raw.writeFile(path, text);
+        this.changed();
     }
 
     /**
@@ -94,7 +110,9 @@ export class Playground {
     }
 
     deleteFile(path) {
+        this.tick();
         this.raw.deleteFile(path);
+        this.changed();
     }
 
     /** The diagnostics of `wowlua check`. */
@@ -114,7 +132,10 @@ export class Playground {
 
     /** Formats a file in place: `{ text }`, or `{ diagnostics }`. */
     format(path) {
-        return JSON.parse(this.raw.format(path));
+        this.tick();
+        const formatted = JSON.parse(this.raw.format(path));
+        this.changed();
+        return formatted;
     }
 
     /**
@@ -130,7 +151,9 @@ export class Playground {
      * when the link does not say), or `null` when it is none.
      */
     openShared(link) {
+        this.tick();
         const run = this.raw.openShared(link);
+        this.changed();
         return run === undefined ? null : JSON.parse(run);
     }
 
@@ -281,6 +304,7 @@ export class Playground {
                 schedule();
             }, Math.ceil(wait));
         };
+        this.servers.add(schedule);
         return {
             send: (message) => {
                 this.tick();
@@ -288,6 +312,7 @@ export class Playground {
                 schedule();
             },
             close: () => {
+                this.servers.delete(schedule);
                 if (timer !== null) clearTimeout(timer);
                 timer = null;
             },

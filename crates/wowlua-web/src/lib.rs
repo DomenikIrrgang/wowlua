@@ -23,6 +23,7 @@ use std::time::{Duration, SystemTime};
 use wowlua_diagnostics::{ColorChoice, MessageFormat, Renderer, Severity};
 use wowlua_driver::host::{self, MemoryHost};
 use wowlua_driver::{BuildRequest, Session};
+use wowlua_lsp::embedded::Change;
 
 /// The package's folder.
 pub const ROOT: &str = "/playground";
@@ -74,7 +75,7 @@ impl Playground {
     pub fn new() -> Playground {
         let memory = Arc::new(MemoryHost::new());
         host::install(Some(memory.clone()));
-        let playground = Playground {
+        let mut playground = Playground {
             memory,
             server: wowlua_lsp::embedded::Embedded::new(),
             game: None,
@@ -98,8 +99,23 @@ impl Playground {
         Path::new(ROOT).join(rel.trim_start_matches('/'))
     }
 
-    /// Puts a file there (and its folders), replacing what was there.
-    pub fn write_file(&self, rel: &str, text: &str) {
+    /// Puts a file there (and its folders), replacing what was there. It
+    /// is the package's file from then on, as one written on disk: checks,
+    /// builds and runs read it, and the language server checks again (a
+    /// document the editor has open keeps the editor's text there).
+    pub fn write_file(&mut self, rel: &str, text: &str) {
+        let path = Playground::path(rel);
+        let change = if host::is_file(&path) {
+            Change::Changed
+        } else {
+            Change::Created
+        };
+        self.put(rel, text);
+        self.server.files_changed(&[(&path, change)]);
+    }
+
+    /// Writes a file, telling no one.
+    fn put(&self, rel: &str, text: &str) {
         self.memory
             .insert(Playground::path(rel), text.as_bytes().to_vec());
     }
@@ -128,9 +144,14 @@ impl Playground {
     }
 
     /// Removes a file (or a folder and what is in it).
-    pub fn delete_file(&self, rel: &str) {
+    pub fn delete_file(&mut self, rel: &str) {
         let path = Playground::path(rel);
-        let _ = host::remove_file(&path).or_else(|_| host::remove_dir_all(&path));
+        if host::remove_file(&path)
+            .or_else(|_| host::remove_dir_all(&path))
+            .is_ok()
+        {
+            self.server.files_changed(&[(&path, Change::Deleted)]);
+        }
     }
 
     /// The package's files, by relative path, without what builds wrote.
@@ -152,12 +173,35 @@ impl Playground {
     }
 
     /// Replaces every file of the package with `files`.
-    pub fn reset(&self, files: impl IntoIterator<Item = (String, String)>) {
+    pub fn reset(&mut self, files: impl IntoIterator<Item = (String, String)>) {
+        let before: Vec<PathBuf> = self
+            .files()
+            .into_iter()
+            .map(|(rel, _)| Playground::path(&rel))
+            .collect();
         let _ = host::remove_dir_all(ROOT);
         let _ = host::create_dir_all(ROOT);
+        let mut after = Vec::new();
         for (rel, text) in files {
-            self.write_file(&rel, &text);
+            self.put(&rel, &text);
+            after.push(Playground::path(&rel));
         }
+        // (the language server: the files gone, and the files now there)
+        let changes: Vec<(&Path, Change)> = before
+            .iter()
+            .filter(|p| !after.contains(p))
+            .map(|p| (p.as_path(), Change::Deleted))
+            .chain(after.iter().map(|p| (p.as_path(), Change::Created)))
+            .collect();
+        self.server.files_changed(&changes);
+    }
+
+    /// The package as written: what the page's package calls read. The
+    /// language server's open documents (the editor's texts, which its
+    /// checks read over the files) are taken out of the way; its next
+    /// check puts them back, as each of its checks does.
+    fn as_written(&self) {
+        wowlua_driver::overlay::replace_all([]);
     }
 
     fn load(&self, session: &mut Session) -> Option<wowlua_driver::Project> {
@@ -180,6 +224,7 @@ impl Playground {
     /// [`build`](Self::build), keeping the compiled code or not (a check
     /// reads none of it), with the test side or not.
     fn build_with(&self, profile: &str, keep_code: bool, tests: bool) -> Json {
+        self.as_written();
         let mut session = Session::new();
         let built = self.load(&mut session).and_then(|project| {
             let request = BuildRequest {
@@ -236,7 +281,9 @@ impl Playground {
 
     /// Formats a file of the package as `wowlua fmt` does: its new text, or
     /// the diagnostics when it could not be formatted (a syntax error).
-    pub fn format(&self, rel: &str) -> Json {
+    pub fn format(&mut self, rel: &str) -> Json {
+        self.as_written();
+        let before = self.read_file(rel);
         let mut session = Session::new();
         let Some(project) = self.load(&mut session) else {
             return json!({ "diagnostics": diagnostics(&mut session) });
@@ -249,7 +296,12 @@ impl Playground {
         if session.has_errors() {
             return json!({ "diagnostics": diagnostics(&mut session) });
         }
-        json!({ "text": self.read_file(rel) })
+        let text = self.read_file(rel);
+        if text != before {
+            let path = Playground::path(rel);
+            self.server.files_changed(&[(&path, Change::Changed)]);
+        }
+        json!({ "text": text })
     }
 
     /// Opens `flavor`'s client from the user's installation (`storage`):
@@ -283,6 +335,7 @@ impl Playground {
             options.installation = self.installation(&options.flavor);
         }
         self.game = None;
+        self.as_written();
         let mut session = Session::new();
         let Some(project) = self.load(&mut session) else {
             return json!({ "ok": false, "diagnostics": diagnostics(&mut session) });
@@ -348,7 +401,7 @@ impl Playground {
     /// Opens a shared package: its files replace these; how it runs (`{}`
     /// when the link does not say). `None` (and nothing changed) when
     /// `link` is not one.
-    pub fn open_shared(&self, link: &str) -> Option<Json> {
+    pub fn open_shared(&mut self, link: &str) -> Option<Json> {
         let (files, run) = share::decode(link)?;
         self.reset(files);
         Some(run.unwrap_or_else(|| json!({})))

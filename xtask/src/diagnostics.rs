@@ -11,7 +11,7 @@ use std::path::Path;
 pub const PATH: &str = "docs/reference/diagnostics.json";
 
 pub fn generate(_root: &Path) -> String {
-    let playground = wowlua_web::Playground::new();
+    let mut playground = wowlua_web::Playground::new();
     let areas: Vec<Json> = wowlua_diagnostics::areas()
         .into_iter()
         .map(|(range, short)| json!({ "range": range, "short": short }))
@@ -33,7 +33,7 @@ pub fn generate(_root: &Path) -> String {
                 let output = if x.compiles {
                     None
                 } else {
-                    output(&playground, info.code, &x.files)
+                    output(&mut playground, info.code, &x.files)
                 };
                 json!({ "compiles": x.compiles, "files": files, "output": output })
             })
@@ -54,7 +54,7 @@ pub fn generate(_root: &Path) -> String {
 
 /// What `wowlua check` prints for an example's diagnostic with `code`.
 fn output(
-    playground: &wowlua_web::Playground,
+    playground: &mut wowlua_web::Playground,
     code: &str,
     files: &[wowlua_diagnostics::ExampleFile],
 ) -> Option<String> {
