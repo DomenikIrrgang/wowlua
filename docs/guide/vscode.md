@@ -13,13 +13,21 @@ back to `event PLAYER_LOGIN` on the left, the game's screen in the
 
 ## Install the extension
 
-The extension lives in the wowlua repository, in
-[`editors/vscode`](../../editors/vscode/README.md). It runs the `wowlua`
-binary (0.10 or newer) for checking and debugging, so
+Install [wowlua from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=wowlua.wowlua):
+search for *wowlua* in VS Code's Extensions view, or run
+
+```console
+$ code --install-extension wowlua.wowlua
+```
+
+It runs the `wowlua` binary (0.10 or newer) for checking and debugging, so
 [install wowlua](install.md) first. It needs VS Code 1.88 or newer.
 
-To use it from a clone of the repository, link it into your extensions folder
-and reload VS Code:
+### From the repository
+
+The extension's source is in the wowlua repository, in
+[`editors/vscode`](../../editors/vscode/README.md). To try a change, link it
+into your extensions folder from a clone and reload VS Code:
 
 ```console
 $ ln -s "$(pwd)/editors/vscode" ~/.vscode/extensions/wowlua
