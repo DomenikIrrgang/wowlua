@@ -13149,7 +13149,7 @@ declare function SecondsToClock(seconds: number, displayZeroHours: boolean?): st
 declare function SecondsToTime(seconds: number, noSeconds: boolean?, notAbbreviated: boolean?, maxCount: number?, roundUp: boolean?): string
 declare function MinutesToTime(mins: number, hideDays: boolean?): string
 declare function SecondsToTimeAbbrev(seconds: number): (string, number)
-declare function FormatShortDate(day: number, month: number, year: number): string
+declare function FormatShortDate(day: number, month: number, year: number?): string
 declare function CreateVector2D(x: number, y: number): Vector2DMixin
 declare function AreVector2DEqual(left: Vector2DMixin, right: Vector2DMixin): boolean
 declare function CreateVector3D(x: number, y: number, z: number): Vector3DMixin

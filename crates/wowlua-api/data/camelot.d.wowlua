@@ -53487,7 +53487,7 @@ declare global AchievementFrame_RefreshBackButton: (showBackButton: boolean?) ->
 @onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_ShowDateCompleted: (parent: unknown, show: boolean) -> ()
 @onDemand("Blizzard_AchievementUI")
-declare global AchievementFrame_SetDateCompleted: (frame: unknown, day: number, month: number, year: number) -> ()
+declare global AchievementFrame_SetDateCompleted: (frame: unknown, day: number, month: number, year: number?) -> ()
 @onDemand("Blizzard_AchievementUI")
 declare global AchievementFrame_ShowAsComplete: (completed: unknown?, wasEarnedByMe: unknown) -> unknown
 @onDemand("Blizzard_AchievementUI")

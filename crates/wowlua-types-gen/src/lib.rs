@@ -946,6 +946,14 @@ fn answer_corrections(d: &mut Decls, wiki: &Decls) {
 }
 
 fn annotation_corrections(d: &mut Decls) {
+    // `FormatShortDate(day, month, year)` takes no year: the short date
+    // without one (Blizzard_SharedXML TimeUtil.lua: `if (year) then …
+    // else … SHORTDATENOYEAR`).
+    for sig in d.functions.get_mut("FormatShortDate").into_iter().flatten() {
+        if let Some(year) = sig.params.iter_mut().find(|p| p.name == "year") {
+            year.optional = true;
+        }
+    }
     // `CreateAnimation(type)` gives that animation's class (T280; the method
     // probe records each: `CreateAnimation("Alpha")` is an Alpha), the
     // annotations' generic `table | T` none.
@@ -2489,6 +2497,30 @@ mod tests {
         assert_eq!(
             text("Slider", "SetScript", 0),
             "(scriptType: \"OnValueChanged\", handler: (((self: Self, value: number, userInput: boolean) -> ()))?)"
+        );
+    }
+
+    /// `FormatShortDate` without a year is the short date without one.
+    #[test]
+    fn format_short_date_takes_no_year() {
+        let mut d = Decls::default();
+        let p = |name: &str| model::ParamDecl {
+            name: name.into(),
+            ty: "number".into(),
+            optional: false,
+        };
+        d.functions.insert(
+            "FormatShortDate".into(),
+            vec![model::Sig {
+                params: vec![p("day"), p("month"), p("year")],
+                returns: vec!["string".into()],
+                ..model::Sig::default()
+            }],
+        );
+        annotation_corrections(&mut d);
+        assert_eq!(
+            model::sig_text(&d.functions["FormatShortDate"][0]),
+            "(day: number, month: number, year: number?): string"
         );
     }
 
