@@ -27,7 +27,7 @@ local function onEnterWorld(isInitialLogin: boolean, isReloadingUi: boolean)
 end
 
 @event("BAG_UPDATE", "BAG_UPDATE_DELAYED")          -- several names: the handler gets the name first
-local function onBags(e: "BAG_UPDATE" | "BAG_UPDATE_DELAYED", ...any) … end
+local function onBags(e: "BAG_UPDATE" | "BAG_UPDATE_DELAYED", ...: any) … end
 
 @unitEvent("UNIT_HEALTH", "player", "party1", "party2")   -- any number of units
 local function onHealth(unit: UnitToken) … end
