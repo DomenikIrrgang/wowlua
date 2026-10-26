@@ -527,7 +527,7 @@ pub fn parse_sources(
                         Diagnostic::error(
                             "E0101",
                             format!(
-                                "{} are wowlua syntax, but this is a `.lua` file",
+                                "this `.lua` file uses {}, which Lua 5.1 doesn't have",
                                 feature.describe()
                             ),
                         )

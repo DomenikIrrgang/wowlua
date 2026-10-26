@@ -62,3 +62,14 @@ fn assigning_a_constant_is_reported_once() {
         ]
     );
 }
+
+/// wowlua syntax in a `.lua` file names the feature in a sentence.
+#[test]
+fn wowlua_syntax_in_a_lua_file() {
+    assert_eq!(
+        check(&[("src/main.lua", "local x = 1\nx += 1\nprint(x)\n")]),
+        [
+            "src/main.lua:2:1: error[E0101]: this `.lua` file uses compound assignment, which Lua 5.1 doesn't have"
+        ]
+    );
+}
