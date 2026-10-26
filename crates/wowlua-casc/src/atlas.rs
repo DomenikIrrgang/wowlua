@@ -20,6 +20,11 @@ const MEMBER_TABLE: u32 = 897532;
 const ELEMENT_TABLE: u32 = 1989276;
 const SLICE_TABLE: u32 = 5319042;
 
+/// The atlas tables' file IDs (`wowlua data pull`).
+pub(crate) fn file_ids() -> impl Iterator<Item = u32> {
+    [ATLAS_TABLE, MEMBER_TABLE, ELEMENT_TABLE, SLICE_TABLE].into_iter()
+}
+
 /// An atlas: its file, its region (left, right, top, bottom, 0 to 1), its
 /// size in the file's pixels, whether it tiles.
 #[derive(Clone, Copy, Debug, PartialEq)]

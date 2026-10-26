@@ -67,6 +67,11 @@ const FILES: &[(&str, u32)] = &[
     ("UiModelSceneCamera", 1548213),
 ];
 
+/// The file IDs of the tables the engine reads (`wowlua data pull`).
+pub(crate) fn file_ids() -> impl Iterator<Item = u32> {
+    FILES.iter().map(|(_, id)| *id)
+}
+
 /// A column: a field of the records, their ID, or the parent ID of the
 /// relationship map.
 #[derive(Clone, Copy, Debug, PartialEq)]

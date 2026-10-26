@@ -535,3 +535,80 @@ fn spell_costs_read_as_the_client_answers_them() {
         "{same}, {by_character}"
     );
 }
+
+/// Pulled game data (`wowlua data pull`, decision T203) reads as the
+/// installation does: the same tables with their hotfixes, the named
+/// files it was given, the client's caches.
+#[test]
+fn pulled_game_data_reads_as_the_installation() {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    #[derive(Default)]
+    struct Memory(Mutex<HashMap<String, Vec<u8>>>);
+    impl Storage for Memory {
+        fn read(&self, path: &str) -> Option<Vec<u8>> {
+            self.0.lock().unwrap().get(path).cloned()
+        }
+        fn read_at(&self, path: &str, offset: u64, len: usize) -> Option<Vec<u8>> {
+            let all = self.read(path)?;
+            all.get(offset as usize..offset as usize + len)
+                .map(<[u8]>::to_vec)
+        }
+        fn list(&self, dir: &str) -> Vec<String> {
+            let prefix = if dir.is_empty() {
+                String::new()
+            } else {
+                format!("{dir}/")
+            };
+            let mut out: Vec<String> = self
+                .0
+                .lock()
+                .unwrap()
+                .keys()
+                .filter_map(|k| {
+                    k.strip_prefix(&prefix)?
+                        .split('/')
+                        .next()
+                        .map(str::to_string)
+                })
+                .collect();
+            out.sort();
+            out.dedup();
+            out
+        }
+    }
+    let storage = FsStorage { root: root.clone() };
+    let product = Casc::product_of_folder(&storage, "_classic_beta_").unwrap_or("wow".into());
+    let live = Casc::open(Box::new(FsStorage { root }), &product).expect("opens");
+    let memory = Memory::default();
+    let files = live.pull(&["Fonts\\FRIZQT__.TTF"]);
+    let bytes: usize = files.iter().map(|(_, b)| b.len()).sum();
+    eprintln!("{product}: {} files, {} MiB", files.len(), bytes >> 20);
+    memory.0.lock().unwrap().extend(files);
+    let pulled = Casc::open_pulled(Box::new(memory)).expect("opens the pulled data");
+    assert_eq!(
+        (&pulled.product, &pulled.version),
+        (&live.product, &live.version)
+    );
+    let open = |c: &Casc| wowlua_casc::tables::Table::open(c, "ItemSparse").expect("ItemSparse");
+    let (a, b) = (open(&live), open(&pulled));
+    assert_eq!(a.len(), b.len());
+    let name = |t: &wowlua_casc::tables::Table| t.row(6948).and_then(|r| r.string("Display_lang"));
+    assert_eq!(name(&a), name(&b));
+    assert_eq!(name(&b).as_deref(), Some("Hearthstone"));
+    assert_eq!(
+        pulled.file_by_path("Fonts\\FRIZQT__.TTF"),
+        live.file_by_path("Fonts\\FRIZQT__.TTF")
+    );
+    // (one copy per locale; the installation may have a folder more)
+    assert_eq!(
+        pulled.cache_files("creaturecache.wdb").is_empty(),
+        live.cache_files("creaturecache.wdb").is_empty()
+    );
+    let spells = |c: &Casc| wowlua_casc::spells::SpellTables::open(c).is_some();
+    assert_eq!(spells(&live), spells(&pulled));
+}

@@ -1,7 +1,8 @@
 //! The user's own WoW installation as a file source (spec debugger §18.10,
 //! decisions T210, T310): the local CASC storage read by path or file ID,
 //! and the client's image formats decoded. Nothing read here is copied
-//! anywhere but memory.
+//! anywhere but memory, except the game data `wowlua data pull` copies
+//! into the user's own cache (decision T203, [`Casc::pull`]).
 //!
 //! The storage is reached through a [`Storage`] (the file system natively,
 //! the browser's File System Access API there), so the crate has no file

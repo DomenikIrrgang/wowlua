@@ -338,7 +338,13 @@ pub struct Casc {
     keys: blte::Keys,
     /// The hotfix cache's records by table hash, read on first use.
     hotfixes: std::sync::OnceLock<HashMap<u32, Vec<Hotfix>>>,
+    /// Game data `wowlua data pull` copied (see [`Casc::pull`]): files are
+    /// read decoded from `files/<id>`.
+    pulled: bool,
 }
+
+/// The client folder of pulled game data (its `Cache/ADB` and `Cache/WDB`).
+const PULLED_FOLDER: &str = "_pulled_";
 
 /// A hotfix of a table's record: its ID, its status (1: the record as
 /// given, 2: the record removed) and its data.
@@ -441,6 +447,7 @@ impl Casc {
             version: row.version.clone(),
             keys: blte::Keys::new(),
             hotfixes: std::sync::OnceLock::new(),
+            pulled: false,
         };
         let enc = casc.read_ekey(&encoding_ekey).ok_or_else(|| {
             CascError(format!(
@@ -602,6 +609,9 @@ impl Casc {
 
     /// A file by its ID.
     pub fn file_by_id(&self, id: u32) -> Option<Vec<u8>> {
+        if self.pulled {
+            return self.storage.read(&format!("files/{id}"));
+        }
         self.root
             .ckeys(id)
             .iter()
@@ -687,6 +697,99 @@ impl Casc {
     /// Files the root knows.
     pub fn file_count(&self) -> usize {
         self.root.by_id.len()
+    }
+
+    /// The game data of the build (`wowlua data pull`, decision T203): the
+    /// client tables the engine reads, the files of `paths` (fonts), and
+    /// the client's hotfix and WDB caches, as files relative to a folder
+    /// that [`Casc::open_pulled`] reads back. Everything is decoded.
+    pub fn pull(&self, paths: &[&str]) -> Vec<(String, Vec<u8>)> {
+        let mut out = vec![(
+            ".pulled".to_string(),
+            format!("{}\n{}\n", self.product, self.version).into_bytes(),
+        )];
+        out.push((
+            format!("{PULLED_FOLDER}/.flavor.info"),
+            format!("Product\n{}\n", self.product).into_bytes(),
+        ));
+        let mut ids: Vec<u32> = crate::tables::file_ids()
+            .chain(crate::atlas::file_ids())
+            .collect();
+        let mut names = String::new();
+        for path in paths {
+            if let Some(id) = self.id_of(path) {
+                names.push_str(&format!("{:016x}\t{id}\n", jenkins::name_hash(path)));
+                ids.push(id);
+            }
+        }
+        ids.sort_unstable();
+        ids.dedup();
+        for id in ids {
+            if let Some(bytes) = self.file_by_id(id) {
+                out.push((format!("files/{id}"), bytes));
+            }
+        }
+        out.push(("names".to_string(), names.into_bytes()));
+        let mut seen = std::collections::HashSet::new();
+        for folder in self.folders() {
+            for kind in ["ADB", "WDB"] {
+                let dir = format!("{folder}/Cache/{kind}");
+                for locale in self.storage.list(&dir) {
+                    for name in self.storage.list(&format!("{dir}/{locale}")) {
+                        let rel = format!("Cache/{kind}/{locale}/{name}");
+                        if !seen.insert(rel.clone()) {
+                            continue;
+                        }
+                        if let Some(bytes) = self.storage.read(&format!("{folder}/{rel}")) {
+                            out.push((format!("{PULLED_FOLDER}/{rel}"), bytes));
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Game data [`Casc::pull`] wrote to `storage`: the same product and
+    /// version, its tables and named files, and its caches.
+    pub fn open_pulled(storage: Box<dyn Storage + Send + Sync>) -> Result<Casc, CascError> {
+        let info = storage
+            .read(".pulled")
+            .ok_or_else(|| CascError("no pulled game data".into()))?;
+        let info = String::from_utf8_lossy(&info).into_owned();
+        let mut lines = info.lines();
+        let product = lines.next().unwrap_or_default().to_string();
+        let version = lines.next().unwrap_or_default().to_string();
+        let names = storage.read("names").unwrap_or_default();
+        let mut by_name: Vec<(u64, u32)> = String::from_utf8_lossy(&names)
+            .lines()
+            .filter_map(|l| {
+                let (hash, id) = l.split_once('\t')?;
+                Some((u64::from_str_radix(hash, 16).ok()?, id.parse().ok()?))
+            })
+            .collect();
+        by_name.sort_unstable();
+        by_name.dedup_by_key(|e| e.0);
+        Ok(Casc {
+            storage,
+            indexes: Vec::new(),
+            encoding: Encoding {
+                data: Vec::new(),
+                ckey_size: 16,
+                ekey_size: 16,
+                page_size: 0,
+                pages: Vec::new(),
+            },
+            root: Root {
+                by_id: Vec::new(),
+                by_name,
+            },
+            product,
+            version,
+            keys: blte::Keys::new(),
+            hotfixes: std::sync::OnceLock::new(),
+            pulled: true,
+        })
     }
 }
 
