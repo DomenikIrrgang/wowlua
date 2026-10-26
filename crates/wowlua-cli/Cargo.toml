@@ -34,6 +34,8 @@ rpassword.workspace = true
 termcolor = "1.4"
 
 [dev-dependencies]
+wowlua-registry.workspace = true
+ureq.workspace = true
 zip.workspace = true
 mlua.workspace = true
 wowlua-vm.workspace = true
