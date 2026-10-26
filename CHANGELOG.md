@@ -111,6 +111,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `STANDARD_TEXT_FONT`, `GENERAL_CHAT_DOCK`, `LE_PARTY_CATEGORY_INSTANCE`, `LE_EXPANSION_LEVEL_CURRENT` and other client constants are declared for every flavor that has them.
 - Messages show record keys that aren't identifiers as written: `{ ["1ST"]: string }`.
 - `wowlua explain W2001` (and every plain-Lua warning form) no longer reports "unknown diagnostic code".
+- `wowlua build --watch`, `check --watch` and `test --watch` no longer run twice for one save when the file watcher reports it twice under load.
 
 ## 0.12.0 (2026-10-26)
 

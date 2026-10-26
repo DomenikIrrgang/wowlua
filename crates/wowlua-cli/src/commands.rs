@@ -3,8 +3,9 @@
 use crate::output::Output;
 use crate::{AddArgs, BuildArgs, GlobalArgs, InstallTarget, Kind};
 use notify_debouncer_mini::{DebouncedEvent, new_debouncer, notify::RecursiveMode};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use wowlua_diagnostics::Diagnostic;
 use wowlua_driver::install::{self, InstallRequest};
 use wowlua_driver::scaffold::{self, InitRequest, NewRequest};
@@ -677,7 +678,8 @@ fn shown_folder(path: &Path) -> String {
 /// Watches `root` and calls `run` once per batch of changes: changes saved
 /// while it runs make one more run, not one each. Changes in the output
 /// folders (which `run` may change), in `.git` and in temporary files are
-/// not changes. Runs until `run` returns false; false when the folder
+/// not changes, nor is a change reported again (the file is as the last
+/// run saw it). Runs until `run` returns false; false when the folder
 /// cannot be watched.
 fn watch(
     out: &Output,
@@ -710,20 +712,36 @@ fn watch(
         "Watching",
         format!("{} for changes (Ctrl+C to stop)", shown_folder(root)),
     );
-    let relevant = |out_dirs: &[PathBuf], result: &Result<Vec<DebouncedEvent>, _>| {
-        result.as_ref().is_ok_and(|events| {
-            events.iter().any(|event| {
-                let path = &event.path;
-                // (a folder that holds an output folder changes with it)
-                !out_dirs
-                    .iter()
-                    .any(|d| path.starts_with(d) || d.starts_with(path))
-                    && !path.components().any(|c| c.as_os_str() == ".git")
-                    && !path.to_string_lossy().contains(".wowlua-tmp")
-                    // (the build's previous output, moved aside)
-                    && !path.to_string_lossy().contains(".wowlua-old")
-            })
-        })
+    // Each changed path as the last run saw it: modification time and size,
+    // `None` when gone. The watcher can report one save twice (under load,
+    // in two batches), and the second report must not run again.
+    let mut seen: HashMap<PathBuf, Option<(Option<SystemTime>, u64)>> = HashMap::new();
+    let mut relevant = |out_dirs: &[PathBuf], result: &Result<Vec<DebouncedEvent>, _>| {
+        let Ok(events) = result else {
+            return false;
+        };
+        let mut changed = false;
+        for event in events {
+            let path = &event.path;
+            // (a folder that holds an output folder changes with it)
+            if out_dirs
+                .iter()
+                .any(|d| path.starts_with(d) || d.starts_with(path))
+                || path.components().any(|c| c.as_os_str() == ".git")
+                || path.to_string_lossy().contains(".wowlua-tmp")
+                // (the build's previous output, moved aside)
+                || path.to_string_lossy().contains(".wowlua-old")
+            {
+                continue;
+            }
+            let now = std::fs::metadata(path)
+                .ok()
+                .map(|m| (m.modified().ok(), m.len()));
+            // (without modification times, every report is a change)
+            let unknown = now.is_some_and(|(modified, _)| modified.is_none());
+            changed |= seen.insert(path.clone(), now) != Some(now) || unknown;
+        }
+        changed
     };
     while let Ok(result) = rx.recv() {
         let mut changed = relevant(&out_dirs, &result);
