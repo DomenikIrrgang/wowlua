@@ -396,7 +396,8 @@ pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> b
     // up to date; a library's is not committed, so it resolves without
     // writing one.
     let mut options = load_options(out, global);
-    if library_manifest(&options) {
+    let library = library_manifest(&options);
+    if library {
         options.lock_in_memory = true;
     } else {
         options.locked = true;
@@ -406,6 +407,29 @@ pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> b
         out.flush(&mut session);
         return false;
     };
+    // Step 3 (§11.9): `wowlua test` on the same packages, with the lockfile
+    // as the publish has it.
+    let tests = (!args.no_test).then(|| {
+        let mut test_global = global.clone();
+        test_global.locked |= !library;
+        let flavor = args.flavor.clone();
+        wowlua_driver::publish::Tests(std::rc::Rc::new(move || {
+            let out = Output::new(&test_global);
+            let test_args = crate::TestArgs {
+                filter: Vec::new(),
+                flavor: flavor.clone(),
+                update_snapshots: false,
+                coverage: false,
+                coverage_per_flavor: false,
+                reporter: Vec::new(),
+                output: None,
+                watch: false,
+                profile_out: None,
+                game_data: false,
+            };
+            test_once(&out, &test_global, &test_args).0
+        }))
+    });
     let request = wowlua_driver::publish::PublishRequest {
         package: wowlua_driver::package::PackageRequest {
             targets: args.targets,
@@ -422,6 +446,7 @@ pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> b
         tag: args.tag,
         deny_warnings: global.deny_warnings,
         status: Some(out.status_sink()),
+        tests,
     };
     let report = wowlua_driver::publish::publish(&mut session, &projects, &request);
     for project in &projects {

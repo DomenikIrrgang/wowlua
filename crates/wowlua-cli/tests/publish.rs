@@ -923,3 +923,53 @@ fn a_tagged_workspace_builds_its_members_untagged() {
         .failure()
         .stderr(predicate::str::contains("error[E4319]"));
 }
+
+/// Step 3 of a publish (Publishing §11.9): `wowlua test` runs after the
+/// checks and before packaging; a failing test stops it, `--no-test`
+/// skips the tests.
+#[test]
+fn publish_runs_the_tests_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = plain(dir.path().to_path_buf());
+    let home = root.join("home");
+    let project = root.join("my-addon");
+    write(
+        &project,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "my-addon", "version": "1.0.0" }, "flavors": { "camelot": {} } }"#,
+            ),
+            ("src/main.wowlua", "print(1)\n"),
+            (
+                "tests/main.test.wowlua",
+                "import test, expect from \"wowlua:test\"\n\n@test(\"counts\")\nlocal function counts()\n    expect(1 + 1).toBe(3)\nend\n",
+            ),
+        ],
+    );
+    // The lockfile a publish needs as it is.
+    wowlua(&project, &home).args(["build"]).assert().success();
+    wowlua(&project, &home)
+        .args(["publish", "--allow-dirty", "--dry-run"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "the tests failed; nothing was published",
+        ));
+    wowlua(&project, &home)
+        .args(["publish", "--allow-dirty", "--dry-run", "--no-test"])
+        .assert()
+        .success();
+    write(
+        &project,
+        &[(
+            "tests/main.test.wowlua",
+            "import test, expect from \"wowlua:test\"\n\n@test(\"counts\")\nlocal function counts()\n    expect(1 + 1).toBe(2)\nend\n",
+        )],
+    );
+    wowlua(&project, &home)
+        .args(["publish", "--allow-dirty", "--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("counts"));
+}

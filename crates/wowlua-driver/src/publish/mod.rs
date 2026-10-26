@@ -43,6 +43,19 @@ pub struct PublishRequest {
     /// read from what `wowlua login` saved (the OS credential store may wait
     /// for the user to allow it).
     pub status: Option<crate::Status>,
+    /// Step 3: runs `wowlua test` after the checks, before packaging; false
+    /// stops the publish. `None` with `--no-test`.
+    pub tests: Option<Tests>,
+}
+
+/// The test run of a publish (the CLI's `wowlua test`).
+#[derive(Clone)]
+pub struct Tests(pub std::rc::Rc<dyn Fn() -> bool>);
+
+impl std::fmt::Debug for Tests {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Tests")
+    }
 }
 
 /// What happened.
@@ -118,6 +131,8 @@ pub fn publish(
     }
     let mut package_request = request.package.clone();
     let mut commit = None;
+    // A `--tag` that does not exist yet is made once the tests passed.
+    let mut new_tag: Option<String> = None;
     if let Some(tag) = &request.tag {
         if !packager {
             let version = first
@@ -164,32 +179,43 @@ pub fn publish(
                 ));
                 package_request.tag = Some(tag.clone());
             }
-            None => {
-                // An annotated tag needs a tagger; CI runners often have none.
-                let identity = git(&repo, &["config", "user.email"]).is_some();
-                let mut args = vec![];
-                if !identity {
-                    args.extend([
-                        "-c",
-                        "user.name=wowlua",
-                        "-c",
-                        "user.email=wowlua@localhost",
-                    ]);
-                }
-                args.extend(["tag", "-a", tag, "-m", tag]);
-                if git(&repo, &args).is_none() {
-                    session.push(
-                        Diagnostic::plain_error(format!("cannot create the tag `{tag}`"))
-                            .with_path(&repo),
-                    );
-                    return None;
-                }
-                report.notes.push(format!(
-                    "created the tag `{tag}` (local; the GitHub release creates it remotely)"
-                ));
-            }
+            None => new_tag = Some(tag.clone()),
         }
         commit = head;
+    }
+    // Step 3: the tests.
+    if let Some(tests) = &request.tests
+        && !(tests.0)()
+    {
+        session.push(
+            Diagnostic::plain_error("the tests failed; nothing was published")
+                .with_path(&repo)
+                .with_help("fix them, or pass `--no-test` to publish without running them"),
+        );
+        return None;
+    }
+    if let Some(tag) = new_tag.as_deref() {
+        // An annotated tag needs a tagger; CI runners often have none.
+        let identity = git(&repo, &["config", "user.email"]).is_some();
+        let mut args = vec![];
+        if !identity {
+            args.extend([
+                "-c",
+                "user.name=wowlua",
+                "-c",
+                "user.email=wowlua@localhost",
+            ]);
+        }
+        args.extend(["tag", "-a", tag, "-m", tag]);
+        if git(&repo, &args).is_none() {
+            session.push(
+                Diagnostic::plain_error(format!("cannot create the tag `{tag}`")).with_path(&repo),
+            );
+            return None;
+        }
+        report.notes.push(format!(
+            "created the tag `{tag}` (local; the GitHub release creates it remotely)"
+        ));
     }
     // Registry targets (§11.8) upload an archive, not a zip.
     let registry_jobs = registry::plan(session, projects, &request.package.targets);
