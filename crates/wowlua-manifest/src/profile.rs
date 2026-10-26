@@ -41,6 +41,8 @@ impl BuiltinProfile {
                 "debug": true, "assertions": true, "log-level": "debug",
                 "instrument": "all", "runtime-checks": "exports",
                 "profile-errors": false, "reflection": "decorated",
+                "profile-call-paths": false, "profile-garbage": false,
+                "frame-budget": 1.0, "slow-call": 2.0,
                 "dev-console": true, "monitor": true, "capture-errors": true, "source-maps": true,
                 "bundle": false, "minify": "none", "minify-libraries": false,
                 "optimize": { "inline": false, "cache-globals": "off", "dead-code": false },
@@ -49,6 +51,8 @@ impl BuiltinProfile {
                 "debug": false, "assertions": false, "log-level": "warn",
                 "instrument": "none", "runtime-checks": "none",
                 "profile-errors": false, "reflection": "decorated",
+                "profile-call-paths": false, "profile-garbage": false,
+                "frame-budget": 1.0, "slow-call": 2.0,
                 "dev-console": false, "monitor": false, "capture-errors": false, "source-maps": true,
                 "bundle": true, "minify": "strip", "minify-libraries": false,
                 "optimize": { "inline": true, "cache-globals": "safe", "dead-code": true },
@@ -57,6 +61,8 @@ impl BuiltinProfile {
                 "debug": true, "assertions": true, "log-level": "trace",
                 "instrument": "none", "runtime-checks": "all",
                 "profile-errors": false, "reflection": "all",
+                "profile-call-paths": false, "profile-garbage": false,
+                "frame-budget": 1.0, "slow-call": 2.0,
                 "dev-console": false, "monitor": false, "capture-errors": false, "source-maps": true,
                 "bundle": false, "minify": "none", "minify-libraries": false,
                 "optimize": { "inline": false, "cache-globals": "off", "dead-code": false },
@@ -87,6 +93,14 @@ pub struct Profile {
     pub instrument: Instrument,
     pub runtime_checks: RuntimeChecks,
     pub profile_errors: bool,
+    /// The dev window starts with call paths switched on (§7.3.2).
+    pub profile_call_paths: bool,
+    /// The dev window starts with garbage per function switched on (§7.3.3).
+    pub profile_garbage: bool,
+    /// The starting frame budget in ms (§7.3.1).
+    pub frame_budget: f64,
+    /// The starting slow-call threshold in ms (§7.3.1).
+    pub slow_call: f64,
     pub reflection: Reflection,
     pub dev_console: bool,
     pub monitor: bool,
@@ -303,6 +317,22 @@ mod tests {
         assert_eq!(beta.config["max"], 100);
         assert_eq!(beta.config["channel"], "SYSTEM");
         assert_eq!(beta.config["nested"], json!({ "a": 1, "b": 3 }));
+    }
+
+    /// The dev window's starting switches and thresholds (spec §9.9,
+    /// decision T174): off, 1 ms and 2 ms unless a profile sets them.
+    #[test]
+    fn performance_settings() {
+        let m = manifest(json!({ "profiles": {
+            "dev": { "profile-call-paths": true, "frame-budget": 0.5 },
+            "raid": { "inherits": "dev", "profile-garbage": true, "slow-call": 4 }
+        }}));
+        let release = resolve(&m, "release").unwrap();
+        assert!(!release.profile_call_paths && !release.profile_garbage);
+        assert_eq!((release.frame_budget, release.slow_call), (1.0, 2.0));
+        let raid = resolve(&m, "raid").unwrap();
+        assert!(raid.profile_call_paths && raid.profile_garbage);
+        assert_eq!((raid.frame_budget, raid.slow_call), (0.5, 4.0));
     }
 
     #[test]

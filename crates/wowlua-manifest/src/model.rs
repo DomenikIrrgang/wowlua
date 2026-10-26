@@ -702,6 +702,21 @@ pub struct ProfileSettings {
     pub runtime_checks: Option<RuntimeChecks>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile_errors: Option<bool>,
+    /// Start the dev window with call paths switched on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_call_paths: Option<bool>,
+    /// Start the dev window with garbage per function switched on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_garbage: Option<bool>,
+    /// The dev window's starting frame budget, in milliseconds (default 1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0))]
+    pub frame_budget: Option<f64>,
+    /// The dev window's starting slow-call threshold, in milliseconds
+    /// (default 2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0))]
+    pub slow_call: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reflection: Option<Reflection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

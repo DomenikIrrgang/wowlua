@@ -732,6 +732,21 @@ fn profiles(manifest: &Manifest, ctx: &mut Ctx) {
                 "unknown level",
             );
         }
+        for (key, value) in [
+            ("frame-budget", settings.frame_budget),
+            ("slow-call", settings.slow_call),
+        ] {
+            if let Some(ms) = value
+                && ms < 0.0
+            {
+                ctx.error(
+                    "E4002",
+                    &path.clone().key(key),
+                    format!("`{key}` is a time in milliseconds and cannot be negative"),
+                    "negative time",
+                );
+            }
+        }
         if let Some(config) = &settings.config {
             for (key_path, reason) in profile::config_mismatches(&manifest.config, config) {
                 let mut p = path.clone().key("config");
@@ -1126,6 +1141,23 @@ mod tests {
                 r#"{{ {PKG}, "publish": {{ "targets": {{ "cf": {{ "type": "curseforge" }} }} }} }}"#
             )),
             vec!["E4002"]
+        );
+    }
+
+    /// `frame-budget` and `slow-call` are milliseconds, never negative.
+    #[test]
+    fn performance_thresholds() {
+        assert!(
+            codes(&format!(
+                r#"{{ {PKG}, "profiles": {{ "dev": {{ "frame-budget": 0.5, "slow-call": 4, "profile-call-paths": true, "profile-garbage": false }} }} }}"#
+            ))
+            .is_empty()
+        );
+        assert_eq!(
+            codes(&format!(
+                r#"{{ {PKG}, "profiles": {{ "dev": {{ "frame-budget": -1, "slow-call": -0.5 }} }} }}"#
+            )),
+            vec!["E4002", "E4002"]
         );
     }
 

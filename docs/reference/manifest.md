@@ -477,10 +477,20 @@ The debugging settings, with their built-in values. What each does is in
 | `runtime-checks` | `"none"`, `"exports"`, `"all"` | `"exports"` | `"all"` | `"none"` |
 | `reflection` | `"none"`, `"decorated"`, `"all"` | `"decorated"` | `"all"` | `"decorated"` |
 | `profile-errors` | bool | `false` | `false` | `false` |
+| `profile-call-paths` | bool | `false` | `false` | `false` |
+| `profile-garbage` | bool | `false` | `false` | `false` |
+| `frame-budget` | number (ms) | `1` | `1` | `1` |
+| `slow-call` | number (ms) | `2` | `2` | `2` |
 | `dev-console` | bool | `true` | `false` | `false` |
 | `monitor` | bool | `true` | `false` | `false` |
 | `capture-errors` | bool | `true` | `false` | `false` |
 | `source-maps` | bool | `true` | `true` | `true` |
+
+`profile-call-paths` and `profile-garbage` start the dev window with call
+paths or garbage per function switched on, and `frame-budget` and
+`slow-call` are its starting frame budget and slow-call threshold. The
+window can change all four while the game runs and remembers them per
+addon.
 
 `minify-libraries` (default `false`) applies the minification level to Lua
 library dependencies too. `line-mode` (`"preserve"`, `"statement"` or
