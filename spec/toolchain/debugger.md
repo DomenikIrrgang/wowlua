@@ -409,6 +409,29 @@ T310).
   feral abilities cost 2 less, Improved Thunder Clap), spells changed by
   the server beyond its hotfixes (Hunter's Mark shows half its table's
   value).
+
+  The talent trees (decision T435) are the client's where its tables are
+  at hand: a tree's nodes (`TraitNode`, by ID), each node's entries,
+  groups, conditions and edges in their tables' order
+  (`TraitNodeXTraitNodeEntry`, `TraitNodeGroupXTraitNode`,
+  `TraitNodeXTraitCond` then its groups' `TraitNodeGroupXTraitCond`,
+  `TraitEdge`), an entry's definition and ranks (`TraitNodeEntry`), a
+  definition's spell and overrides (`TraitDefinition`), a rank's cost
+  (the node's own or its groups' costs, else its tree's:
+  `TraitTreeXTraitCost`, `TraitCost`), whether its ranks can be refunded
+  (the tree's flags), and a condition's points to spend in its node group
+  (a tab of the tree; else its tree), its flags and its tooltip
+  (`TraitCond`, `SharedString`). `C_Traits.GetTreeNodes`, `GetNodeInfo`,
+  `GetEntryInfo`, `GetDefinitionInfo`, `GetNodeCost` and
+  `GetConditionInfo` answer from them; a node or entry the build lacks
+  answers nothing. The character's own part stays the recording's (its
+  configs and their trees, the ranks bought, the currencies' maxima, the
+  traits' descriptions), as do the trees without the tables. Checked
+  against the recorded answers of 11 characters (3,578 answers,
+  `wowlua-render`'s installation test): the same, except the five mage
+  nodes the build changed since the recording. Unverified: costs of a
+  node's own besides its tree's, conditions of quests, achievements or
+  levels (camelot's have none: they count as met).
 - **Fonts**: the client's TrueType fonts from the installation; without
   them, the bundled stand-in fonts (open licenses), at the same pixel
   heights. Glyph positions follow the engine's measured widths (§17.6), so

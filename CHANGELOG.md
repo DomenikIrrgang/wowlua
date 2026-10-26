@@ -36,6 +36,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- With your WoW installation (`wowlua test --game-data`, `wowlua data pull`, the playground), camelot's talent trees come from your client's game tables: nodes, entries, connections, costs and "Spend N more points" requirements match the build you play, and such a requirement counts only the points spent in its own tab.
 - `if flavor == …` branches count for E8300, E8310 and E8330: a call is checked only for the flavors that run it.
 - The router's help and `Usage:` lines start with the slash command (`/mya scale <number>`).
 - Using a possibly secret value as a table key is E2040 (W2040 in basic mode).

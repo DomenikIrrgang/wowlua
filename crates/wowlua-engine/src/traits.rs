@@ -3,9 +3,10 @@
 //! `data/camelot-traits.txt` by class) and as their ranks change: a rank
 //! bought is staged at once, applied (`CommitConfig`) on the server's word.
 //!
-//! The trees' structure is the recording's (nodes, entries, definitions,
-//! edges, conditions, costs, currencies' maxima); the ranks are the
-//! engine's (the recording's unless the test sets them,
+//! The trees' structure is the client's `Trait` tables' where the VM has
+//! them (decision T435: nodes, entries, definitions, groups, edges,
+//! conditions, costs), else the recording's; the character's configs and
+//! currencies' maxima are the recording's; the ranks are the engine's (the recording's unless the test sets them,
 //! `e.setTraitRanks(config, { [node] = rank })`), and every answer that
 //! follows from them is worked out: a node's ranks and next entry, whether
 //! it is available, meets its edges, can be bought; a tree's currency; a
@@ -33,11 +34,12 @@
 //! the legacy recording, 0.07 s in the talents one).
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
 
+use crate::clientdata::{TraitNode, TraitTables};
 use crate::units::PLAYER;
 use crate::{engine, engine_mut, widgets};
 
@@ -68,6 +70,12 @@ const NEVER_PURCHASABLE: i64 = 2;
 const TIERED: f64 = 1.0;
 /// `Enum.TraitConditionType.Available`.
 const AVAILABLE: f64 = 0.0;
+/// `Enum.TraitTreeFlag.CannotRefund`.
+const CANNOT_REFUND: u32 = 1;
+/// `Enum.TraitCondFlag`: a gate, always met, sufficient.
+const IS_GATE: u32 = 1;
+const IS_ALWAYS_MET: u32 = 2;
+const IS_SUFFICIENT: u32 = 4;
 /// `Enum.TraitEdgeType`: one source suffices, every source is needed.
 const SUFFICIENT: f64 = 2.0;
 const REQUIRED: f64 = 3.0;
@@ -281,6 +289,47 @@ pub struct Model<'a> {
     /// The class talent points the player has earned, for the player's own
     /// configs (`stats::talent_points`), in place of the recorded ones.
     points: Option<i64>,
+    /// The client's trees, where its tables are at hand (decision T435):
+    /// their structure in place of the recording's.
+    client: Option<Arc<TraitTables>>,
+}
+
+/// An ID as the client's tables key it.
+fn uid(n: i64) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+/// A table's fields in the order the client lists them (by key).
+fn fields(mut f: Vec<(&str, Rv)>) -> Rv {
+    f.sort_by(|a, b| a.0.cmp(b.0));
+    Rv::Table(f.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+}
+
+fn num(n: impl Into<f64>) -> Rv {
+    Rv::Num(n.into())
+}
+
+fn nums(list: &[u32]) -> Rv {
+    Rv::list_of(list.iter().map(|&n| num(n)).collect())
+}
+
+/// Costs as `GetNodeCost` lists them.
+fn costs(list: &[(u32, u32)]) -> Rv {
+    Rv::list_of(
+        list.iter()
+            .map(|&(currency, amount)| fields(vec![("ID", num(currency)), ("amount", num(amount))]))
+            .collect(),
+    )
+}
+
+/// A call's number arguments (`C_Traits.GetEntryInfo(5999541, 129384)`).
+fn call_ints(call: &str) -> Vec<i64> {
+    call.split_once('(')
+        .map(|(_, rest)| rest.trim_end_matches(')'))
+        .unwrap_or_default()
+        .split(", ")
+        .filter_map(|a| a.parse().ok())
+        .collect()
 }
 
 impl<'a> Model<'a> {
@@ -290,7 +339,158 @@ impl<'a> Model<'a> {
             state,
             bare: false,
             points: None,
+            client: None,
         }
+    }
+
+    /// The model of a recorded character in a VM: its ranks, and the
+    /// client's trees where the VM has them.
+    fn of(vm: &'a Vm, class: &str) -> Model<'a> {
+        Model::new(class, &engine(vm).world.traits).with_client(crate::clientdata::traits(vm))
+    }
+
+    /// The model with the client's trees (`None`: the recording's).
+    pub fn with_client(mut self, client: Option<Arc<TraitTables>>) -> Model<'a> {
+        self.client = client;
+        self
+    }
+
+    /// The client's node.
+    fn shape(&self, node: i64) -> Option<&TraitNode> {
+        self.client.as_ref()?.nodes.get(&uid(node))
+    }
+
+    /// A node's structure: the client's (nothing bought yet: its ranks are
+    /// the engine's, `node`), else the recording's.
+    fn node_info(&self, config: i64, node: i64) -> Option<Rv> {
+        let Some(client) = &self.client else {
+            return self.recorded_node(config, node);
+        };
+        let n = client.nodes.get(&uid(node))?;
+        let max = self.max_ranks(config, node);
+        let first = n.entries.first().copied();
+        let entry =
+            |rank: u32| first.map(|e| fields(vec![("entryID", num(e)), ("rank", num(rank))]));
+        let mut f = vec![
+            ("ID", num(uid(node))),
+            ("activeRank", num(0)),
+            ("canPurchaseRank", Rv::Bool(false)),
+            ("canRefundRank", Rv::Bool(false)),
+            ("conditionIDs", nums(&n.conditions)),
+            ("currentRank", num(0)),
+            ("entryIDs", nums(&n.entries)),
+            ("entryIDsWithCommittedRanks", Rv::list_of(Vec::new())),
+            ("flags", num(n.flags)),
+            ("groupIDs", nums(&n.groups)),
+            ("isAvailable", Rv::Bool(false)),
+            ("isCascadeRepurchasable", Rv::Bool(false)),
+            ("isDisplayError", Rv::Bool(false)),
+            ("isVisible", Rv::Bool(true)),
+            ("maxRanks", num(max as f64)),
+            ("meetsEdgeRequirements", Rv::Bool(false)),
+            ("posX", num(n.x)),
+            ("posY", num(n.y)),
+            ("ranksIncreased", num(0)),
+            ("ranksPurchased", num(0)),
+            ("totalMaxRanks", num(max as f64)),
+            ("type", num(n.kind)),
+            (
+                "visibleEdges",
+                Rv::list_of(
+                    n.edges
+                        .iter()
+                        .map(|e| {
+                            fields(vec![
+                                ("isActive", Rv::Bool(false)),
+                                ("targetNode", num(e.target)),
+                                ("type", num(e.kind)),
+                                ("visualStyle", num(e.style)),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+        ];
+        if let Some(e) = entry(0) {
+            f.push(("activeEntry", e));
+        }
+        if let Some(e) = entry(1) {
+            f.push(("nextEntry", e));
+        }
+        // A tiered node's ranks increased by entry (recorded: the legacy
+        // trees' one tiered node, each of its entries 0).
+        if f64::from(n.kind) == TIERED {
+            f.push((
+                "entryIDToRanksIncreased",
+                Rv::Table(n.entries.iter().map(|e| (e.to_string(), num(0))).collect()),
+            ));
+        }
+        if n.sub_tree != 0 {
+            f.push(("subTreeID", num(n.sub_tree)));
+        }
+        Some(fields(f))
+    }
+
+    /// The answers the client's tables give (decision T435): a tree's
+    /// nodes, an entry, a definition, a node's cost. `None`: not one of
+    /// those, or no client; `Some(None)`: one the client lacks.
+    fn client_answer(&self, name: &str, call: &str) -> Option<Option<Rv>> {
+        let client = self.client.as_ref()?;
+        let args = call_ints(call);
+        let arg = |i: usize| args.get(i).copied().map(uid);
+        Some(match name {
+            "C_Traits.GetTreeNodes" => Some(Rv::list_of(
+                self.tree_nodes(args.first().copied()?)
+                    .into_iter()
+                    .map(|n| num(n as f64))
+                    .collect(),
+            )),
+            "C_Traits.GetNodeCost" => Some(costs(&self.cost_list(args.get(1).copied()?))),
+            "C_Traits.GetEntryInfo" => client.entries.get(&arg(1)?).map(|e| {
+                let config = args[0];
+                let available = e
+                    .conditions
+                    .iter()
+                    .all(|c| self.condition_met(config, *c as i64));
+                let mut f = vec![
+                    ("conditionIDs", nums(&e.conditions)),
+                    ("definitionID", num(e.definition)),
+                    ("entryCost", costs(&e.costs)),
+                    ("isAvailable", Rv::Bool(available)),
+                    ("isDisplayError", Rv::Bool(false)),
+                    ("maxRanks", num(e.max_ranks)),
+                    ("type", num(e.kind)),
+                ];
+                if e.sub_tree != 0 {
+                    f.push(("subTreeID", num(e.sub_tree)));
+                }
+                fields(f)
+            }),
+            "C_Traits.GetDefinitionInfo" => client.definitions.get(&arg(0)?).map(|d| {
+                let mut f = Vec::new();
+                for (k, v) in [
+                    ("overrideName", &d.override_name),
+                    ("overrideSubtext", &d.override_subtext),
+                    ("overrideDescription", &d.override_description),
+                ] {
+                    if !v.is_empty() {
+                        f.push((k, Rv::Str(v.clone())));
+                    }
+                }
+                for (k, v) in [
+                    ("spellID", d.spell),
+                    ("overrideIcon", d.override_icon),
+                    ("overriddenSpellID", d.overridden_spell),
+                    ("visibleSpellID", d.visible_spell),
+                ] {
+                    if v != 0 {
+                        f.push((k, num(v)));
+                    }
+                }
+                fields(f)
+            }),
+            _ => return None,
+        })
     }
 
     /// The model with the player's earned class talent points.
@@ -332,6 +532,13 @@ impl<'a> Model<'a> {
     }
 
     fn tree_nodes(&self, tree: i64) -> Vec<i64> {
+        if let Some(client) = &self.client {
+            return client
+                .trees
+                .get(&uid(tree))
+                .map(|t| t.nodes.iter().map(|&n| i64::from(n)).collect())
+                .unwrap_or_default();
+        }
         self.first(&format!("C_Traits.GetTreeNodes({tree})"))
             .map(|l| {
                 l.list()
@@ -402,6 +609,19 @@ impl<'a> Model<'a> {
 
     /// The spells of a node's entries (their definitions').
     fn node_spells(&self, config: i64, node: i64) -> Vec<i64> {
+        if let Some(client) = &self.client {
+            return self
+                .shape(node)
+                .map(|n| {
+                    n.entries
+                        .iter()
+                        .filter_map(|e| client.entries.get(e))
+                        .filter_map(|e| client.definitions.get(&e.definition))
+                        .map(|d| i64::from(d.spell))
+                        .collect()
+                })
+                .unwrap_or_default();
+        }
         let entries = self
             .recorded_node(config, node)
             .map(|n| n.nums("entryIDs"))
@@ -421,19 +641,61 @@ impl<'a> Model<'a> {
     }
 
     fn entry_max_ranks(&self, config: i64, entry: i64) -> i64 {
+        if let Some(client) = &self.client {
+            return client
+                .entries
+                .get(&uid(entry))
+                .map_or(1, |e| i64::from(e.max_ranks));
+        }
         self.first(&format!("C_Traits.GetEntryInfo({config}, {entry})"))
             .and_then(|e| e.num("maxRanks"))
             .unwrap_or(1.0) as i64
     }
 
     fn max_ranks(&self, config: i64, node: i64) -> i64 {
+        // A tiered node's: its entries' together, else its first entry's.
+        if let Some(n) = self.shape(node) {
+            let ranks = n
+                .entries
+                .iter()
+                .map(|&e| self.entry_max_ranks(config, i64::from(e)));
+            return if f64::from(n.kind) == TIERED {
+                ranks.sum()
+            } else {
+                ranks.take(1).sum::<i64>().max(1)
+            };
+        }
         self.recorded_node(config, node)
             .and_then(|n| n.num("maxRanks"))
             .unwrap_or(1.0) as i64
     }
 
+    /// A node's cost in the client's tables: its own (and its groups'),
+    /// else its tree's (recorded: every camelot node its tree's; unverified:
+    /// a node with costs of its own besides).
+    fn cost_list(&self, node: i64) -> Vec<(u32, u32)> {
+        let Some(n) = self.shape(node) else {
+            return Vec::new();
+        };
+        if !n.costs.is_empty() {
+            return n.costs.clone();
+        }
+        self.client
+            .as_ref()
+            .and_then(|c| c.trees.get(&n.tree))
+            .map(|t| t.costs.clone())
+            .unwrap_or_default()
+    }
+
     /// A node's cost: (currency, amount) a rank.
     fn cost(&self, config: i64, node: i64) -> Vec<(i64, i64)> {
+        if self.client.is_some() {
+            return self
+                .cost_list(node)
+                .into_iter()
+                .map(|(c, a)| (i64::from(c), i64::from(a)))
+                .collect();
+        }
         self.first(&format!("C_Traits.GetNodeCost({config}, {node})"))
             .map(|l| {
                 l.list()
@@ -453,9 +715,24 @@ impl<'a> Model<'a> {
         staged: bool,
         recorded: bool,
     ) -> i64 {
+        self.spent_where(config, currency, staged, recorded, |t, _| {
+            tree.is_none_or(|x| x == t)
+        })
+    }
+
+    /// Points of a currency spent in the config's nodes that `within`
+    /// (tree, node) holds.
+    fn spent_where(
+        &self,
+        config: i64,
+        currency: i64,
+        staged: bool,
+        recorded: bool,
+        within: impl Fn(i64, i64) -> bool,
+    ) -> i64 {
         self.nodes(config)
             .into_iter()
-            .filter(|(t, _)| tree.is_none_or(|x| x == *t))
+            .filter(|(t, n)| within(*t, *n))
             .map(|(_, n)| {
                 let rank = if recorded {
                     self.recorded_rank(config, n)
@@ -533,7 +810,44 @@ impl<'a> Model<'a> {
     /// points still to spend in its tree (its points: what the recording
     /// still lacked and had spent).
     pub fn condition(&self, config: i64, cond: i64) -> Option<Rv> {
-        let mut info = self.first(&format!("C_Traits.GetConditionInfo({config}, {cond})"))?;
+        if let Some(client) = &self.client {
+            // The client's: its points to spend in its tree (unverified:
+            // its other requirements, quests, achievements, levels; camelot's
+            // conditions have none).
+            let c = client.conditions.get(&uid(cond))?;
+            let mut f = vec![
+                ("condID", num(uid(cond))),
+                ("isAlwaysMet", Rv::Bool(c.flags & IS_ALWAYS_MET != 0)),
+                ("isGate", Rv::Bool(c.flags & IS_GATE != 0)),
+                ("isMet", Rv::Bool(true)),
+                ("isSufficient", Rv::Bool(c.flags & IS_SUFFICIENT != 0)),
+                ("type", num(c.kind)),
+            ];
+            if c.currency == 0 {
+                return Some(fields(f));
+            }
+            f.push(("traitCurrencyID", num(c.currency)));
+            f.push(("spentAmountRequired", num(c.spent)));
+            if let Some(t) = &c.tooltip {
+                f.push(("tooltipFormat", Rv::Str(t.clone())));
+            }
+            // In its node group (a tab: recorded, 266 of 266 conditions),
+            // else its tree.
+            let group = client.groups.get(&c.group);
+            let now =
+                self.spent_where(
+                    config,
+                    i64::from(c.currency),
+                    true,
+                    false,
+                    |t, n| match group {
+                        Some(nodes) if c.group != 0 => nodes.contains(&uid(n)),
+                        _ => t == i64::from(c.tree),
+                    },
+                );
+            return Some(Self::still_to_spend(fields(f), i64::from(c.spent) - now));
+        }
+        let info = self.first(&format!("C_Traits.GetConditionInfo({config}, {cond})"))?;
         let (Some(currency), Some(remaining)) =
             (info.num("traitCurrencyID"), info.num("spentAmountRequired"))
         else {
@@ -545,7 +859,13 @@ impl<'a> Model<'a> {
         let currency = currency as i64;
         let needed = remaining as i64 + self.spent(config, currency, Some(tree), false, true);
         let now = self.spent(config, currency, Some(tree), true, false);
-        let left = (needed - now).max(0);
+        Some(Self::still_to_spend(info, needed - now))
+    }
+
+    /// A spending condition with `left` points still to spend: met at 0
+    /// (without its tooltip), else its tooltip's text with the points.
+    fn still_to_spend(mut info: Rv, left: i64) -> Rv {
+        let left = left.max(0);
         info.set("isMet", Rv::Bool(left == 0));
         info.set("spentAmountRequired", Rv::Num(left as f64));
         if left == 0 {
@@ -557,7 +877,7 @@ impl<'a> Model<'a> {
                 .replacen("%s", "", 1);
             info.set("tooltipText", Rv::Str(format!("|cffff2020{text}|r")));
         }
-        Some(info)
+        info
     }
 
     fn condition_met(&self, config: i64, cond: i64) -> bool {
@@ -573,6 +893,23 @@ impl<'a> Model<'a> {
 
     /// The edges into a node: (source, type).
     fn edges_into(&self, config: i64, node: i64) -> Vec<(i64, f64)> {
+        // The client's: the edges of the nodes of its tree.
+        if let Some(client) = &self.client {
+            let Some(tree) = self.shape(node).and_then(|n| client.trees.get(&n.tree)) else {
+                return Vec::new();
+            };
+            return tree
+                .nodes
+                .iter()
+                .filter_map(|s| Some((*s, client.nodes.get(s)?)))
+                .flat_map(|(s, n)| {
+                    n.edges
+                        .iter()
+                        .filter(|e| e.target == uid(node))
+                        .map(move |e| (i64::from(s), f64::from(e.kind)))
+                })
+                .collect();
+        }
         let mut out = Vec::new();
         for (_, source) in self.nodes(config) {
             let Some(info) = self.recorded_node(config, source) else {
@@ -607,6 +944,12 @@ impl<'a> Model<'a> {
     }
 
     fn cannot_refund(&self, config: i64, node: i64) -> bool {
+        if let Some(client) = &self.client {
+            return self
+                .shape(node)
+                .and_then(|n| client.trees.get(&n.tree))
+                .is_some_and(|t| t.flags & CANNOT_REFUND != 0);
+        }
         self.tree_of(config, node)
             .and_then(|t| self.first(&format!("C_Traits.GetTreeInfo({config}, {t})")))
             .is_some_and(|t| t.flag("cannotRefund"))
@@ -639,7 +982,9 @@ impl<'a> Model<'a> {
     pub fn node(&self, config: i64, node: i64) -> Option<Rv> {
         // A node of a tree the config does not hold (recorded so, or not).
         if !self.bare && self.tree_of(config, node).is_none() {
+            // The client's node needs no host: its tree is its own.
             let (class, host) = match self.recorded_node(config, node) {
+                _ if self.client.is_some() => (self.class.clone(), config),
                 Some(_) => (self.class.clone(), config),
                 None => self.host(node)?,
             };
@@ -648,13 +993,14 @@ impl<'a> Model<'a> {
                 state: self.state,
                 bare: true,
                 points: None,
+                client: self.client.clone(),
             };
             let mut info = bare.node(host, node)?;
             info.set("canPurchaseRank", Rv::Bool(false));
             info.set("canRefundRank", Rv::Bool(false));
             return Some(info);
         }
-        let mut info = self.recorded_node(config, node)?;
+        let mut info = self.node_info(config, node)?;
         let rank = self.rank(config, node, true);
         let max = self.max_ranks(config, node);
         let available = info
@@ -668,7 +1014,11 @@ impl<'a> Model<'a> {
         // node's entries one after another (recorded: rank 5 of five
         // one-rank entries is the fifth at 1; rank 0 the first at 0), else
         // the node's entry (the one it shows).
-        let shown = info
+        // (the recorded choice of a node of entries to choose from)
+        let shown = self
+            .recorded_node(config, node)
+            .filter(|_| !self.bare)
+            .unwrap_or_else(|| info.clone())
             .get("activeEntry")
             .and_then(|e| e.num("entryID"))
             .map(|e| e as i64)
@@ -760,6 +1110,12 @@ impl<'a> Model<'a> {
 
     /// The edges' targets of a node.
     fn targets(&self, config: i64, node: i64) -> Vec<i64> {
+        if self.client.is_some() {
+            return self
+                .shape(node)
+                .map(|n| n.edges.iter().map(|e| i64::from(e.target)).collect())
+                .unwrap_or_default();
+        }
         self.recorded_node(config, node)
             .and_then(|i| i.get("visibleEdges").cloned())
             .map(|e| {
@@ -802,7 +1158,7 @@ fn characters() -> &'static [&'static str] {
 
 fn model(vm: &Vm) -> Model<'_> {
     let key = character(vm);
-    Model::new(&key, &engine(vm).world.traits)
+    Model::of(vm, &key)
 }
 
 /// The inspected config (`-1`): the recorded character the test named
@@ -905,7 +1261,13 @@ fn recorded(vm: &mut Vm, c: NativeCall) -> Ret {
         call = call.replacen("(-1", &format!("({real}"), 1);
         key = k;
     }
-    let m = Model::new(&key, &engine(vm).world.traits);
+    let m = Model::of(vm, &key);
+    // The trees' structure: the client's where its tables are at hand.
+    if m.known()
+        && let Some(rv) = m.client_answer(&name, &call)
+    {
+        return Ok(answer(vm, rv));
+    }
     if m.known()
         && let Some(values) = m.recorded(&call)
     {
@@ -967,7 +1329,7 @@ fn get_node_info(vm: &mut Vm, c: NativeCall) -> Ret {
             return Ok(vec![]);
         };
         let (key, config, viewed) = resolve(vm, config);
-        let mut rv = Model::new(&key, &engine(vm).world.traits).node(config, node);
+        let mut rv = Model::of(vm, &key).node(config, node);
         // Another's talents viewed: nothing to buy or take back.
         if viewed && let Some(info) = rv.as_mut() {
             info.set("canPurchaseRank", Rv::Bool(false));
@@ -983,7 +1345,7 @@ fn get_condition_info(vm: &mut Vm, c: NativeCall) -> Ret {
             return Ok(vec![]);
         };
         let (key, config, _) = resolve(vm, config);
-        let rv = Model::new(&key, &engine(vm).world.traits).condition(config, cond);
+        let rv = Model::of(vm, &key).condition(config, cond);
         Ok(answer(vm, rv))
     })
 }
@@ -1005,7 +1367,7 @@ fn get_tree_currency_info(vm: &mut Vm, c: NativeCall) -> Ret {
         let (key, config, viewed) = resolve(vm, config);
         // The player's own talents: the points their level earned.
         let points = (!viewed).then(|| crate::stats::talent_points(vm) as i64);
-        let mut m = Model::new(&key, &engine(vm).world.traits);
+        let mut m = Model::of(vm, &key);
         if let Some(p) = points {
             m = m.with_points(p);
         }
@@ -1037,17 +1399,14 @@ fn bare_tree_currency(vm: &Vm, tree: i64, exclude: bool) -> Option<Rv> {
     // of the class trees); the same on every run (the data's order is a
     // hash map's).
     hosts.sort_unstable();
-    let owns = |(class, config): &(&str, i64)| {
-        Model::new(class, &engine(vm).world.traits)
-            .trees(*config)
-            .contains(&tree)
-    };
+    let owns = |(class, config): &(&str, i64)| Model::of(vm, class).trees(*config).contains(&tree);
     let (class, config) = hosts.iter().find(|h| owns(h)).or(hosts.first()).copied()?;
     let bare = Model {
         class: class.to_string(),
         state: &engine(vm).world.traits,
         bare: true,
         points: None,
+        client: crate::clientdata::traits(vm),
     };
     bare.tree_currency(config, tree, exclude)
 }
@@ -1561,30 +1920,84 @@ pub fn behaviours(flavor: &str) -> Vec<(&'static str, NativeFn)> {
     ]
 }
 
+/// The fields two answers differ in: ours, theirs.
+fn differences(ours: &Option<Rv>, theirs: &Option<Rv>) -> String {
+    let (Some(Rv::Table(a)), Some(Rv::Table(b))) = (ours, theirs) else {
+        return format!("{ours:?} / {theirs:?}");
+    };
+    let mut out = Vec::new();
+    for (k, v) in a {
+        match b.iter().find(|(kb, _)| kb == k) {
+            Some((_, w)) if w == v => {}
+            Some((_, w)) => out.push(format!("{k}: {v:?} / {w:?}")),
+            None => out.push(format!("{k}: {v:?} / -")),
+        }
+    }
+    for (k, w) in b {
+        if !a.iter().any(|(ka, _)| ka == k) {
+            out.push(format!("{k}: - / {w:?}"));
+        }
+    }
+    out.join("; ")
+}
+
+/// The recorded answers again from the client's trees and the recorded
+/// ranks (decision T435): the number compared and those that differ.
+/// Every node, entry, definition, cost, condition and tree currency of
+/// every recorded class.
+pub fn compare_with_recording(client: Arc<TraitTables>) -> (usize, Vec<String>) {
+    let state = Traits::default();
+    let mut checked = 0;
+    let mut wrong = Vec::new();
+    let mut calls: Vec<_> = data().iter().collect();
+    calls.sort_unstable();
+    for ((class, call), answer) in calls {
+        let m = Model::new(class, &state).with_client(Some(client.clone()));
+        let args = call_ints(call);
+        let name = call.split('(').next().unwrap_or_default();
+        let ours = match name {
+            "C_Traits.GetNodeInfo" => m.node(args[0], args[1]),
+            "C_Traits.GetConditionInfo" => m.condition(args[0], args[1]),
+            "C_Traits.GetTreeCurrencyInfo" => {
+                // Only the configs the model knows the trees of.
+                if !m.trees(args[0]).contains(&args[1]) {
+                    continue;
+                }
+                m.tree_currency(args[0], args[1], call.ends_with("true)"))
+            }
+            _ => match m.client_answer(name, call) {
+                Some(rv) => rv,
+                None => continue,
+            },
+        };
+        let theirs = Rv::answer(answer).into_iter().next();
+        let (ours, theirs) = (ours.map(canonical), theirs.map(canonical));
+        if ours != theirs {
+            wrong.push(format!("{class} {call}: {}", differences(&ours, &theirs)));
+        }
+        checked += 1;
+    }
+    (checked, wrong)
+}
+
+/// An answer with its tables' fields in one order (a Lua table has none):
+/// numbers' keys by number, the others by name.
+fn canonical(rv: Rv) -> Rv {
+    let Rv::Table(fields) = rv else {
+        return rv;
+    };
+    let mut fields: Vec<(String, Rv)> =
+        fields.into_iter().map(|(k, v)| (k, canonical(v))).collect();
+    fields.sort_by(|a, b| match (a.0.parse::<f64>(), b.0.parse::<f64>()) {
+        (Ok(x), Ok(y)) => x.total_cmp(&y),
+        _ => a.0.cmp(&b.0),
+    });
+    Rv::Table(fields)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The fields two answers differ in: ours, theirs.
-    fn differences(ours: &Option<Rv>, theirs: &Option<Rv>) -> String {
-        let (Some(Rv::Table(a)), Some(Rv::Table(b))) = (ours, theirs) else {
-            return format!("{ours:?} / {theirs:?}");
-        };
-        let mut out = Vec::new();
-        for (k, v) in a {
-            match b.iter().find(|(kb, _)| kb == k) {
-                Some((_, w)) if w == v => {}
-                Some((_, w)) => out.push(format!("{k}: {v:?} / {w:?}")),
-                None => out.push(format!("{k}: {v:?} / -")),
-            }
-        }
-        for (k, w) in b {
-            if !a.iter().any(|(ka, _)| ka == k) {
-                out.push(format!("{k}: - / {w:?}"));
-            }
-        }
-        out.join("; ")
-    }
 
     /// A fixture's entries (`["call"] = "answer",`, Lua's escapes).
     fn fixture(text: &str) -> Vec<(String, String)> {
@@ -1623,6 +2036,119 @@ mod tests {
                 Some((lua(k), lua(v)))
             })
             .collect()
+    }
+
+    /// The client's trees (decision T435): a hand-made tree in place of the
+    /// recorded druid's (config 22147, tree 1089), two tabs (node groups 1
+    /// and 2), a condition of 2 points spent in the first tab.
+    #[test]
+    fn the_client_trees_give_the_structure() {
+        use crate::clientdata::{
+            TraitCondition, TraitDefinition, TraitEntry, TraitNode, TraitTree,
+        };
+        let mut t = TraitTables::default();
+        t.trees.insert(
+            1089,
+            TraitTree {
+                flags: CANNOT_REFUND,
+                nodes: vec![1001, 1002, 1003],
+                costs: vec![(3820, 1)],
+            },
+        );
+        for (id, group, conditions) in [(1001, 1, vec![]), (1002, 1, vec![900]), (1003, 2, vec![])]
+        {
+            t.nodes.insert(
+                id,
+                TraitNode {
+                    tree: 1089,
+                    entries: vec![id + 1000],
+                    groups: vec![group],
+                    conditions,
+                    ..Default::default()
+                },
+            );
+            t.entries.insert(
+                id + 1000,
+                TraitEntry {
+                    definition: id + 2000,
+                    max_ranks: 5,
+                    ..Default::default()
+                },
+            );
+            t.definitions.insert(
+                id + 2000,
+                TraitDefinition {
+                    spell: id + 3000,
+                    ..Default::default()
+                },
+            );
+        }
+        t.groups.insert(1, vec![1001, 1002]);
+        t.groups.insert(2, vec![1003]);
+        t.conditions.insert(
+            900,
+            TraitCondition {
+                tree: 1089,
+                group: 1,
+                currency: 3820,
+                spent: 2,
+                tooltip: Some("Spend %d more |4point:points; in %s".into()),
+                ..Default::default()
+            },
+        );
+        let client = Arc::new(t);
+        let mut state = Traits::default();
+        let available = |state: &Traits| {
+            let m = Model::new("DRUID-22147", state).with_client(Some(client.clone()));
+            let node = m.node(22147, 1002).unwrap();
+            (node.flag("isAvailable"), m.condition(22147, 900).unwrap())
+        };
+        // Points in the other tab do not count.
+        state.committed.insert((22147, 1003), 5);
+        let (open, cond) = available(&state);
+        assert!(!open);
+        assert_eq!(cond.num("spentAmountRequired"), Some(2.0));
+        assert_eq!(
+            cond.get("tooltipText"),
+            Some(&Rv::Str(
+                "|cffff2020Spend 2 more |4point:points; in |r".into()
+            ))
+        );
+        state.committed.insert((22147, 1001), 2);
+        let (open, cond) = available(&state);
+        assert!(open);
+        assert!(cond.flag("isMet"));
+        assert_eq!(cond.get("tooltipText"), None);
+
+        let m = Model::new("DRUID-22147", &state).with_client(Some(client.clone()));
+        assert_eq!(m.tree_nodes(1089), [1001, 1002, 1003]);
+        assert_eq!(m.node_spells(22147, 1001), [4001]);
+        let node = m.node(22147, 1001).unwrap();
+        assert_eq!(node.num("ranksPurchased"), Some(2.0));
+        assert_eq!(node.num("maxRanks"), Some(5.0));
+        // A recorded node the build lacks: none.
+        assert_eq!(m.node(22147, 104925), None);
+        let entry = m
+            .client_answer(
+                "C_Traits.GetEntryInfo",
+                "C_Traits.GetEntryInfo(22147, 2001)",
+            )
+            .flatten()
+            .unwrap();
+        assert_eq!(entry.num("definitionID"), Some(3001.0));
+        let def = m
+            .client_answer(
+                "C_Traits.GetDefinitionInfo",
+                "C_Traits.GetDefinitionInfo(3001)",
+            )
+            .flatten()
+            .unwrap();
+        assert_eq!(def, fields(vec![("spellID", num(4001))]));
+        let cost = m
+            .client_answer("C_Traits.GetNodeCost", "C_Traits.GetNodeCost(22147, 1001)")
+            .flatten()
+            .unwrap();
+        assert_eq!(cost, costs(&[(3820, 1)]));
     }
 
     /// Another class's node asked through the class config answers as with

@@ -1,8 +1,10 @@
 //! The client's own tables, where the host has the user's installation
 //! (spec debugger §18.10, decision T321): model scenes, their cameras and
-//! actors (`C_ModelInfo`), items, creatures, spells (decision T391). Without one, the engine answers as before:
+//! actors (`C_ModelInfo`), items, creatures, spells (decision T391), talent
+//! trees (decision T435). Without one, the engine answers as before:
 //! nothing.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use wowlua_vm::stdlib::Ret;
@@ -160,6 +162,116 @@ pub trait ClientData: Send + Sync {
     fn glyph(&self, _font: &str, _px: u32, _c: char) -> Option<(f32, f32)> {
         None
     }
+    /// The talent trees of the client's `Trait` tables (decision T435).
+    fn traits(&self) -> Option<Arc<TraitTables>> {
+        None
+    }
+}
+
+/// The client's talent trees (its `Trait` tables), by ID: their nodes,
+/// entries, definitions, edges, conditions and costs.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TraitTables {
+    pub trees: HashMap<u32, TraitTree>,
+    pub nodes: HashMap<u32, TraitNode>,
+    pub entries: HashMap<u32, TraitEntry>,
+    pub definitions: HashMap<u32, TraitDefinition>,
+    pub conditions: HashMap<u32, TraitCondition>,
+    /// The nodes of each node group (`TraitNodeGroupXTraitNode`).
+    pub groups: HashMap<u32, Vec<u32>>,
+}
+
+/// A trait tree (`TraitTree`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TraitTree {
+    /// `Enum.TraitTreeFlag` bits (1: its ranks cannot be refunded).
+    pub flags: u32,
+    /// Its nodes, by ID.
+    pub nodes: Vec<u32>,
+    /// What a rank of its nodes costs: (trait currency, amount)
+    /// (`TraitTreeXTraitCost`).
+    pub costs: Vec<(u32, u32)>,
+}
+
+/// A trait node (`TraitNode` and its joins).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TraitNode {
+    pub tree: u32,
+    pub x: i32,
+    pub y: i32,
+    /// `Enum.TraitNodeType`.
+    pub kind: u32,
+    /// `Enum.TraitNodeFlag` bits.
+    pub flags: u32,
+    pub sub_tree: u32,
+    /// Its entries, in their index's order.
+    pub entries: Vec<u32>,
+    /// Its groups, in their index's order.
+    pub groups: Vec<u32>,
+    /// Its own conditions, then its groups' (by ID).
+    pub conditions: Vec<u32>,
+    /// What a rank costs beyond its tree's: its own costs, then its
+    /// groups'.
+    pub costs: Vec<(u32, u32)>,
+    /// The edges from it to the nodes it unlocks, by ID.
+    pub edges: Vec<TraitEdge>,
+}
+
+/// An edge from a node to one it unlocks (`TraitEdge`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TraitEdge {
+    pub target: u32,
+    /// `Enum.TraitEdgeType`.
+    pub kind: u32,
+    /// `Enum.TraitEdgeVisualStyle`.
+    pub style: u32,
+}
+
+/// A node's entry (`TraitNodeEntry`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TraitEntry {
+    pub definition: u32,
+    pub max_ranks: u32,
+    /// `Enum.TraitNodeEntryType`.
+    pub kind: u32,
+    pub sub_tree: u32,
+    pub conditions: Vec<u32>,
+    pub costs: Vec<(u32, u32)>,
+}
+
+/// What an entry gives (`TraitDefinition`); 0 and empty for none.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TraitDefinition {
+    pub spell: u32,
+    pub override_name: String,
+    pub override_subtext: String,
+    pub override_description: String,
+    pub override_icon: u32,
+    pub overridden_spell: u32,
+    pub visible_spell: u32,
+}
+
+/// A condition of nodes (`TraitCond`): the points of a currency to spend
+/// in its node group (a tab of a talent tree), else its tree, first.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TraitCondition {
+    /// `Enum.TraitConditionType`.
+    pub kind: u32,
+    /// `Enum.TraitCondFlag` bits (1 a gate, 2 always met, 4 sufficient).
+    pub flags: u32,
+    pub tree: u32,
+    /// The node group the points are spent in, 0 for the tree.
+    pub group: u32,
+    pub currency: u32,
+    /// The points to spend, 0 for none.
+    pub spent: u32,
+    /// "Spend %d more |4point:points; in %s …" (its `SharedString`).
+    pub tooltip: Option<String>,
+}
+
+/// The client's talent trees, where its tables are at hand.
+pub(crate) fn traits(vm: &Vm) -> Option<Arc<TraitTables>> {
+    data(vm)?.traits()
 }
 
 /// A spell of the client's tables: its name, rank, icon, cast time,

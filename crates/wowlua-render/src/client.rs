@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use wowlua_casc::FsStorage;
 use wowlua_casc::display::{Display, Library};
 use wowlua_casc::{Casc, Rgba};
+use wowlua_engine::clientdata::TraitTables;
 use wowlua_engine::scene::{Image, ModelSource};
 
 use crate::Assets;
@@ -88,6 +89,213 @@ fn library_of(casc: &Arc<Casc>) -> Arc<Mutex<Library>> {
         return Arc::new(Mutex::new(Library::default()));
     };
     m.entry(key).or_default().clone()
+}
+
+/// The talent trees of a build's `Trait` tables (decision T435); `None`
+/// where the build has no trees.
+pub fn trait_tables(casc: &Casc) -> Option<TraitTables> {
+    use wowlua_casc::tables::Table;
+    use wowlua_engine::clientdata::{
+        TraitCondition, TraitDefinition, TraitEdge, TraitEntry, TraitNode, TraitTree,
+    };
+    let open = |name: &str| Table::open(casc, name);
+    let trees = open("TraitTree")?;
+    let nodes = open("TraitNode")?;
+    // (parent, index or ID, child) by parent, in order.
+    let joined = |table: &str, parent: &'static str, child: &'static str, index: bool| {
+        let mut by: HashMap<u32, Vec<(u32, u32)>> = HashMap::new();
+        if let Some(t) = open(table) {
+            for r in t.rows() {
+                let order = if index { r.int("Index") } else { r.id() };
+                by.entry(r.int(parent))
+                    .or_default()
+                    .push((order, r.int(child)));
+            }
+        }
+        by.into_iter()
+            .map(|(k, mut v)| {
+                v.sort_unstable();
+                (k, v.into_iter().map(|(_, c)| c).collect::<Vec<u32>>())
+            })
+            .collect::<HashMap<u32, Vec<u32>>>()
+    };
+    let costs: HashMap<u32, (u32, u32)> = open("TraitCost")
+        .map(|t| {
+            t.rows()
+                .map(|r| (r.id(), (r.int("TraitCurrencyID"), r.int("Amount"))))
+                .collect()
+        })
+        .unwrap_or_default();
+    let cost_list = |ids: Option<&Vec<u32>>| -> Vec<(u32, u32)> {
+        ids.into_iter()
+            .flatten()
+            .filter_map(|c| costs.get(c).copied())
+            .collect()
+    };
+    let node_entries = joined(
+        "TraitNodeXTraitNodeEntry",
+        "TraitNodeID",
+        "TraitNodeEntryID",
+        true,
+    );
+    let node_groups = joined(
+        "TraitNodeGroupXTraitNode",
+        "TraitNodeID",
+        "TraitNodeGroupID",
+        true,
+    );
+    let node_conds = joined("TraitNodeXTraitCond", "TraitNodeID", "TraitCondID", false);
+    let group_conds = joined(
+        "TraitNodeGroupXTraitCond",
+        "TraitNodeGroupID",
+        "TraitCondID",
+        false,
+    );
+    let node_costs = joined("TraitNodeXTraitCost", "TraitNodeID", "TraitCostID", false);
+    let group_costs = joined(
+        "TraitNodeGroupXTraitCost",
+        "TraitNodeGroupID",
+        "TraitCostID",
+        false,
+    );
+    let tree_costs = joined("TraitTreeXTraitCost", "TraitTreeID", "TraitCostID", false);
+    let entry_conds = joined(
+        "TraitNodeEntryXTraitCond",
+        "TraitNodeEntryID",
+        "TraitCondID",
+        false,
+    );
+    let entry_costs = joined(
+        "TraitNodeEntryXTraitCost",
+        "TraitNodeEntryID",
+        "TraitCostID",
+        false,
+    );
+    let mut edges: HashMap<u32, Vec<(u32, TraitEdge)>> = HashMap::new();
+    if let Some(t) = open("TraitEdge") {
+        for r in t.rows() {
+            edges.entry(r.int("LeftTraitNodeID")).or_default().push((
+                r.id(),
+                TraitEdge {
+                    target: r.int("RightTraitNodeID"),
+                    kind: r.int("Type"),
+                    style: r.int("VisualStyle"),
+                },
+            ));
+        }
+    }
+    let mut out = TraitTables {
+        groups: joined(
+            "TraitNodeGroupXTraitNode",
+            "TraitNodeGroupID",
+            "TraitNodeID",
+            true,
+        ),
+        ..TraitTables::default()
+    };
+    for r in trees.rows() {
+        let id = r.id();
+        out.trees.insert(
+            id,
+            TraitTree {
+                flags: r.int("Flags"),
+                nodes: Vec::new(),
+                costs: cost_list(tree_costs.get(&id)),
+            },
+        );
+    }
+    let mut ids: Vec<u32> = nodes.rows().map(|r| r.id()).collect();
+    ids.sort_unstable();
+    for id in ids {
+        let Some(r) = nodes.row(id) else { continue };
+        let groups = node_groups.get(&id).cloned().unwrap_or_default();
+        let mut conditions = node_conds.get(&id).cloned().unwrap_or_default();
+        let mut costs = cost_list(node_costs.get(&id));
+        for g in &groups {
+            conditions.extend(group_conds.get(g).into_iter().flatten());
+            costs.extend(cost_list(group_costs.get(g)));
+        }
+        let mut out_edges = edges.remove(&id).unwrap_or_default();
+        out_edges.sort_by_key(|(e, _)| *e);
+        let tree = r.int("TraitTreeID");
+        if let Some(t) = out.trees.get_mut(&tree) {
+            t.nodes.push(id);
+        }
+        out.nodes.insert(
+            id,
+            TraitNode {
+                tree,
+                x: r.signed("PosX"),
+                y: r.signed("PosY"),
+                kind: r.int("Type"),
+                flags: r.int("Flags"),
+                sub_tree: r.int("TraitSubTreeID"),
+                entries: node_entries.get(&id).cloned().unwrap_or_default(),
+                groups,
+                conditions,
+                costs,
+                edges: out_edges.into_iter().map(|(_, e)| e).collect(),
+            },
+        );
+    }
+    if let Some(t) = open("TraitNodeEntry") {
+        for r in t.rows() {
+            let id = r.id();
+            out.entries.insert(
+                id,
+                TraitEntry {
+                    definition: r.int("TraitDefinitionID"),
+                    max_ranks: r.int("MaxRanks"),
+                    kind: r.int("NodeEntryType"),
+                    sub_tree: r.int("TraitSubTreeID"),
+                    conditions: entry_conds.get(&id).cloned().unwrap_or_default(),
+                    costs: cost_list(entry_costs.get(&id)),
+                },
+            );
+        }
+    }
+    if let Some(t) = open("TraitDefinition") {
+        for r in t.rows() {
+            let text = |c: &str| r.string(c).unwrap_or_default();
+            out.definitions.insert(
+                r.id(),
+                TraitDefinition {
+                    spell: r.int("SpellID"),
+                    override_name: text("OverrideName_lang"),
+                    override_subtext: text("OverrideSubtext_lang"),
+                    override_description: text("OverrideDescription_lang"),
+                    override_icon: r.int("OverrideIcon"),
+                    overridden_spell: r.int("OverridesSpellID"),
+                    visible_spell: r.int("VisibleSpellID"),
+                },
+            );
+        }
+    }
+    let shared = open("SharedString");
+    if let Some(t) = open("TraitCond") {
+        for r in t.rows() {
+            let tooltip = match r.int("SpendMoreSharedStringID") {
+                0 => None,
+                s => shared
+                    .as_ref()
+                    .and_then(|t| t.row(s))
+                    .and_then(|r| r.string("String_lang")),
+            };
+            out.conditions.insert(
+                r.id(),
+                TraitCondition {
+                    kind: r.int("CondType"),
+                    flags: r.int("Flags"),
+                    tree: r.int("TraitTreeID"),
+                    group: r.int("TraitNodeGroupID"),
+                    currency: r.int("TraitCurrencyID"),
+                    spent: r.int("SpentAmountRequired"),
+                    tooltip,
+                },
+            );
+        }
+    }
+    Some(out)
 }
 
 /// The item of an item link (`|Hitem:6125:…|h`, `item:6125`).
@@ -252,6 +460,8 @@ pub struct CascClientData {
     casc: OnceLock<Option<Arc<Casc>>>,
     /// The spell tables, opened on first use.
     spells: OnceLock<Option<wowlua_casc::spells::SpellTables>>,
+    /// The talent trees, read on first use.
+    traits: OnceLock<Option<Arc<TraitTables>>>,
     /// The client's fonts by their file's name (lower case), read on first
     /// use; `None` for one the storage lacks.
     fonts: std::sync::Mutex<std::collections::HashMap<String, Option<Arc<fontdue::Font>>>>,
@@ -268,6 +478,7 @@ impl CascClientData {
             open,
             casc: OnceLock::new(),
             spells: OnceLock::new(),
+            traits: OnceLock::new(),
             fonts: Default::default(),
             glyphs: Default::default(),
         }
@@ -299,6 +510,15 @@ impl CascClientData {
                 wowlua_casc::spells::SpellTables::open(casc)
             })
             .as_ref()
+    }
+
+    fn trait_tables(&self) -> Option<Arc<TraitTables>> {
+        self.traits
+            .get_or_init(|| {
+                let casc = self.casc.get_or_init(|| (self.open)()).as_ref()?;
+                trait_tables(casc).map(Arc::new)
+            })
+            .clone()
     }
 
     fn with<T>(&self, f: impl FnOnce(&mut Library, &Casc) -> Option<T>) -> Option<T> {
@@ -493,6 +713,10 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
         });
         self.glyphs.lock().ok()?.insert(key, measured);
         measured
+    }
+
+    fn traits(&self) -> Option<Arc<TraitTables>> {
+        self.trait_tables()
     }
 
     fn spell(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientSpell> {

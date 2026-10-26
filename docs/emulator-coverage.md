@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,143 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,145 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,143 rules unverified: each rests on Blizzard's
+The engine's code marks 1,145 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2093,11 +2093,13 @@ page changes only when a rule is added, removed or reworded.
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): `SetTrainerServiceTypeFilter(type, on)`: the list again, its update (unverified).
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): A class trainer's: a recorded one's as its data has them; an explicit one's (unverified) no skill or ability required...
 
-### traits (10)
+### traits (12)
 
 - [traits.rs](../crates/wowlua-engine/src/traits.rs): Unverified: an edge is met by its source at its last rank (the classic rule; recorded only met at 5 of 5); the unlock...
 - [traits.rs](../crates/wowlua-engine/src/traits.rs): A commit's second stage after its first, by the config's type: the legacy trees' (`Generic`, 0.499 s recorded), the c...
 - [traits.rs](../crates/wowlua-engine/src/traits.rs): The talents' spells that change the player's damage done, applied: `PLAYER_DAMAGE_DONE_MODS("player")` as many times,...
+- [traits.rs](../crates/wowlua-engine/src/traits.rs): A node's cost in the client's tables: its own (and its groups'), else its tree's (recorded: every camelot node its tr...
+- [traits.rs](../crates/wowlua-engine/src/traits.rs): The client's: its points to spend in its tree (unverified: its other requirements, quests, achievements, levels; came...
 - [traits.rs](../crates/wowlua-engine/src/traits.rs): An inspected player's tree without its recorded character (the test named none): its currency as the tree's owner's w...
 - [traits.rs](../crates/wowlua-engine/src/traits.rs): The nodes it unlocked, after the currencies, then its edges' targets again (recorded: the legacy druid's fifth point).
 - [traits.rs](../crates/wowlua-engine/src/traits.rs): `C_ClassTalents.CommitConfig(savedConfigID)`: the active config's staged ranks applied (the loadout saved: unverified).
