@@ -1,0 +1,16 @@
+# The build context is the repository root; the image needs the workspace's
+# manifests and crates only.
+.git
+.github
+.claude
+target
+**/target
+docs
+web
+tests
+review
+editors
+examples
+schema
+scripts
+**/node_modules

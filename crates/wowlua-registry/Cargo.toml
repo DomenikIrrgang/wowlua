@@ -1,0 +1,33 @@
+[package]
+name = "wowlua-registry"
+description = "The wowlua registry server: the sparse index, downloads, publishing, yanks and owners, with GitHub sign-in"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "wowlua-registry"
+path = "src/main.rs"
+
+[dependencies]
+wowlua-manifest.workspace = true
+wowlua-pkg.workspace = true
+wowlua-span.workspace = true
+axum = { version = "0.8", default-features = false, features = ["form", "http1", "multipart", "query", "tokio"] }
+tokio = { version = "1.54", features = ["macros", "net", "rt-multi-thread", "signal"] }
+getrandom = "0.4"
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+ureq.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -36,6 +36,7 @@ wowlua-debug = { path = "crates/wowlua-debug", default-features = false }
 wowlua-casc = { path = "crates/wowlua-casc" }
 wowlua-render = { path = "crates/wowlua-render" }
 wowlua-lsp = { path = "crates/wowlua-lsp", default-features = false }
+wowlua-registry = { path = "crates/wowlua-registry" }
 
 anyhow = "1.0"
 assert_cmd = "2.2"

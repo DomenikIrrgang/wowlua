@@ -1,0 +1,310 @@
+{
+  "ace3": {
+    "authors": [],
+    "note": "Ace3 (WoWAce)"
+  },
+  "aceaddon-3-0": {
+    "authors": [],
+    "note": "AceAddon-3.0 (Ace3)"
+  },
+  "acebucket-3-0": {
+    "authors": [],
+    "note": "AceBucket-3.0 (Ace3)"
+  },
+  "acecomm-3-0": {
+    "authors": [],
+    "note": "AceComm-3.0 (Ace3)"
+  },
+  "aceconfig-3-0": {
+    "authors": [],
+    "note": "AceConfig-3.0 (Ace3)"
+  },
+  "aceconfigcmd-3-0": {
+    "authors": [],
+    "note": "AceConfigCmd-3.0 (Ace3)"
+  },
+  "aceconfigdialog-3-0": {
+    "authors": [],
+    "note": "AceConfigDialog-3.0 (Ace3)"
+  },
+  "aceconfigregistry-3-0": {
+    "authors": [],
+    "note": "AceConfigRegistry-3.0 (Ace3)"
+  },
+  "aceconsole-3-0": {
+    "authors": [],
+    "note": "AceConsole-3.0 (Ace3)"
+  },
+  "acedb-3-0": {
+    "authors": [],
+    "note": "AceDB-3.0 (Ace3)"
+  },
+  "acedboptions-3-0": {
+    "authors": [],
+    "note": "AceDBOptions-3.0 (Ace3)"
+  },
+  "aceevent-3-0": {
+    "authors": [],
+    "note": "AceEvent-3.0 (Ace3)"
+  },
+  "acegui-3-0": {
+    "authors": [],
+    "note": "AceGUI-3.0 (Ace3)"
+  },
+  "acegui-3-0-sharedmediawidgets": {
+    "authors": [],
+    "note": "AceGUI-3.0-SharedMediaWidgets"
+  },
+  "acehook-3-0": {
+    "authors": [],
+    "note": "AceHook-3.0 (Ace3)"
+  },
+  "acelocale-3-0": {
+    "authors": [],
+    "note": "AceLocale-3.0 (Ace3)"
+  },
+  "aceserializer-3-0": {
+    "authors": [],
+    "note": "AceSerializer-3.0 (Ace3)"
+  },
+  "acetab-3-0": {
+    "authors": [],
+    "note": "AceTab-3.0 (Ace3)"
+  },
+  "acetimer-3-0": {
+    "authors": [],
+    "note": "AceTimer-3.0 (Ace3)"
+  },
+  "callbackhandler": {
+    "authors": [],
+    "note": "CallbackHandler-1.0"
+  },
+  "callbackhandler-1-0": {
+    "authors": [],
+    "note": "CallbackHandler-1.0"
+  },
+  "libactionbutton-1-0": {
+    "authors": [],
+    "note": "LibActionButton-1.0"
+  },
+  "libbabble-boss-3-0": {
+    "authors": [],
+    "note": "LibBabble-Boss-3.0"
+  },
+  "libbabble-zone-3-0": {
+    "authors": [],
+    "note": "LibBabble-Zone-3.0"
+  },
+  "libbase64-1-0": {
+    "authors": [],
+    "note": "LibBase64-1.0"
+  },
+  "libbuttonglow-1-0": {
+    "authors": [],
+    "note": "LibButtonGlow-1.0"
+  },
+  "libchatanims": {
+    "authors": [],
+    "note": "LibChatAnims"
+  },
+  "libclassicdurations": {
+    "authors": [],
+    "note": "LibClassicDurations"
+  },
+  "libcompress": {
+    "authors": [],
+    "note": "LibCompress"
+  },
+  "libcustomglow": {
+    "authors": [],
+    "note": "LibCustomGlow-1.0"
+  },
+  "libcustomglow-1-0": {
+    "authors": [],
+    "note": "LibCustomGlow-1.0"
+  },
+  "libdatabroker": {
+    "authors": [],
+    "note": "LibDataBroker-1.1"
+  },
+  "libdatabroker-1-1": {
+    "authors": [],
+    "note": "LibDataBroker-1.1"
+  },
+  "libdbicon": {
+    "authors": [],
+    "note": "LibDBIcon-1.0"
+  },
+  "libdbicon-1-0": {
+    "authors": [],
+    "note": "LibDBIcon-1.0"
+  },
+  "libddi-1-0": {
+    "authors": [],
+    "note": "LibDDI-1.0"
+  },
+  "libdeflate": {
+    "authors": [],
+    "note": "LibDeflate"
+  },
+  "libdispel-1-0": {
+    "authors": [],
+    "note": "LibDispel-1.0"
+  },
+  "libdualspec-1-0": {
+    "authors": [],
+    "note": "LibDualSpec-1.0"
+  },
+  "libeditmode": {
+    "authors": [],
+    "note": "LibEditMode"
+  },
+  "libelvuiplugin-1-0": {
+    "authors": [],
+    "note": "LibElvUIPlugin-1.0"
+  },
+  "libgetframe-1-0": {
+    "authors": [],
+    "note": "LibGetFrame-1.0"
+  },
+  "libgraph-2-0": {
+    "authors": [],
+    "note": "LibGraph-2.0"
+  },
+  "libgroupinspect": {
+    "authors": [],
+    "note": "LibGroupInSpecT-1.1"
+  },
+  "libhealcomm-4-0": {
+    "authors": [],
+    "note": "LibHealComm-4.0"
+  },
+  "libitemupgradeinfo-1-0": {
+    "authors": [],
+    "note": "LibItemUpgradeInfo-1.0"
+  },
+  "libkeybound-1-0": {
+    "authors": [],
+    "note": "LibKeyBound-1.0"
+  },
+  "libmapdata-1-0": {
+    "authors": [],
+    "note": "LibMapData-1.0"
+  },
+  "libnameplateregistry-1-0": {
+    "authors": [],
+    "note": "LibNameplateRegistry-1.0"
+  },
+  "libopenraid": {
+    "authors": [],
+    "note": "LibOpenRaid"
+  },
+  "libqtip": {
+    "authors": [],
+    "note": "LibQTip"
+  },
+  "libqtip-1-0": {
+    "authors": [],
+    "note": "LibQTip-1.0"
+  },
+  "librangecheck": {
+    "authors": [],
+    "note": "LibRangeCheck"
+  },
+  "librangecheck-3-0": {
+    "authors": [],
+    "note": "LibRangeCheck-3.0"
+  },
+  "libserialize": {
+    "authors": [],
+    "note": "LibSerialize"
+  },
+  "libsharedmedia": {
+    "authors": [],
+    "note": "LibSharedMedia-3.0"
+  },
+  "libsharedmedia-3-0": {
+    "authors": [],
+    "note": "LibSharedMedia-3.0"
+  },
+  "libsimplesticky-1-0": {
+    "authors": [],
+    "note": "LibSimpleSticky-1.0"
+  },
+  "libsink-2-0": {
+    "authors": [],
+    "note": "LibSink-2.0"
+  },
+  "libspecialization": {
+    "authors": [],
+    "note": "LibSpecialization"
+  },
+  "libstub": {
+    "authors": [],
+    "note": "LibStub"
+  },
+  "libtextdump-1-0": {
+    "authors": [],
+    "note": "LibTextDump-1.0"
+  },
+  "libtourist-3-0": {
+    "authors": [],
+    "note": "LibTourist-3.0"
+  },
+  "libuidropdownmenu-4-0": {
+    "authors": [],
+    "note": "LibUIDropDownMenu-4.0"
+  },
+  "libwindow-1-1": {
+    "authors": [],
+    "note": "LibWindow-1.1"
+  },
+  "std": {
+    "authors": [],
+    "note": "the wowlua project"
+  },
+  "taintless": {
+    "authors": [],
+    "note": "TaintLess"
+  },
+  "wow-api-camelot": {
+    "authors": [],
+    "note": "wowlua's typed WoW API of the camelot flavor (spec \u00a710.9)"
+  },
+  "wow-api-cata": {
+    "authors": [],
+    "note": "wowlua's typed WoW API of the cata flavor (spec \u00a710.9)"
+  },
+  "wow-api-mists": {
+    "authors": [],
+    "note": "wowlua's typed WoW API of the mists flavor (spec \u00a710.9)"
+  },
+  "wow-api-standard": {
+    "authors": [],
+    "note": "wowlua's typed WoW API of the standard flavor (spec \u00a710.9)"
+  },
+  "wow-api-tbc": {
+    "authors": [],
+    "note": "wowlua's typed WoW API of the tbc flavor (spec \u00a710.9)"
+  },
+  "wow-api-vanilla": {
+    "authors": [],
+    "note": "wowlua's typed WoW API of the vanilla flavor (spec \u00a710.9)"
+  },
+  "wow-api-wrath": {
+    "authors": [],
+    "note": "wowlua's typed WoW API of the wrath flavor (spec \u00a710.9)"
+  },
+  "wowlua": {
+    "authors": [],
+    "note": "the wowlua project"
+  },
+  "wowlua-std": {
+    "authors": [],
+    "note": "the wowlua project"
+  },
+  "wowlua-ui": {
+    "authors": [],
+    "note": "the wowlua project"
+  }
+}
