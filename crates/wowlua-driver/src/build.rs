@@ -245,6 +245,60 @@ pub fn build_with_cache(
     build_inner(session, project, request, Some(cache))
 }
 
+/// E4318 for a flavor without a types package (spec Manifest §9.4.1): the
+/// compiler has no `wow-api-<flavor>` declarations for it, or none that
+/// `flavors.<id>.types` accepts. The declarations ship with the compiler
+/// (decision T83), one version per flavor: the game version of the flavor
+/// table's interface number (120100 → 12.1.0).
+fn missing_types_package(
+    manifest: &wowlua_manifest::LoadedManifest,
+    flavor: &str,
+) -> Option<Diagnostic> {
+    let table = wowlua_flavors::table();
+    let shipped = table
+        .flavor(flavor)
+        .and_then(|f| f.interface.first())
+        .map(|i| wowlua_flavors::interface_to_version(*i))
+        .filter(|_| wowlua_api::own(flavor).is_some());
+    let Some(shipped) = shipped else {
+        return Some(Diagnostic::error(
+            "E4318",
+            format!(
+                "flavor `{flavor}` has no types package: this compiler has no `wow-api-{flavor}` declarations"
+            ),
+        ));
+    };
+    let requirement = manifest
+        .manifest
+        .flavors
+        .iter()
+        .flatten()
+        .find(|(name, _)| table.resolve(name).is_some_and(|f| f.id == flavor))
+        .and_then(|(_, settings)| settings.types.as_deref())?;
+    let req = match semver::VersionReq::parse(requirement) {
+        Ok(req) => req,
+        Err(e) => {
+            return Some(Diagnostic::error(
+                "E4002",
+                format!("`flavors.{flavor}.types` is not a version requirement: {e}"),
+            ));
+        }
+    };
+    let version = semver::Version::parse(&shipped).ok()?;
+    (!req.matches(&version)).then(|| {
+        Diagnostic::error(
+            "E4318",
+            format!("flavor `{flavor}` has no types package matching `{requirement}`"),
+        )
+        .with_note(format!(
+            "this compiler ships `wow-api-{flavor}` {shipped}; other versions come with the registry"
+        ))
+        .with_help(format!(
+            "remove `flavors.{flavor}.types`, or accept {shipped} (`\"types\": \"^{shipped}\"`)"
+        ))
+    })
+}
+
 fn build_inner(
     session: &mut Session,
     project: &Project,
@@ -336,6 +390,9 @@ fn build_inner(
                 )
                 .with_path(&manifest.path),
             );
+        }
+        if let Some(d) = missing_types_package(manifest, flavor) {
+            session.push(d.with_path(&manifest.path));
         }
     }
 

@@ -1470,6 +1470,42 @@ fn types_sync_moves_the_pins_to_the_flavor_table() {
         .stderr(predicate::str::contains("W4313").not());
 }
 
+/// E4318 (spec Manifest §9.4.1) for a flavor without a types package: the
+/// compiler ships one `wow-api-<flavor>` version, which a
+/// `flavors.<id>.types` requirement must accept.
+#[test]
+fn a_flavor_needs_a_types_package() {
+    let dir = tempfile::tempdir().unwrap();
+    let manifest = |types: &str| {
+        format!(
+            "{{ \"package\": {{ \"name\": \"typed\", \"version\": \"1.0.0\" }},\n  \"flavors\": {{ \"retail\": {{ \"types\": \"{types}\" }}, \"vanilla\": {{}} }} }}\n"
+        )
+    };
+    write(
+        dir.path(),
+        &[
+            ("wowlua.json", &manifest("^11")),
+            ("src/main.lua", "print(1)\n"),
+        ],
+    );
+    wowlua(dir.path())
+        .arg("check")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "error[E4318]: flavor `standard` has no types package matching `^11`",
+        ))
+        .stderr(predicate::str::contains("ships `wow-api-standard` 12.1.0"));
+    write(dir.path(), &[("wowlua.json", &manifest("not a version"))]);
+    wowlua(dir.path())
+        .arg("check")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E4002]"));
+    write(dir.path(), &[("wowlua.json", &manifest("^12.1"))]);
+    wowlua(dir.path()).arg("check").assert().success();
+}
+
 #[test]
 fn parallel_builds_equal_sequential_builds() {
     let dir = tempfile::tempdir().unwrap();

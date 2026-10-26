@@ -219,7 +219,7 @@ aliases (§9.4.1), normalized to IDs.
 |-----|------|---------|---------|
 | `interface` | number[] | the interface numbers pinned in `wowlua.lock` for that flavor | Interface numbers to emit |
 | `client-folders` | string[] | from the flavor table | Install folders `wowlua dev` / `install` use |
-| `types` | semver req | latest compatible | Version requirement for the flavor's `wow-api-<flavor>` package |
+| `types` | semver req | latest compatible | Version requirement for the flavor's `wow-api-<flavor>` package. Until the registry provides the packages, the compiler ships one version per flavor (decision T83), the game version of the flavor table's interface number; a requirement it does not meet is E4318. |
 
 When `flavors` is absent, an `addon` targets `standard` only, and `library`,
 `lua-library` and `types` packages support **all** flavors.

@@ -1050,6 +1050,12 @@ manifest, or else from the flavor table pinned in `wowlua.lock`.
 Remove the empty `interface` list to use the pinned numbers, list the numbers
 yourself, or update the pinned table with `wowlua types sync`.
 
+It is also reported when the flavor has no types package: the compiler ships
+one version of each `wow-api-<flavor>` declarations (the game version of the
+flavor table's interface number, `wow-api-standard` 12.1.0 for 120100), and a
+`flavors.<id>.types` requirement that this version does not meet finds none.
+Remove the requirement, or widen it to accept the shipped version.
+
 ```json fails title=wowlua.json
 {
     "package": {
