@@ -87,7 +87,7 @@ and indentation. Unknown keys are error E4002, so typos are caught. Keys are
 Top-level keys: `$schema`, `package`, `addon`, `lua-library`, `types`,
 `flavors`, `dependencies`, `dev-dependencies`, `addon-dependencies`,
 `features`, `build`, `check`, `config`, `profiles`, `minify-levels`, `publish`,
-`meta`, `fmt`, `compat`, `workspace`, `stdlib`.
+`meta`, `fmt`, `test`, `compat`, `workspace`, `stdlib`.
 
 ## 9.2 `package`
 
