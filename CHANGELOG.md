@@ -17,6 +17,11 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - W3021 when a built-in decorator's name (`@profile`, …) hides a function of yours.
 - In optimized builds, `@inline` private methods are inlined where their class calls them, like `@inline` local functions.
 - In `--!strict` files, backtick strings skip `tostring` for strings and numbers, `??` compiles to `or`, and `?.` compiles to `and`/`or` where the types allow it.
+- `wowlua check --watch` checks again after every change.
+- `wowlua types sync` moves wowlua.lock's interface numbers to your wowlua's flavor table and warns (W4313) when a client alias such as `anniversary` now names another flavor.
+- `-v` shows the git and svn commands wowlua runs and the requests `wowlua publish` makes.
+- `--features a,b` and `--no-default-features` choose a build's features, and `wowlua add --no-default-features` turns a dependency's defaults off.
+- `wowlua test` runs a library's tests, and `wowlua check` checks `lua-library` and `types` packages.
 
 ### Changed
 
@@ -31,6 +36,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Widget getters Blizzard documents as possibly secret (`GetText`, `IsShown`, `GetWidth`, `GetAlpha`, `GetPoint`, …) are typed `T | Secret<T>`: check them with `issecretvalue` or `canaccessvalue` before computing with them. `mock.textOf` returns `string | Secret<string>`.
 - `wowlua check` and dev builds report E3032 when a `@debugOnly` function is used as a value, as release builds already did; uses in code only debug builds keep are allowed.
 - An XML file loading a file that `build.exclude` or a profile's `exclude` leaves out warns W5004 instead of failing with E5002.
+- `wowlua new --ci github` writes a workflow that checks, tests and builds every push and publishes tags.
+- `flavors.<id>.types` must accept the API version wowlua ships (E4318).
 
 ### Fixed
 
@@ -69,6 +76,12 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A missing module reports one E1015, without the extra "imports need the package context" error, and its imported names no longer warn W1001.
 - With `line-mode: "pretty"` or `"statement"`, trailing comments stay after the code of their line.
 - A publish target that minifies differently from its profile (`minify: "max"`) gets its own build id, so `wowlua trace` decodes its errors with the right maps.
+- `wowlua dev` started in the package folder no longer prints an empty folder name.
+- `publish --dry-run` without a CurseForge token no longer contacts CurseForge or adds E4202.
+- A new library package no longer warns W1003.
+- A misspelled `--target` is E4006 instead of doing nothing.
+- Path dependencies work in the browser playground.
+- An asset a profile excludes or another flavor owns is E4307 where it is used, not a misleading E1038 or a missing texture.
 
 ## 0.12.0 (2026-10-26)
 

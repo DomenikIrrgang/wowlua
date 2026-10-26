@@ -3748,7 +3748,7 @@
     },
     "E4006": {
       "area": "manifest",
-      "text": "A name that should refer to a profile, minification level or addon does not:\na profile's `inherits`, a profile's or publish target's `minify`, a target's\n`profile`, a minification level's `extends`, an entry of\n`publish.bundle-addons`, or `--profile` on the command line. The built-in\nprofiles are `dev`, `release` and `test`; the built-in minification levels\nare `none`, `strip`, `compact`, `rename` and `max`. Your own come from\n`profiles` and `minify-levels`.\n\nFix the name, or define the profile or level.",
+      "text": "A name that should refer to a profile, minification level, publish target or\naddon does not: a profile's `inherits`, a profile's or publish target's\n`minify`, a target's `profile`, a minification level's `extends`, an entry of\n`publish.bundle-addons` (it must name an addon of the workspace), or\n`--profile` or `--target` (of `wowlua package` and `wowlua publish`) on the\ncommand line. The built-in\nprofiles are `dev`, `release` and `test`; the built-in minification levels\nare `none`, `strip`, `compact`, `rename` and `max`. Your own come from\n`profiles` and `minify-levels`.\n\nFix the name, or define the profile, level or target.",
       "examples": [
         {
           "compiles": false,
@@ -4192,7 +4192,7 @@
     },
     "E4307": {
       "area": "manifest",
-      "text": "An `asset()` path from `wowlua:meta` does not name an asset of the build.\n`asset(\"media/icon.tga\")` becomes the file's in-game path, so a file missing\nfrom the output would be a missing texture in game.\n\nThe compiler already reports a path that is not in `build.assets` as E1038\nwhile it checks the code, so this second check of the finished output does\nnot fire in practice. Add the file to `build.assets`, with its case exactly as\nin the call.",
+      "text": "An `asset()` path from `wowlua:meta` does not name an asset of the build.\n`asset(\"media/icon.tga\")` becomes the file's in-game path, so a file missing\nfrom the output would be a missing texture in game.\n\nA path that is not in `build.assets` at all is E1038 while the code is\nchecked. This second check of the finished output finds the assets of the\npackage that a build leaves out although its code uses them: those the\nprofile's `exclude` drops (`\"profiles\": { \"release\": { \"exclude\":\n[\"media/debug.tga\"] } }`), and those `build.flavor-files` gives only to\nflavors the build does not target.\n\nShip the asset in that build, or do not use it there (put the call under\n`@if(build.debug)` or a flavor check). `wowlua build` reports it, not\n`wowlua check`, so it has no example here.",
       "examples": [],
       "related": [
         "E1038"
@@ -4368,7 +4368,7 @@
     },
     "E4314": {
       "area": "manifest",
-      "text": "An entry of `features` names something that does not exist or cannot be\nswitched on: a feature that is not defined (or `default`, which only lists the\nfeatures that are on by default), `dep:<name>` for a dependency the manifest\ndoes not declare, or `dep:<name>` for a dependency that is not marked\n`\"optional\": true`. A required dependency is always included, so no feature\ncan switch it on.\n\nDefine the missing feature, fix the name, or mark the dependency optional.",
+      "text": "An entry of `features` names something that does not exist or cannot be\nswitched on: a feature that is not defined (or `default`, which only lists the\nfeatures that are on by default), `dep:<name>` for a dependency the manifest\ndoes not declare, or `dep:<name>` for a dependency that is not marked\n`\"optional\": true`. A required dependency is always included, so no feature\ncan switch it on. `--features` on the command line reports it too when it\nnames a feature the package does not define.\n\nDefine the missing feature, fix the name, or mark the dependency optional.",
       "examples": [
         {
           "compiles": false,
@@ -4497,7 +4497,7 @@
     },
     "E4318": {
       "area": "manifest",
-      "text": "A targeted flavor has no interface number, so its TOC would have no\n`## Interface` value. The numbers come from the flavor's `interface` in the\nmanifest, or else from the flavor table pinned in `wowlua.lock`.\n\nRemove the empty `interface` list to use the pinned numbers, list the numbers\nyourself, or update the pinned table with `wowlua types sync`.",
+      "text": "A targeted flavor has no interface number, so its TOC would have no\n`## Interface` value. The numbers come from the flavor's `interface` in the\nmanifest, or else from the flavor table pinned in `wowlua.lock`.\n\nRemove the empty `interface` list to use the pinned numbers, list the numbers\nyourself, or update the pinned table with `wowlua types sync`.\n\nIt is also reported when the flavor has no types package: the compiler ships\none version of each `wow-api-<flavor>` declarations (the game version of the\nflavor table's interface number, `wow-api-standard` 12.1.0 for 120100), and a\n`flavors.<id>.types` requirement that this version does not meet finds none.\nRemove the requirement, or widen it to accept the shipped version.",
       "examples": [
         {
           "compiles": false,

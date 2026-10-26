@@ -118,7 +118,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E4003", summary: "Invalid package name or version" },
     CodeInfo { code: "E4004", summary: "Unknown flavor" },
     CodeInfo { code: "E4005", summary: "Conflicting setting between `.pkgmeta` and `wowlua.json` in compatibility mode" },
-    CodeInfo { code: "E4006", summary: "Unknown profile, minification level or publish target referenced" },
+    CodeInfo { code: "E4006", summary: "Unknown profile, minification level, publish target or bundled addon referenced" },
     CodeInfo { code: "E4007", summary: "Cyclic profile or minification-level inheritance (`inherits` / `extends`)" },
     CodeInfo { code: "E4012", summary: "Profile `config` key missing from the top-level `config`, or with an incompatible type" },
     CodeInfo { code: "W4030", summary: "Unsupported packager keyword" },
