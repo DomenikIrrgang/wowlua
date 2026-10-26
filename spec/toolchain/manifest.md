@@ -628,7 +628,7 @@ Since M9 S4 (`blizzard-ui`, `profile`, `addons`) and S5 (`coverage`, `reporters`
 
 | Key | Type | Default | Meaning |
 |-----|------|---------|---------|
-| `blizzard-ui` | bool | `false` | Load the flavor's FrameXML as secure code before the addon ([WoW client emulation §17.7](emulator.md#177-blizzards-ui-code)) |
+| `blizzard-ui` | bool | `false` | Load the flavor's FrameXML as secure code before the addon ([WoW client emulation §17.7](emulator.md#177-blizzards-ui-code)); for now it loads without errors on camelot alone, the one client recorded |
 | `profile` | string | none | The world profile (`tests/profiles/<name>.json`) of test files that name none ([Tooling §16.1.4](tooling.md#1614-wowluamock)) |
 | `platform` | `"mac"` \| `"windows"` | `"mac"` | The machine the emulated client runs on for test files that name none: the recorded answers that differ by machine (key names, graphics, sound, colours' last digits) and `IsMacClient`, `IsWindowsClient` (decision T236; a file's `config({ platform })` over it) |
 | `screen` | `{ width, height, dpiScale?, uiScale? }` | `{ width: 1920, height: 1080 }` | The screen the emulated client draws on for test files that name none, in pixels: UIParent's size and scale, `GetScreenWidth`, `GetPhysicalScreenSize`, and the size of text in UI units. `dpiScale` is the system's (`GetScreenDPIScale`, 1 by default); `uiScale` the UI scale with "Use UI Scale" on (without one, the client's own: 768 over the height, times the DPI scale, at most 1). Decision T237; a file's `config({ screen })` over it |

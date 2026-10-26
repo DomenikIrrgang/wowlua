@@ -520,7 +520,12 @@ takes the flavor's `Interface` folder and its global strings:
   client's recording (`/stdtest engine`), secure addons run in the client's
   secure environment, and Blizzard's errors are caught where ScriptErrors
   reports them (`C_Log.LogErrorMessage`). The CVars start at the client's defaults (the 248 the UI code reads that
-  have one, recorded by `/stdtest engine`).
+  have one, recorded by `/stdtest engine`). The other flavors' clients are
+  not recorded yet: their UI code meets enums, colors and constants the
+  documentation lacks and raises errors while it loads, so for now
+  `test.blizzard-ui` is for camelot, and wowlua's example addons run
+  their tests on camelot alone (their manifests' `flavor-files` give
+  `tests/**` to camelot) until standard's and vanilla's are recorded.
 - **The client's cases.** With camelot's UI code loaded (and the addon's
   saved variables loaded as the addon's), all 819 cases `/stdtest probe`
   recorded on WoW Forever 1.60.1 give the client's results, the 22 the VM

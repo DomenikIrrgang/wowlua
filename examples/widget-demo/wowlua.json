@@ -22,6 +22,11 @@
     "camelot": {},
     "vanilla": {}
   },
+  "build": {
+    "flavor-files": {
+      "tests/**": ["camelot"]
+    }
+  },
   "test": {
     "blizzard-ui": true
   }

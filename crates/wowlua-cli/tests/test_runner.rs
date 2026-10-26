@@ -2191,7 +2191,8 @@ end
 }
 
 /// The examples' tests: the addons with Blizzard's UI (skipped without
-/// the UI code of `cargo xtask types fetch`).
+/// the UI code of `cargo xtask types fetch`), on every flavor they list
+/// (their tests are camelot's alone, `flavor-files`).
 #[test]
 fn example_tests() {
     example("core-demo", "8 passed, 0 failed");
@@ -2216,7 +2217,7 @@ fn example(name: &str, summary: &str) {
         return;
     }
     let out = wowlua(&root.join("examples").join(name))
-        .args(["test", "--flavor", "camelot"])
+        .arg("test")
         .env("WOWLUA_UI_SOURCE", &source)
         .output()
         .unwrap();

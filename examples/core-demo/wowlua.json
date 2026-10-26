@@ -28,6 +28,11 @@
   "check": {
     "mode": "strict"
   },
+  "build": {
+    "flavor-files": {
+      "tests/**": ["camelot"]
+    }
+  },
   "test": {
     "blizzard-ui": true
   }
