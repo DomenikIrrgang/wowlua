@@ -27,6 +27,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Two types with one name in one scope (an interface, a type alias, a class or an enum) are E1031; before, only two interfaces were reported, and otherwise the later one silently replaced the earlier.
 - `ns.__wowlua = …` is E2003.
 - `@inline` on a function that isn't local gives W3031.
+- Widget getters Blizzard documents as possibly secret (`GetText`, `IsShown`, `GetWidth`, `GetAlpha`, `GetPoint`, …) are typed `T | Secret<T>`: check them with `issecretvalue` or `canaccessvalue` before computing with them. `mock.textOf` returns `string | Secret<string>`.
 
 ### Fixed
 
@@ -51,6 +52,16 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Assigning a private or protected field, or using a private static member, from outside the class is E2011.
 - A subclass's inherited constructor no longer depends on file order (E2006 "expected 0").
 - In a decorated function, recursive calls are checked against the decorator's result type.
+- `wowlua:format`'s `duration`, `short`, `clock`, `money` and `date` work in `wowlua test` without `test.blizzard-ui`: the emulated client has the game UI's `SecondsToTime`, `SecondsToTimeAbbrev`, `SecondsToClock`, `GetMoneyString`, `FormatShortDate`, `FormatLargeNumber` and `COPPER_PER_SILVER`.
+- `format.short` returns the time ("2 m") instead of a format string ("%d m").
+- `SendChatMessage`, `DoEmote` and `CancelEmote` work in `wowlua test` without `test.blizzard-ui`.
+- `NUM_BAG_SLOTS` and `NUM_TOTAL_EQUIPPED_BAG_SLOTS` are defined in camelot tests without `test.blizzard-ui`.
+- A status bar's `OnValueChanged` and `OnMinMaxChanged` get a secret after a secret `SetValue` or `SetMinMaxValues`, and `HasSecretAspect(Enum.SecretAspect.BarValue)` reports it; their handler is `(self, value)`.
+- `C_Container.GetContainerItemInfo` returns `nil` for an item without item data, and such an item in a world profile no longer makes Blizzard's UI raise an error.
+- `mock.fireEvent` rejects a wrongly typed enumeration value (`mock.fireEvent("BAG_UPDATE", "x")`).
+- `FormatShortDate`'s `year` is optional.
+- Hover and completion show Blizzard's own descriptions where warcraft.wiki.gg has none.
+- The example addons' tests pass on every flavor they list.
 
 ## 0.12.0 (2026-10-26)
 
