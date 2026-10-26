@@ -36,7 +36,7 @@
   ],
   "scripts": {
     "build": "cargo build --profile web --target wasm32-unknown-unknown -p wowlua-web && wasm-bindgen --target web --no-typescript --out-dir pkg ../target/wasm32-unknown-unknown/web/wowlua_web.wasm",
-    "test": "node test/smoke.mjs"
+    "test": "node test/smoke.mjs && node test/worker.mjs"
   },
   "sideEffects": false
 }

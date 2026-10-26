@@ -22,6 +22,7 @@ const wowlua = connect(
 );
 await wowlua.call("writeFile", "src/main.wowlua", 'print("Hello")');
 const diagnostics = await wowlua.call("check");
+// [{ severity, code, message, file, range, text }]: `text` as `wowlua check` prints it
 ```
 
 Install it from a release (`wowlua-web-<version>.tgz` on GitHub). The

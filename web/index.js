@@ -8,7 +8,7 @@
 //   await load();                          // fetches wowlua_web_bg.wasm
 //   const p = new Playground();            // the template package
 //   p.writeFile("src/main.wowlua", text);
-//   p.check();                             // [{ severity, code, message, file, range }]
+//   p.check();                             // [{ severity, code, message, file, range, text }]
 //
 // Paths are relative to the package's folder; the language server's URIs
 // are `file:///playground/<path>`. A panic in wowlua ends the module
@@ -260,9 +260,9 @@ export class Playground {
     }
 
     /**
-     * Runs the game on `screen` each animation frame until `stop()` is
-     * called on what this returns; `onOutput` gets what the addon prints
-     * and raises.
+     * Runs the game each animation frame, drawn on `screen` (`null`: not
+     * drawn), until `stop()` is called on what this returns; `onOutput`
+     * gets what the addon prints and raises.
      */
     play(screen, onOutput = () => {}) {
         const frame = typeof requestAnimationFrame === "function"
@@ -273,7 +273,7 @@ export class Playground {
             if (!on) return;
             if (this.raw.running) {
                 for (const o of this.advance()) onOutput(o);
-                screen.draw(this.raw);
+                screen?.draw(this.raw);
             }
             frame(step);
         };

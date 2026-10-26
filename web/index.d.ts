@@ -155,14 +155,16 @@ export class Playground {
     input(input: Input): Output[];
     /** The running addon's screen in pixels: [width, height]. */
     screenSize(): [number, number];
-    /** Advances and draws each animation frame until `stop()`. */
-    play(screen: Screen, onOutput?: (output: Output) => void): { stop(): void };
+    /** Advances and draws (`null`: not drawn) each animation frame until `stop()`. */
+    play(screen: Screen | null, onOutput?: (output: Output) => void): { stop(): void };
 }
 
 export type PlaygroundCall =
     | "files" | "reset" | "writeFile" | "readFile" | "deleteFile"
     | "check" | "build" | "format" | "share" | "openShared" | "version"
     | "loadBlizzardUI" | "run" | "stop" | "input" | "screenSize" | "useInstallation"
+    /** Moves the game to now: what it printed and raised (also to `onOutput`). */
+    | "advance"
     | "profiles" | "profileSchema" | "world"
     /** The game's screen as a PNG Blob (`call("snapshot", scale)`). */
     | "snapshot";
@@ -189,7 +191,10 @@ export interface Connection {
         /** `{ event: "stopped" | "breakpoint" | "terminated", … }`. */
         onEvent(listen: (event: Record<string, any>) => void): () => void;
     };
-    /** What the running addon prints and raises. */
+    /**
+     * What the running addon prints and raises, with a canvas or without:
+     * the worker moves the game each frame either way.
+     */
     onOutput(listen: (output: Output) => void): () => void;
     /** Progress while Blizzard's UI loads. */
     onProgress(listen: (done: number, total: number) => void): () => void;

@@ -11,7 +11,7 @@
 //   await wowlua.call("loadBlizzardUI", { flavor: "camelot" });
 //   await wowlua.attachCanvas(canvas);          // the game is drawn there
 //   await wowlua.call("run", { blizzardUI: true });
-//   wowlua.onOutput((o) => console.log(o.text));
+//   wowlua.onOutput((o) => console.log(o.text));   // with a canvas or without
 //
 // Debugging (a cross-origin isolated page: `wowlua.debug.available`):
 //   wowlua.debug.onEvent((e) => …);                  // { event: "stopped", reason, … }

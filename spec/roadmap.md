@@ -704,7 +704,8 @@ with its own design); wowlua provides what the page embeds:
   test runner's addon session, after Blizzard's UI when the page fetched
   it (the files listed per flavor by `cargo xtask web-ui`, from jsDelivr);
   frames as the page's clock moves, the debugger's input, output to the
-  page; the renderer draws into the canvas (WebGPU, else WebGL 2) and
+  page (through the worker with a canvas or without: its frames run
+  either way, and `advance` moves the game at once; 0.12.1); the renderer draws into the canvas (WebGPU, else WebGL 2) and
   snapshots the screen. Checked natively (`crates/wowlua-web/tests/run.rs`,
   with the UI in CI's Blizzard UI job), in Node, and in Chrome on WebGPU
   and WebGL 2: camelot's default UI and an addon's frame drawn, a click

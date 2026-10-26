@@ -62,7 +62,7 @@ import { load, Playground } from "@wowlua/web";
 await load();                    // or load(url) when the .wasm is elsewhere
 const p = new Playground();      // wowlua.json and src/main.wowlua
 p.writeFile("src/main.wowlua", text);
-p.check();                       // [{ severity, code, message, file, range }]
+p.check();                       // [{ severity, code, message, file, range, text }]
 p.build("dev");                  // { ok, diagnostics, files: [{ path, text }] }
 p.format("src/main.wowlua");     // { text } (written) or { diagnostics }
 p.files();                       // { "wowlua.json": "…", "src/main.wowlua": "…" }
@@ -75,6 +75,8 @@ manifest's `check.lints` apply, so W2063 stays off until you turn it on).
 Write the editor's text with `writeFile` before you check, build or run
 it.
 
+A diagnostic's `text` is the diagnostic as `wowlua check` prints it,
+without colors: the code, the message, the source lines and the help.
 Ranges are the Language Server Protocol's: lines and UTF-16 columns from
 0, which CodeMirror and Monaco both take. A built file that is not text,
 such as an image, comes as URL-safe `base64` instead of `text`.
@@ -155,6 +157,9 @@ const png = await wowlua.call("snapshot", 1);     // the screen as a PNG Blob
   before its files came is then missing. Pass `base` to fetch from
   another place with the same paths. Without it (`blizzardUI: false`) the
   addon runs alone, at once.
+- Without a canvas the game runs all the same, not drawn: what it prints
+  and raises comes to `onOutput`. `call("advance")` moves it to now at
+  once and returns that output too, as `input` and `world` return theirs.
 - The game's textures, fonts and models are the user's installation's
   (below); without it images are placeholders (magenta) and text uses
   stand-in fonts, except the addon's own images (its PNG, TGA and BLP
@@ -162,7 +167,8 @@ const png = await wowlua.call("snapshot", 1);     // the screen as a PNG Blob
 
 Without the worker, `Playground` has the same calls (`loadBlizzardUI`,
 `run`, `advance`, `input`, `stop`) and `createScreen(canvas)` with
-`playground.play(screen, onOutput)`.
+`playground.play(screen, onOutput)` (`play(null, onOutput)` runs it
+without drawing).
 
 ## World profiles
 

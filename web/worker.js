@@ -6,8 +6,8 @@
 //   { id, call: "<method>", args: [...] }  → { id, result } or { id, error }
 //       methods: files, reset, writeFile, readFile, deleteFile, check,
 //                build, format, share, openShared, version,
-//                loadBlizzardUI, run, stop, input, screenSize, profiles,
-//                profileSchema, world,
+//                loadBlizzardUI, run, stop, advance, input, screenSize,
+//                profiles, profileSchema, world,
 //                snapshot (the game's screen as a PNG Blob),
 //                useInstallation(source, { flavor }) (the user's WoW folder:
 //                a FileSystemDirectoryHandle, or a folder input's files)
@@ -16,8 +16,9 @@
 //       the game is drawn there each frame from then on
 //   { resize: [width, height] }            the canvas's new size
 //   (from the worker) { output: { kind, text, stack } }: what the game
-//       printed and raised; { progress: [done, total] } while loading
-//       Blizzard's UI
+//       printed and raised, with a canvas or without (the game moves each
+//       frame either way; `advance`, `input` and `world` return theirs
+//       too); { progress: [done, total] } while loading Blizzard's UI
 //   { debugMailbox: <SharedArrayBuffer> }  the debugger's requests come
 //       there (client.js writes them; a cross-origin isolated page only):
 //       stopped, the game waits on it. Its answers and events come back as
@@ -31,14 +32,20 @@ import { Installation } from "./installation.js";
 const CALLS = new Set([
     "files", "reset", "writeFile", "readFile", "deleteFile",
     "check", "build", "format", "share", "openShared",
-    "run", "stop", "input", "screenSize", "profiles", "profileSchema", "world",
+    "run", "stop", "advance", "input", "screenSize", "profiles", "profileSchema", "world",
 ]);
+
+// (what the game prints and raises, each call or frame that moved it)
+const post = (output) => postMessage({ output });
 
 let playground = null;
 let server = null;
 let ready = null;
 let screen = null;
 let canvas = null;
+// The game's frames: not drawn until a canvas comes, its output posted
+// all the same.
+let frames = null;
 
 // The debugger's mailbox: [state (0 empty, 1 full), length], then the
 // request's UTF-8 bytes.
@@ -63,6 +70,7 @@ function start(wasm) {
     ready ??= load(wasm).then(() => {
         playground = new Playground();
         server = playground.languageServer((message) => postMessage({ lsp: message }));
+        frames = playground.play(null, post);
     });
     return ready;
 }
@@ -94,7 +102,8 @@ onmessage = async (event) => {
         if (m.canvas !== undefined) {
             canvas = m.canvas;
             screen = await createScreen(canvas);
-            playground.play(screen, (output) => postMessage({ output }));
+            frames.stop();
+            frames = playground.play(screen, post);
             result = screen.backend;
         } else if (m.call === "snapshot") {
             // drawn off the canvas and read back (`snapshot(scale)`)
@@ -118,8 +127,8 @@ onmessage = async (event) => {
             throw new Error("debugging needs a cross-origin isolated page (COOP and COEP headers)");
         } else if (CALLS.has(m.call)) {
             result = playground[m.call](...(m.args ?? []));
-            // (what input made the game print goes where the frames' does)
-            if (m.call === "input" || m.call === "world") for (const output of result) postMessage({ output });
+            // (what a call made the game print goes where the frames' does)
+            if (m.call === "advance" || m.call === "input" || m.call === "world") for (const output of result) post(output);
         } else {
             throw new Error(`no method ${m.call}`);
         }
