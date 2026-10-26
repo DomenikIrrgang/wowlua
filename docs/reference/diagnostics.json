@@ -50,7 +50,8 @@
               "lang": "wowlua",
               "text": "local hp = UnitHealth(\"player\")\nif hp > 0\n    print(hp)\nend\n"
             }
-          ]
+          ],
+          "output": "error[E0101]: 'then' expected near 'print'\n  ┌─ src/main.wowlua:3:5\n  │\n3 │     print(hp)\n  │     ^^^^^ here"
         },
         {
           "compiles": true,
@@ -60,7 +61,8 @@
               "lang": "wowlua",
               "text": "local hp = UnitHealth(\"player\")\nif hp > 0 then\n    print(hp)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -80,7 +82,8 @@
               "lang": "wowlua",
               "text": "local greeting = \"Welcome back\nprint(greeting)\n"
             }
-          ]
+          ],
+          "output": "error[E0102]: unfinished string\n  ┌─ src/main.wowlua:1:18\n  │\n1 │ local greeting = \"Welcome back\n  │                  ^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -90,7 +93,8 @@
               "lang": "wowlua",
               "text": "local greeting = \"Welcome back\"\nprint(greeting)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -110,7 +114,8 @@
               "lang": "wowlua",
               "text": "local maxGold = 1__000_000\nprint(maxGold)\n"
             }
-          ]
+          ],
+          "output": "error[E0103]: malformed number (misplaced `_` digit separator) near '1__000_000'\n  ┌─ src/main.wowlua:1:17\n  │\n1 │ local maxGold = 1__000_000\n  │                 ^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -120,7 +125,8 @@
               "lang": "wowlua",
               "text": "local maxGold = 1_000_000\nprint(maxGold)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -137,7 +143,8 @@
               "lang": "wowlua",
               "text": "local show = print\nshow\n(\"ready\")\n"
             }
-          ]
+          ],
+          "output": "error[E0104]: ambiguous syntax (function call x new statement)\n  ┌─ src/main.wowlua:3:1\n  │\n3 │ (\"ready\")\n  │ ^ here"
         },
         {
           "compiles": true,
@@ -147,7 +154,8 @@
               "lang": "wowlua",
               "text": "local show = print\nshow(\"ready\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -166,7 +174,8 @@
               "lang": "wowlua",
               "text": "local name = \"MyAddon\"\nprint(`{name} lives in Interface\\AddOns`)\n"
             }
-          ]
+          ],
+          "output": "error[E0105]: invalid escape `\\A` in a backtick string\n  ┌─ src/main.wowlua:2:33\n  │\n2 │ print(`{name} lives in Interface\\AddOns`)\n  │                                 ^^ here"
         },
         {
           "compiles": true,
@@ -176,7 +185,8 @@
               "lang": "wowlua",
               "text": "local name = \"MyAddon\"\nprint(`{name} lives in Interface\\\\AddOns`)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -195,7 +205,8 @@
               "lang": "wowlua",
               "text": "local function onEvent(event: string)\n    if event ~= \"PLAYER_LOGIN\" then\n        break\n    end\n    print(\"logged in\")\nend\nonEvent(\"PLAYER_LOGIN\")\n"
             }
-          ]
+          ],
+          "output": "error[E0106]: no loop to break near 'end'\n  ┌─ src/main.wowlua:3:9\n  │\n3 │         break\n  │         ^^^^^ here"
         },
         {
           "compiles": true,
@@ -205,7 +216,8 @@
               "lang": "wowlua",
               "text": "local function onEvent(event: string)\n    if event ~= \"PLAYER_LOGIN\" then\n        return\n    end\n    print(\"logged in\")\nend\nonEvent(\"PLAYER_LOGIN\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -224,7 +236,8 @@
               "lang": "wowlua",
               "text": "local i = 0\nrepeat\n    i += 1\n    local finished = i >= 10\n    if i % 2 == 0 then continue end\n    print(i)\nuntil finished\n"
             }
-          ]
+          ],
+          "output": "error[E0107]: `continue` cannot be used in this `repeat` loop: its `until` condition uses the body local `finished`\n  ┌─ src/main.wowlua:7:7\n  │\n7 │ until finished\n  │       ^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -234,7 +247,8 @@
               "lang": "wowlua",
               "text": "local i = 0\nlocal finished = false\nrepeat\n    i += 1\n    finished = i >= 10\n    if i % 2 == 0 then continue end\n    print(i)\nuntil finished\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -253,7 +267,8 @@
               "lang": "wowlua",
               "text": "local function start()\n    import after from \"wowlua:timer\"\n    after(1, function() print(\"started\") end)\nend\nstart()\n"
             }
-          ]
+          ],
+          "output": "error[E0108]: `import` is only allowed at the top level of a file\n  ┌─ src/main.wowlua:2:5\n  │\n2 │     import after from \"wowlua:timer\"\n  │     ^^^^^^ here"
         },
         {
           "compiles": true,
@@ -263,7 +278,8 @@
               "lang": "wowlua",
               "text": "import after from \"wowlua:timer\"\n\nlocal function start()\n    after(1, function() print(\"started\") end)\nend\nstart()\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -283,7 +299,8 @@
               "lang": "wowlua",
               "text": "@deprecated\nprint(\"old API\")\n"
             }
-          ]
+          ],
+          "output": "error[E0109]: a decorator must be followed by a declaration (function, local, const, class, …)\n  ┌─ src/main.wowlua:1:1\n  │  \n1 │ ╭ @deprecated\n2 │ │ print(\"old API\")\n  │ ╰────────────────^ here"
         },
         {
           "compiles": true,
@@ -293,7 +310,8 @@
               "lang": "wowlua",
               "text": "@deprecated\nlocal function oldApi()\n    print(\"old API\")\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -310,7 +328,8 @@
               "lang": "wowlua",
               "text": "local saved: boolean? = nil\nlocal fallback = true\nprint(saved ?? fallback or false)\n"
             }
-          ]
+          ],
+          "output": "error[E0110]: `??` cannot be mixed with `and`/`or` without parentheses\n  ┌─ src/main.wowlua:3:25\n  │\n3 │ print(saved ?? fallback or false)\n  │                         ^^ here"
         },
         {
           "compiles": true,
@@ -320,7 +339,8 @@
               "lang": "wowlua",
               "text": "local saved: boolean? = nil\nlocal fallback = true\nprint((saved ?? fallback) or false)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -337,7 +357,8 @@
               "lang": "wowlua",
               "text": "local kills, deaths = 0, 0\nkills, deaths += 1\nprint(kills, deaths)\n"
             }
-          ]
+          ],
+          "output": "error[E0111]: compound assignment has a single target\n  ┌─ src/main.wowlua:2:15\n  │\n2 │ kills, deaths += 1\n  │               ^^ here"
         },
         {
           "compiles": true,
@@ -347,7 +368,8 @@
               "lang": "wowlua",
               "text": "local kills, deaths = 0, 0\nkills += 1\ndeaths += 1\nprint(kills, deaths)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -364,7 +386,8 @@
               "lang": "wowlua",
               "text": "const MAX_ITEMS\nprint(MAX_ITEMS)\n"
             }
-          ]
+          ],
+          "output": "error[E0112]: `const` needs an initializer\n  ┌─ src/main.wowlua:1:1\n  │\n1 │ const MAX_ITEMS\n  │ ^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -374,7 +397,8 @@
               "lang": "wowlua",
               "text": "const MAX_ITEMS = 40\nprint(MAX_ITEMS)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -393,7 +417,8 @@
               "lang": "wowlua",
               "text": "local settings: { frame: { scale: number }? } = {}\nsettings.frame?.scale = 1\n"
             }
-          ]
+          ],
+          "output": "error[E0113]: an optional chain cannot be assigned to\n  ┌─ src/main.wowlua:2:1\n  │\n2 │ settings.frame?.scale = 1\n  │ ^^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -403,7 +428,8 @@
               "lang": "wowlua",
               "text": "local settings: { frame: { scale: number }? } = {}\nif settings.frame then\n    settings.frame.scale = 1\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -420,7 +446,8 @@
               "lang": "wowlua",
               "text": "for i = 1, 3 do\n    continue\n    print(i)\nend\n"
             }
-          ]
+          ],
+          "output": "error[E0114]: `continue` must be the last statement of its block; write `do continue end`\n  ┌─ src/main.wowlua:3:5\n  │\n3 │     print(i)\n  │     ^^^^^ here"
         },
         {
           "compiles": true,
@@ -430,7 +457,8 @@
               "lang": "wowlua",
               "text": "for i = 1, 3 do\n    if i == 2 then continue end\n    print(i)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -450,7 +478,8 @@
               "lang": "wowlua",
               "text": "local function setup()\n    enum Mode { Simple, Advanced }\n    return Mode.Simple\nend\nprint(setup())\n"
             }
-          ]
+          ],
+          "output": "error[E0115]: `enum` is only allowed at the top level of a file\n  ┌─ src/main.wowlua:2:5\n  │\n2 │     enum Mode { Simple, Advanced }\n  │     ^^^^ here"
         },
         {
           "compiles": true,
@@ -460,7 +489,8 @@
               "lang": "wowlua",
               "text": "enum Mode { Simple, Advanced }\n\nlocal function setup()\n    return Mode.Simple\nend\nprint(setup())\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -479,7 +509,8 @@
               "lang": "wowlua",
               "text": "local count = 3\nprint(`count} items: {count}`)\n"
             }
-          ]
+          ],
+          "output": "error[E0116]: unbalanced `}` in an interpolated string; write `\\}` for a literal brace\n  ┌─ src/main.wowlua:2:13\n  │\n2 │ print(`count} items: {count}`)\n  │             ^ here"
         },
         {
           "compiles": true,
@@ -489,7 +520,8 @@
               "lang": "wowlua",
               "text": "local count = 3\nprint(`\\{count\\} items: {count}`)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -509,7 +541,8 @@
               "lang": "wowlua",
               "text": "import _, clamp from \"./math\"\nprint(clamp(5, 0, 1))\n"
             }
-          ]
+          ],
+          "output": "error[E0117]: `import _` cannot be combined with other names\n  ┌─ src/main.wowlua:1:8\n  │\n1 │ import _, clamp from \"./math\"\n  │        ^ here"
         },
         {
           "compiles": true,
@@ -524,7 +557,8 @@
               "lang": "wowlua",
               "text": "export function clamp(v: number, lo: number, hi: number): number\n    return math.max(lo, math.min(hi, v))\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -541,7 +575,8 @@
               "lang": "wowlua",
               "text": "export local M = {}\nexport function M.greet()\n    print(\"hello\")\nend\n"
             }
-          ]
+          ],
+          "output": "error[E0118]: `export function` takes a plain name\n  ┌─ src/main.wowlua:2:17\n  │\n2 │ export function M.greet()\n  │                 ^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -551,7 +586,8 @@
               "lang": "wowlua",
               "text": "export local M = {}\nfunction M.greet()\n    print(\"hello\")\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -570,7 +606,8 @@
               "lang": "wowlua",
               "text": "export local count: number\n"
             }
-          ]
+          ],
+          "output": "error[E0119]: `export local` needs an initializer\n  ┌─ src/main.wowlua:1:1\n  │\n1 │ export local count: number\n  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -580,7 +617,8 @@
               "lang": "wowlua",
               "text": "export local count: number = 0\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -599,7 +637,8 @@
               "lang": "wowlua",
               "text": "--!strict\nlocal playerName = UnitName(\"player\")\nprint(playerNmae)\n"
             }
-          ]
+          ],
+          "output": "error[E1001]: `playerNmae` is not a declared global\n  ┌─ src/main.wowlua:3:7\n  │\n3 │ print(playerNmae)\n  │       ^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -609,7 +648,8 @@
               "lang": "wowlua",
               "text": "--!strict\nlocal playerName = UnitName(\"player\")\nprint(playerName)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -629,7 +669,8 @@
               "lang": "wowlua",
               "text": "local playerName = UnitName(\"player\")\nprint(playerNmae)\n"
             }
-          ]
+          ],
+          "output": "warning[W1001]: `playerNmae` is not a declared global\n  ┌─ src/main.wowlua:2:7\n  │\n2 │ print(playerNmae)\n  │       ^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -639,7 +680,8 @@
               "lang": "wowlua",
               "text": "local playerName = UnitName(\"player\")\nprint(playerName)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -659,7 +701,8 @@
               "lang": "wowlua",
               "text": "--!strict\ncounter = 0\n"
             }
-          ]
+          ],
+          "output": "error[E1002]: assigns the undeclared global `counter` (declare it, use `_G.counter`, or make it `local`)\n  ┌─ src/main.wowlua:2:1\n  │\n2 │ counter = 0\n  │ ^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -669,7 +712,8 @@
               "lang": "wowlua",
               "text": "--!strict\ndeclare global MyAddonCounter: number\nMyAddonCounter = 0\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -689,7 +733,8 @@
               "lang": "wowlua",
               "text": "counter = 0\n"
             }
-          ]
+          ],
+          "output": "warning[W1002]: assigns the undeclared global `counter` (declare it, use `_G.counter`, or make it `local`)\n  ┌─ src/main.wowlua:1:1\n  │\n1 │ counter = 0\n  │ ^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -699,7 +744,8 @@
               "lang": "wowlua",
               "text": "local counter = 0\nprint(counter)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -727,7 +773,8 @@
               "lang": "wowlua",
               "text": "local function greet(name: string, title: string)\n    print(\"Hello \" .. name)\nend\ngreet(\"Ana\", \"Dr.\")\n"
             }
-          ]
+          ],
+          "output": "warning[W1003]: unused parameter `title`\n  ┌─ src/main.wowlua:1:36\n  │\n1 │ local function greet(name: string, title: string)\n  │                                    ^^^^^ never read\n  │\n  = help: prefix it with `_` (`_title`)"
         },
         {
           "compiles": true,
@@ -737,7 +784,8 @@
               "lang": "wowlua",
               "text": "local function greet(name: string, _title: string)\n    print(\"Hello \" .. name)\nend\ngreet(\"Ana\", \"Dr.\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -754,7 +802,8 @@
               "lang": "wowlua",
               "text": "local function resize(width: number = height, height: number = 100)\n    print(width, height)\nend\nresize()\n"
             }
-          ]
+          ],
+          "output": "error[E1004]: `height` here is the parameter, which is not set yet (a default reads only earlier parameters); to read an outer `height`, give the parameter another name\n  ┌─ src/main.wowlua:1:39\n  │\n1 │ local function resize(width: number = height, height: number = 100)\n  │                                       ^^^^^^ here"
         },
         {
           "compiles": true,
@@ -764,7 +813,8 @@
               "lang": "wowlua",
               "text": "local function resize(height: number = 100, width: number = height)\n    print(width, height)\nend\nresize()\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -783,7 +833,8 @@
               "lang": "wowlua",
               "text": "local count = 1\ndo\n    local count = 2\n    print(count)\nend\nprint(count)\n"
             }
-          ]
+          ],
+          "output": "warning[W1004]: `count` shadows a local of an enclosing scope\n  ┌─ src/main.wowlua:3:11\n  │\n1 │ local count = 1\n  │       ----- shadowed local\n2 │ do\n3 │     local count = 2\n  │           ^^^^^ declared here"
         },
         {
           "compiles": true,
@@ -793,7 +844,8 @@
               "lang": "wowlua",
               "text": "local count = 1\ndo\n    local bonus = 2\n    print(bonus)\nend\nprint(count)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -812,7 +864,8 @@
               "lang": "wowlua",
               "text": "local function sign(x: number): number\n    if x >= 0 then return 1 else return -1 end\n    print(\"never printed\")\nend\nprint(sign(2))\n"
             }
-          ]
+          ],
+          "output": "warning[W1005]: unreachable code\n  ┌─ src/main.wowlua:3:5\n  │\n3 │     print(\"never printed\")\n  │     ^^^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -822,7 +875,8 @@
               "lang": "wowlua",
               "text": "local function sign(x: number): number\n    print(\"checking\", x)\n    if x >= 0 then return 1 else return -1 end\nend\nprint(sign(2))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -839,7 +893,8 @@
               "lang": "wowlua",
               "text": "export local count = 0\ncount = count + 1\n"
             }
-          ]
+          ],
+          "output": "error[E1010]: cannot assign to the exported binding `count`; mutate a table's contents or export accessor functions\n  ┌─ src/main.wowlua:2:1\n  │\n2 │ count = count + 1\n  │ ^^^^^ here"
         },
         {
           "compiles": true,
@@ -849,7 +904,8 @@
               "lang": "wowlua",
               "text": "export local state = { count = 0 }\nstate.count = state.count + 1\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -869,7 +925,8 @@
               "lang": "wowlua",
               "text": "local delay = 1\nimport after from \"wowlua:timer\"\nafter(delay, function() print(\"later\") end)\n"
             }
-          ]
+          ],
+          "output": "error[E1011]: imports must come before every other statement\n  ┌─ src/main.wowlua:2:1\n  │\n2 │ import after from \"wowlua:timer\"\n  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this import follows other code"
         },
         {
           "compiles": true,
@@ -879,7 +936,8 @@
               "lang": "wowlua",
               "text": "import after from \"wowlua:timer\"\nlocal delay = 1\nafter(delay, function() print(\"later\") end)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -898,7 +956,8 @@
               "lang": "wowlua",
               "text": "import sleepFor from \"wowlua:timer\"\nsleepFor(1)\n"
             }
-          ]
+          ],
+          "output": "error[E1012]: module has no export named `sleepFor`\n  ┌─ src/main.wowlua:1:8\n  │\n1 │ import sleepFor from \"wowlua:timer\"\n  │        ^^^^^^^^ not exported"
         },
         {
           "compiles": true,
@@ -908,7 +967,8 @@
               "lang": "wowlua",
               "text": "import after from \"wowlua:timer\"\nafter(1, function() print(\"later\") end)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -932,7 +992,8 @@
               "lang": "wowlua",
               "text": "export function clamp(v: number, lo: number, hi: number): number\n    return math.max(lo, math.min(hi, v))\nend\n"
             }
-          ]
+          ],
+          "output": "error[E1013]: `./Math` differs in case from the file `math.wowlua`\n  ┌─ src/main.wowlua:1:19\n  │\n1 │ import clamp from \"./Math\"\n  │                   ^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -947,7 +1008,8 @@
               "lang": "wowlua",
               "text": "export function clamp(v: number, lo: number, hi: number): number\n    return math.max(lo, math.min(hi, v))\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -972,7 +1034,8 @@
               "lang": "wowlua",
               "text": "import hello from \"./main\"\nexport function greet(): string\n    return hello() .. \"!\"\nend\nprint(greet())\n"
             }
-          ]
+          ],
+          "output": "error[E1014]: load-time dependency cycle between main.wowlua, other.wowlua\n  ┌─ src/main.wowlua:5:7\n  │\n5 │ print(greet())\n  │       ^^^^^ `main.wowlua` uses the import `greet` from `other.wowlua` while it loads\n  │\n  ┌─ src/other.wowlua:3:12\n  │\n3 │     return hello() .. \"!\"\n  │            ----- `other.wowlua` uses the import `hello` from `main.wowlua` while it loads\n  │\n  = note: main.wowlua: in top-level code\n  = note: other.wowlua: in greet, called from top-level code\n  = help: move the use into a function that runs later (an event handler, for example), or split a module"
         },
         {
           "compiles": true,
@@ -987,7 +1050,8 @@
               "lang": "wowlua",
               "text": "import hello from \"./main\"\nexport function greet(): string\n    return hello() .. \"!\"\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1007,7 +1071,8 @@
               "lang": "wowlua",
               "text": "import clamp from \"./math\"\nprint(clamp(5, 0, 1))\n"
             }
-          ]
+          ],
+          "output": "error[E1015]: module `./math` not found\n  ┌─ src/main.wowlua:1:19\n  │\n1 │ import clamp from \"./math\"\n  │                   ^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -1022,7 +1087,8 @@
               "lang": "wowlua",
               "text": "export function clamp(v: number, lo: number, hi: number): number\n    return math.max(lo, math.min(hi, v))\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1042,7 +1108,8 @@
               "lang": "wowlua",
               "text": "local items = {}\nexport function items()\n    return {}\nend\n"
             }
-          ]
+          ],
+          "output": "error[E1016]: the export `items` redeclares a module-level name\n  ┌─ src/main.wowlua:2:17\n  │\n1 │ local items = {}\n  │       ----- also declared here\n2 │ export function items()\n  │                 ^^^^^ exported here\n  │\n  = help: an export is a module-level local of its own, so the two shadow each other and code meant for one reads the other: rename one of them (an export needs no forward declaration, it is hoisted)"
         },
         {
           "compiles": true,
@@ -1052,7 +1119,8 @@
               "lang": "wowlua",
               "text": "local itemList = {}\nexport function items()\n    return itemList\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1071,7 +1139,8 @@
               "lang": "wowlua",
               "text": "import flavor from \"wowlua:meta\"\n\n@if(flavor == \"standard\")\nlocal function setupEditMode()\n    print(\"edit mode\")\nend\n\nsetupEditMode()\n"
             }
-          ]
+          ],
+          "output": "error[E1020]: `setupEditMode` was removed by `@if` for this build\n  ┌─ src/main.wowlua:8:1\n  │  \n3 │ ╭ @if(flavor == \"standard\")\n4 │ │ local function setupEditMode()\n5 │ │     print(\"edit mode\")\n6 │ │ end\n  │ ╰───' removed here\n7 │   \n8 │   setupEditMode()\n  │   ^^^^^^^^^^^^^ used here"
         },
         {
           "compiles": true,
@@ -1081,7 +1150,8 @@
               "lang": "wowlua",
               "text": "import flavor from \"wowlua:meta\"\n\n@if(flavor == \"standard\")\nlocal function setupEditMode()\n    print(\"edit mode\")\nend\n\nif flavor == \"standard\" then\n    setupEditMode()\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1107,7 +1177,8 @@
               "lang": "wowlua",
               "text": "export const VERSION = 1\nreturn VERSION\n"
             }
-          ]
+          ],
+          "output": "error[E1032]: a module cannot `return` at its top level\n  ┌─ src/main.wowlua:2:1\n  │\n2 │ return VERSION\n  │ ^^^^^^^^^^^^^^ exports after this would never be assigned"
         },
         {
           "compiles": true,
@@ -1117,7 +1188,8 @@
               "lang": "wowlua",
               "text": "export const VERSION = 1\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -1144,7 +1216,8 @@
               "lang": "lua",
               "text": "print(MyAddonDB.version)\n"
             }
-          ]
+          ],
+          "output": "warning[W1033]: the load order of the files defining `MyAddonDB` cannot be determined; they keep their source order\n  ┌─ src/a.lua:1:1\n  │\n1 │ MyAddonDB = {}\n  │ ^^^^^^^^^ defined here at load time\n  │\n  ┌─ src/b.lua:1:1\n  │\n1 │ MyAddonDB = { version = 2 }\n  │ --------- defined here at load time\n  │\n  = help: import the module that should load first, or list the files in `build.load-order`"
         },
         {
           "compiles": true,
@@ -1164,7 +1237,8 @@
               "lang": "lua",
               "text": "print(MyAddonDB.version)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1189,7 +1263,8 @@
               "lang": "lua",
               "text": "print(MyAddonDB)\n"
             }
-          ]
+          ],
+          "output": "warning[W1034]: `MyAddonDB` is read while the file loads, but only defined later (inside functions that run at run time)\n  ┌─ src/b.lua:1:7\n  │\n1 │ print(MyAddonDB)\n  │       ^^^^^^^^^ read at load time"
         },
         {
           "compiles": true,
@@ -1204,7 +1279,8 @@
               "lang": "lua",
               "text": "local frame = CreateFrame(\"Frame\")\nframe:RegisterEvent(\"PLAYER_LOGIN\")\nframe:SetScript(\"OnEvent\", function()\n    print(MyAddonDB)\nend)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1234,7 +1310,8 @@
               "lang": "wowlua",
               "text": "export function greet(): string\n    return \"hi\"\nend\n"
             }
-          ]
+          ],
+          "output": "error[E1035]: `build.load-order` lists `src/main.wowlua` before `src/util.wowlua`, but it depends on it\n  ┌─ src/main.wowlua:2:7\n  │\n2 │ print(greet())\n  │       ^^^^^ `main.wowlua` uses the import `greet` from `util.wowlua` while it loads"
         },
         {
           "compiles": true,
@@ -1254,7 +1331,8 @@
               "lang": "wowlua",
               "text": "export function greet(): string\n    return \"hi\"\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1284,7 +1362,8 @@
               "lang": "lua",
               "text": "MyAddonGreeting = \"hi\"\n"
             }
-          ]
+          ],
+          "output": "warning[W1035]: `build.load-order` loads `main.lua` before `util.lua`, which uses a name it defines; keeping the listed order\n  ┌─ src/main.lua:1:7\n  │\n1 │ print(MyAddonGreeting)\n  │       ^^^^^^^^^^^^^^^ `main.lua` uses `MyAddonGreeting` from `util.lua` while it loads\n  │\n  = help: if the listed order is wrong, change `build.load-order`; otherwise move the use into a function that runs later"
         },
         {
           "compiles": true,
@@ -1304,7 +1383,8 @@
               "lang": "lua",
               "text": "MyAddonGreeting = \"hi\"\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1334,7 +1414,8 @@
               "lang": "lua",
               "text": "print(\"b\")\n"
             }
-          ]
+          ],
+          "output": "error[E1036]: the flavors need incompatible load orders, but `build.toc-layout` is `single`\n = in wowlua.json\n = help: use `\"toc-layout\": \"auto\"` to get per-flavor TOC files"
         },
         {
           "compiles": true,
@@ -1354,7 +1435,8 @@
               "lang": "lua",
               "text": "print(\"b\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1378,7 +1460,8 @@
               "lang": "wowlua",
               "text": "import show from \"./main\"\nexport local items = {}\nexport function add(name: string)\n    table.insert(items, name)\n    show()\nend\n"
             }
-          ]
+          ],
+          "output": "warning[W1036]: `items` is `any` here: `other` is checked after this module in their import cycle, and its export `items` has no type annotation\n  ┌─ src/main.wowlua:1:8\n  │\n1 │ import items from \"./other\"\n  │        ^^^^^ read as `any`\n  │\n  = help: annotate it where `other` exports it (`export local items: T = …`)"
         },
         {
           "compiles": true,
@@ -1393,7 +1476,8 @@
               "lang": "wowlua",
               "text": "import show from \"./main\"\nexport local items: string[] = {}\nexport function add(name: string)\n    table.insert(items, name)\n    show()\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1412,7 +1496,8 @@
               "lang": "wowlua",
               "text": "export const VERSION = 1\nprint(describe())\nfunction describe(): string\n    return \"v\" .. VERSION\nend\n"
             }
-          ]
+          ],
+          "output": "error[E1037]: `describe` is used before its definition runs (hoisted functions are `nil` until then)\n  ┌─ src/main.wowlua:2:7\n  │\n2 │ print(describe())\n  │       ^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -1422,7 +1507,8 @@
               "lang": "wowlua",
               "text": "export const VERSION = 1\nfunction describe(): string\n    return \"v\" .. VERSION\nend\nprint(describe())\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1442,7 +1528,8 @@
               "lang": "wowlua",
               "text": "import asset from \"wowlua:meta\"\nlocal icon = asset(\"media/icon.tga\")\nprint(icon)\n"
             }
-          ]
+          ],
+          "output": "error[E1038]: `media/icon.tga` is not an asset of the package (`build.assets`)\n  ┌─ src/main.wowlua:2:14\n  │\n2 │ local icon = asset(\"media/icon.tga\")\n  │              ^^^^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -1462,7 +1549,8 @@
               "lang": "wowlua",
               "text": "import asset from \"wowlua:meta\"\nlocal icon = asset(\"media/icon.tga\")\nprint(icon)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1486,7 +1574,8 @@
               "lang": "wowlua",
               "text": "import flavor from \"wowlua:meta\"\n\n@if(flavor == \"standard\")\nlocal function setupEditMode()\n    print(\"edit mode\")\nend\n\nsetupEditMode()\n"
             }
-          ]
+          ],
+          "output": "error[E1039]: `flavor` is not a constant in shared flavor mode; use a runtime check\n  ┌─ src/main.wowlua:3:5\n  │\n3 │ @if(flavor == \"standard\")\n  │     ^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -1501,7 +1590,8 @@
               "lang": "wowlua",
               "text": "import flavor from \"wowlua:meta\"\n\nlocal function setupEditMode()\n    print(\"edit mode\")\nend\n\nif flavor == \"standard\" then\n    setupEditMode()\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1521,7 +1611,8 @@
               "lang": "wowlua",
               "text": "local verbose = true\n\n@if(verbose)\nlocal function dumpState()\n    print(\"state\")\nend\n"
             }
-          ]
+          ],
+          "output": "error[E1040]: `@if` conditions must be static: `wowlua:meta` paths, constants and literals\n  ┌─ src/main.wowlua:3:5\n  │\n3 │ @if(verbose)\n  │     ^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -1531,7 +1622,8 @@
               "lang": "wowlua",
               "text": "import build from \"wowlua:meta\"\n\n@if(build.debug)\nlocal function dumpState()\n    print(\"state\")\nend\n\nif build.debug then\n    dumpState()\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1559,7 +1651,8 @@
               "lang": "wowlua",
               "text": "local count: number = \"3\"\nprint(count)\n"
             }
-          ]
+          ],
+          "output": "error[E2001]: `\"3\"` is not assignable to `number`\n  ┌─ src/main.wowlua:1:7\n  │\n1 │ local count: number = \"3\"\n  │       ^^^^^ here"
         },
         {
           "compiles": true,
@@ -1569,7 +1662,8 @@
               "lang": "wowlua",
               "text": "local count: number = 3\nprint(count)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1589,7 +1683,8 @@
               "lang": "wowlua",
               "text": "local f: Fram = CreateFrame(\"Frame\")\nprint(f)\n"
             }
-          ]
+          ],
+          "output": "error[E2002]: unknown type `Fram`\n  ┌─ src/main.wowlua:1:10\n  │\n1 │ local f: Fram = CreateFrame(\"Frame\")\n  │          ^^^^ not declared"
         },
         {
           "compiles": true,
@@ -1599,7 +1694,8 @@
               "lang": "wowlua",
               "text": "local f: Frame = CreateFrame(\"Frame\")\nprint(f)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1618,7 +1714,8 @@
               "lang": "wowlua",
               "text": "class Animal\n    name: string = \"Rex\"\nend\nlocal a = Animal.new()\nprint(a.nmae)\n"
             }
-          ]
+          ],
+          "output": "error[E2003]: `Animal` has no field or method `nmae`\n  ┌─ src/main.wowlua:5:9\n  │\n5 │ print(a.nmae)\n  │         ^^^^ here"
         },
         {
           "compiles": false,
@@ -1628,7 +1725,8 @@
               "lang": "wowlua",
               "text": "class Animal\n    name: string = \"Rex\"\nend\nfunction Animal:speak()\n    print(self.name)\nend\n"
             }
-          ]
+          ],
+          "output": "error[E2003]: class `Animal` has no static member `name`\n  ┌─ src/main.wowlua:5:16\n  │\n5 │     print(self.name)\n  │                ^^^^ here"
         },
         {
           "compiles": true,
@@ -1638,7 +1736,8 @@
               "lang": "wowlua",
               "text": "class Animal\n    name: string = \"Rex\"\n    function speak()\n        print(self.name)\n    end\nend\nlocal a = Animal.new()\nprint(a.name)\na:speak()\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1659,7 +1758,8 @@
               "lang": "wowlua",
               "text": "local count: number = 3\ncount()\n"
             }
-          ]
+          ],
+          "output": "error[E2004]: a value of type `3` is not callable\n  ┌─ src/main.wowlua:2:1\n  │\n2 │ count()\n  │ ^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -1669,7 +1769,8 @@
               "lang": "wowlua",
               "text": "local count: number = 3\nprint(count)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1689,7 +1790,8 @@
               "lang": "wowlua",
               "text": "--!strict\nlocal function first(xs: string[]): string?\n    return xs[1]\nend\nlocal s = first({ \"a\" })\nprint(s:upper())\n"
             }
-          ]
+          ],
+          "output": "error[E2005]: `string?` may be `nil`\n  ┌─ src/main.wowlua:6:9\n  │\n6 │ print(s:upper())\n  │         ^^^^^ here"
         },
         {
           "compiles": true,
@@ -1699,7 +1801,8 @@
               "lang": "wowlua",
               "text": "--!strict\nlocal function first(xs: string[]): string?\n    return xs[1]\nend\nlocal s = first({ \"a\" })\nif s then\n    print(s:upper())\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1718,7 +1821,8 @@
               "lang": "wowlua",
               "text": "local function add(a: number, b: number): number\n    return a + b\nend\nprint(add(1, 2, 3))\n"
             }
-          ]
+          ],
+          "output": "error[E2006]: too many arguments: expected 2, got 3\n  ┌─ src/main.wowlua:4:17\n  │\n4 │ print(add(1, 2, 3))\n  │                 ^ here"
         },
         {
           "compiles": true,
@@ -1728,7 +1832,8 @@
               "lang": "wowlua",
               "text": "local function add(a: number, b: number): number\n    return a + b\nend\nprint(add(1, 2))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1749,7 +1854,8 @@
               "lang": "wowlua",
               "text": "local function add(a: number, b: number): number\n    return a + b\nend\nprint(add(1))\n"
             }
-          ]
+          ],
+          "output": "error[E2007]: missing argument `b` of type `number`\n  ┌─ src/main.wowlua:4:7\n  │\n4 │ print(add(1))\n  │       ^^^^^^ here"
         },
         {
           "compiles": true,
@@ -1759,7 +1865,8 @@
               "lang": "wowlua",
               "text": "local function add(a: number, b: number?): number\n    return a + (b or 0)\nend\nprint(add(1))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1778,7 +1885,8 @@
               "lang": "wowlua",
               "text": "class Counter\n    n: number = 0\n    function bump()\n        self.n += 1\n    end\nend\nlocal c = Counter.new()\nc.bump()\n"
             }
-          ]
+          ],
+          "output": "error[E2008]: `bump` is a method; call it with `:`\n  ┌─ src/main.wowlua:8:1\n  │\n8 │ c.bump()\n  │ ^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -1788,7 +1896,8 @@
               "lang": "wowlua",
               "text": "class Counter\n    n: number = 0\n    function bump()\n        self.n += 1\n    end\nend\nlocal c = Counter.new()\nc:bump()\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1807,7 +1916,8 @@
               "lang": "wowlua",
               "text": "local function sign(n: number): number\n    if n > 0 then\n        return 1\n    elseif n < 0 then\n        return -1\n    end\nend\nprint(sign(2))\n"
             }
-          ]
+          ],
+          "output": "error[E2009]: not all code paths return a value\n  ┌─ src/main.wowlua:7:1\n  │\n7 │ end\n  │ ^^^ here"
         },
         {
           "compiles": true,
@@ -1817,7 +1927,8 @@
               "lang": "wowlua",
               "text": "local function sign(n: number): number\n    if n > 0 then\n        return 1\n    elseif n < 0 then\n        return -1\n    end\n    return 0\nend\nprint(sign(2))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1836,7 +1947,8 @@
               "lang": "wowlua",
               "text": "const MAX = 5\nMAX = 6\n"
             }
-          ]
+          ],
+          "output": "error[E2010]: cannot assign to `MAX`\n  ┌─ src/main.wowlua:2:1\n  │\n2 │ MAX = 6\n  │ ^^^ here"
         },
         {
           "compiles": true,
@@ -1846,7 +1958,8 @@
               "lang": "wowlua",
               "text": "local max = 5\nmax = 6\nprint(max)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1865,7 +1978,8 @@
               "lang": "wowlua",
               "text": "class Account\n    private balance: number = 0\nend\nlocal a = Account.new()\nprint(a.balance)\n"
             }
-          ]
+          ],
+          "output": "error[E2011]: `balance` is private\n  ┌─ src/main.wowlua:5:9\n  │\n5 │ print(a.balance)\n  │         ^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -1875,7 +1989,8 @@
               "lang": "wowlua",
               "text": "class Account\n    private balance: number = 0\n    function getBalance(): number\n        return self.balance\n    end\nend\nlocal a = Account.new()\nprint(a:getBalance())\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1894,7 +2009,8 @@
               "lang": "wowlua",
               "text": "overload function size(s: string): number\noverload function size(t: table): number\nlocal function size(v: string | table): number\n    return #v\nend\nprint(size(5))\n"
             }
-          ]
+          ],
+          "output": "error[E2012]: no overload matches the arguments (5); overloads:\n  (s: string) -> number\n  (t: table) -> number\n  ┌─ src/main.wowlua:6:7\n  │\n6 │ print(size(5))\n  │       ^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -1904,7 +2020,8 @@
               "lang": "wowlua",
               "text": "overload function size(s: string): number\noverload function size(t: table): number\nlocal function size(v: string | table): number\n    return #v\nend\nprint(size(\"abc\"))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1925,7 +2042,8 @@
               "lang": "wowlua",
               "text": "type Pair<A, B> = { first: A, second: B }\nlocal p: Pair<number> = { first = 1, second = 2 }\nprint(p)\n"
             }
-          ]
+          ],
+          "output": "error[E2013]: `Pair` takes 2 type arguments, but 1 were given\n  ┌─ src/main.wowlua:2:10\n  │\n2 │ local p: Pair<number> = { first = 1, second = 2 }\n  │          ^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -1935,7 +2053,8 @@
               "lang": "wowlua",
               "text": "type Pair<A, B> = { first: A, second: B }\nlocal p: Pair<number, number> = { first = 1, second = 2 }\nprint(p)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1955,7 +2074,8 @@
               "lang": "wowlua",
               "text": "local function largest<T extends { size: number }>(xs: T[]): T\n    return xs[1]\nend\nprint(largest({ \"a\", \"b\" }))\n"
             }
-          ]
+          ],
+          "output": "error[E2014]: `string` does not satisfy the constraint `{ size: number }` of `T`\n  ┌─ src/main.wowlua:4:7\n  │\n4 │ print(largest({ \"a\", \"b\" }))\n  │       ^^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -1965,7 +2085,8 @@
               "lang": "wowlua",
               "text": "local function largest<T extends { size: number }>(xs: T[]): T\n    return xs[1]\nend\nprint(largest({ { size = 1 } }))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -1985,7 +2106,8 @@
               "lang": "wowlua",
               "text": "local n = 5\nlocal s = n :: string\nprint(s)\n"
             }
-          ]
+          ],
+          "output": "error[E2015]: cannot assert `number` as `string`\n  ┌─ src/main.wowlua:2:11\n  │\n2 │ local s = n :: string\n  │           ^^^^^^^^^^^ here\n  │\n  = help: to force the type, write `:: any :: string`"
         },
         {
           "compiles": true,
@@ -1995,7 +2117,8 @@
               "lang": "wowlua",
               "text": "local n: number | string = \"five\"\nlocal s = n :: string\nprint(s)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2019,7 +2142,8 @@
               "lang": "wowlua",
               "text": "--!strict\nC_Garrison.GetGarrisonInfo(1)\n"
             }
-          ]
+          ],
+          "output": "error[E2030]: `C_Garrison.GetGarrisonInfo` is not available in `vanilla`; guard it with a flavor check or an existence check\n  ┌─ src/main.wowlua:2:12\n  │\n2 │ C_Garrison.GetGarrisonInfo(1)\n  │            ^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -2034,7 +2158,8 @@
               "lang": "wowlua",
               "text": "--!strict\nif C_Garrison then\n    C_Garrison.GetGarrisonInfo(1)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2053,7 +2178,8 @@
               "lang": "wowlua",
               "text": "--!strict\nlocal hp = UnitHealth(\"target\")\nif hp < 1000 then\n    print(\"low\")\nend\n"
             }
-          ]
+          ],
+          "output": "error[E2040]: `number | Secret<number>` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first\n  ┌─ src/main.wowlua:3:4\n  │\n3 │ if hp < 1000 then\n  │    ^^ here"
         },
         {
           "compiles": true,
@@ -2063,7 +2189,8 @@
               "lang": "wowlua",
               "text": "--!strict\nlocal hp = UnitHealth(\"target\")\nif canaccessvalue(hp) and hp < 1000 then\n    print(\"low\")\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2082,7 +2209,8 @@
               "lang": "wowlua",
               "text": "local hp = UnitHealth(\"target\")\nif hp < 1000 then\n    print(\"low\")\nend\n"
             }
-          ]
+          ],
+          "output": "warning[W2040]: `number | Secret<number>` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first\n  ┌─ src/main.wowlua:2:4\n  │\n2 │ if hp < 1000 then\n  │    ^^ here"
         },
         {
           "compiles": true,
@@ -2092,7 +2220,8 @@
               "lang": "wowlua",
               "text": "local hp = UnitHealth(\"target\")\nif canaccessvalue(hp) and hp < 1000 then\n    print(\"low\")\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2111,7 +2240,8 @@
               "lang": "wowlua",
               "text": "--!strict\nlocal function double(n)\n    return n * 2\nend\nprint(double(2))\n"
             }
-          ]
+          ],
+          "output": "error[E2050]: parameter `n` needs a type annotation\n  ┌─ src/main.wowlua:2:23\n  │\n2 │ local function double(n)\n  │                       ^ here"
         },
         {
           "compiles": true,
@@ -2121,7 +2251,8 @@
               "lang": "wowlua",
               "text": "--!strict\nlocal function double(n: number): number\n    return n * 2\nend\nprint(double(2))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2140,7 +2271,8 @@
               "lang": "wowlua",
               "text": "--!strict\nlocal function make(): { x: number }\n    return { x = 1 }\nend\nlocal p = make()\np.y = 2\n"
             }
-          ]
+          ],
+          "output": "error[E2051]: cannot add the field `y` to a sealed table\n  ┌─ src/main.wowlua:6:3\n  │\n6 │ p.y = 2\n  │   ^ here"
         },
         {
           "compiles": true,
@@ -2150,7 +2282,8 @@
               "lang": "wowlua",
               "text": "--!strict\nlocal function make(): { x: number, y?: number }\n    return { x = 1 }\nend\nlocal p = make()\np.y = 2\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2169,7 +2302,8 @@
               "lang": "wowlua",
               "text": "--!strict\nclass Player\n    name: string\n    level: number\n    constructor(name: string)\n        self.name = name\n    end\nend\nprint(Player.new(\"a\"))\n"
             }
-          ]
+          ],
+          "output": "error[E2052]: field `level` is not assigned in the constructor (initialize it, assign it, or make it optional)\n  ┌─ src/main.wowlua:4:5\n  │\n4 │     level: number\n  │     ^^^^^ here"
         },
         {
           "compiles": true,
@@ -2179,7 +2313,8 @@
               "lang": "wowlua",
               "text": "--!strict\nclass Player\n    name: string\n    level: number\n    constructor(name: string)\n        self.name = name\n        self.level = 1\n    end\nend\nprint(Player.new(\"a\"))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2210,7 +2345,8 @@
               "lang": "wowlua",
               "text": "local function add(a, b)\n    return a + b\nend\nprint(add(1, 2, 3))\n"
             }
-          ]
+          ],
+          "output": "warning[W2055]: too many arguments: expected 2, got 3\n  ┌─ src/main.wowlua:4:17\n  │\n4 │ print(add(1, 2, 3))\n  │                 ^ here"
         },
         {
           "compiles": true,
@@ -2220,7 +2356,8 @@
               "lang": "wowlua",
               "text": "local function add(a, b)\n    return a + b\nend\nprint(add(1, 2))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2245,7 +2382,8 @@
               "lang": "wowlua",
               "text": "local co = coroutine.create(function()\n    pcall(function()\n        coroutine.yield(1)\n    end)\nend)\ncoroutine.resume(co)\n"
             }
-          ]
+          ],
+          "output": "warning[W2057]: `coroutine.yield` cannot yield across `pcall` in Lua 5.1\n  ┌─ src/main.wowlua:3:9\n  │\n3 │         coroutine.yield(1)\n  │         ^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -2255,7 +2393,8 @@
               "lang": "wowlua",
               "text": "local co = coroutine.create(function()\n    pcall(function()\n        print(\"work\")\n    end)\n    coroutine.yield(1)\nend)\ncoroutine.resume(co)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2286,7 +2425,8 @@
               "lang": "wowlua",
               "text": "local x, y: number, number = 1, 2\nprint(x, y)\n"
             }
-          ]
+          ],
+          "output": "error[E2060]: `number` is declared as a local, but it names a type: annotate each name (`local a: T, b: U`)\n  ┌─ src/main.wowlua:1:21\n  │\n1 │ local x, y: number, number = 1, 2\n  │                     ^^^^^^ here"
         },
         {
           "compiles": true,
@@ -2296,7 +2436,8 @@
               "lang": "wowlua",
               "text": "local x: number, y: number = 1, 2\nprint(x, y)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2315,7 +2456,8 @@
               "lang": "wowlua",
               "text": "local function half(n: number): number\n    return n / 0\nend\nprint(half(1))\n"
             }
-          ]
+          ],
+          "output": "warning[W2060]: division by zero: WoW raises an error here, where Lua elsewhere gives inf or nan (use `math.huge` for infinity)\n  ┌─ src/main.wowlua:2:16\n  │\n2 │     return n / 0\n  │                ^ here"
         },
         {
           "compiles": true,
@@ -2325,7 +2467,8 @@
               "lang": "wowlua",
               "text": "local function half(n: number): number\n    return n / 2\nend\nprint(half(1))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -2342,7 +2485,8 @@
               "lang": "wowlua",
               "text": "local function gapFor(subtitle: string?): number?\n    return subtitle and nil or 8\nend\nprint(gapFor(\"x\"))\n"
             }
-          ]
+          ],
+          "output": "warning[W2061]: `a and nil or b` is always `b`: the `nil` makes the `or` take over (write `not a and b or nil`, or an `if`)\n  ┌─ src/main.wowlua:2:12\n  │\n2 │     return subtitle and nil or 8\n  │            ^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -2352,7 +2496,8 @@
               "lang": "wowlua",
               "text": "local function gapFor(subtitle: string?): number?\n    return not subtitle and 8 or nil\nend\nprint(gapFor(\"x\"))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -2369,7 +2514,8 @@
               "lang": "wowlua",
               "text": "local function pos()\n    return 1, 2\nend\nlocal x, y, z = pos()\nprint(x, y, z)\n"
             }
-          ]
+          ],
+          "output": "warning[W2062]: `pos` gives at most 2 values: `z` is always nil\n  ┌─ src/main.wowlua:4:13\n  │\n4 │ local x, y, z = pos()\n  │             ^ here"
         },
         {
           "compiles": true,
@@ -2379,7 +2525,8 @@
               "lang": "wowlua",
               "text": "local function pos()\n    return 1, 2\nend\nlocal x, y = pos()\nprint(x, y)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -2401,7 +2548,8 @@
               "lang": "wowlua",
               "text": "local function show(value)\n    print(value)\nend\nshow(1)\n"
             }
-          ]
+          ],
+          "output": "warning[W2063]: parameter `value` is `any`: nothing gives it a type (annotate it)\n  ┌─ src/main.wowlua:1:21\n  │\n1 │ local function show(value)\n  │                     ^^^^^ here"
         },
         {
           "compiles": true,
@@ -2416,7 +2564,8 @@
               "lang": "wowlua",
               "text": "local function show(value: number)\n    print(value)\nend\nshow(1)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2435,7 +2584,8 @@
               "lang": "wowlua",
               "text": "class Animal\n    name: string\n    constructor(name: string)\n        self.name = name\n    end\nend\nclass Dog extends Animal\n    constructor(name: string)\n        self.name = name\n        super(name)\n    end\nend\nprint(Dog.new(\"Rex\"))\n"
             }
-          ]
+          ],
+          "output": "error[E3001]: `self` is used before `super(...)`\n  ┌─ src/main.wowlua:9:9\n  │\n9 │         self.name = name\n  │         ^^^^ used here"
         },
         {
           "compiles": true,
@@ -2445,7 +2595,8 @@
               "lang": "wowlua",
               "text": "class Animal\n    name: string\n    constructor(name: string)\n        self.name = name\n    end\nend\nclass Dog extends Animal\n    tricks: number = 0\n    constructor(name: string)\n        super(name)\n        self.tricks = 1\n    end\nend\nprint(Dog.new(\"Rex\"))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2464,7 +2615,8 @@
               "lang": "wowlua",
               "text": "abstract class Shape\n    abstract function area(): number\nend\nprint(Shape.new())\n"
             }
-          ]
+          ],
+          "output": "error[E3002]: cannot instantiate the abstract class `Shape`\n  ┌─ src/main.wowlua:4:7\n  │\n4 │ print(Shape.new())\n  │       ^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -2474,7 +2626,8 @@
               "lang": "wowlua",
               "text": "abstract class Shape\n    abstract function area(): number\nend\nclass Square extends Shape\n    side: number = 2\n    override function area(): number\n        return self.side * self.side\n    end\nend\nprint(Square.new():area())\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2493,7 +2646,8 @@
               "lang": "wowlua",
               "text": "abstract class Shape\n    abstract function area(): number\nend\nclass Square extends Shape\n    side: number = 2\nend\nprint(Square.new())\n"
             }
-          ]
+          ],
+          "output": "error[E3003]: class `Square` does not implement the abstract method `area`\n  ┌─ src/main.wowlua:4:7\n  │\n4 │ class Square extends Shape\n  │       ^^^^^^ not abstract"
         },
         {
           "compiles": true,
@@ -2503,7 +2657,8 @@
               "lang": "wowlua",
               "text": "abstract class Shape\n    abstract function area(): number\nend\nclass Square extends Shape\n    side: number = 2\n    override function area(): number\n        return self.side * self.side\n    end\nend\nprint(Square.new())\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2523,7 +2678,8 @@
               "lang": "wowlua",
               "text": "class Item\n    function new()\n    end\nend\nprint(Item)\n"
             }
-          ]
+          ],
+          "output": "error[E3004]: `new` is a reserved member name\n  ┌─ src/main.wowlua:2:14\n  │\n2 │     function new()\n  │              ^^^ reserved"
         },
         {
           "compiles": true,
@@ -2533,7 +2689,8 @@
               "lang": "wowlua",
               "text": "class Item\n    constructor()\n    end\nend\nprint(Item.new())\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2552,7 +2709,8 @@
               "lang": "wowlua",
               "text": "class Animal\n    function speak(): string\n        return \"...\"\n    end\nend\nclass Dog extends Animal\n    function speak(): string\n        return \"woof\"\n    end\nend\nprint(Dog.new():speak())\n"
             }
-          ]
+          ],
+          "output": "error[E3005]: `speak` overrides a member of a superclass; mark it `override`\n  ┌─ src/main.wowlua:7:14\n  │\n2 │     function speak(): string\n  │              ----- overridden member\n  ·\n7 │     function speak(): string\n  │              ^^^^^ missing `override`"
         },
         {
           "compiles": true,
@@ -2562,7 +2720,8 @@
               "lang": "wowlua",
               "text": "class Animal\n    function speak(): string\n        return \"...\"\n    end\nend\nclass Dog extends Animal\n    override function speak(): string\n        return \"woof\"\n    end\nend\nprint(Dog.new():speak())\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2589,7 +2748,8 @@
               "lang": "wowlua",
               "text": "class Tile extends Frame\n    function __tostring(): string\n        return \"tile\"\n    end\nend\nprint(Tile)\n"
             }
-          ]
+          ],
+          "output": "error[E3007]: widget class `Tile` cannot define the metamethod `__tostring`\n  ┌─ src/main.wowlua:2:14\n  │\n2 │     function __tostring(): string\n  │              ^^^^^^^^^^ the frame's metatable belongs to WoW"
         },
         {
           "compiles": true,
@@ -2599,7 +2759,8 @@
               "lang": "wowlua",
               "text": "class Tile extends Frame\n    function describe(): string\n        return \"tile\"\n    end\nend\nprint(Tile)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2624,7 +2785,8 @@
               "lang": "wowlua",
               "text": "export class Animal\nend\n"
             }
-          ]
+          ],
+          "output": "error[E3008]: class `Dog` extends `Animal`, which `import type` imports: a type only, with no class at run time\n  ┌─ src/main.wowlua:2:19\n  │\n2 │ class Dog extends Animal\n  │                   ^^^^^^ imported with `import type`\n  │\n  = help: import it as a value: `import Animal from …`"
         },
         {
           "compiles": true,
@@ -2639,7 +2801,8 @@
               "lang": "wowlua",
               "text": "export class Animal\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -2656,7 +2819,8 @@
               "lang": "wowlua",
               "text": "enum Size { Small = 1, Large = \"large\" }\nprint(Size.Small)\n"
             }
-          ]
+          ],
+          "output": "error[E3010]: enum `Size` mixes numeric and string values\n  ┌─ src/main.wowlua:1:24\n  │\n1 │ enum Size { Small = 1, Large = \"large\" }\n  │                        ^^^^^ here"
         },
         {
           "compiles": true,
@@ -2666,7 +2830,8 @@
               "lang": "wowlua",
               "text": "enum Size { Small = \"small\", Large = \"large\" }\nprint(Size.Small)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2685,7 +2850,8 @@
               "lang": "wowlua",
               "text": "enum Quality { Poor = 0, Common, Junk = 1 }\nprint(Quality.Poor)\n"
             }
-          ]
+          ],
+          "output": "error[E3011]: duplicate value in enum `Quality`\n  ┌─ src/main.wowlua:1:34\n  │\n1 │ enum Quality { Poor = 0, Common, Junk = 1 }\n  │                                  ^^^^ this value is used by an earlier member"
         },
         {
           "compiles": true,
@@ -2695,7 +2861,8 @@
               "lang": "wowlua",
               "text": "enum Quality { Poor = 0, Common, Junk = 2 }\nprint(Quality.Poor)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2714,7 +2881,8 @@
               "lang": "wowlua",
               "text": "@memoize\nlocal function lookup(id: number): number\n    return id * 2\nend\nprint(lookup(1))\n"
             }
-          ]
+          ],
+          "output": "error[E3020]: unknown decorator `@memoize`; decorators are core decorators, local or imported functions, or `@_G.…`\n  ┌─ src/main.wowlua:1:1\n  │\n1 │ @memoize\n  │ ^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -2724,7 +2892,8 @@
               "lang": "wowlua",
               "text": "local function memoize<A, R>(fn: (A) -> R, ctx: DecoratorContext): (A) -> R\n    print(ctx.name)\n    return fn\nend\n\n@memoize\nlocal function lookup(id: number): number\n    return id * 2\nend\nprint(lookup(1))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2743,7 +2912,8 @@
               "lang": "wowlua",
               "text": "@script(\"OnClick\")\nlocal function clicked()\nend\nclicked()\n"
             }
-          ]
+          ],
+          "output": "error[E3021]: `@script` cannot be applied to functions\n  ┌─ src/main.wowlua:1:1\n  │\n1 │ @script(\"OnClick\")\n  │ ^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -2753,7 +2923,8 @@
               "lang": "wowlua",
               "text": "class Clicker extends Button\n    @script(\"OnClick\")\n    function clicked()\n        print(\"clicked\")\n    end\nend\nprint(Clicker)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2789,7 +2960,8 @@
               "lang": "wowlua",
               "text": "@deprecated(\"use newName\")\nlocal function oldName()\nend\noldName()\n"
             }
-          ]
+          ],
+          "output": "warning[W3030]: `oldName` is deprecated: use newName\n  ┌─ src/main.wowlua:4:1\n  │\n4 │ oldName()\n  │ ^^^^^^^ used here"
         },
         {
           "compiles": true,
@@ -2799,7 +2971,8 @@
               "lang": "wowlua",
               "text": "local function newName()\nend\nnewName()\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -2822,7 +2995,8 @@
               "lang": "wowlua",
               "text": "@debugOnly\nlocal function check(n: number): boolean\n    return n > 0\nend\ncheck(1)\n"
             }
-          ]
+          ],
+          "output": "error[E3032]: a `@debugOnly` function cannot return values (its calls are removed from release builds)\n  ┌─ src/main.wowlua:3:5\n  │\n3 │     return n > 0\n  │     ^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -2832,7 +3006,8 @@
               "lang": "wowlua",
               "text": "@debugOnly\nlocal function report(n: number)\n    print(n)\nend\nreport(1)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2851,7 +3026,8 @@
               "lang": "wowlua",
               "text": "@intrinsic(\"events.event\")\ndeclare function event(name: string): any\n"
             }
-          ]
+          ],
+          "output": "error[E3033]: `@intrinsic` is only for compiler-known modules (the standard library)\n  ┌─ src/main.wowlua:1:1\n  │\n1 │ @intrinsic(\"events.event\")\n  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -2861,7 +3037,8 @@
               "lang": "wowlua",
               "text": "declare function event(name: string): any\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -2878,7 +3055,8 @@
               "lang": "wowlua",
               "text": "class Animal\n    function speak()\n        local super = 1\n        print(super)\n    end\nend\nprint(Animal)\n"
             }
-          ]
+          ],
+          "output": "error[E3040]: `super` cannot be a local name inside a class body\n  ┌─ src/main.wowlua:3:15\n  │\n3 │         local super = 1\n  │               ^^^^^ here"
         },
         {
           "compiles": true,
@@ -2888,7 +3066,8 @@
               "lang": "wowlua",
               "text": "class Animal\n    function speak()\n        local base = 1\n        print(base)\n    end\nend\nprint(Animal)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2907,7 +3086,8 @@
               "lang": "wowlua",
               "text": "class Bag\n    items: any[] = { ... }\n    constructor(...: any)\n    end\nend\nprint(Bag)\n"
             }
-          ]
+          ],
+          "output": "error[E3041]: `...` cannot be used in a field initializer\n  ┌─ src/main.wowlua:2:22\n  │\n2 │     items: any[] = { ... }\n  │                      ^^^ here"
         },
         {
           "compiles": true,
@@ -2917,7 +3097,8 @@
               "lang": "wowlua",
               "text": "class Bag\n    items: any[]\n    constructor(...: any)\n        self.items = { ... }\n    end\nend\nprint(Bag)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -2934,7 +3115,8 @@
               "lang": "wowlua",
               "text": "class Unit\n    function label(): string\n        return \"x\"\n    end\nend\nclass Player extends Unit\n    label: string = \"y\"\nend\nprint(Player)\n"
             }
-          ]
+          ],
+          "output": "error[E3042]: `label` is a field in one class and a method or accessor in the other\n  ┌─ src/main.wowlua:7:5\n  │\n2 │     function label(): string\n  │              ----- inherited member\n  ·\n7 │     label: string = \"y\"\n  │     ^^^^^ here"
         },
         {
           "compiles": true,
@@ -2944,7 +3126,8 @@
               "lang": "wowlua",
               "text": "class Unit\n    function label(): string\n        return \"x\"\n    end\nend\nclass Player extends Unit\n    title: string = \"y\"\nend\nprint(Player)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2963,7 +3146,8 @@
               "lang": "wowlua",
               "text": "class Tile extends Frame\n    get size(): number\n        return 1\n    end\nend\nprint(Tile)\n"
             }
-          ]
+          ],
+          "output": "error[E3043]: widget class `Tile` cannot declare accessors\n  ┌─ src/main.wowlua:2:9\n  │\n2 │     get size(): number\n  │         ^^^^ the frame's metatable belongs to WoW"
         },
         {
           "compiles": true,
@@ -2973,7 +3157,8 @@
               "lang": "wowlua",
               "text": "class Tile extends Frame\n    function getSize(): number\n        return 1\n    end\nend\nprint(Tile)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -2992,7 +3177,8 @@
               "lang": "wowlua",
               "text": "overload function size(s: string): number\noverload function size(t: table): number\nlocal function size(v: string): number\n    return #v\nend\nprint(size(\"a\"))\n"
             }
-          ]
+          ],
+          "output": "error[E3044]: the implementation of `size` (`(v: string) -> number`) does not accept this overload (`(t: table) -> number`)\n  ┌─ src/main.wowlua:2:19\n  │\n2 │ overload function size(t: table): number\n  │                   ^^^^ here"
         },
         {
           "compiles": true,
@@ -3002,7 +3188,8 @@
               "lang": "wowlua",
               "text": "overload function size(s: string): number\noverload function size(t: table): number\nlocal function size(v: string | table): number\n    return #v\nend\nprint(size(\"a\"))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3022,7 +3209,8 @@
               "lang": "wowlua",
               "text": "import assert from \"wowlua:debug\"\nlocal ok = assert(true, \"x\")\nprint(ok)\n"
             }
-          ]
+          ],
+          "output": "error[E3045]: `assert` can only be a call statement, because the call may be removed\n  ┌─ src/main.wowlua:2:12\n  │\n2 │ local ok = assert(true, \"x\")\n  │            ^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -3032,7 +3220,8 @@
               "lang": "wowlua",
               "text": "import assert from \"wowlua:debug\"\nlocal ready = true\nassert(ready, \"not ready\")\nprint(ready)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3051,7 +3240,8 @@
               "lang": "wowlua",
               "text": "class Point\n    x: number\n    constructor(public x: number)\n    end\nend\nprint(Point)\n"
             }
-          ]
+          ],
+          "output": "error[E3046]: the field `x` is declared twice\n  ┌─ src/main.wowlua:3:24\n  │\n3 │     constructor(public x: number)\n  │                        ^ here"
         },
         {
           "compiles": true,
@@ -3061,7 +3251,8 @@
               "lang": "wowlua",
               "text": "class Point\n    constructor(public x: number)\n    end\nend\nprint(Point.new(1).x)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3080,7 +3271,8 @@
               "lang": "wowlua",
               "text": "overload function size(s: string): number\nlocal count = 0\nlocal function size(v: string): number\n    return #v\nend\nprint(size(\"a\"), count)\n"
             }
-          ]
+          ],
+          "output": "error[E3047]: the overload signature of `size` is not followed by its implementation\n  ┌─ src/main.wowlua:1:19\n  │\n1 │ overload function size(s: string): number\n  │                   ^^^^ here"
         },
         {
           "compiles": true,
@@ -3090,7 +3282,8 @@
               "lang": "wowlua",
               "text": "local count = 0\noverload function size(s: string): number\nlocal function size(v: string): number\n    return #v\nend\nprint(size(\"a\"), count)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3109,7 +3302,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\",\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4001]: invalid JSON: trailing comma\n  ┌─ wowlua.json:6:5\n  │\n6 │     },\n  │     ^ here\n  │\n  = note: wowlua.json is strict JSON: no comments and no trailing commas"
         },
         {
           "compiles": true,
@@ -3119,7 +3313,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3138,7 +3333,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"toc-extra\": { \"Website\": \"https://example.com\" }\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "warning[W4001]: unknown TOC directive `Website` in `addon.toc-extra`\n  ┌─ wowlua.json:8:24\n  │\n8 │         \"toc-extra\": { \"Website\": \"https://example.com\" }\n  │                        ^^^^^^^^^ unknown directive\n  │\n  = help: custom metadata fields should start with `X-`"
         },
         {
           "compiles": true,
@@ -3148,7 +3344,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"toc-extra\": { \"X-Website\": \"https://example.com\" }\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3167,7 +3364,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"titel\": \"Playground\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4002]: unknown key `titel` in `addon`\n  ┌─ wowlua.json:8:9\n  │\n8 │         \"titel\": \"Playground\"\n  │         ^^^^^^^ unknown key\n  │\n  = help: did you mean `title`?"
         },
         {
           "compiles": true,
@@ -3177,7 +3375,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"title\": \"Playground\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3197,7 +3396,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"Playground\",\n        \"version\": \"0.1\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4003]: invalid package name `Playground`\n  ┌─ wowlua.json:3:9\n  │\n3 │         \"name\": \"Playground\",\n  │         ^^^^^^ invalid name\n  │\n  = help: use 2–64 lowercase letters, digits and `-`"
         },
         {
           "compiles": true,
@@ -3207,7 +3407,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -3224,7 +3425,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"classic\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4004]: unknown flavor `classic`\n  ┌─ wowlua.json:8:9\n  │\n8 │         \"classic\": {}\n  │         ^^^^^^^^^ unknown flavor\n  │\n  = note: known flavors: standard, camelot, mists, cata, wrath, tbc, vanilla"
         },
         {
           "compiles": true,
@@ -3234,7 +3436,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"vanilla\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -3256,7 +3459,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"build\": {\n        \"exclude\": [\"notes/**\"]\n    },\n    \"compat\": {\n        \"pkgmeta\": true\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4005]: `build.exclude` (`ignore`) is set by both `.pkgmeta` and wowlua.json\n = in wowlua.json\n = help: with `compat.pkgmeta`, keep it in `.pkgmeta` and remove it from wowlua.json"
         },
         {
           "compiles": true,
@@ -3271,7 +3475,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"pkgmeta\": true\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3290,7 +3495,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"release\": { \"minify\": \"tiny\" }\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4006]: unknown minification level `tiny`\n   ┌─ wowlua.json:11:22\n   │\n11 │         \"release\": { \"minify\": \"tiny\" }\n   │                      ^^^^^^^^ unknown level"
         },
         {
           "compiles": true,
@@ -3300,7 +3506,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"release\": { \"minify\": \"compact\" }\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3321,7 +3528,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"beta\": { \"inherits\": \"staging\" },\n        \"staging\": { \"inherits\": \"beta\" }\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4007]: profile inheritance cycle: beta → staging → beta\n   ┌─ wowlua.json:11:19\n   │\n11 │         \"beta\": { \"inherits\": \"staging\" },\n   │                   ^^^^^^^^^^ cycle"
         },
         {
           "compiles": true,
@@ -3331,7 +3539,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"beta\": { \"inherits\": \"staging\" },\n        \"staging\": { \"inherits\": \"release\" }\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3351,7 +3560,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"config\": {\n        \"maxHistory\": 50\n    },\n    \"profiles\": {\n        \"dev\": { \"config\": { \"maxHistory\": \"500\" } }\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4012]: profile `dev`: config key `maxHistory` has type a string but the top-level `config` defines a number\n   ┌─ wowlua.json:14:30\n   │\n14 │         \"dev\": { \"config\": { \"maxHistory\": \"500\" } }\n   │                              ^^^^^^^^^^^^ invalid config key"
         },
         {
           "compiles": true,
@@ -3361,7 +3571,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"config\": {\n        \"maxHistory\": 50\n    },\n    \"profiles\": {\n        \"dev\": { \"config\": { \"maxHistory\": 500 } }\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -3383,7 +3594,8 @@
               "lang": "lua",
               "text": "local L = {}\n--@localization(locale=\"enUS\", format=\"lua_additive_table\")@\nprint(L)\n"
             }
-          ]
+          ],
+          "output": "warning[W4030]: `@localization(…)@` is not supported; the line is left unchanged\n = in src/main.lua\n = help: use `wowlua:locale` instead"
         },
         {
           "compiles": true,
@@ -3398,7 +3610,8 @@
               "lang": "lua",
               "text": "local L = {}\nL[\"Hello\"] = \"Hello\"\nprint(L)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3423,7 +3636,8 @@
               "lang": "lua",
               "text": "--@retail@\nprint(\"Retail only\")\n--@end-retail@\n"
             }
-          ]
+          ],
+          "output": "warning[W4031]: `@retail@` blocks are left as written in a multi-version build, like the packager does\n = in src/main.lua\n = help: the code runs on every client; use Lua conditions on `WOW_PROJECT_ID` to limit it"
         },
         {
           "compiles": true,
@@ -3438,7 +3652,8 @@
               "lang": "lua",
               "text": "if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then\n    print(\"Retail only\")\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3512,7 +3727,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground-options\",\n        \"version\": \"0.1.0\"\n    },\n    \"addon\": {\n        \"saved-variables\": [\"PlaygroundDB\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4120]: SavedVariables `PlaygroundDB` is used by both `Playground` and `PlaygroundOptions`\n = in options/wowlua.json"
         },
         {
           "compiles": true,
@@ -3527,7 +3743,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground-options\",\n        \"version\": \"0.1.0\"\n    },\n    \"addon\": {\n        \"saved-variables\": [\"PlaygroundOptionsDB\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3586,7 +3803,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^9.0\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4300]: this package requires wowlua ^9.0, but this is wowlua 0.12.0\n  ┌─ wowlua.json:5:9\n  │\n5 │         \"wowlua\": \"^9.0\"\n  │         ^^^^^^^^ required compiler version\n  │\n  = help: install a matching wowlua version"
         },
         {
           "compiles": true,
@@ -3596,7 +3814,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3615,7 +3834,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"standard\": {},\n        \"camelot\": {}\n    },\n    \"addon-dependencies\": {\n        \"optional\": [{ \"name\": \"Details\", \"flavors\": [\"camelot\"] }]\n    },\n    \"build\": {\n        \"toc-layout\": \"single\"\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4301]: `build.toc-layout` is `single`, but the client retail-beta 12.0.1 does not support inline load directives on `##` lines\n = in wowlua.json\n = help: use `\"toc-layout\": \"auto\"` or drop the flavor"
         },
         {
           "compiles": true,
@@ -3625,7 +3845,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"standard\": {},\n        \"camelot\": {}\n    },\n    \"addon-dependencies\": {\n        \"optional\": [{ \"name\": \"Details\", \"flavors\": [\"camelot\"] }]\n    },\n    \"build\": {\n        \"toc-layout\": \"auto\"\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3669,7 +3890,8 @@
               "lang": "wowlua",
               "text": "import flavor from \"wowlua:meta\"\n@if(flavor == \"mists\")\nimport a from \"./a\"\nexport local b = \"b\"\nprint(b, flavor)\n"
             }
-          ]
+          ],
+          "output": "warning[W4304]: the flavors need different load orders; using per-flavor TOC files\n = in wowlua.json"
         },
         {
           "compiles": true,
@@ -3689,7 +3911,8 @@
               "lang": "wowlua",
               "text": "import flavor from \"wowlua:meta\"\n@if(flavor == \"mists\")\nimport a from \"./a\"\nexport local b = \"b\"\nprint(b, flavor)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3729,7 +3952,8 @@
               "lang": "lua",
               "text": "print(\"old core\")\n"
             }
-          ]
+          ],
+          "output": "error[E4308]: output paths `src/Core.lua` and `src/core.lua` differ only in case"
         },
         {
           "compiles": true,
@@ -3744,7 +3968,8 @@
               "lang": "lua",
               "text": "print(\"old core\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3776,7 +4001,8 @@
               "lang": "lua",
               "text": "print(\"core\")\n"
             }
-          ]
+          ],
+          "output": "warning[W4310]: XML reference `Core.lua` differs in case from the file `core.lua`\n  ┌─ src/main.xml:2:19\n  │\n2 │     <Script file=\"Core.lua\"/>\n  │                   ^^^^^^^^ case mismatch"
         },
         {
           "compiles": true,
@@ -3791,7 +4017,8 @@
               "lang": "lua",
               "text": "print(\"core\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3815,7 +4042,8 @@
               "lang": "text",
               "text": "MIT License\n"
             }
-          ]
+          ],
+          "output": "error[E4311]: asset `LICENSES.txt` collides with a generated output path\n = in LICENSES.txt\n = help: move the asset, or exclude it from `build.assets`"
         },
         {
           "compiles": true,
@@ -3830,7 +4058,8 @@
               "lang": "text",
               "text": "MIT License\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3849,7 +4078,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"load-on-demand\": false\n    },\n    \"addon-dependencies\": {\n        \"load-with\": [\"Blizzard_Collections\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4312]: `addon.load-on-demand` is false, but `addon-dependencies.load-with` makes the addon load on demand\n   ┌─ wowlua.json:8:9\n   │\n 8 │         \"load-on-demand\": false\n   │         ^^^^^^^^^^^^^^^^ set to false here\n   ·\n11 │         \"load-with\": [\"Blizzard_Collections\"]\n   │         ----------- implies load on demand"
         },
         {
           "compiles": true,
@@ -3859,7 +4089,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon-dependencies\": {\n        \"load-with\": [\"Blizzard_Collections\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -3884,7 +4115,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"features\": {\n        \"default\": [\"minimap\"],\n        \"minimap\": [\"icons\"]\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4314]: feature `minimap` refers to unknown feature `icons`\n   ┌─ wowlua.json:12:21\n   │\n12 │         \"minimap\": [\"icons\"]\n   │                     ^^^^^^^ unknown feature"
         },
         {
           "compiles": true,
@@ -3894,7 +4126,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"features\": {\n        \"default\": [\"minimap\"],\n        \"minimap\": [\"icons\"],\n        \"icons\": []\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -3911,7 +4144,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"beta\": { \"log-level\": \"info\" }\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4315]: custom profile `beta` must name the profile it builds on\n   ┌─ wowlua.json:11:9\n   │\n11 │         \"beta\": { \"log-level\": \"info\" }\n   │         ^^^^^^ missing `inherits`\n   │\n   = help: add `\"inherits\": \"dev\"` or `\"inherits\": \"release\"`"
         },
         {
           "compiles": true,
@@ -3921,7 +4155,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"beta\": { \"inherits\": \"release\", \"log-level\": \"info\" }\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -3946,7 +4181,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground-options\",\n        \"version\": \"0.1.0\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"build\": {\n        \"out\": \"build\"\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4316]: a workspace member may not set `build.out`\n = in options/wowlua.json\n = help: the workspace root's `build.out` holds every member's build"
         },
         {
           "compiles": true,
@@ -3961,7 +4197,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground-options\",\n        \"version\": \"0.1.0\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -3978,7 +4215,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"kind\": \"library\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"title\": \"Playground\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4317]: the `addon` section is only valid for packages of kind `addon`\n  ┌─ wowlua.json:8:5\n  │\n8 │     \"addon\": {\n  │     ^^^^^^^ not allowed here"
         },
         {
           "compiles": true,
@@ -3988,7 +4226,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"kind\": \"library\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -4005,7 +4244,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": { \"interface\": [] }\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4318]: flavor `camelot` has no interface number\n = in wowlua.json"
         },
         {
           "compiles": true,
@@ -4015,7 +4255,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": { \"interface\": [16001] }\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -4073,7 +4314,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground-options\",\n        \"version\": \"0.1.0\"\n    },\n    \"addon-dependencies\": {\n        \"required\": [\"Playground\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4324]: the workspace's required addon dependencies form a cycle: Playground → PlaygroundOptions → Playground\n = in wowlua.json\n = help: make one of them an optional dependency"
         },
         {
           "compiles": true,
@@ -4088,7 +4330,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground-options\",\n        \"version\": \"0.1.0\"\n    },\n    \"addon-dependencies\": {\n        \"required\": [\"Playground\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -4110,7 +4353,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground-options\",\n        \"version\": \"0.1.0\"\n    },\n    \"addon\": {\n        \"name\": \"Playground\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4325]: two workspace members are both the addon `Playground`\n = in options/wowlua.json\n = note: also wowlua.json"
         },
         {
           "compiles": true,
@@ -4125,7 +4369,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground-options\",\n        \"version\": \"0.1.0\"\n    },\n    \"addon\": {\n        \"name\": \"PlaygroundOptions\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4204,7 +4449,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"pkgmeta\": true\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "warning[W4333]: external `libs/LibOld` is a Mercurial repository (`https://repos.wowace.com/wow/libold`), which wowlua cannot fetch; not converted\n = help: replace it with a git mirror or a release archive"
         },
         {
           "compiles": true,
@@ -4219,7 +4465,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"pkgmeta\": true\n    }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4244,7 +4491,8 @@
               "lang": "wowlua",
               "text": "import binding from \"wowlua:bindings\"\n\n@binding(\"PLAYGROUND_SHOW\", { label = \"Show\" })\nlocal function show()\n    print(\"show\")\nend\n"
             }
-          ]
+          ],
+          "output": "error[E4334]: `Bindings.xml` is hand-written, and `wowlua:bindings` would generate one\n  ┌─ src/main.wowlua:3:10\n  │\n3 │ @binding(\"PLAYGROUND_SHOW\", { label = \"Show\" })\n  │          ^^^^^^^^^^^^^^^^^ a `@binding`\n  │\n  = help: declare every binding with `@binding`, or keep the hand-written file and drop `wowlua:bindings`"
         },
         {
           "compiles": true,
@@ -4254,7 +4502,8 @@
               "lang": "wowlua",
               "text": "import binding from \"wowlua:bindings\"\n\n@binding(\"PLAYGROUND_SHOW\", { label = \"Show\" })\nlocal function show()\n    print(\"show\")\nend\n\n@binding(\"PLAYGROUND_HIDE\", { label = \"Hide\" })\nlocal function hide()\n    print(\"hide\")\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -4276,7 +4525,8 @@
               "lang": "lua",
               "text": "--@version-mists@\nprint(\"Mists only\")\n--@end-version-mists@\n"
             }
-          ]
+          ],
+          "output": "error[E4335]: build type version keywords (`@version-…@`) are not allowed in a multi-version build\n = in src/main.lua\n = help: use Lua conditions on `WOW_PROJECT_ID` or TOC load conditions, like the packager asks"
         },
         {
           "compiles": true,
@@ -4291,7 +4541,8 @@
               "lang": "lua",
               "text": "if WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC then\n    print(\"Mists only\")\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4317,7 +4568,8 @@
               "lang": "json",
               "text": "{ \"money\": 123456, }\n"
             }
-          ]
+          ],
+          "output": "error[E4400]: invalid JSON: trailing comma\n  ┌─ tests/profiles/rich.json:1:20\n  │\n1 │ { \"money\": 123456, }\n  │                    ^ here\n  │\n  = note: a world profile is strict JSON: no comments and no trailing commas"
         },
         {
           "compiles": true,
@@ -4327,7 +4579,8 @@
               "lang": "json",
               "text": "{ \"money\": 123456 }\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4347,7 +4600,8 @@
               "lang": "json",
               "text": "{ \"monies\": 123456 }\n"
             }
-          ]
+          ],
+          "output": "error[E4401]: unknown key `monies` at the top level\n  ┌─ tests/profiles/rich.json:1:3\n  │\n1 │ { \"monies\": 123456 }\n  │   ^^^^^^^^ unknown key\n  │\n  = help: did you mean `money`?"
         },
         {
           "compiles": true,
@@ -4357,7 +4611,8 @@
               "lang": "json",
               "text": "{ \"money\": 123456 }\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4377,7 +4632,8 @@
               "lang": "json",
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"test\": {\n        \"profile\": \"rich\"\n    }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E4402]: no world profile `rich` (`tests/profiles/rich.json`)\n   ┌─ wowlua.json:11:20\n   │\n11 │         \"profile\": \"rich\"\n   │                    ^^^^^^ names no profile\n   │\n   = help: add `tests/profiles/rich.json`"
         },
         {
           "compiles": true,
@@ -4392,7 +4648,8 @@
               "lang": "json",
               "text": "{ \"money\": 123456 }\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4412,7 +4669,8 @@
               "lang": "wowlua",
               "text": "local v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20,\n      v21, v22, v23, v24, v25, v26, v27, v28, v29, v30, v31, v32, v33, v34, v35, v36, v37, v38, v39, v40,\n      v41, v42, v43, v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60,\n      v61\nlocal function show()\n    print(v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20,\n        v21, v22, v23, v24, v25, v26, v27, v28, v29, v30, v31, v32, v33, v34, v35, v36, v37, v38, v39, v40,\n        v41, v42, v43, v44, v45, v46, v47, v48, v49, v50, v51, v52, v53, v54, v55, v56, v57, v58, v59, v60,\n        v61)\nend\nshow()\n"
             }
-          ]
+          ],
+          "output": "error[E5001]: Lua 5.1 limit exceeded: function at line 5 has more than 60 upvalues\n  ┌─ src/main.wowlua:9:1\n  │\n9 │         v61)\n  │ ^^^^^^^^^^^^ in the function containing this line\n  │\n  = help: split the function or move locals into a table"
         },
         {
           "compiles": true,
@@ -4422,7 +4680,8 @@
               "lang": "wowlua",
               "text": "local values = {}\nfor i = 1, 61 do\n    values[i] = i\nend\nlocal function show()\n    print(unpack(values))\nend\nshow()\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -4439,7 +4698,8 @@
               "lang": "xml",
               "text": "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\">\n    <Script file=\"missing.lua\"/>\n</Ui>\n"
             }
-          ]
+          ],
+          "output": "error[E5002]: XML reference `missing.lua` does not resolve to a source file\n  ┌─ src/ui.xml:2:19\n  │\n2 │     <Script file=\"missing.lua\"/>\n  │                   ^^^^^^^^^^^ not found"
         },
         {
           "compiles": true,
@@ -4454,7 +4714,8 @@
               "lang": "lua",
               "text": "print(\"loaded\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4479,7 +4740,8 @@
               "lang": "xml",
               "text": "<Ui xmlns=\"http://www.blizzard.com/wow/ui/\">\n    <!--@debug@-->\n    <Script file=\"DevTools.lua\"/>\n    <!--@end-debug@-->\n</Ui>\n"
             }
-          ]
+          ],
+          "output": "warning[W5003]: XML reference `DevTools.lua` in a `@debug@` block does not resolve to a source file; left out of this build\n  ┌─ src/ui.xml:3:19\n  │\n3 │     <Script file=\"DevTools.lua\"/>\n  │                   ^^^^^^^^^^^^ not found\n  │\n  = note: release builds comment the block out, like the packager"
         },
         {
           "compiles": true,
@@ -4499,7 +4761,8 @@
               "lang": "lua",
               "text": "print(\"dev tools loaded\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4528,7 +4791,8 @@
               "lang": "lua",
               "text": "print(\"vanilla only\")\n"
             }
-          ]
+          ],
+          "output": "warning[W5004]: `src/ui.xml` loads `Vanilla.lua`, which is not part of this build's output\n = help: check `build.exclude` and `build.flavor-files`"
         },
         {
           "compiles": true,
@@ -4543,7 +4807,8 @@
               "lang": "lua",
               "text": "print(\"vanilla only\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4567,7 +4832,8 @@
               "lang": "lua",
               "text": "local file = debugstack(1, 1, 0):match(\"([^/\\\\]+)%.lua\")\nprint(file)\n"
             }
-          ]
+          ],
+          "output": "warning[W6001]: this file reads a Lua file name from `debugstack` or `debuglocals`, which see the bundle's file name, not this file's\n = in src/main.lua\n = help: `wowlua trace` maps bundle locations back; or turn bundling off with `bundle: false`"
         },
         {
           "compiles": true,
@@ -4582,7 +4848,8 @@
               "lang": "lua",
               "text": "local folder = debugstack(1, 1, 0):match(\"AddOns[/\\\\]([^/\\\\]+)\")\nprint(folder)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -4609,7 +4876,8 @@
               "lang": "wowlua",
               "text": "print(\"hello\")\n"
             }
-          ]
+          ],
+          "output": "warning[W6002]: this module is removed: it only declares things and nothing uses it\n = in src/colors.wowlua\n = help: import it where it is needed, or list it in `build.keep`"
         },
         {
           "compiles": true,
@@ -4629,7 +4897,8 @@
               "lang": "wowlua",
               "text": "import RED from \"/colors\"\nprint(RED)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4648,7 +4917,8 @@
               "lang": "json",
               "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"minify-levels\": { \"readable\": { \"passes\": [\"strip-comment\"] } }\n}\n"
             }
-          ]
+          ],
+          "output": "error[E6003]: unknown minification pass `strip-comment`\n  ┌─ wowlua.json:4:49\n  │\n4 │     \"minify-levels\": { \"readable\": { \"passes\": [\"strip-comment\"] } }\n  │                                                 ^^^^^^^^^^^^^^^ unknown pass\n  │\n  = help: did you mean `strip-comments`?"
         },
         {
           "compiles": true,
@@ -4658,7 +4928,8 @@
               "lang": "json",
               "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"minify-levels\": { \"readable\": { \"passes\": [\"strip-comments\"] } }\n}\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4685,7 +4956,8 @@
               "lang": "wowlua",
               "text": "import nameof from \"wowlua:debug\"\n\nlocal function onLogin() end\nprint(nameof(onLogin()))\n"
             }
-          ]
+          ],
+          "output": "error[E7001]: `nameof` needs a name, a field access or an index with a string key\n  ┌─ src/main.wowlua:4:7\n  │\n4 │ print(nameof(onLogin()))\n  │       ^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -4695,7 +4967,8 @@
               "lang": "wowlua",
               "text": "import nameof from \"wowlua:debug\"\n\nlocal function onLogin() end\nprint(nameof(onLogin))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -4717,7 +4990,8 @@
               "lang": "wowlua",
               "text": "import todo from \"wowlua:debug\"\n\nlocal function exportData(): string\n    return todo(\"export\")\nend\nprint(exportData())\n"
             }
-          ]
+          ],
+          "output": "warning[W7001]: `todo()` in a release build\n  ┌─ src/main.wowlua:4:12\n  │\n4 │     return todo(\"export\")\n  │            ^^^^^^^^^^^^^^ raises \"not implemented\" when it runs"
         },
         {
           "compiles": true,
@@ -4732,7 +5006,8 @@
               "lang": "wowlua",
               "text": "local function exportData(): string\n    return \"data\"\nend\nprint(exportData())\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -4754,7 +5029,8 @@
               "lang": "wowlua",
               "text": "import * as reflect from \"wowlua:reflect\"\n\n@reflect\nclass Settings\n    scale: number = 1\nend\n\nprint(#reflect.fields(Settings))\n"
             }
-          ]
+          ],
+          "output": "warning[W7010]: reflection metadata is requested, but this profile has `reflection = \"none\"`\n  ┌─ src/main.wowlua:8:8\n  │\n8 │ print(#reflect.fields(Settings))\n  │        ^^^^^^^^^^^^^^^^^^^^^^^^ returns nil"
         },
         {
           "compiles": true,
@@ -4769,7 +5045,8 @@
               "lang": "wowlua",
               "text": "import * as reflect from \"wowlua:reflect\"\n\n@reflect\nclass Settings\n    scale: number = 1\nend\n\nprint(#reflect.fields(Settings))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -4786,7 +5063,8 @@
               "lang": "wowlua",
               "text": "import send from \"wowlua:events\"\nsend(\"PLAYER_LOGIN\")\n"
             }
-          ]
+          ],
+          "output": "error[E8001]: `PLAYER_LOGIN` is a WoW event; only messages can be sent\n  ┌─ src/main.wowlua:2:6\n  │\n2 │ send(\"PLAYER_LOGIN\")\n  │      ^^^^^^^^^^^^^^ a WoW event"
         },
         {
           "compiles": true,
@@ -4796,7 +5074,8 @@
               "lang": "wowlua",
               "text": "import on, send from \"wowlua:events\"\n\ndeclare message MYADDON_READY()\n\non(\"MYADDON_READY\", function() print(\"ready\") end)\nsend(\"MYADDON_READY\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4815,7 +5094,8 @@
               "lang": "wowlua",
               "text": "import event from \"wowlua:events\"\n\nclass Tracker\n    @event(\"PLAYER_LOGIN\")\n    function onLogin()\n        print(\"logged in\")\n    end\nend\n"
             }
-          ]
+          ],
+          "output": "error[E8002]: `@event` on an instance method: register with `on(…, self)` in the constructor\n  ┌─ src/main.wowlua:4:5\n  │\n4 │     @event(\"PLAYER_LOGIN\")\n  │     ^^^^^^^^^^^^^^^^^^^^^^ an instance method"
         },
         {
           "compiles": true,
@@ -4825,7 +5105,8 @@
               "lang": "wowlua",
               "text": "import on from \"wowlua:events\"\n\nclass Tracker\n    constructor()\n        on(\"PLAYER_LOGIN\", function() self:onLogin() end, self)\n    end\n\n    function onLogin()\n        print(\"logged in\")\n    end\nend\n\nlocal tracker = Tracker.new()\nprint(tracker)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4844,7 +5125,8 @@
               "lang": "wowlua",
               "text": "import on from \"wowlua:events\"\non(\"PLAYER_LOGN\", function() print(\"hi\") end)\n"
             }
-          ]
+          ],
+          "output": "error[E8003]: unknown event or message `PLAYER_LOGN`\n  ┌─ src/main.wowlua:2:4\n  │\n2 │ on(\"PLAYER_LOGN\", function() print(\"hi\") end)\n  │    ^^^^^^^^^^^^^ not declared"
         },
         {
           "compiles": true,
@@ -4854,7 +5136,8 @@
               "lang": "wowlua",
               "text": "import on from \"wowlua:events\"\non(\"PLAYER_LOGIN\", function() print(\"hi\") end)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4874,7 +5157,8 @@
               "lang": "wowlua",
               "text": "import slash from \"wowlua:slash\"\n\n@slash(\"/mytool\")\nlocal function open(msg: string) print(msg) end\n\n@slash(\"/MyTool\")\nlocal function toggle(msg: string) print(msg) end\n"
             }
-          ]
+          ],
+          "output": "error[E8010]: the slash command `/MyTool` is registered twice\n  ┌─ src/main.wowlua:6:8\n  │\n6 │ @slash(\"/MyTool\")\n  │        ^^^^^^^^^ again"
         },
         {
           "compiles": true,
@@ -4884,7 +5168,8 @@
               "lang": "wowlua",
               "text": "import slash from \"wowlua:slash\"\n\n@slash(\"/mytool\", \"/mt\")\nlocal function open(msg: string) print(msg) end\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4904,7 +5189,8 @@
               "lang": "wowlua",
               "text": "import slash from \"wowlua:slash\"\n\n@slash(\"/reload\")\nlocal function reload(msg: string) print(msg) end\n"
             }
-          ]
+          ],
+          "output": "warning[W8011]: `/reload` is one of the game's slash commands\n  ┌─ src/main.wowlua:3:8\n  │\n3 │ @slash(\"/reload\")\n  │        ^^^^^^^^^ taken by the game"
         },
         {
           "compiles": true,
@@ -4914,7 +5200,8 @@
               "lang": "wowlua",
               "text": "import slash from \"wowlua:slash\"\n\n@slash(\"/myreload\")\nlocal function reload(msg: string) print(msg) end\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4934,7 +5221,8 @@
               "lang": "wowlua",
               "text": "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"MyAddonDB\", { version = 1, defaults = { scale = 1 } })\nprint(db)\n"
             }
-          ]
+          ],
+          "output": "error[E8020]: `MyAddonDB` is not declared in `addon.saved-variables` or `addon.saved-variables-per-character`\n  ┌─ src/main.wowlua:2:23\n  │\n2 │ local db = saved.bind(\"MyAddonDB\", { version = 1, defaults = { scale = 1 } })\n  │                       ^^^^^^^^^^^ not in the manifest"
         },
         {
           "compiles": true,
@@ -4949,7 +5237,8 @@
               "lang": "wowlua",
               "text": "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"MyAddonDB\", { version = 1, defaults = { scale = 1 } })\nprint(db)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -4974,7 +5263,8 @@
               "lang": "wowlua",
               "text": "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"MyAddonDB\", { version = 1, defaults = { scale = 1 }, profiles = true })\nprint(db)\n"
             }
-          ]
+          ],
+          "output": "error[E8021]: profiles keep the active profile in `MyAddonDBPerChar`: add it to `addon.saved-variables-per-character`\n  ┌─ src/main.wowlua:2:23\n  │\n2 │ local db = saved.bind(\"MyAddonDB\", { version = 1, defaults = { scale = 1 }, profiles = true })\n  │                       ^^^^^^^^^^^ needs `PerChar`"
         },
         {
           "compiles": true,
@@ -4989,7 +5279,8 @@
               "lang": "wowlua",
               "text": "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"MyAddonDB\", { version = 1, defaults = { scale = 1 }, profiles = true })\nprint(db)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5009,7 +5300,8 @@
               "lang": "wowlua",
               "text": "import throttle from \"wowlua:timer\"\n\n@throttle(0.5)\nlocal function refresh(): boolean\n    print(\"refresh\")\n    return true\nend\nrefresh()\n"
             }
-          ]
+          ],
+          "output": "error[E8030]: `@throttle` may run the function later, so it must not return values\n  ┌─ src/main.wowlua:3:1\n  │\n3 │ @throttle(0.5)\n  │ ^^^^^^^^^^^^^^ defers the call"
         },
         {
           "compiles": true,
@@ -5019,7 +5311,8 @@
               "lang": "wowlua",
               "text": "import throttle from \"wowlua:timer\"\n\n@throttle(0.5)\nlocal function refresh()\n    print(\"refresh\")\nend\nrefresh()\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -5036,7 +5329,8 @@
               "lang": "wowlua",
               "text": "import hook from \"wowlua:hooks\"\nhook(\"MyMissingFunction\", function() print(\"called\") end)\n"
             }
-          ]
+          ],
+          "output": "warning[W8040]: `MyMissingFunction` is not a declared global function; the hook fails where it is installed\n  ┌─ src/main.wowlua:2:6\n  │\n2 │ hook(\"MyMissingFunction\", function() print(\"called\") end)\n  │      ^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -5046,7 +5340,8 @@
               "lang": "wowlua",
               "text": "import hook from \"wowlua:hooks\"\nif _G.MyMissingFunction then\n    hook(\"MyMissingFunction\", function() print(\"called\") end)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5065,7 +5360,8 @@
               "lang": "wowlua",
               "text": "import * as comm from \"wowlua:comm\"\nlocal channel = comm.open(\"MyVeryLongAddonPrefix\")\nprint(channel)\n"
             }
-          ]
+          ],
+          "output": "error[E8050]: the addon message prefix `MyVeryLongAddonPrefix` has 21 characters; the client takes 1 to 16\n  ┌─ src/main.wowlua:2:27\n  │\n2 │ local channel = comm.open(\"MyVeryLongAddonPrefix\")\n  │                           ^^^^^^^^^^^^^^^^^^^^^^^ this prefix"
         },
         {
           "compiles": true,
@@ -5075,7 +5371,8 @@
               "lang": "wowlua",
               "text": "import * as comm from \"wowlua:comm\"\nlocal channel = comm.open(\"MyAddon\")\nprint(channel)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -5097,7 +5394,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L)\n"
             }
-          ]
+          ],
+          "output": "error[E8060]: `welcome-text` in `locales/enUS.json` is no locale key (`[A-Z0-9_]+`)\n = in locales/enUS.json"
         },
         {
           "compiles": true,
@@ -5112,7 +5410,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L.WELCOME_TEXT)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5142,7 +5441,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L.TITLE)\n"
             }
-          ]
+          ],
+          "output": "error[E8061]: `SUBTITLE` in `locales/deDE.json` is not a key of the base locale `enUS`\n = in locales/deDE.json"
         },
         {
           "compiles": true,
@@ -5162,7 +5462,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L.TITLE, L.SUBTITLE)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5192,7 +5493,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L.TITLE, L.SUBTITLE)\n"
             }
-          ]
+          ],
+          "output": "warning[W8062]: `deDE` lacks 1 of 2 translations (`SUBTITLE`); the base strings are used\n = in locales/deDE.json"
         },
         {
           "compiles": true,
@@ -5212,7 +5514,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L.TITLE, L.SUBTITLE)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5241,7 +5544,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L.WELCOME({ name = \"Thrall\" }))\n"
             }
-          ]
+          ],
+          "output": "error[E8063]: `WELCOME` in `locales/deDE.json` uses the placeholders [{spieler}], the base locale [{name}]\n = in locales/deDE.json"
         },
         {
           "compiles": true,
@@ -5261,7 +5565,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L.WELCOME({ name = \"Thrall\" }))\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5285,7 +5590,8 @@
               "lang": "wowlua",
               "text": "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\n\nlocal db = saved.bind(\"PlaygroundDB\", { version = 1, defaults = { scale = 1, locked = false } })\n\nsettings.register({\n    title = \"Playground\",\n    store = db,\n    controls = { settings.checkbox(\"scale\", { label = \"Scale\" }) },\n})\n"
             }
-          ]
+          ],
+          "output": "error[E8070]: `scale` is `number`; a checkbox needs `boolean`\n  ┌─ src/main.wowlua:9:36\n  │\n9 │     controls = { settings.checkbox(\"scale\", { label = \"Scale\" }) },\n  │                                    ^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -5300,7 +5606,8 @@
               "lang": "wowlua",
               "text": "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\n\nlocal db = saved.bind(\"PlaygroundDB\", { version = 1, defaults = { scale = 1, locked = false } })\n\nsettings.register({\n    title = \"Playground\",\n    store = db,\n    controls = {\n        settings.slider(\"scale\", { label = \"Scale\", min = 0.5, max = 2, step = 0.1 }),\n        settings.checkbox(\"locked\", { label = \"Lock frame\" }),\n    },\n})\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5320,7 +5627,8 @@
               "lang": "wowlua",
               "text": "import * as launcher from \"wowlua:launcher\"\n\nlauncher.register({ icon = \"Interface\\\\Icons\\\\INV_Misc_QuestionMark\", label = \"Playground\", onClick = function() end })\nlauncher.register({ icon = \"Interface\\\\Icons\\\\INV_Misc_Book_09\", label = \"Playground\", onClick = function() end })\n"
             }
-          ]
+          ],
+          "output": "error[E8080]: `launcher.register` is called more than once\n  ┌─ src/main.wowlua:4:1\n  │\n3 │ launcher.register({ icon = \"Interface\\\\Icons\\\\INV_Misc_QuestionMark\", label = \"Playground\", onClick = function() end })\n  │ ----------------------------------------------------------------------------------------------------------------------- first registered here\n4 │ launcher.register({ icon = \"Interface\\\\Icons\\\\INV_Misc_Book_09\", label = \"Playground\", onClick = function() end })\n  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ again"
         },
         {
           "compiles": true,
@@ -5330,7 +5638,8 @@
               "lang": "wowlua",
               "text": "import * as launcher from \"wowlua:launcher\"\n\nlauncher.register({ icon = \"Interface\\\\Icons\\\\INV_Misc_QuestionMark\", label = \"Playground\", onClick = function() end })\nlauncher.setIcon(\"Interface\\\\Icons\\\\INV_Misc_Book_09\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5349,7 +5658,8 @@
               "lang": "wowlua",
               "text": "import slash from \"wowlua:slash\"\n\n@slash(\"mytool\")\nlocal function open(msg: string) print(msg) end\n"
             }
-          ]
+          ],
+          "output": "error[E8101]: `mytool` is no slash command: it starts with `/` and has no spaces\n  ┌─ src/main.wowlua:3:8\n  │\n3 │ @slash(\"mytool\")\n  │        ^^^^^^^^ invalid"
         },
         {
           "compiles": true,
@@ -5359,7 +5669,8 @@
               "lang": "wowlua",
               "text": "import slash from \"wowlua:slash\"\n\n@slash(\"/mytool\")\nlocal function open(msg: string) print(msg) end\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5384,7 +5695,8 @@
               "lang": "wowlua",
               "text": "import on from \"wowlua:events\"\non(\"ACTIVE_COMBAT_CONFIG_CHANGED\", function() print(\"changed\") end)\n"
             }
-          ]
+          ],
+          "output": "warning[W8101]: `ACTIVE_COMBAT_CONFIG_CHANGED` is not available in `vanilla`; there the handler is never called\n  ┌─ src/main.wowlua:2:4\n  │\n2 │ on(\"ACTIVE_COMBAT_CONFIG_CHANGED\", function() print(\"changed\") end)\n  │    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -5399,7 +5711,8 @@
               "lang": "wowlua",
               "text": "import on from \"wowlua:events\"\nif WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then\n    on(\"ACTIVE_COMBAT_CONFIG_CHANGED\", function() print(\"changed\") end)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5423,7 +5736,8 @@
               "lang": "wowlua",
               "text": "import * as saved from \"wowlua:saved\"\nlocal name = \"MyAddonDB\"\nlocal db = saved.bind(name, { version = 1, defaults = {} })\nprint(db)\n"
             }
-          ]
+          ],
+          "output": "error[E8102]: `saved.bind` needs the SavedVariable's name as a string literal\n  ┌─ src/main.wowlua:3:23\n  │\n3 │ local db = saved.bind(name, { version = 1, defaults = {} })\n  │                       ^^^^ not a literal"
         },
         {
           "compiles": true,
@@ -5438,7 +5752,8 @@
               "lang": "wowlua",
               "text": "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"MyAddonDB\", { version = 1, defaults = {} })\nprint(db)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5458,7 +5773,8 @@
               "lang": "wowlua",
               "text": "import hook from \"wowlua:hooks\"\nhook(\"AchievementFrame_ToggleAchievementFrame\", function() print(\"toggled\") end)\n"
             }
-          ]
+          ],
+          "output": "warning[W8102]: `AchievementFrame_ToggleAchievementFrame` exists only once the load-on-demand addon `Blizzard_AchievementUI` has loaded; hook it with `hook(_G, \"AchievementFrame_ToggleAchievementFrame\", fn, { addon = \"Blizzard_AchievementUI\" })`\n  ┌─ src/main.wowlua:2:6\n  │\n2 │ hook(\"AchievementFrame_ToggleAchievementFrame\", function() print(\"toggled\") end)\n  │      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -5468,7 +5784,8 @@
               "lang": "wowlua",
               "text": "import hook from \"wowlua:hooks\"\nhook(_G, \"AchievementFrame_ToggleAchievementFrame\", function() print(\"toggled\") end, { addon = \"Blizzard_AchievementUI\" })\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5492,7 +5809,8 @@
               "lang": "wowlua",
               "text": "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"MyAddonDB\", { version = 1, defaults = {} })\nlocal again = saved.bind(\"MyAddonDB\", { version = 1, defaults = {} })\nprint(db, again)\n"
             }
-          ]
+          ],
+          "output": "error[E8103]: `MyAddonDB` is bound twice\n  ┌─ src/main.wowlua:3:15\n  │\n2 │ local db = saved.bind(\"MyAddonDB\", { version = 1, defaults = {} })\n  │            ------------------------------------------------------- first bound here\n3 │ local again = saved.bind(\"MyAddonDB\", { version = 1, defaults = {} })\n  │               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ again"
         },
         {
           "compiles": true,
@@ -5512,7 +5830,8 @@
               "lang": "wowlua",
               "text": "import db from \"/db\"\nprint(db)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5537,7 +5856,8 @@
               "lang": "wowlua",
               "text": "import * as saved from \"wowlua:saved\"\n\ninterface Settings\n    lastTarget: Secret<string>?\nend\n\nlocal db = saved.bind(\"MyAddonDB\", { version = 1, defaults = {} :: Settings })\nprint(db)\n"
             }
-          ]
+          ],
+          "output": "error[E8104]: the defaults of `saved.bind` contain a `Secret<…>` type (at `lastTarget`): secret values cannot be compared or saved\n  ┌─ src/main.wowlua:7:62\n  │\n7 │ local db = saved.bind(\"MyAddonDB\", { version = 1, defaults = {} :: Settings })\n  │                                                              ^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -5552,7 +5872,8 @@
               "lang": "wowlua",
               "text": "import * as saved from \"wowlua:saved\"\n\ninterface Settings\n    lastTarget: string?\nend\n\nlocal db = saved.bind(\"MyAddonDB\", { version = 1, defaults = {} :: Settings })\nprint(db)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -5579,7 +5900,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L.TITLE)\n"
             }
-          ]
+          ],
+          "output": "error[E8105]: `german.json`: `german` is no locale code\n = in locales/german.json\n = help: locale files are named by locale: enUS, enGB, deDE, esES, esMX, frFR, itIT, koKR, ptBR, ruRU, zhCN, zhTW"
         },
         {
           "compiles": true,
@@ -5599,7 +5921,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L.TITLE)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5623,7 +5946,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L)\n"
             }
-          ]
+          ],
+          "output": "error[E8106]: the base locale `locales/enUS.json` is missing\n = in locales\n = help: it defines the keys; `build.locale-base` names another base"
         },
         {
           "compiles": true,
@@ -5643,7 +5967,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L.TITLE)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5667,7 +5992,8 @@
               "lang": "wowlua",
               "text": "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\n\ninterface Options\n    anchor: \"TOPLEFT\" | \"CENTER\"\nend\n\nlocal db = saved.bind(\"PlaygroundDB\", { version = 1, defaults = { anchor = \"CENTER\" } :: Options })\n\nsettings.register({\n    title = \"Playground\",\n    store = db,\n    controls = {\n        settings.dropdown(\"anchor\", { label = \"Anchor\", options = {\n            { value = \"TOPLEFT\", label = \"Top left\" },\n            { value = \"BOTTOM\", label = \"Bottom\" },\n        } }),\n    },\n})\n"
             }
-          ]
+          ],
+          "output": "error[E8107]: the option value `\"BOTTOM\"` is not a `\"TOPLEFT\" | \"CENTER\"` (the type of `anchor`)\n   ┌─ src/main.wowlua:16:23\n   │\n16 │             { value = \"BOTTOM\", label = \"Bottom\" },\n   │                       ^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -5682,7 +6008,8 @@
               "lang": "wowlua",
               "text": "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\n\ninterface Options\n    anchor: \"TOPLEFT\" | \"CENTER\" | \"BOTTOM\"\nend\n\nlocal db = saved.bind(\"PlaygroundDB\", { version = 1, defaults = { anchor = \"CENTER\" } :: Options })\n\nsettings.register({\n    title = \"Playground\",\n    store = db,\n    controls = {\n        settings.dropdown(\"anchor\", { label = \"Anchor\", options = {\n            { value = \"TOPLEFT\", label = \"Top left\" },\n            { value = \"BOTTOM\", label = \"Bottom\" },\n        } }),\n    },\n})\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5702,7 +6029,8 @@
               "lang": "wowlua",
               "text": "import expect from \"wowlua:test\"\n\nexpect(1 + 1).toBe(2)\n"
             }
-          ]
+          ],
+          "output": "error[E8108]: `wowlua:test` is only for test files\n  ┌─ src/main.wowlua:1:20\n  │\n1 │ import expect from \"wowlua:test\"\n  │                    ^^^^^^^^^^^^^ imported here\n  │\n  = help: test files are `*.test.wowlua` files and the files under `tests/`"
         },
         {
           "compiles": true,
@@ -5712,7 +6040,8 @@
               "lang": "wowlua",
               "text": "import test, expect from \"wowlua:test\"\n\n@test(\"adds\")\nlocal function adds()\n    expect(1 + 1).toBe(2)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5731,7 +6060,8 @@
               "lang": "wowlua",
               "text": "import router from \"wowlua:slash\"\n\nlocal commands = router({\n    scale = { args = { \"number\" }, run = function(value: number, extra: string) print(value, extra) end },\n})\nprint(commands)\n"
             }
-          ]
+          ],
+          "output": "error[E8112]: `run` takes 1 parameter(s) for its arguments and flags, not 2\n  ┌─ src/main.wowlua:4:42\n  │\n4 │     scale = { args = { \"number\" }, run = function(value: number, extra: string) print(value, extra) end },\n  │                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -5741,7 +6071,8 @@
               "lang": "wowlua",
               "text": "import router from \"wowlua:slash\"\n\nlocal commands = router({\n    scale = { args = { \"number\" }, run = function(value: number) print(value) end },\n})\nprint(commands)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -5763,7 +6094,8 @@
               "lang": "wowlua",
               "text": "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\n\nlocal db = saved.bind(\"PlaygroundDB\", { version = 1, defaults = { showMinimap = true } })\n\nsettings.register({\n    title = \"Playground\",\n    store = db,\n    controls = { settings.checkbox(\"showMiniMap\", { label = \"Minimap button\" }) },\n})\n"
             }
-          ]
+          ],
+          "output": "error[E8113]: the store `{ showMinimap: boolean }` has no field `showMiniMap`\n  ┌─ src/main.wowlua:9:36\n  │\n9 │     controls = { settings.checkbox(\"showMiniMap\", { label = \"Minimap button\" }) },\n  │                                    ^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -5778,7 +6110,8 @@
               "lang": "wowlua",
               "text": "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\n\nlocal db = saved.bind(\"PlaygroundDB\", { version = 1, defaults = { showMinimap = true } })\n\nsettings.register({\n    title = \"Playground\",\n    store = db,\n    controls = { settings.checkbox(\"showMinimap\", { label = \"Minimap button\" }) },\n})\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5803,7 +6136,8 @@
               "lang": "wowlua",
               "text": "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\n\nlocal db = saved.bind(\"PlaygroundDB\", { version = 1, defaults = { locked = false, debug = false } })\n\nsettings.register({ title = \"Playground\", store = db, controls = {\n    settings.checkbox(\"locked\", { label = \"Lock frame\" }),\n} })\nsettings.register({ title = \"Playground: Advanced\", store = db, controls = {\n    settings.checkbox(\"debug\", { label = \"Debug output\" }),\n} })\n"
             }
-          ]
+          ],
+          "output": "error[E8114]: `settings.register` is called more than once\n   ┌─ src/main.wowlua:9:1\n   │    \n 6 │   ╭ settings.register({ title = \"Playground\", store = db, controls = {\n 7 │   │     settings.checkbox(\"locked\", { label = \"Lock frame\" }),\n 8 │   │ } })\n   │   ╰────' first registered here\n 9 │ ╭   settings.register({ title = \"Playground: Advanced\", store = db, controls = {\n10 │ │       settings.checkbox(\"debug\", { label = \"Debug output\" }),\n11 │ │   } })\n   │ ╰──────^ again\n   │    \n   = help: one options page per addon: put more pages in `subcategories`"
         },
         {
           "compiles": true,
@@ -5818,7 +6152,8 @@
               "lang": "wowlua",
               "text": "import * as settings from \"wowlua:settings\"\nimport * as saved from \"wowlua:saved\"\n\nlocal db = saved.bind(\"PlaygroundDB\", { version = 1, defaults = { locked = false, debug = false } })\n\nsettings.register({ title = \"Playground\", store = db, controls = {\n    settings.checkbox(\"locked\", { label = \"Lock frame\" }),\n}, subcategories = {\n    { title = \"Advanced\", controls = { settings.checkbox(\"debug\", { label = \"Debug output\" }) } },\n} })\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5842,7 +6177,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L.TITLE)\n"
             }
-          ]
+          ],
+          "output": "error[E8115]: `MAX_KILLS` in `locales/enUS.json` must be a string\n = in locales/enUS.json"
         },
         {
           "compiles": true,
@@ -5857,7 +6193,8 @@
               "lang": "wowlua",
               "text": "import L from \"wowlua:locale\"\nprint(L.TITLE, L.MAX_KILLS)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5881,7 +6218,8 @@
               "lang": "wowlua",
               "text": "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"MyAddonCharDB\", { version = 1, defaults = {}, profiles = true })\nprint(db)\n"
             }
-          ]
+          ],
+          "output": "error[E8117]: `MyAddonCharDB` is per character: profiles need an account-wide SavedVariable\n  ┌─ src/main.wowlua:2:23\n  │\n2 │ local db = saved.bind(\"MyAddonCharDB\", { version = 1, defaults = {}, profiles = true })\n  │                       ^^^^^^^^^^^^^^^ per character"
         },
         {
           "compiles": true,
@@ -5896,7 +6234,8 @@
               "lang": "wowlua",
               "text": "import * as saved from \"wowlua:saved\"\nlocal db = saved.bind(\"MyAddonDB\", { version = 1, defaults = {}, profiles = true })\nprint(db)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5915,7 +6254,8 @@
               "lang": "wowlua",
               "text": "import warn from \"wowlua:log\"\n\nlocal report = warn\nreport(\"low on bag space\")\n"
             }
-          ]
+          ],
+          "output": "error[E8118]: a log level function can only be called directly, so that the compiler can remove it; wrap it in a function\n  ┌─ src/main.wowlua:3:16\n  │\n3 │ local report = warn\n  │                ^^^^ here"
         },
         {
           "compiles": true,
@@ -5925,7 +6265,8 @@
               "lang": "wowlua",
               "text": "import warn from \"wowlua:log\"\n\nlocal function report(message: string)\n    warn(message)\nend\nreport(\"low on bag space\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5949,7 +6290,8 @@
               "lang": "wowlua",
               "text": "import internal parse from \"/tracker\"\nprint(parse(\"3\"))\n"
             }
-          ]
+          ],
+          "output": "error[E8119]: `import internal` is only for test files\n  ┌─ src/main.wowlua:1:1\n  │\n1 │ import internal parse from \"/tracker\"\n  │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ here\n  │\n  = help: export what other files use"
         },
         {
           "compiles": true,
@@ -5964,7 +6306,8 @@
               "lang": "wowlua",
               "text": "import test, expect from \"wowlua:test\"\nimport internal parse from \"/tracker\"\n\n@test(\"parses numbers\")\nlocal function parses()\n    expect(parse(\"3\")).toBe(3)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -5983,7 +6326,8 @@
               "lang": "wowlua",
               "text": "import test, cases, expect from \"wowlua:test\"\n\n@test(\"doubles\")\n@cases({ { 1, 2 }, { 2, \"4\" } })\nlocal function doubles(n: number, expected: number)\n    expect(n * 2).toBe(expected)\nend\n"
             }
-          ]
+          ],
+          "output": "error[E8120]: case 2: `\"4\"` is not assignable to `number` (parameter `expected`)\n  ┌─ tests/main.test.wowlua:4:25\n  │\n4 │ @cases({ { 1, 2 }, { 2, \"4\" } })\n  │                         ^^^ here"
         },
         {
           "compiles": true,
@@ -5993,7 +6337,8 @@
               "lang": "wowlua",
               "text": "import test, cases, expect from \"wowlua:test\"\n\n@test(\"doubles\")\n@cases({ { 1, 2 }, { 2, 4 } })\nlocal function doubles(n: number, expected: number)\n    expect(n * 2).toBe(expected)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -6012,7 +6357,8 @@
               "lang": "wowlua",
               "text": "import test, expect from \"wowlua:test\"\n\n@test(\"counts\")\nlocal function counts()\n    local count = 3\n    expect(count).toHaveLength(3)\nend\n"
             }
-          ]
+          ],
+          "output": "error[E8121]: `toHaveLength` needs a string or a table; the value is `number`\n  ┌─ tests/main.test.wowlua:6:5\n  │\n6 │     expect(count).toHaveLength(3)\n  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -6022,7 +6368,8 @@
               "lang": "wowlua",
               "text": "import test, expect from \"wowlua:test\"\n\n@test(\"counts\")\nlocal function counts()\n    local items = { \"a\", \"b\", \"c\" }\n    expect(items).toHaveLength(3)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -6041,7 +6388,8 @@
               "lang": "wowlua",
               "text": "import expectError from \"wowlua:test\"\n\n@expectError(\"E2001\")\nlocal function wrongArgument()\n    local n: number = 3\n    print(n)\nend\n"
             }
-          ]
+          ],
+          "output": "error[E8122]: `wrongArgument` should not compile with E2001; it gives none\n  ┌─ tests/main.test.wowlua:3:1\n  │\n3 │ @expectError(\"E2001\")\n  │ ^^^^^^^^^^^^^^^^^^^^^ expected here"
         },
         {
           "compiles": true,
@@ -6051,7 +6399,8 @@
               "lang": "wowlua",
               "text": "import expectError from \"wowlua:test\"\n\n@expectError(\"E2001\")\nlocal function wrongArgument()\n    local n: number = \"3\"\n    print(n)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -6075,7 +6424,8 @@
               "lang": "wowlua",
               "text": "import test, expect from \"wowlua:test\"\nimport * as mock from \"wowlua:mock\"\nimport * as clock from \"/clock\"\n\nmock.module(clock, { today = function(): number return 0 end })\n\n@test(\"reads the clock\")\nlocal function reads()\n    expect(clock.now()).toBe(0)\nend\n"
             }
-          ]
+          ],
+          "output": "error[E8123]: the module has no export `today`\n  ┌─ tests/clock.test.wowlua:5:22\n  │\n5 │ mock.module(clock, { today = function(): number return 0 end })\n  │                      ^^^^^ here"
         },
         {
           "compiles": true,
@@ -6090,7 +6440,8 @@
               "lang": "wowlua",
               "text": "import test, expect from \"wowlua:test\"\nimport * as mock from \"wowlua:mock\"\nimport * as clock from \"/clock\"\n\nmock.module(clock, { now = function(): number return 0 end })\n\n@test(\"reads the clock\")\nlocal function reads()\n    expect(clock.now()).toBe(0)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -6114,7 +6465,8 @@
               "lang": "wowlua",
               "text": "import onTooltip from \"wowlua:tooltip\"\n\n@onTooltip(\"Mount\")\nlocal function showMountId(tip, data)\n    print(data.id)\nend\n"
             }
-          ]
+          ],
+          "output": "error[E8300]: `Mount` tooltips are not available on vanilla\n  ┌─ src/main.wowlua:3:12\n  │\n3 │ @onTooltip(\"Mount\")\n  │            ^^^^^^^ not on every targeted flavor\n  │\n  = help: without the tooltip data system only \"Item\", \"Spell\" and \"Unit\" tooltips are hooked; guard the hook with `@if(flavor == …)`"
         },
         {
           "compiles": true,
@@ -6129,7 +6481,8 @@
               "lang": "wowlua",
               "text": "import onTooltip from \"wowlua:tooltip\"\nimport flavor from \"wowlua:meta\"\n\n@if(flavor == \"camelot\")\n@onTooltip(\"Mount\")\nlocal function showMountId(tip, data)\n    print(data.id)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -6156,7 +6509,8 @@
               "lang": "wowlua",
               "text": "import * as aura from \"wowlua:aura\"\n\nfor a in aura.each(\"player\", \"HELPFUL|MINE\") do\n    print(a.name)\nend\n"
             }
-          ]
+          ],
+          "output": "error[E8310]: `MINE` is not an aura filter word\n  ┌─ src/main.wowlua:3:30\n  │\n3 │ for a in aura.each(\"player\", \"HELPFUL|MINE\") do\n  │                              ^^^^^^^^^^^^^^ in this aura filter"
         },
         {
           "compiles": true,
@@ -6166,7 +6520,8 @@
               "lang": "wowlua",
               "text": "import * as aura from \"wowlua:aura\"\n\nfor a in aura.each(\"player\", \"HELPFUL|PLAYER\") do\n    print(a.name)\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -6185,7 +6540,8 @@
               "lang": "wowlua",
               "text": "import * as tooltip from \"wowlua:tooltip\"\n\ntooltip.hook(\"Items\", function(tip, data)\n    print(data.id)\nend)\n"
             }
-          ]
+          ],
+          "output": "error[E8330]: unknown tooltip kind `Items`\n  ┌─ src/main.wowlua:3:14\n  │\n3 │ tooltip.hook(\"Items\", function(tip, data)\n  │              ^^^^^^^ not an `Enum.TooltipDataType` name\n  │\n  = help: for example \"Item\", \"Spell\", \"Unit\", \"Mount\" or \"Currency\""
         },
         {
           "compiles": true,
@@ -6195,7 +6551,8 @@
               "lang": "wowlua",
               "text": "import * as tooltip from \"wowlua:tooltip\"\n\ntooltip.hook(\"Item\", function(tip, data)\n    print(data.id)\nend)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -6214,7 +6571,8 @@
               "lang": "wowlua",
               "text": "import * as frames from \"wowlua:frames\"\n\nlocal db: { window: number? } = {}\nlocal window = CreateFrame(\"Frame\", nil, UIParent)\nframes.movable(window, { store = db, key = \"window\" })\n"
             }
-          ]
+          ],
+          "output": "error[E8340]: the store's `window` is `number?`; a movable frame keeps its position in a `FramePosition?` field\n  ┌─ src/main.wowlua:5:44\n  │\n5 │ frames.movable(window, { store = db, key = \"window\" })\n  │                                            ^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -6224,7 +6582,8 @@
               "lang": "wowlua",
               "text": "import * as frames from \"wowlua:frames\"\nimport type FramePosition from \"wowlua:frames\"\n\nlocal db: { window: FramePosition? } = {}\nlocal window = CreateFrame(\"Frame\", nil, UIParent)\nframes.movable(window, { store = db, key = \"window\" })\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -6241,7 +6600,8 @@
               "lang": "wowlua",
               "text": "import binding from \"wowlua:bindings\"\n\nlocal name = \"MYADDON_TOGGLE\"\n\n@binding(name, { label = \"Toggle window\" })\nlocal function toggleWindow()\n    print(\"toggle\")\nend\n"
             }
-          ]
+          ],
+          "output": "error[E8350]: `@binding` needs the binding's name as a constant string\n  ┌─ src/main.wowlua:5:10\n  │\n5 │ @binding(name, { label = \"Toggle window\" })\n  │          ^^^^ not a constant"
         },
         {
           "compiles": true,
@@ -6251,7 +6611,8 @@
               "lang": "wowlua",
               "text": "import binding from \"wowlua:bindings\"\n\nconst NAME = \"MYADDON_TOGGLE\"\n\n@binding(NAME, { label = \"Toggle window\" })\nlocal function toggleWindow()\n    print(\"toggle\")\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -6271,7 +6632,8 @@
               "lang": "wowlua",
               "text": "import binding from \"wowlua:bindings\"\n\n@binding(\"MYADDON_TOGGLE\", { label = \"Toggle window\" })\nlocal function toggleWindow()\n    print(\"toggle\")\nend\n\n@binding(\"MYADDON_TOGGLE\", { label = \"Toggle map\" })\nlocal function toggleMap()\n    print(\"map\")\nend\n"
             }
-          ]
+          ],
+          "output": "error[E8351]: the keybinding `MYADDON_TOGGLE` is declared twice\n  ┌─ src/main.wowlua:8:10\n  │\n3 │ @binding(\"MYADDON_TOGGLE\", { label = \"Toggle window\" })\n  │          ---------------- first declared here\n  ·\n8 │ @binding(\"MYADDON_TOGGLE\", { label = \"Toggle map\" })\n  │          ^^^^^^^^^^^^^^^^ again"
         },
         {
           "compiles": true,
@@ -6281,7 +6643,8 @@
               "lang": "wowlua",
               "text": "import binding from \"wowlua:bindings\"\n\n@binding(\"MYADDON_TOGGLE\", { label = \"Toggle window\" })\nlocal function toggleWindow()\n    print(\"toggle\")\nend\n\n@binding(\"MYADDON_TOGGLE_MAP\", { label = \"Toggle map\" })\nlocal function toggleMap()\n    print(\"map\")\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -6300,7 +6663,8 @@
               "lang": "wowlua",
               "text": "import binding from \"wowlua:bindings\"\n\n@binding(\"myaddon-toggle\", { label = \"Toggle window\" })\nlocal function toggleWindow()\n    print(\"toggle\")\nend\n"
             }
-          ]
+          ],
+          "output": "error[E8352]: `myaddon-toggle` is no keybinding name: it matches `[A-Z][A-Z0-9_]*`\n  ┌─ src/main.wowlua:3:10\n  │\n3 │ @binding(\"myaddon-toggle\", { label = \"Toggle window\" })\n  │          ^^^^^^^^^^^^^^^^ invalid"
         },
         {
           "compiles": true,
@@ -6310,7 +6674,8 @@
               "lang": "wowlua",
               "text": "import binding from \"wowlua:bindings\"\n\n@binding(\"MYADDON_TOGGLE\", { label = \"Toggle window\" })\nlocal function toggleWindow()\n    print(\"toggle\")\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -6329,7 +6694,8 @@
               "lang": "wowlua",
               "text": "import * as settings from \"wowlua:settings\"\n\nlocal control = settings.keybinding(\"MYADDON_TOGGLE\", { label = \"Toggle window\" })\nprint(control)\n"
             }
-          ]
+          ],
+          "output": "error[E8353]: `MYADDON_TOGGLE` is not a keybinding of this addon: declare it with `@binding`\n  ┌─ src/main.wowlua:3:37\n  │\n3 │ local control = settings.keybinding(\"MYADDON_TOGGLE\", { label = \"Toggle window\" })\n  │                                     ^^^^^^^^^^^^^^^^ not declared"
         },
         {
           "compiles": true,
@@ -6339,7 +6705,8 @@
               "lang": "wowlua",
               "text": "import * as settings from \"wowlua:settings\"\nimport binding from \"wowlua:bindings\"\n\n@binding(\"MYADDON_TOGGLE\", { label = \"Toggle window\" })\nlocal function toggleWindow()\n    print(\"toggle\")\nend\n\nlocal control = settings.keybinding(\"MYADDON_TOGGLE\", { label = \"Toggle window\" })\nprint(control)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -6358,7 +6725,8 @@
               "lang": "wowlua",
               "text": "import binding from \"wowlua:bindings\"\n\n@binding(\"MYADDON_TOGGLE\", { label = \"Toggle window\", default = \"CTRL-T\" })\nlocal function toggleWindow()\n    print(\"toggle\")\nend\n"
             }
-          ]
+          ],
+          "output": "warning[W8354]: the default key `CTRL-T` of `MYADDON_TOGGLE` is ignored: no targeted client supports default keys\n  ┌─ src/main.wowlua:3:65\n  │\n3 │ @binding(\"MYADDON_TOGGLE\", { label = \"Toggle window\", default = \"CTRL-T\" })\n  │                                                                 ^^^^^^^^ no default key there"
         },
         {
           "compiles": true,
@@ -6368,7 +6736,8 @@
               "lang": "wowlua",
               "text": "import binding from \"wowlua:bindings\"\n\n@binding(\"MYADDON_TOGGLE\", { label = \"Toggle window\" })\nlocal function toggleWindow()\n    print(\"toggle\")\nend\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -6385,7 +6754,8 @@
               "lang": "wowlua",
               "text": "import * as color from \"wowlua:color\"\n\nlocal orange = color.hex(\"ff880\")\nprint(orange:GetRGB())\n"
             }
-          ]
+          ],
+          "output": "error[E8390]: `ff880` is not a color: write \"rrggbb\" or \"aarrggbb\" in hex digits, optionally after `#`\n  ┌─ src/main.wowlua:3:26\n  │\n3 │ local orange = color.hex(\"ff880\")\n  │                          ^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -6395,7 +6765,8 @@
               "lang": "wowlua",
               "text": "import * as color from \"wowlua:color\"\n\nlocal orange = color.hex(\"ff8800\")\nprint(orange:GetRGB())\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -6412,7 +6783,8 @@
               "lang": "wowlua",
               "text": "import * as media from \"wowlua:media\"\n\nmedia.register(\"texture\", \"MyAddon Flat\", \"Interface\\\\AddOns\\\\MyAddon\\\\flat.tga\")\n"
             }
-          ]
+          ],
+          "output": "error[E8400]: `texture` is not a media kind: \"font\", \"statusbar\", \"border\", \"background\" or \"sound\"\n  ┌─ src/main.wowlua:3:16\n  │\n3 │ media.register(\"texture\", \"MyAddon Flat\", \"Interface\\\\AddOns\\\\MyAddon\\\\flat.tga\")\n  │                ^^^^^^^^^ unknown kind"
         },
         {
           "compiles": true,
@@ -6422,7 +6794,8 @@
               "lang": "wowlua",
               "text": "import * as media from \"wowlua:media\"\n\nmedia.register(\"statusbar\", \"MyAddon Flat\", \"Interface\\\\AddOns\\\\MyAddon\\\\flat.tga\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -6439,7 +6812,8 @@
               "lang": "wowlua",
               "text": "import * as callbacks from \"wowlua:callbacks\"\n\ninterface TrackerEvents\n    KillRecorded: (count: number) -> ()\nend\n\nlocal events: callbacks.Registry<TrackerEvents> = callbacks.registry()\nevents:on(\"KillsRecorded\", function(count: number)\n    print(count)\nend)\n"
             }
-          ]
+          ],
+          "output": "error[E8420]: `KillsRecorded` is not an event of `TrackerEvents`\n  ┌─ src/main.wowlua:8:11\n  │\n8 │ events:on(\"KillsRecorded\", function(count: number)\n  │           ^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -6449,7 +6823,8 @@
               "lang": "wowlua",
               "text": "import * as callbacks from \"wowlua:callbacks\"\n\ninterface TrackerEvents\n    KillRecorded: (count: number) -> ()\nend\n\nlocal events: callbacks.Registry<TrackerEvents> = callbacks.registry()\nevents:on(\"KillRecorded\", function(count: number)\n    print(count)\nend)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -6466,7 +6841,8 @@
               "lang": "wowlua",
               "text": "import * as jobs from \"wowlua:jobs\"\n\nlocal items = { 3, 1, 2 }\njobs.start(function(ctx)\n    table.sort(items, function(a, b)\n        ctx:check()\n        return a < b\n    end)\nend)\n"
             }
-          ]
+          ],
+          "output": "warning[W8430]: a job cannot yield here: the coroutine would cross a pcall, sort or gsub callback\n  ┌─ src/main.wowlua:6:9\n  │\n6 │         ctx:check()\n  │         ^^^^^^^^^^^ yields inside a C call"
         },
         {
           "compiles": true,
@@ -6476,7 +6852,8 @@
               "lang": "wowlua",
               "text": "import * as jobs from \"wowlua:jobs\"\n\nlocal items = { 3, 1, 2 }\njobs.start(function(ctx)\n    ctx:check()\n    table.sort(items, function(a, b)\n        return a < b\n    end)\nend)\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": []
@@ -6493,7 +6870,8 @@
               "lang": "wowlua",
               "text": "import * as secure from \"wowlua:secure\"\n\nlocal bar = CreateFrame(\"Frame\", nil, UIParent, \"SecureHandlerStateTemplate\")\nsecure.visibility(bar, \"[incombat] show; hide\")\n"
             }
-          ]
+          ],
+          "output": "error[E8440]: invalid macro conditional: unknown condition `incombat`\n  ┌─ src/main.wowlua:4:24\n  │\n4 │ secure.visibility(bar, \"[incombat] show; hide\")\n  │                        ^^^^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -6503,7 +6881,8 @@
               "lang": "wowlua",
               "text": "import * as secure from \"wowlua:secure\"\n\nlocal bar = CreateFrame(\"Frame\", nil, UIParent, \"SecureHandlerStateTemplate\")\nsecure.visibility(bar, \"[combat] show; hide\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [
@@ -6522,7 +6901,8 @@
               "lang": "wowlua",
               "text": "import * as secure from \"wowlua:secure\"\n\nlocal bar = CreateFrame(\"Frame\", nil, UIParent, \"SecureHandlerStateTemplate\")\nsecure.visibility(bar, \"[combat] visible; hidden\")\n"
             }
-          ]
+          ],
+          "output": "error[E8441]: a visibility driver's values are `show` and `hide`, not `visible`\n  ┌─ src/main.wowlua:4:24\n  │\n4 │ secure.visibility(bar, \"[combat] visible; hidden\")\n  │                        ^^^^^^^^^^^^^^^^^^^^^^^^^^ here"
         },
         {
           "compiles": true,
@@ -6532,7 +6912,8 @@
               "lang": "wowlua",
               "text": "import * as secure from \"wowlua:secure\"\n\nlocal bar = CreateFrame(\"Frame\", nil, UIParent, \"SecureHandlerStateTemplate\")\nsecure.visibility(bar, \"[combat] show; hide\")\n"
             }
-          ]
+          ],
+          "output": null
         }
       ],
       "related": [

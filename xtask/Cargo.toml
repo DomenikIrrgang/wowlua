@@ -20,6 +20,7 @@ wowlua-luair.workspace = true
 wowlua-manifest.workspace = true
 wowlua-span.workspace = true
 wowlua-diagnostics.workspace = true
+wowlua-web = { path = "../crates/wowlua-web" }
 wowlua-syntax.workspace = true
 wowlua-flavors.workspace = true
 wowlua-types-gen.workspace = true

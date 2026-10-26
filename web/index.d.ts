@@ -19,6 +19,8 @@ export interface Diagnostic {
     /** The file, relative to the package; null for the package as a whole. */
     file: string | null;
     range: Range;
+    /** The diagnostic as `wowlua check` prints it, without colors. */
+    text: string;
 }
 
 export type BuiltFile = { path: string; text: string } | { path: string; base64: string };

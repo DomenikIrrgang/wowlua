@@ -20,7 +20,7 @@ use serde_json::{Value as Json, json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use wowlua_diagnostics::Severity;
+use wowlua_diagnostics::{ColorChoice, MessageFormat, Renderer, Severity};
 use wowlua_driver::host::{self, MemoryHost};
 use wowlua_driver::{BuildRequest, Session};
 
@@ -368,11 +368,13 @@ impl Playground {
     }
 }
 
-/// A session's diagnostics: `{ severity, code, message, file, range }`,
-/// `file` relative to the package (`null` for the package as a whole) and
-/// `range` as the language server's (lines and UTF-16 columns from 0).
+/// A session's diagnostics: `{ severity, code, message, file, range, text }`,
+/// `file` relative to the package (`null` for the package as a whole),
+/// `range` as the language server's (lines and UTF-16 columns from 0) and
+/// `text` the diagnostic as `wowlua check` prints it, without colors.
 fn diagnostics(session: &mut Session) -> Json {
     let found = session.take_diagnostics().into_vec();
+    let renderer = Renderer::new(MessageFormat::Human, ColorChoice::Never);
     let items: Vec<Json> = found
         .iter()
         .map(|d| {
@@ -405,12 +407,16 @@ fn diagnostics(session: &mut Session) -> Json {
                     wowlua_lsp::text::range("", 0, 0),
                 ),
             };
+            let text = renderer
+                .render_to_string(&session.db, d)
+                .replace(&format!("{ROOT}/"), "");
             json!({
                 "severity": severity,
                 "code": d.code,
                 "message": message,
                 "file": file,
                 "range": range,
+                "text": text,
             })
         })
         .collect();

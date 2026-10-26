@@ -3780,6 +3780,7 @@ dependencies = [
  "wowlua-toc",
  "wowlua-types-gen",
  "wowlua-vm",
+ "wowlua-web",
  "wowlua-xml",
 ]
 
