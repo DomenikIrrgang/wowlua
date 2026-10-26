@@ -328,3 +328,21 @@ fn event_and_message_declarations() {
         assert_eq!(codes_of(src), ["E2059"], "{src}");
     }
 }
+
+/// A table literal returned from a function has escaped: it is sealed
+/// (spec §2.4.2), so in strict mode a new field is E2051 and an unknown one
+/// E2003, while its own fields read and write as usual.
+#[test]
+fn returned_tables_are_sealed() {
+    let make = "local function make()\n    local t = { count = 0 }\n    t.name = \"x\"\n    return t\nend\nlocal o = make()\n";
+    strict_ok(&format!("{make}o.count = o.count + 1\nprint(o.name)\n"));
+    strict_err(&format!("{make}o.extra = 1\n"), "E2051");
+    strict_err(&format!("{make}print(o.missing)\n"), "E2003");
+    // basic mode allows new fields on sealed tables
+    ok(&format!("{make}o.extra = 1\nprint(o.extra)\n"));
+    // a table made and returned directly, too
+    strict_err(
+        "local function mk()\n    return { a = 1 }\nend\nlocal m = mk()\nm.b = 2\n",
+        "E2051",
+    );
+}

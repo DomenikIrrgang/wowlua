@@ -1837,9 +1837,14 @@ impl<'e, 'p> Checker<'e, 'p> {
                     .as_ref()
                     .map(|p| p.types.iter().map(|&t| Some(t)).collect())
                     .unwrap_or_default();
-                let pack = self.expr_pack(values, &expected_types);
+                let mut pack = self.expr_pack(values, &expected_types);
                 if let Some(exp) = expected {
                     self.check_pack(values, &pack, &exp, s.span());
+                }
+                // A returned table has escaped: callers get it sealed
+                // (spec §2.4.2).
+                for t in pack.types.iter_mut() {
+                    *t = self.sealed_members(*t);
                 }
                 if let Some(f) = self.fns.last_mut() {
                     f.returns.push(pack);
@@ -3014,6 +3019,18 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.sealed_at(t, 0)
     }
 
+    /// [`Self::sealed`] for each member of a union.
+    fn sealed_members(&mut self, t: TypeId) -> TypeId {
+        let Ty::Union(members) = self.env.types.get(t).clone() else {
+            return self.sealed(t);
+        };
+        let sealed: Vec<TypeId> = members.iter().map(|&m| self.sealed(m)).collect();
+        if sealed == members {
+            return t;
+        }
+        self.env.types.union(&sealed)
+    }
+
     fn sealed_at(&mut self, t: TypeId, depth: u32) -> TypeId {
         let Ty::Record(r) = self.env.types.get(t).clone() else {
             return t;
@@ -3037,7 +3054,12 @@ impl<'e, 'p> Checker<'e, 'p> {
         let mut r = r;
         r.open = false;
         r.fields = fields;
-        self.env.types.record(r)
+        let sealed = self.env.types.record(r);
+        // (a `setmetatable` object's fallbacks are still its)
+        if let Some(rest) = self.fallback_fields.get(&t).cloned() {
+            self.fallback_fields.insert(sealed, rest);
+        }
+        sealed
     }
 
     /// Adds a field to an open table, or checks it against a sealed one.
