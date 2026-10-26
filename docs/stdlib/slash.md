@@ -107,8 +107,9 @@ usage line, and `false` for an unknown command.
 
 Each entry of `args` converts one word of the input before `run` sees it.
 Declare `run`'s parameters with the types below. The compiler checks that each
-entry is a valid spec and that `run` takes one parameter per argument, plus one
-for the flags (E8112).
+entry is a valid spec, that `run` takes one parameter per argument, plus one
+for the flags, and that each typed parameter takes what its argument gives: a
+`string` parameter for a `"number"` argument is an error (E8112).
 
 | Spec | The player types | `run` gets |
 |------|------------------|------------|
@@ -136,25 +137,26 @@ argument's text, `--name` is plain text.
 ## Help and usage
 
 `/mya` alone, `/mya help` and an unknown command print one line per command,
-with its arguments and help text. A wrong argument prints the usage of just
-that command. The lines go to the chat through [`wowlua:log`](chat.md), after
+with its arguments and help text, after the slash command. A wrong argument
+prints the usage of just that command. The lines go to the chat through [`wowlua:log`](chat.md), after
 your addon's name. For the router above, `/mya help` then `/mya scale big`
 print:
 
 ```text
-MyAddon: limit [number] - Warn below this many free slots
-MyAddon: note <string> <text...> - Add a note to a bag
-MyAddon: reset [--all] - Reset the window position (--all: every setting)
-MyAddon: scale <number> - Set the window scale
-MyAddon: show - Show the window
-MyAddon: sort <name|quality|type> - Choose how items are sorted
-MyAddon: Usage: scale <number>
+MyAddon: /mya limit [number] - Warn below this many free slots
+MyAddon: /mya note <string> <text...> - Add a note to a bag
+MyAddon: /mya reset [--all] - Reset the window position (--all: every setting)
+MyAddon: /mya scale <number> - Set the window scale
+MyAddon: /mya show - Show the window
+MyAddon: /mya sort <name|quality|type> - Choose how items are sorted
+MyAddon: Usage: /mya scale <number>
 ```
 
 Commands are listed by name. Pass `{ order = "added" }` as the router's second
 argument to list them in the order they were added: the definitions first, by
 name, since a table has no order, then each `add`. `commands:help()` returns
-the same lines as one string, for a help panel of your own.
+the same lines as one string, for a help panel of your own (outside a slash
+command's handler, after your addon's first slash command).
 
 ## Aliases
 

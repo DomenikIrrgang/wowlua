@@ -778,11 +778,11 @@ impl Checker<'_, '_> {
                     h.push((name.span(), m));
                 }
                 let m = self.registry_method_type(o, name.text(), args, m);
-                self.check_router_add(o, name.text(), args);
                 if let Some(reads) = reads {
                     self.env.pending_reads = reads;
                 }
                 let results = self.call(m, Some(o), args, e.span(), expected);
+                self.check_router_add(o, name.text(), args);
                 self.forget_passed(Some(obj), args);
                 if opt || chained {
                     let first = results.types.first().copied().unwrap_or(Types::NIL);
@@ -3044,6 +3044,16 @@ impl Checker<'_, '_> {
         {
             self.check_settings(def);
         }
+        if id == "slash.router"
+            && let Some(defs) = args.exprs().first()
+            && let ExprKind::Table(fields) = defs.kind()
+        {
+            for f in fields {
+                if let TableField::Named { value, .. } = f {
+                    self.check_router_run_types(value);
+                }
+            }
+        }
         if id == "frames.movable"
             && let Some(opts) = args.exprs().get(1)
         {
@@ -3667,6 +3677,138 @@ impl Checker<'_, '_> {
         };
         for (span, message, _) in crate::stdlib::router_command_problems(command) {
             self.report("E8112", span, message);
+        }
+        self.check_router_run_types(command);
+    }
+
+    /// One literal router command (`router`'s definitions, `Router:add`):
+    /// each typed parameter of `run` takes what its argument converts to:
+    /// `"number"` a `number`, `"number?"` a `number?`, `"rest"` a `string`,
+    /// choices the union of their literals, the flags a table of booleans
+    /// (E8112, spec stdlib "slash"; the specs and the parameter count are
+    /// [`crate::stdlib::router_command_problems`]'s). Called once the
+    /// command's types are known.
+    fn check_router_run_types(&mut self, command: Expr<'_>) {
+        let ExprKind::Table(fields) = command.kind() else {
+            return;
+        };
+        let field = |key: &str| {
+            fields.iter().find_map(|f| match f {
+                TableField::Named { name, value, .. } if name.text() == key => Some(value),
+                _ => None,
+            })
+        };
+        let Some(run) = field("run") else { return };
+        let ExprKind::Function(func) = run.kind() else {
+            return;
+        };
+        let mut expected: Vec<Option<TypeId>> = Vec::new();
+        if let Some(args) = field("args") {
+            let ExprKind::Table(specs) = args.kind() else {
+                return;
+            };
+            for spec in specs {
+                let TableField::Positional(spec) = spec else {
+                    return;
+                };
+                expected.push(self.router_arg_type(spec));
+            }
+        }
+        if let Some(flags) = field("flags") {
+            let t = match flags.kind() {
+                ExprKind::Table(names) => {
+                    let mut fields = crate::check::types::FieldMap::default();
+                    for n in names {
+                        let TableField::Positional(n) = n else {
+                            continue;
+                        };
+                        let ExprKind::String(lit) = n.kind() else {
+                            continue;
+                        };
+                        let name = String::from_utf8_lossy(&lit.value()).into_owned();
+                        fields.insert(
+                            name.into(),
+                            crate::check::types::Field {
+                                ty: Types::BOOLEAN,
+                                optional: false,
+                                readonly: false,
+                            },
+                        );
+                    }
+                    self.env.types.record(crate::check::types::Record {
+                        fields: fields.into(),
+                        ..Default::default()
+                    })
+                }
+                _ => self
+                    .env
+                    .types
+                    .intern(Ty::Map(Types::STRING, Types::BOOLEAN)),
+            };
+            expected.push(Some(t));
+        }
+        let Some(&run_type) = self.expr_types.get(&(run.span().start, run.span().end)) else {
+            return;
+        };
+        let Ty::Func(f) = self.env.types.get(run_type).clone() else {
+            return;
+        };
+        for (i, param) in func.params().iter().enumerate() {
+            let (Some(Some(want)), Some(p), Some(annotation)) =
+                (expected.get(i), f.params.get(i), param.ty())
+            else {
+                continue;
+            };
+            if !self.env.assignable(*want, p.ty, self.mode) {
+                let msg = format!(
+                    "`run`'s parameter `{}` is `{}`, but its argument gives `{}`",
+                    param.name().text(),
+                    self.env.display(p.ty),
+                    self.env.display(*want)
+                );
+                self.report("E8112", annotation.span(), msg);
+            }
+        }
+    }
+
+    /// The type a router `ArgSpec` converts its token to; `None` for a spec
+    /// that is not literal.
+    fn router_arg_type(&mut self, spec: Expr<'_>) -> Option<TypeId> {
+        match spec.kind() {
+            ExprKind::String(lit) => {
+                let value = lit.value();
+                let s = String::from_utf8_lossy(&value);
+                let (kind, optional) = match s.strip_suffix('?') {
+                    Some(k) => (k, true),
+                    None => (s.as_ref(), false),
+                };
+                let t = match kind {
+                    "string" | "rest" => Types::STRING,
+                    "number" => Types::NUMBER,
+                    "boolean" => Types::BOOLEAN,
+                    _ => return None,
+                };
+                Some(if optional {
+                    self.env.types.optional(t)
+                } else {
+                    t
+                })
+            }
+            ExprKind::Table(choices) => {
+                let mut members = Vec::new();
+                for c in choices {
+                    let TableField::Positional(c) = c else {
+                        return None;
+                    };
+                    let ExprKind::String(lit) = c.kind() else {
+                        return None;
+                    };
+                    let choice = String::from_utf8_lossy(&lit.value()).into_owned();
+                    members.push(self.env.types.str(&choice));
+                }
+                (!members.is_empty()).then(|| self.env.types.union(&members))
+            }
+            _ => None,
         }
     }
 

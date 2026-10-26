@@ -722,7 +722,10 @@ The commands of a slash `router` (and a literal command given to
 `Router:add`) are checked at compile time. Each entry of `args` must be
 `"string"`, `"number"` or `"boolean"` (with `?` when optional), a list of
 choice strings, or `"rest"` as the last one. `run` takes one parameter per
-argument, plus one for the flags table when `flags` is declared.
+argument, plus one for the flags table when `flags` is declared, and each
+typed parameter takes what its argument converts to: a `number` for
+`"number"`, a `string` for `"rest"`, the choices' union for a list of choices,
+a table of booleans for the flags.
 
 Make `run`'s parameters match `args` and `flags`, or fix the invalid argument
 spec.

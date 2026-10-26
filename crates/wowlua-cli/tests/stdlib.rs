@@ -2357,15 +2357,16 @@ print("keys", SLASH_WOWLUA_STD_11, SLASH_WOWLUA_STD_12, SLASH_WOWLUA_STD_21)
         .iter()
         .map(|l| l.replace("|cff33ff99Std|r: ", ""))
         .collect();
+    // Help and usage lines start with the slash command.
     let help = [
-        "boom",
-        "mode <tank|heal> [boolean]",
-        "move <number> [number] [--smooth]",
-        "note <text...>",
-        "reset [--all]",
-        "say <string> <text...> [--loud]",
-        "scale <number> - Set the scale",
-        "show - Show the window",
+        "/std boom",
+        "/std mode <tank|heal> [boolean]",
+        "/std move <number> [number] [--smooth]",
+        "/std note <text...>",
+        "/std reset [--all]",
+        "/std say <string> <text...> [--loud]",
+        "/std scale <number> - Set the scale",
+        "/std show - Show the window",
     ];
     let mut expected: Vec<&str> = vec![
         "show",
@@ -2376,9 +2377,9 @@ print("keys", SLASH_WOWLUA_STD_11, SLASH_WOWLUA_STD_12, SLASH_WOWLUA_STD_21)
         "-> true",
         "scale -2",
         "-> true",
-        "Usage: scale <number>",
+        "Usage: /std scale <number>",
         "-> true",
-        "Usage: scale <number>",
+        "Usage: /std scale <number>",
         "-> true",
         // Choices match in any case and give the declared spelling.
         "mode heal true",
@@ -2389,9 +2390,9 @@ print("keys", SLASH_WOWLUA_STD_11, SLASH_WOWLUA_STD_12, SLASH_WOWLUA_STD_21)
         "-> true",
         "mode tank nil",
         "-> true",
-        "Usage: mode <tank|heal> [boolean]",
+        "Usage: /std mode <tank|heal> [boolean]",
         "-> true",
-        "Usage: mode <tank|heal> [boolean]",
+        "Usage: /std mode <tank|heal> [boolean]",
         "-> true",
         // The rest as typed, trimmed at the end.
         "say two words [hello there  friend] false",
@@ -2403,15 +2404,15 @@ print("keys", SLASH_WOWLUA_STD_11, SLASH_WOWLUA_STD_12, SLASH_WOWLUA_STD_21)
         "-> true",
         "say bob [] false",
         "-> true",
-        "Usage: say <string> <text...> [--loud]",
+        "Usage: /std say <string> <text...> [--loud]",
         "-> true",
         "reset true",
         "-> true",
         "reset false",
         "-> true",
-        "Usage: reset [--all]",
+        "Usage: /std reset [--all]",
         "-> true",
-        "Usage: reset [--all]",
+        "Usage: /std reset [--all]",
         "-> true",
         "move 1 nil true",
         "-> true",
@@ -2442,7 +2443,7 @@ fn slash_router_help() {
     );
     // Both list every command, sorted, and count as handled.
     assert_eq!(out.len(), 18, "{out:?}");
-    assert_eq!(out[0], "|cff33ff99Std|r: boom", "{out:?}");
+    assert_eq!(out[0], "|cff33ff99Std|r: /std boom", "{out:?}");
     assert_eq!(out[8], "-> true", "{out:?}");
     assert_eq!(out[0..9], out[9..18], "{out:?}");
 }
@@ -2488,6 +2489,7 @@ local function onCommand(msg: string) print("->", cmds:dispatch(msg)) end
         "",
         r#"Mock.slash("/std b 2")
 Mock.slash("/std help")
+print(StdCmds:help())
 for _, c in ipairs(StdCmds:commands()) do print(c.name, c.usage, c.help, #c.aliases, c.owner == StdOwner) end
 print(pcall(StdCmds.add, StdCmds, "other", { run = function() end, aliases = { "B" } }))
 StdCmds:removeAll(StdOwner)
@@ -2505,18 +2507,20 @@ Mock.slash("/std b 2")
         [
             "beta 2",
             "-> true",
-            "zeta - Defined first",
-            "beta <number> - B",
-            "alpha",
-            "solo",
+            "/std zeta - Defined first",
+            "/std beta <number> - B",
+            "/std alpha",
+            "/std solo",
             "-> true",
+            // Outside a handler, after the addon's first command.
+            "/std zeta - Defined first\n/std beta <number> - B\n/std alpha\n/std solo",
             "zeta zeta Defined first 0 false",
             "beta beta <number> B 1 true",
             "alpha alpha nil 0 true",
             "solo solo nil 0 false",
             "false router: \"B\" is taken by the command \"beta\"",
             // Only zeta is left: the help, and not dispatched.
-            "zeta - Defined first",
+            "/std zeta - Defined first",
             "-> false",
         ],
         "{out:?}"
@@ -2787,6 +2791,24 @@ fn core_modules_are_checked_at_compile_time() {
         ),
         (
             "import router from \"wowlua:slash\"\nlocal r = router({})\nr:add(\"go\", { args = { \"rest\", \"number\" }, run = function(a: string, b: number) end })\n",
+            "E8112",
+        ),
+        // `run`'s parameter types: a number is no string, flags are no
+        // number, a choice outside the list.
+        (
+            "import router from \"wowlua:slash\"\nlocal r = router({ go = { args = { \"number\" }, run = function(a: string) end } })\n",
+            "E8112",
+        ),
+        (
+            "import router from \"wowlua:slash\"\nlocal r = router({ go = { flags = { \"all\" }, run = function(f: number) end } })\n",
+            "E8112",
+        ),
+        (
+            "import router from \"wowlua:slash\"\nlocal r = router({ go = { args = { { \"tank\", \"heal\" } }, run = function(m: \"tank\" | \"dps\") end } })\n",
+            "E8112",
+        ),
+        (
+            "import router from \"wowlua:slash\"\nlocal r = router({})\nr:add(\"go\", { args = { \"rest\" }, run = function(text: boolean) end })\n",
             "E8112",
         ),
         // `known`'s fallback joins the result's type.
@@ -3078,6 +3100,9 @@ local owner = {}
 local r = router({}, { order = "added" })
 r:add("go", { args = { "number", "rest" }, run = function(a: number, b: string) end }, owner)
 r:add("stop", { run = function() end, help = "Stop" })
+-- `run` typed as its arguments and flags convert.
+r:add("mode", { args = { { "tank", "heal" }, "number?" }, flags = { "all" }, run = function(m: "tank" | "heal", n: number?, flags: { [string]: boolean }) end })
+r:add("pick", { args = { { "tank", "heal" } }, flags = { "all" }, run = function(m: string, flags: { all: boolean }) end })
 for _, c in ipairs(r:commands()) do print(c.name, c.usage, c.help, #c.aliases) end
 r:remove("stop")
 r:removeAll(owner)

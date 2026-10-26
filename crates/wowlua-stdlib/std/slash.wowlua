@@ -40,7 +40,9 @@ export interface Router
     --- `msg` or `help` prints the help (true); an unknown command prints it
     --- too (false). A secret `msg` runs nothing (false).
     function dispatch(msg: string): boolean
-    --- Every command's usage and help text, one per line.
+    --- Every command's usage and help text, one per line, each after the
+    --- slash command (`/<cmd> <command> <args> - <help>`): the one whose
+    --- handler runs, else the addon's first.
     function help(): string
     --- Adds a command (checked like the definitions; a name or alias that is
     --- taken is an error), owned by `owner` for `removeAll`.
@@ -58,6 +60,10 @@ type Handler = (msg: string, editBox: EditBox?) -> ()
 local prefix = "WOWLUA_" .. addonName:upper():gsub("[^A-Z0-9]", "_") .. "_"
 local registered = 0
 local commands: { [string]: boolean } = {}
+-- The command whose handler runs (its first name), and the addon's first
+-- command: the router's help and usage lines start with it.
+local running: string? = nil
+local first: string? = nil
 
 local function register(names: string[], fn: Handler)
     registered += 1
@@ -73,8 +79,12 @@ local function register(names: string[], fn: Handler)
         commands[lower] = true
         _G["SLASH_" .. key .. i] = name
     end
+    first = first ?? names[1]
     SlashCmdList[key] = function(msg: string, editBox: EditBox?)
+        const outer = running
+        running = names[1]
         callIn({ component = "slash: " .. names[1] }, fn, msg, editBox)
+        running = outer
     end
 end
 
@@ -166,6 +176,13 @@ local function describe(spec: ArgSpec): string
     local optional = spec:sub(-1) == "?"
     local kind = optional and spec:sub(1, -2) or spec
     return optional and "[" .. kind .. "]" or "<" .. kind .. ">"
+end
+
+-- `/<cmd> ` for help and usage lines: the command whose handler runs, else
+-- the addon's first one (nothing when it has none).
+local function slashPrefix(): string
+    const cmd = running ?? first
+    return cmd and cmd .. " " or ""
 end
 
 local function usage(name: string, command: Command): string
@@ -277,7 +294,7 @@ class SlashRouter implements Router
     function help(): string
         local lines: string[] = {}
         for i, c in ipairs(self:commands()) do
-            lines[i] = c.usage .. (c.help and " - " .. c.help or "")
+            lines[i] = slashPrefix() .. c.usage .. (c.help and " - " .. c.help or "")
         end
         return table.concat(lines, "\n")
     end
@@ -332,7 +349,7 @@ class SlashRouter implements Router
             local flag = tokens[i]:match("^%-%-(.+)$")
             if flag then
                 if not known[flag] then
-                    say("Usage: " .. usage(name, command))
+                    say("Usage: " .. slashPrefix() .. usage(name, command))
                     return true
                 end
                 flags[flag] = true
@@ -348,13 +365,13 @@ class SlashRouter implements Router
             end
             local ok, v = convert(spec, positional[i])
             if not ok then
-                say("Usage: " .. usage(name, command))
+                say("Usage: " .. slashPrefix() .. usage(name, command))
                 return true
             end
             values[i] = v
         end
         if not restAt and #positional > #args then
-            say("Usage: " .. usage(name, command))
+            say("Usage: " .. slashPrefix() .. usage(name, command))
             return true
         end
         local n = #args
