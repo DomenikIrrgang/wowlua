@@ -346,3 +346,26 @@ fn returned_tables_are_sealed() {
         "E2051",
     );
 }
+
+/// An existence test of a field the type lacks is never reported, and the
+/// code it guards reads the field as `any` (spec §6.5), for a local's
+/// record too.
+#[test]
+fn existence_tests_of_record_fields() {
+    let r = "local r: { name: string } = { name = \"a\" }\n";
+    strict_ok(&format!("{r}if r.maybe then print(r.maybe) end\n"));
+    strict_ok(&format!("{r}if not r.maybe then print(r.name) end\n"));
+    strict_ok(&format!(
+        "{r}if r.maybe ~= nil and r.maybe.deep then print(1) end\n"
+    ));
+    // outside a test it is still E2003
+    strict_err(&format!("{r}print(r.maybe)\n"), "E2003");
+    strict_err(
+        &format!("{r}if r.maybe then print(1) end\nprint(r.maybe)\n"),
+        "E2003",
+    );
+    // an open table's field set later in a loop is tested as before
+    strict_ok(
+        "local t = {}\nfor i = 1, 2 do\n    if t.seen then print(t.seen, i) end\n    t.seen = true\nend\n",
+    );
+}

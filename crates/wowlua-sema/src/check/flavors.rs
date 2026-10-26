@@ -91,7 +91,14 @@ impl Checker<'_, '_> {
                 }
             }
             _ => {
-                if self.api_path(cond).is_some() {
+                // a global's path, or a local's field (`if r.maybe then`)
+                let local_field = matches!(
+                    cond.kind(),
+                    ExprKind::Field { .. } | ExprKind::OptField { .. }
+                ) && self
+                    .field_path(cond)
+                    .is_some_and(|(root, _)| root != super::narrow::GLOBAL_ROOT);
+                if self.api_path(cond).is_some() || local_field {
                     self.probes.insert(cond.span());
                 }
             }

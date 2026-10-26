@@ -525,7 +525,10 @@ impl Checker<'_, '_> {
                 }
                 let guarded = path
                     .as_ref()
-                    .is_some_and(|p| self.guard.present.contains(p));
+                    .is_some_and(|p| self.guard.present.contains(p))
+                    || self.field_path(e).is_some_and(|(root, p)| {
+                        root != super::narrow::GLOBAL_ROOT && self.guard.fields.contains(&(root, p))
+                    });
                 let (o, chained) = self.chain_obj(obj);
                 let opt = matches!(e.kind(), ExprKind::OptField { .. });
                 let o = if opt { self.env.types.non_nil(o) } else { o };
@@ -553,10 +556,11 @@ impl Checker<'_, '_> {
                 // A member the type lacks, in an existence test (`nil`) or
                 // in the region such a test guards (`any`).
                 let own = self.missing_in_own_open(obj, o, name.text());
-                let missing = (probed || guarded) && {
-                    self.own_open = own;
-                    self.member_type(o, name.text(), name.span(), true) == Some(Types::ERROR)
-                };
+                let missing = (probed || guarded)
+                    && (self.lacks_field(o, name.text()) || {
+                        self.own_open = own;
+                        self.member_type(o, name.text(), name.span(), true) == Some(Types::ERROR)
+                    });
                 let t = if missing {
                     if probed { Types::NIL } else { Types::ANY }
                 } else {
@@ -1699,6 +1703,23 @@ impl Checker<'_, '_> {
             }
         }
         open
+    }
+
+    /// `o` is a sealed table type (records, `nil`) none of whose members
+    /// has the field `name` or an indexer. (An open table may get it later.)
+    fn lacks_field(&self, o: TypeId, name: &str) -> bool {
+        let members = self.env.types.members(o);
+        let mut record = false;
+        for m in members {
+            match self.env.types.get(m) {
+                Ty::Nil => {}
+                Ty::Record(r) if !r.open && !r.fields.contains_key(name) && r.indexer.is_none() => {
+                    record = true;
+                }
+                _ => return false,
+            }
+        }
+        record
     }
 
     /// The type of `o.name`; unknown members of declared types are E2003.
