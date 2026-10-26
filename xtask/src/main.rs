@@ -2,6 +2,8 @@
 //!
 //! - `cargo xtask codes`: regenerate the diagnostic code table from
 //!   `spec/appendix/diagnostics.md`.
+//! - `cargo xtask diagnostics`: the codes' explanations as JSON for the
+//!   website (`docs/reference/diagnostics.json`).
 //! - `cargo xtask schema`: regenerate the manifest's and the world
 //!   profiles' JSON schemas in `schema/`.
 //! - `cargo xtask runtime`: compile the runtime's wowlua sources into the
@@ -36,6 +38,7 @@ use std::path::{Path, PathBuf};
 mod atlases;
 mod corpus;
 mod coverage;
+mod diagnostics;
 mod fixture;
 mod fullprobe;
 mod ingest;
@@ -58,6 +61,9 @@ fn main() -> Result<()> {
     let root = workspace_root();
     match task.as_str() {
         "codes" => write_if_changed(&codes_path(&root), &generate_codes(&root)?),
+        "diagnostics" => {
+            write_if_changed(&root.join(diagnostics::PATH), &diagnostics::generate(&root))
+        }
         "fixture" => {
             let (Some(saved), Some(name)) = (std::env::args().nth(2), std::env::args().nth(3))
             else {
@@ -134,6 +140,11 @@ fn main() -> Result<()> {
         }
         "check" => {
             check_current(&codes_path(&root), &generate_codes(&root)?, "codes")?;
+            check_current(
+                &root.join(diagnostics::PATH),
+                &diagnostics::generate(&root),
+                "diagnostics",
+            )?;
             check_current(
                 &schema_path(&root),
                 &wowlua_manifest::schema_json(),
@@ -252,7 +263,7 @@ fn main() -> Result<()> {
             }
         }
         _ => bail!(
-            "usage: cargo xtask <codes|schema|check|coverage-report|corpus|types|packager-diff|packager-runs>"
+            "usage: cargo xtask <codes|diagnostics|schema|check|coverage-report|corpus|types|packager-diff|packager-runs>"
         ),
     }
 }

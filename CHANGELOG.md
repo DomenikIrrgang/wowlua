@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### New
+
+- `wowlua explain` explains every error and warning: what triggers it, how to fix it, an example that reports it and one that compiles, and related codes. The same explanations are on each code's page on wowlua.dev.
+
 ## 0.12.0 (2026-10-26)
 
 ### New

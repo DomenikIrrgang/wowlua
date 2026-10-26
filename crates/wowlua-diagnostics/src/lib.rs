@@ -1,13 +1,15 @@
 //! Diagnostics: the error/warning model shared by every wowlua crate, the
-//! registry of diagnostic codes (spec Appendix B), and rendering in the
-//! `human`, `short`, `json` and `github` message formats.
+//! registry of diagnostic codes (spec Appendix B) with their explanations,
+//! and rendering in the `human`, `short`, `json` and `github` message formats.
 
 mod codes;
+mod explanations;
 mod render;
 
 use std::path::{Path, PathBuf};
 use wowlua_span::Span;
 
+pub use explanations::{Example, ExampleFile, Explanation, areas, explanation};
 pub use render::{ColorChoice, MessageFormat, Renderer};
 
 /// A registered diagnostic code and its one-line summary.

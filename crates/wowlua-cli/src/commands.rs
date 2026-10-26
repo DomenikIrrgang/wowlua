@@ -1627,11 +1627,39 @@ pub fn explain(out: &Output, code: &str) -> bool {
             } else {
                 "warning"
             };
-            out.print(format!(
-                "{} ({kind}): {}\n\nSee the diagnostics reference: spec/appendix/diagnostics.md\n",
+            let mut text = format!(
+                "{} ({kind}): {}\n",
                 info.code,
                 info.summary.replace('`', "")
+            );
+            if let Some(e) = wowlua_diagnostics::explanation(info.code) {
+                text.push_str(&format!("\n{}\n", e.text));
+                for example in &e.examples {
+                    let verdict = if example.compiles {
+                        "Compiles"
+                    } else {
+                        "Reports it"
+                    };
+                    text.push_str(&format!("\n{verdict}:\n"));
+                    for file in &example.files {
+                        if example.files.len() > 1 || file.path != "src/main.wowlua" {
+                            text.push_str(&format!("  {}\n", file.path));
+                        }
+                        for line in file.text.lines() {
+                            text.push_str(format!("    {line}").trim_end());
+                            text.push('\n');
+                        }
+                    }
+                }
+                if !e.related.is_empty() {
+                    text.push_str(&format!("\nRelated: {}\n", e.related.join(", ")));
+                }
+            }
+            text.push_str(&format!(
+                "\nhttps://wowlua.dev/docs/reference/diagnostics/{}\n",
+                info.code
             ));
+            out.print(text);
             true
         }
         None => {
