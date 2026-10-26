@@ -100,6 +100,45 @@ Wago and WoWInterface targets build unminified unless the target sets
 explained in
 [Optimization §15.4](../../spec/toolchain/optimization.md#154-minification-levels).
 
+## How fast should it run?
+
+WoW runs your addon on Lua 5.1, whose compiler optimizes very little, so the
+release profile also reshapes the code it compiles: a field such as
+`self.config.scale` read in a loop is read once before it, `ipairs` over an
+array becomes a numeric loop, `table.insert(t, v)` becomes `t[#t + 1] = v`,
+small helpers are inlined, and locals that hold a constant become the
+constant. Each happens only where it can't change what your code does: the
+rewrites that depend on types only in strict-mode files, where the type
+checker proved that a table has no metatable function in the way and that a
+value is a number. Plain `.lua` files stay as they are.
+
+```wowlua title=src/bars.wowlua
+--!strict
+export class Bars
+    config: { width: number, scale: number }
+    widths: number[] = {}
+
+    constructor()
+        self.config = { width = 120, scale = 1 }
+    end
+
+    function layout(values: number[])
+        for i, v in ipairs(values) do
+            table.insert(self.widths, v * self.config.width * self.config.scale)
+        end
+    end
+end
+```
+
+In a release build, `self.widths`, `self.config.width` and
+`self.config.scale` are read once before the loop, the loop is numeric, and
+the `table.insert` is an assignment. Each optimization has its own switch
+under the profile's `optimize` (see
+[the manifest reference](../reference/manifest.md#profilesprofileoptimize)).
+`wowlua bench` shows what they buy for your code: write `@bench` functions
+next to your tests and compare the optimized and unoptimized builds (see
+[Testing](testing.md#benchmarks)).
+
 ## Versions come from git tags
 
 You set `package.version` in `wowlua.json` and tag the commit you release.

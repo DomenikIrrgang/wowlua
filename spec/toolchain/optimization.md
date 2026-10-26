@@ -22,9 +22,15 @@ harder to read:
 
 | Setting | Values | Effect |
 |---------|--------|--------|
-| `optimize.inline` | bool | Inline local functions and `@inline` private methods whose body is a single `return <expression>` (§15.2) |
+| `optimize.inline` | bool | Inline local functions and `@inline` private methods whose body is a single `return <expression>`, and those whose body is statements where a call is a statement (§15.2) |
 | `optimize.cache-globals` | `"off"` `"safe"` | Hoist frequently used read-only globals and Lua standard-library functions into file-level locals (`local pairs, type = pairs, type`). Faster access in hot code. `"safe"` only hoists names the module never assigns and that are on the compiler's stable-global list (Lua stdlib and immutable WoW API namespaces). Never hoists names that addons commonly hook. |
 | `optimize.dead-code` | bool | Remove unused local functions, unused module-private declarations, and **side-effect-free** modules nothing uses (§15.2.1) |
+| `optimize.constants` | bool | Locals assigned once with a constant become the constant (§15.2.3) |
+| `optimize.cache-fields` | bool | Field reads of plain tables read once into a local: out of loops that cannot change them, and repeated ones in a stretch of code (§15.2.3) |
+| `optimize.cache-upvalues` | bool | Upvalues read in a loop or often, and never assigned, copied into locals (§15.2.3) |
+| `optimize.numeric-loops` | bool | `ipairs` loops over plain arrays become numeric loops (§15.2.3) |
+| `optimize.table-insert` | bool | `table.insert(t, v)` on a plain table becomes `t[#t + 1] = v` (§15.2.3) |
+| `optimize.hoist-closures` | bool | Closures that capture nothing from a loop are made once, before it (§15.2.3) |
 | `bundle` | bool | Bundle all Lua into as few files as possible (§15.3) |
 | `minify` | level name | Apply a minification level (§15.4) |
 
@@ -35,14 +41,18 @@ Defaults:
 | `optimize.inline` | `false` | `false` | `true` |
 | `optimize.cache-globals` | `"off"` | `"off"` | `"safe"` |
 | `optimize.dead-code` | `false` | `false` | `true` |
+| `optimize.constants`, `optimize.cache-fields`, `optimize.cache-upvalues`, `optimize.numeric-loops`, `optimize.table-insert`, `optimize.hoist-closures` | `false` | `false` | `true` |
 | `bundle` | `false` | `false` | `true` |
 | `minify` | `"none"` | `"none"` | `"strip"` |
 
 In the manifest, `optimize` is a nested object:
-`"optimize": { "inline": true, "cache-globals": "safe", "dead-code": true }`.
+`"optimize": { "inline": true, "cache-globals": "safe", "dead-code": true }`;
+settings it leaves out keep the profile's.
 
-The optimizations apply to compiled code and to the project's plain Lua
-files (like minification, §15.4.1), before minification.
+`inline`, `cache-globals` and `dead-code` apply to compiled code and to the
+project's plain Lua files (like minification, §15.4.1), before
+minification. The optimizations of §15.2.3 apply to compiled code only:
+plain Lua files stay as they are (decision T426).
 
 **`cache-globals: "safe"`** hoists, the most used first, names read at least
 twice and never assigned in the file: Lua 5.1's base functions (`pairs`,
@@ -58,14 +68,36 @@ budgets of §15.2.2.
 `return <expression>` (no function expressions, no `...`) with that
 expression when the function is not recursive, never assigned and only ever
 called, the call's arguments are literals or locals, and the body's other
-names mean the same at the call. Calls used as statements stay calls. A
-function whose calls were all inlined goes. `@inline` is a hint for such
-functions; on anything else (a longer body, a recursive or escaping function,
-a function that is not local, a public or protected method) it is ignored
-with W3031 (decision T166).
+names mean the same at the call. Such calls used as statements stay calls.
 
-An `@inline` private method is inlined the same way where its class calls
-it: `obj:m(args)` (any instance: a private method is the class's own, which
+A local function whose body is statements (no `...`, no `return` but a
+last one without values, which goes) is inlined where a call of it is a
+statement of its own: the call becomes `do local <parameters> = <arguments>
+<body> end`, which evaluates the arguments once, in order, and adjusts them
+to the parameters as the call does. The same conditions apply (not
+recursive, never assigned, only called, the body's free names mean the same
+at the call), arguments past the parameters must be literals or names, the
+body must fit the budgets of §15.2.2 where it goes, and a body of more than
+12 statements (nested ones counted) is inlined only into its one call.
+Unbundled builds (`line-mode` `"preserve"`), which keep every instruction
+on its source line, inline no statement bodies (decision T434).
+
+Neither kind inlines a function that uses levels of the call stack
+(`setfenv`, `getfenv`, `error` with a level, `debugstack`, `debuglocals`,
+`debug.*`): inlined, its levels would name other functions. An inlined
+function has no frame of its own in a stack; an error in an inlined
+expression reports the call's line, one in inlined statements their own
+(through the source map).
+
+A function whose calls were all inlined goes. `@inline` is a hint for such
+functions; on anything else (a body that returns early or returns values
+from statements, one that uses stack levels, a recursive or escaping function, a statement body none of
+whose calls is a statement, a long one called more than once, a function
+that is not local, a public or protected method) it is ignored with W3031
+(decisions T166, T434).
+
+An `@inline` private method, with either kind of body, is inlined the same
+way where its class calls it: `obj:m(args)` (any instance: a private method is the class's own, which
 nothing outside the class calls or replaces) and `C.m(args)` for a static
 one go through a local function made from the method, declared before the
 class, which the rules above then inline. The method stays on the class for
@@ -103,15 +135,130 @@ creates a Lua 5.1 limit error that the unoptimized code did not have:
 | `cache-globals` | Stops hoisting when the file's main chunk would exceed 180 active locals, or when any function would exceed 50 upvalues. The most frequently used names are hoisted first. |
 | `dedupe-strings` | Same limits, applied to its shared string locals |
 | `inline` | Does not inline into a function if that would exceed 180 locals or 50 upvalues in it |
+| `cache-fields`, `cache-upvalues`, `hoist-closures` | Add no local to a function that has 180 active locals; add no upvalue |
 
 Locals also take registers, which a function's temporaries share (250 in
 all; large nested table constructors need many). The budgets cannot see
 those, so the build compiles each optimized file: if it exceeds a Lua 5.1
-limit, the file is built again without `dedupe-strings`, `cache-globals` and
-`inline`, and a note says so.
+limit, the file is built again without `dedupe-strings`, `cache-globals`,
+`inline` and the optimizations that add locals (`cache-fields`,
+`cache-upvalues`, `numeric-loops`, `hoist-closures`), and a note says so.
 
 Bundling adds no locals to modules, because each module keeps its own
 function (§15.3.1).
+
+### 15.2.3 Shaping for Lua 5.1
+
+WoW loads Lua source and compiles it with Lua 5.1's compiler, which
+optimizes little, so these optimizations shape the source it compiles
+(roadmap M11). Each applies only where its preconditions hold; those about
+types hold where the type checker proved them in a strict-mode file
+(decision L28: basic-mode types may be wrong at runtime), so basic mode
+keeps its tables and operators as written, and `any` values too. What the
+checker proves (decision T427):
+
+- **A plain table**: a value, never `nil`, whose reads and writes run no
+  code. An array, a map, a record or interface value, a namespace, a
+  widget or a declared class (whose metatables index through tables), an
+  instance or class table of a package class without accessors and without
+  `__index` or `__newindex` metamethods (in its superclasses neither).
+  Records and interfaces count only while no class of the package has
+  accessors or those metamethods (one of its instances could be held as
+  one), and a record with an `any` indexer (a `setmetatable` object whose
+  `__index` is a function) never.
+- **A plain array**: a value typed `T[]`.
+- **An operator that runs no metamethod**: arithmetic of numbers, `..` of
+  strings and numbers, comparisons of two numbers or two strings, `==` and
+  `~=` with a number, string or literal on one side (Lua calls `__eq` for
+  two tables only), `not`, `and`, `or`, `-` of a number and `#` of a string
+  or a plain table (Lua 5.1 calls no `__len` for tables).
+
+Secure-code paths keep their call structure: the secure API (`securecall`,
+`securecallfunction`, `securecallmethod`, `secureexecuterange`,
+`hooksecurefunc`, …) is called as written, and nothing passed to it is moved
+or made once. The rewrites that rely on a library function (`ipairs`,
+`table.insert`, `pcall`, …) are not done in a file that assigns that global
+or library field, or that uses `setfenv`, `getfenv`, `loadstring` or `_G`.
+Errors keep their messages, but the name a message gives a value may change
+(`local 'x'` for `upvalue 'x'`), as with `cache-globals`.
+
+**`constants`.** A local declared with a constant (`nil`, a boolean, a
+number, a string of at most 40 bytes on one line) and never assigned is
+that constant wherever it is read, but as an object or a callee; a
+declaration whose every read became the constant goes. Reads in other
+functions become constants instead of upvalues, and Lua folds arithmetic of
+constants (`LIMIT * 2`) (decision T433).
+
+**`cache-fields`.** A chain of field reads from a local (`self.frame`,
+`self.frame.texture`), each from a plain table, is read once into a local
+(`__wl_texture`) where nothing can change it in between (decision T428).
+Something can change a chain where code may run, or a write may reach it:
+
+- a call, but of the library functions that run no code of the addon's and
+  assign no named field (`math.*`, `string.*` but `gsub`, `type`,
+  `select`, `tonumber`, `next`, `rawget`, `unpack`, `table.insert`,
+  `table.remove`, `table.concat`, `bit.*` and WoW's aliases of them);
+- a method call; a field or index read, an assignment or an operator that
+  may run a metamethod (not plain, or not proved);
+- an assignment to a field of the chain's names, of any table; an index
+  assignment whose key may be a string (a number key, `t[#t + 1]` or a
+  numeric loop's variable, cannot be); an assignment to the chain's local.
+
+Two places qualify:
+
+- **Out of a loop.** A chain a loop (its body, its condition, a generic
+  `for`'s iterator, which must be `pairs`, `ipairs` or `next`) cannot change
+  is read before the loop, when the loop's first reads of it are where the
+  loop starts: in its body's first statements, before any but locals,
+  assignments, calls and guards (`if v == nil then break end`), which
+  could narrow what the checker proved (a `while`'s condition and a guard
+  must not test the chain's local). A loop that runs no time reads it once
+  for nothing, which a plain table allows. `for i = 1, #self.items do`
+  reads `self.items` before the loop too.
+- **In a stretch of code.** A chain read again before anything that could
+  change it is read once, before the statement of its first read, when that
+  read happens whenever the statement runs (not on the right of `and` or
+  `or`, not after code ran in the same statement). Branches that leave
+  (`break`, `return`) do not end a stretch for the code after them.
+
+The longest chain read at least twice (or once in a loop it was read
+before) gets the local, and a second round finds the chains those locals
+share (`p.pos` of `p.pos.x` and `p.pos.y`). The local is declared on the
+statement's line.
+
+**`cache-upvalues`.** A function that reads a local of an enclosing
+function in a loop, or at least three times, while nothing ever assigns it
+after its declaration, starts with `local name = name` and reads its copy
+(a register, not an upvalue). Reads as a callee do not count: a call copies
+the function into a register either way. A copy of a generated local is
+generated too (decision T432).
+
+**`numeric-loops`.** `for i, v in ipairs(t)` over a plain array becomes
+`for i = 1, 2 ^ 53 do local v = t[i] if v == nil then break end … end`: it
+reads `t[i]` as `ipairs` does and stops at the first `nil` wherever that is,
+also when the body grows or shrinks the array, and `t` is evaluated once
+(into a local when it is not one). Without the index variable, the loop's
+variable is a generated one (decision T429).
+
+**`table-insert`.** A call statement `table.insert(t, v)` or `tinsert(t,
+v)` with two arguments, of a plain table `t` that is a local or a chain of
+plain fields, and a `v` that runs no code and is one value, becomes
+`t[#t + 1] = v`: Lua 5.1's `table.insert` writes raw at `#t + 1`, which an
+assignment to a plain table does (decision T430).
+
+**`hoist-closures`.** A function made in a loop that captures nothing the
+loop declares is made once, before it, where its identity cannot be seen:
+a local function (or `local f = function … end`) only ever called, and a
+function passed to a call that calls it and keeps nothing of it (`pcall`,
+`xpcall`, `table.sort`, `string.gsub`, `table.foreach`, `table.foreachi`
+and WoW's `sort`, `gsub`, `foreach`, `foreachi`). A loop inside a loop
+gives its closures to the outermost loop they capture nothing from.
+Unbundled builds (`line-mode` `"preserve"`) keep closures where they are:
+moved, their lines would move (decision T431).
+
+`wowlua bench` ([Tooling §16.1.7](tooling.md#1617-benchmarks-wowlua-bench))
+measures what they change; the benchmark suite in `tests/bench/` of the
+wowlua repository holds a benchmark per optimization.
 
 ## 15.3 Bundling
 
@@ -363,6 +510,9 @@ every pass: with every pass but `dedupe-strings` and `rename-private`, the
 output compiles to the same bytecode once debug information is stripped, and
 in preserve mode every instruction keeps its line; with all passes, it still
 compiles. The semantic passes are checked by running test programs before and
-after. The corpus addons are also adopted and built bundled, with the release
+after, and every file's main chunk runs in PUC Lua 5.1 with `inline`,
+`cache-globals` and the optimizations of §15.2.3 and without them: it must
+print the same and fail with the same message (the line and the name it gives
+the value aside), unless it runs too long to compare. The corpus addons are also adopted and built bundled, with the release
 optimizations, at every preset level; every Lua file of each build must
 compile (`cargo xtask corpus addons`).

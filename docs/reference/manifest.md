@@ -431,21 +431,34 @@ source lines.
 
 ### `profiles.<profile>.optimize`
 
-An object of `inline` (bool), `cache-globals` (`"off"` or `"safe"`) and
-`dead-code` (bool). Default: all off in `dev` and `test`, all on (`"safe"`) in
+An object of these settings; one you leave out keeps the profile's value.
+Default: all off in `dev` and `test`, all on (`cache-globals` `"safe"`) in
 `release`.
 
-- `inline` replaces calls of small local functions, whose body is a single
-  `return`, with the expression.
-- `cache-globals` copies read-only globals, such as `pairs` or a `C_*`
-  namespace table, into file-level locals.
-- `dead-code` removes unused locals and local functions, and modules without
-  side effects that nothing uses (warning W6002 names each).
+| Key | Values | What it does |
+|-----|--------|--------------|
+| `inline` | bool | Replaces calls of small local functions (and `@inline` private methods) with their body: a single `return` expression wherever it's called, statements where the call is a statement of its own |
+| `cache-globals` | `"off"`, `"safe"` | Copies read-only globals, such as `pairs` or a `C_*` namespace table, into file-level locals |
+| `dead-code` | bool | Removes unused locals and local functions, and modules without side effects that nothing uses (warning W6002 names each) |
+| `constants` | bool | A local assigned once with a constant (a number, a boolean, `nil`, a short string) becomes the constant where it's read |
+| `cache-fields` | bool | Reads a field chain such as `self.frame.texture` once into a local: before a loop that can't change it, or once for repeated reads in a stretch of code |
+| `cache-upvalues` | bool | A function that reads an outer local in a loop (or three times or more), which nothing assigns, starts with `local name = name` |
+| `numeric-loops` | bool | `for i, v in ipairs(t)` over an array becomes a numeric loop that stops at the first `nil`, as `ipairs` does |
+| `table-insert` | bool | `table.insert(t, v)` becomes `t[#t + 1] = v` |
+| `hoist-closures` | bool | A function made in a loop that captures nothing of the loop is made once, before it: a local function only called, or one passed to `pcall`, `xpcall`, `table.sort` or `string.gsub` |
 
-The passes stay within Lua 5.1's limits on locals and upvalues.
+`cache-fields`, `numeric-loops` and `table-insert` need types: they apply in
+strict-mode files (`--!strict`, `check.mode`), where the type checker proved
+the tables plain (no metatable function between you and the field) and the
+values numbers. None of the last six touch plain `.lua` files. Unbundled
+builds keep every instruction on its source line, so they don't inline
+statement bodies or move closures. The passes stay within Lua 5.1's limits
+on locals and upvalues. `wowlua bench` measures what they change; see
+[Testing](../guide/testing.md#benchmarks) and
+[Optimization §15.2](../../spec/toolchain/optimization.md#152-profile-controlled-optimizations).
 
 ```json
-"optimize": { "inline": true, "cache-globals": "safe", "dead-code": true }
+"optimize": { "inline": true, "cache-globals": "safe", "dead-code": true, "hoist-closures": false }
 ```
 
 ### `profiles.<profile>.exclude`

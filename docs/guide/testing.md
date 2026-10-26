@@ -470,6 +470,69 @@ ran (`j` and `k` jump between them) and each branch's counts. `lcov`,
 percentages go in `test.coverage` of `wowlua.json`; a full run below one
 fails. In VS Code, *Run with Coverage* shows the same in the gutter.
 
+## Benchmarks
+
+A `@bench` function in a test file is a benchmark. `wowlua test` leaves it
+out; `wowlua bench` calls it many times, in the build your `release` profile
+optimizes and in the same build with every optimization off, on the same Lua
+5.1 the tests run on, and shows both times. Here is a module worth timing:
+
+```wowlua title=src/totals.wowlua
+--!strict
+export type Kill = { target: string, damage: number }
+
+export function totalDamage(kills: Kill[]): number
+    local sum = 0
+    for _, kill in ipairs(kills) do
+        sum = sum + kill.damage
+    end
+    return sum
+end
+```
+
+And a benchmark of it:
+
+```wowlua title=tests/totals.test.wowlua
+import bench from "wowlua:test"
+import totalDamage from "/totals"
+import type Kill from "/totals"
+
+local kills: Kill[] = {}
+for i = 1, 50 do
+    kills[i] = { target = "Hogger", damage = i * 10 }
+end
+
+@bench("total damage of 50 kills")
+local function total()
+    totalDamage(kills)
+end
+```
+
+```console
+$ wowlua bench
+    Building MyAddon (camelot): optimized as `release` and unoptimized
+     Running benchmarks (camelot)
+
+tests/totals.test.wowlua (camelot)
+  benchmark                          unoptimized               release  speed-up
+  total damage of 50 kills        3.35 µs ± 1.5%        1.39 µs ± 1.5%  2.41x
+```
+
+Here the release build turned the `ipairs` loop into a numeric loop, as the
+module is in strict mode and `kills` is an array. Each time is the median
+time of a call, with how far the runs spread around it. The two builds take turns, so a busy machine slows both alike, and the
+numbers are stable enough to compare from one run to the next. Your
+`@beforeAll` hooks run once and `@beforeEach` and `@afterEach` around each
+benchmark, so a benchmark sees the same world as your tests. `--profile`
+times the optimizations of another profile, `--samples` and `--batch-ms`
+measure longer, and `--json` prints the results for a script to compare. A
+benchmark that fails fails the run.
+
+The times are those of wowlua's Lua 5.1, not of the game: how much faster
+the optimized build is says what an optimization buys, not what a frame in
+WoW costs. For that, record in the game with the dev window (see
+[Debugging](debugging.md)).
+
 ## In CI
 
 Tests need no game, so they run wherever wowlua does. The `github` reporter

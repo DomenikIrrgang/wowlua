@@ -239,7 +239,7 @@ returns whether it passed and the message; a library exports its matchers and
 a test file that imports it gets them, checked like the built-in ones.
 
 **Benchmarks and examples.** `@bench` functions in test files are run by
-`wowlua bench` (M11, decision T221).
+`wowlua bench` (§16.1.7, decision T221), not by `wowlua test`.
 
 Code examples in `---` doc comments run as tests (decision T222). A fenced
 block marked `wowlua` (```` ```wowlua ````) in a doc comment of an addon
@@ -535,6 +535,55 @@ minimum percentages per kind; a run of the whole suite below one fails. A
 run with filters (`wowlua test --coverage Units/Threat`) checks part of the
 suite while its totals still count every source file, so no minimum
 applies to it (decision T250).
+
+### 16.1.7 Benchmarks (`wowlua bench`)
+
+```
+wowlua bench [filter…] [--flavor <f>] [--profile <name>] [--samples <n>] [--batch-ms <ms>] [--json]
+```
+
+`wowlua bench` measures what the optimizations change
+([Optimization §15.2](optimization.md#152-profile-controlled-optimizations)):
+the `@bench` functions of the test files run on the embedded Lua 5.1 (the
+test runner's VM, §16.1.2) in two test builds that differ in their
+`optimize` settings only, and the report puts their times side by side
+(decision T425).
+
+```wowlua fragment
+@bench("auras: filter")
+local function filter()
+    shown(auras, now)
+end
+```
+
+- `@bench(name?)` marks a benchmark; the name defaults to the function's.
+  `@skip` and `@flavors` apply as to tests. The function is called many
+  times with no arguments, and its result is dropped.
+- **The two builds.** Both are the test build (§16.1.5) with the
+  `runtime-checks`, `instrument`, `assertions`, `log-level` and line mode
+  of `--profile` (default `release`): one with its `optimize` settings,
+  one with every optimization off. Each goes to
+  `<build.out>/.test/bench-<optimized|unoptimized>-<flavor>/<Name>`.
+- **What runs.** One flavor (the first, or each `--flavor`). Each test
+  file loads in both builds, with its `@beforeAll` hooks run in each; each
+  benchmark runs between the file's `@beforeEach` and `@afterEach` hooks,
+  one benchmark and one file at a time. `filter` selects files and
+  benchmarks as for `wowlua test`.
+- **How it is measured** (stable enough to compare runs). A benchmark is
+  called in batches: as many calls as make a batch of the unoptimized build
+  last `--batch-ms` (20 by default), found by doubling, which warms both
+  builds up. Then `--samples` batches of each (10 by default) run in turns,
+  the builds' order swapped every other turn, each after a full garbage
+  collection, so a machine that slows down slows both alike. A build's time
+  is the median of its batches, per call, with the median distance of its
+  batches from it as its spread (`± 1.2%`); the speed-up is the unoptimized
+  time over the optimized one.
+- **Report.** A table per file and flavor: each benchmark's time in both
+  builds and the speed-up; `--json` prints the same as JSON (`profile`,
+  `samples`, `batch_ms`, and per file each benchmark's `calls` per batch,
+  `unoptimized` and `optimized` with `nanos` and `spread`, and `speedup`).
+- A benchmark that raises an error is reported with it and fails the run
+  (exit code 1), as does a file that does not load or compile.
 
 ## 16.2 Language server (`wowlua lsp`)
 

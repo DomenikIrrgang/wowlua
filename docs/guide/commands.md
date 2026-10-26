@@ -45,6 +45,8 @@ $ wowlua data pull                         # read your WoW installation's game d
 $ wowlua test --game-data                  # tests see the client's items and spells where they define none
 $ wowlua test -u                           # take the new snapshots and screenshots
 $ wowlua test --coverage --reporter html   # which lines and branches the tests ran
+$ wowlua bench                             # time the @bench functions, optimized and not
+$ wowlua bench auras --json                # only those whose path or name contains "auras", as JSON
 $ wowlua fmt                               # format the package's sources
 $ wowlua fmt --check                       # only report what would change
 $ wowlua lint                              # only the lints: unused, shadowing, unreachable
