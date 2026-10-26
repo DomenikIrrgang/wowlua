@@ -90,6 +90,11 @@ lto = "thin"
 codegen-units = 1
 strip = true
 
+# The playground's WebAssembly (`web/`): smaller over the network.
+[profile.web]
+inherits = "release"
+opt-level = "s"
+
 # The VM and the engine run Blizzard's UI code in tests: optimized even in
 # debug builds, so those tests take seconds, not minutes.
 [profile.dev.package.wowlua-vm]

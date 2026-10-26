@@ -727,3 +727,24 @@ with its own design); wowlua provides what the page embeds:
 - S6 A bare test page that uses only the package, `docs/embedding.md` for
   the website, and the package built and attached to each release.
   The test page (`web/demo/`) and the guide came with S2.
+  Built 2026-10-26 (T399): the release workflow builds the package (the
+  `web` profile, optimized for size), runs its Node test and attaches
+  `wowlua-web-<version>.tgz` with its SHA-256; `xtask check` keeps
+  `web/package.json` at the workspace's version. The tarball installs
+  with npm and works from a fresh project.
+
+Exit checked 2026-10-26 in Chrome: AdvancedInterfaceOptions from the
+corpus, adopted with `wowlua init` (53 files) and opened from a share link
+(142 KB), built for its seven flavors in the page (0.3 s), ran on camelot
+after Blizzard's default UI; `/aio` typed into the chat stopped at a
+breakpoint in its handler (`src/basicOptions.lua:126`, through Blizzard's
+chat edit box), showed `msg`, stepped to the next line and ran on, and its
+options opened in Blizzard's settings panel (once
+`C_SettingsUtil.OpenSettingsPanel` fired its event, T400). Loading
+Blizzard's UI waits for its on-demand addons' code by default (the
+settings panel's is one).
+
+**Status: done (2026-10-26).** Not yet: dependencies other than the
+standard library in the page, world profiles in share links, Blizzard's
+UI for flavors other than camelot; the timing of `SETTINGS_PANEL_OPEN`
+(`tests/ingame/PROBES.md`).

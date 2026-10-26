@@ -29,11 +29,13 @@
     "client.js",
     "worker.js",
     "installation.js",
+    "README.md",
+    "LICENSE",
     "pkg/wowlua_web.js",
     "pkg/wowlua_web_bg.wasm"
   ],
   "scripts": {
-    "build": "cargo build --release --target wasm32-unknown-unknown -p wowlua-web && wasm-bindgen --target web --no-typescript --out-dir pkg ../target/wasm32-unknown-unknown/release/wowlua_web.wasm",
+    "build": "cargo build --profile web --target wasm32-unknown-unknown -p wowlua-web && wasm-bindgen --target web --no-typescript --out-dir pkg ../target/wasm32-unknown-unknown/web/wowlua_web.wasm",
     "test": "node test/smoke.mjs"
   },
   "sideEffects": false

@@ -181,3 +181,21 @@ KEY_MOUSEWHEELUP = 'Mouse Wheel Up'",
     );
     assert_eq!(r, ["s-1", "c-a-2", "m-E", "s-Mouse Wheel Up", "SHIFT-1"]);
 }
+
+/// `Settings.OpenToCategory`'s client call asks the settings panel to open
+/// (`SETTINGS_PANEL_OPEN`, its category and element), at once (T400).
+#[test]
+fn opening_the_settings_panel_fires_its_event() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local got = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('SETTINGS_PANEL_OPEN')
+f:SetScript('OnEvent', function(_, event, category, element) got[#got + 1] = tostring(category) .. ':' .. tostring(element) end)
+C_SettingsUtil.OpenSettingsPanel(12, 'Sound')
+C_SettingsUtil.OpenSettingsPanel()
+return got[1], got[2]",
+    );
+    assert_eq!(r, ["12:Sound", "nil:nil"]);
+}

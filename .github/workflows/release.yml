@@ -62,8 +62,45 @@ jobs:
             wowlua-*.zip
             wowlua-*.sha256
 
+  # The playground's package (@wowlua/web): the npm tarball the website
+  # installs, attached to the release (roadmap M14 S6, T399).
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.129
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build and test
+        working-directory: web
+        run: |
+          cp ../LICENSE .
+          npm run build
+          npm test
+      - name: Package
+        working-directory: web
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          test "$(node -p 'require("./package.json").version')" = "$version" \
+            || { echo "web/package.json is not version $version"; exit 1; }
+          npm pack
+          mv "wowlua-web-$version.tgz" ..
+          cd .. && shasum -a 256 "wowlua-web-$version.tgz" > "wowlua-web-$version.tgz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: |
+            wowlua-web-*.tgz
+            wowlua-web-*.sha256
+
   publish:
-    needs: build
+    needs: [build, web]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

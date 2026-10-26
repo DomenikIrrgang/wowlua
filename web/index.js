@@ -128,14 +128,17 @@ export class Playground {
     }
 
     /**
-     * Fetches a flavor's Blizzard UI code into the playground: what loading
-     * it reads first (about 2,400 files, 18 MB for camelot; the browser
-     * caches them), then, in the background, the code of the addons it
-     * loads on demand (`later`, a promise). From jsDelivr's copy of
+     * Fetches a flavor's Blizzard UI code into the playground (about 4,500
+     * files, 36 MB for camelot; the browser caches them): what loading it
+     * reads first, then the code of the addons it loads on demand (the
+     * settings, the spellbook, …). With `background`, it resolves once the
+     * first part is there and fetches the rest meanwhile (`later`, a
+     * promise): a run starts sooner, but an addon Blizzard loads on demand
+     * before its files came is not there. From jsDelivr's copy of
      * Gethe/wow-ui-source at the commit wowlua's declarations name, unless
      * `base` names another place with the same paths.
      */
-    async loadBlizzardUI({ flavor = "camelot", base, concurrency = 48, onProgress, fetch: get = fetch } = {}) {
+    async loadBlizzardUI({ flavor = "camelot", base, concurrency = 48, background = false, onProgress, fetch: get = fetch } = {}) {
         const json = Raw.blizzardUI(flavor);
         if (json === undefined) throw new Error(`no Blizzard UI for ${flavor} in the playground`);
         const ui = JSON.parse(json);
@@ -158,7 +161,8 @@ export class Playground {
             this.raw.writeHostFile(ui.strings.path, new Uint8Array(await response.arrayBuffer()));
         }
         await fetchAll(ui.startup, concurrency, one);
-        const later = fetchAll(ui.later, Math.max(1, concurrency >> 2), one);
+        const later = fetchAll(ui.later, background ? Math.max(1, concurrency >> 2) : concurrency, one);
+        if (!background) await later;
         return { flavor, commit: ui.commit, later };
     }
 

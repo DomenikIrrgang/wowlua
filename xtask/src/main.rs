@@ -157,7 +157,8 @@ fn main() -> Result<()> {
             for (path, lua) in &slices {
                 check_current(path, lua, "runtime")?;
             }
-            webui::check(&root)
+            webui::check(&root)?;
+            check_web_version(&root)
         }
         "parse-stats" => {
             let Some(dir) = std::env::args().nth(2) else {
@@ -327,4 +328,23 @@ fn parse_row(line: &str) -> Option<(String, String)> {
         && matches!(code.as_bytes()[0], b'E' | b'W')
         && code[1..].bytes().all(|b| b.is_ascii_digit());
     valid.then(|| (code.to_string(), summary.replace("\\|", "|")))
+}
+
+/// `web/package.json` (the playground's package, released with wowlua) has
+/// the workspace's version.
+fn check_web_version(root: &Path) -> Result<()> {
+    let manifest = fs::read_to_string(root.join("web/package.json"))?;
+    let value: serde_json::Value = serde_json::from_str(&manifest)?;
+    let cargo = fs::read_to_string(root.join("Cargo.toml"))?;
+    let want = regex::Regex::new(r#"(?m)^\[workspace\.package\][^\[]*?^version = "([^"]+)""#)?
+        .captures(&cargo)
+        .map(|c| c[1].to_string())
+        .context("the workspace's version in Cargo.toml")?;
+    if value["version"].as_str() != Some(want.as_str()) {
+        bail!(
+            "web/package.json has version {}, the workspace {want}: set it (CLAUDE.md, Releasing)",
+            value["version"]
+        );
+    }
+    Ok(())
 }

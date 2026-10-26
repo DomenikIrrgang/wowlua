@@ -5,9 +5,36 @@ and language server as WebAssembly, over a package held in memory. It is
 what the playground on wowlua.dev embeds; it brings no editor and no page
 design of its own.
 
+## Install
+
+Each wowlua release has the package attached:
+`wowlua-web-<version>.tgz` (with its SHA-256). Install it from there:
+
+```sh
+npm install https://github.com/DomenikIrrgang/wowlua/releases/download/v0.12.0/wowlua-web-0.12.0.tgz
+```
+
+The module is about 74 MB, 13 MB with gzip and less with Brotli (the
+compiler, the language server, the emulated client and its renderer, and
+the game API's declarations and recordings): serve it compressed, with
+`Content-Type: application/wasm`, and let the browser cache it.
+
+The worker, the module and the scripts load each other by relative URLs,
+so the simplest way to serve them with any framework is as static files:
+copy the package's files (`index.js`, `client.js`, `worker.js`,
+`installation.js`, `pkg/`) to a folder the site serves, say
+`public/wowlua/` in Next.js (a `postinstall` script does it), and start
+the worker from there:
+
+```js
+import { connect } from "@wowlua/web/client";
+const wowlua = connect(new Worker("/wowlua/worker.js", { type: "module" }));
+```
+
 ## Build
 
-You need Rust with the `wasm32-unknown-unknown` target and
+To build it from the repository you need Rust with the
+`wasm32-unknown-unknown` target and
 [`wasm-bindgen`](https://github.com/wasm-bindgen/wasm-bindgen) 0.2.129 (the
 version in `Cargo.lock`):
 
@@ -17,11 +44,8 @@ cargo install wasm-bindgen-cli --version 0.2.129 --locked
 cd web
 npm run build   # pkg/wowlua_web.js and pkg/wowlua_web_bg.wasm
 npm test        # the package as a page uses it, in Node
+npm pack        # wowlua-web-<version>.tgz, as the release has it
 ```
-
-The module is about 76 MB, 14 MB with gzip (the compiler, the language
-server, the emulated client and its renderer): serve it compressed, with
-`Content-Type: application/wasm`, and let the browser cache it.
 
 ## The playground
 
@@ -103,11 +127,14 @@ const png = await wowlua.call("snapshot", 1);     // the screen as a PNG Blob
   button runs its `OnClick`, typing goes into the focused edit box.
 - Blizzard's default UI is its code from Gethe/wow-ui-source at the
   commit wowlua's declarations name, fetched by the page from jsDelivr
-  (about 2,450 files, 18 MB, before the run; the rest of its addons' code
-  in the background). The browser caches the files: a first run takes
-  about 30 s, later ones a few seconds. Pass `base` to fetch from another
-  place with the same paths. Without it (`blizzardUI: false`) the addon
-  runs alone, at once.
+  (about 4,500 files, 36 MB for camelot: what loading it reads, then the
+  addons it loads on demand, such as the settings and the spellbook). The
+  browser caches the files: a first load takes about a minute, later ones
+  a few seconds. `background: true` starts runs after the first 2,450
+  files and fetches the rest meanwhile; an addon Blizzard loads on demand
+  before its files came is then missing. Pass `base` to fetch from
+  another place with the same paths. Without it (`blizzardUI: false`) the
+  addon runs alone, at once.
 - The game's textures, fonts and models are the user's installation's
   (below); without it images are placeholders (magenta) and text uses
   stand-in fonts, except the addon's own images (its PNG, TGA and BLP

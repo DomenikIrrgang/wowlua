@@ -671,6 +671,17 @@ Take a screenshot after each step that names one.
    4. `/dump C_Reputation.GetFactionDataByID(930)`
    5. `/dump C_MountJournal.GetMountInfoByID(6)`
 
+## Owed from M14 (next beta, about 2026-11-07)
+
+1. **When `SETTINGS_PANEL_OPEN` comes** (decision T400; wowlua fires it
+   inside `C_SettingsUtil.OpenSettingsPanel`, at once). With the settings
+   closed:
+   1. `/run local f=CreateFrame("Frame") f:RegisterEvent("SETTINGS_PANEL_OPEN") f:SetScript("OnEvent",function(_,e,a,b) print("event",a,b,GetTime()) end) WOWLUA_F=f`
+   2. `/run print("before",GetTime()) C_SettingsUtil.OpenSettingsPanel() print("after",GetTime(),SettingsPanel:IsShown())`
+
+   Note the order of the three lines ("before", "event", "after"): is the
+   event before "after", and is the panel shown at "after"?
+
 ## Answered on the beta's last day (2026-10-24)
 
 - PvP ranks (major faction 2800): `GetMajorFactionProgressionInfo` gives

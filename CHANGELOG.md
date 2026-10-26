@@ -4,8 +4,13 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### New
+
+- **wowlua in the browser**: wowlua's checker, language server, emulated client and debugger now run in a web page, the base for the playground on wowlua.dev. A package can be edited, checked, built and shared as a link, run against Blizzard's default UI and debugged with breakpoints, with the game's art from your own installation read in the browser and never uploaded. Each release has the package attached (`wowlua-web-<version>.tgz`).
+
 ### Fixed
 
+- `Settings.OpenToCategory` opens Blizzard's settings panel in tests and the emulator (an addon's `/command` that shows its options, such as AdvancedInterfaceOptions' `/aio`); it did nothing.
 - In tests, `loadstring` of code past Lua's limits gives the game's error message: "more than 199 variables in assignment" (not 200), an upvalue too many reported on the line the game reports, and "function or expression too complex near '…'" with the token it is near.
 
 ## 0.11.0 (2026-10-25)

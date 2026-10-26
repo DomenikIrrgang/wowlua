@@ -3803,10 +3803,22 @@ local function settings()
         end
         return nil
     end
+    --- The category list's element for `category` as it is now (opening
+    --- a category from a button, `Settings.OpenToCategory`, lays the list
+    --- out anew), else `element`.
+    local function elementOf(element: any, category: any): any
+        local found = nil
+        list.ScrollBox:GetDataProvider():ForEach(function(e: any)
+            if not found and e.data and e.data.category == category then
+                found = e
+            end
+        end)
+        return found or element
+    end
     --- Selects a category by clicking its row: whether it is shown.
     local function select(element: any, category: any): boolean
         openSettings()
-        const row = rowOf(element)
+        const row = rowOf(elementOf(element, category))
         if not row then
             return false
         end

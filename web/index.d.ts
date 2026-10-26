@@ -122,6 +122,8 @@ export class Playground {
         flavor?: string;
         base?: string;
         concurrency?: number;
+        /** Resolve after the startup files; the rest comes meanwhile. */
+        background?: boolean;
         onProgress?: (done: number, total: number) => void;
         fetch?: typeof fetch;
     }): Promise<{ flavor: string; commit: string; later: Promise<void> }>;

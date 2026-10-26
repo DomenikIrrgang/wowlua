@@ -1,3 +1,4 @@
 # built by `npm run build`
 /pkg/
 /node_modules/
+/LICENSE

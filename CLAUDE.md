@@ -43,7 +43,9 @@ Before setting a tag:
    subject is unclear).
 2. Choose the next version by the rules above. Set it in `Cargo.toml`
    (`workspace.package.version`; `cargo metadata` updates `Cargo.lock`), in
-   `README.md`'s roadmap line and in `docs/install.md`'s examples.
+   `web/package.json` (the playground's package, attached to the release),
+   in `README.md`'s roadmap line and in `docs/install.md`'s and
+   `docs/embedding.md`'s examples.
 3. Write the changelog section as above: rename `## Unreleased` and check it
    against the log.
 4. Check it: `TAG=v<version> node .github/scripts/discord-release.mjs --dry-run`

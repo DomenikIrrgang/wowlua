@@ -80,6 +80,15 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `C_SettingsUtil.OpenSettingsPanel([category, element])`
+/// (`Settings.OpenToCategory`): the client asks the settings panel to open
+/// with `SETTINGS_PANEL_OPEN`, at once (decision T400).
+fn open_settings_panel(vm: &mut Vm, c: NativeCall) -> Ret {
+    let args = [c.arg(1), c.arg(2)];
+    widgets::fire_event(vm, "SETTINGS_PANEL_OPEN", &args);
+    Ok(vec![])
+}
+
 fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false)])
 }
@@ -3304,7 +3313,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Tutorial.ReturnToTutorialArea", nothing),
         ("C_Tutorial.SendTutorialStartButtonTelem", nothing),
         ("C_Tutorial.GetCombatEventInfo", nothing),
-        ("C_SettingsUtil.OpenSettingsPanel", nothing),
+        ("C_SettingsUtil.OpenSettingsPanel", open_settings_panel),
         ("C_Debug.DashboardIsEnabled", no),
         ("C_Debug.FrameXMLDebug", nothing),
         ("C_Debug.ToggleDebugCharInfo", nothing),
