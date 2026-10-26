@@ -297,6 +297,9 @@ dist/release/MyAddon/
 - **Reference rewriting.** `<Script file="…">` and `<Include file="…">` paths
   are resolved relative to the XML file. References to `.wowlua` sources are
   rewritten to the compiled `.lua` path. Unresolvable references are E5002.
+  A reference to a source file this build leaves out of the output
+  (`build.flavor-files`, `build.exclude` or the profile's `exclude`) stays as
+  written and is warning W5004: in game it fails to load in that build.
 - **Inline directives.** A `file` attribute may carry inline load directives
   like a TOC file line (`file="Data_TBC.lua [AllowLoadGameType tbc]"`), which
   the client evaluates (decision T62). The path is resolved without them, and

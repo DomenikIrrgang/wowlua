@@ -696,7 +696,16 @@ fn build_inner(
         }
     }
 
-    // XML references.
+    // XML references. A file `build.exclude` or the profile's `exclude`
+    // leaves out is W5004 where the output's XML loads it, not E5002.
+    let excluded = |src_rel: &str| {
+        let rel = if build_cfg.src.is_empty() || build_cfg.src == "." {
+            src_rel.to_string()
+        } else {
+            format!("{}/{src_rel}", build_cfg.src.trim_end_matches('/'))
+        };
+        exclude.is_match(&rel) && crate::host::is_file(root.join(&rel))
+    };
     let xml = resolve_xml(
         session,
         &files,
@@ -704,6 +713,7 @@ fn build_inner(
         &addon_name,
         keywords && profile.debug,
         (&flavor_blocks, &flavors),
+        &excluded,
     );
 
     // Flavor restrictions (`build.flavor-files`) and the TOC file list.
@@ -2729,6 +2739,7 @@ fn resolve_xml(
     addon: &str,
     packager_debug: bool,
     variants: (&BTreeSet<String>, &[String]),
+    excluded: &dyn Fn(&str) -> bool,
 ) -> XmlInfo {
     let by_src_rel: HashMap<String, &Source> = files
         .iter()
@@ -2858,6 +2869,12 @@ fn resolve_xml(
                         ..reference.clone()
                     });
                 }
+                // A file the build excludes: the output's XML still loads it
+                // (W5004, below).
+                None if excluded(&joined)
+                    || joined
+                        .strip_suffix(".lua")
+                        .is_some_and(|stem| excluded(&format!("{stem}.wowlua"))) => {}
                 None => diagnostics.push(
                     Diagnostic::error(
                         "E5002",
@@ -4540,7 +4557,8 @@ fn validate_output(
         }
     }
     // The package's own XML loads only files of the output (W5004): a file
-    // `build.flavor-files` leaves out of a build may still be referenced.
+    // `build.flavor-files`, `build.exclude` or the profile's `exclude` leaves
+    // out of a build may still be referenced.
     let lower_paths: HashSet<String> = out.keys().map(|p| p.to_ascii_lowercase()).collect();
     let prefix = format!("interface/addons/{}/", addon.to_ascii_lowercase());
     let mut missing: BTreeSet<(String, String)> = BTreeSet::new();

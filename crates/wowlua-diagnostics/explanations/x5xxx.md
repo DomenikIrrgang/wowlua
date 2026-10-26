@@ -118,13 +118,16 @@ Related: E5002
 ## W5004
 
 An XML file of the build loads a file that exists in your sources but is not
-part of this build's output, usually because `build.flavor-files` restricts
-it to flavors this build doesn't target. In game the reference fails to load
-for those flavors.
+part of this build's output: `build.flavor-files` restricts it to flavors
+this build doesn't target, or `build.exclude` or the profile's `exclude`
+leaves it out (a developer tool left out of `release`). In game the
+reference fails to load in those builds.
 
 Restrict the XML file to the same flavors, or let the generated TOC load the
 file (it lists each file only for the flavors it belongs to) and drop the
-reference.
+reference. For an excluded file, load it from code that the same builds
+leave out, or stop excluding it. A reference to a file that doesn't exist at
+all is E5002.
 
 ```json fails title=wowlua.json
 {

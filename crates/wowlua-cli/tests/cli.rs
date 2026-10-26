@@ -1669,6 +1669,55 @@ fn debug_only_values_are_reported_in_every_build() {
     }
 }
 
+/// An XML file that loads a file `build.exclude` or a profile's `exclude`
+/// leaves out of the output gets W5004, as one `build.flavor-files` leaves
+/// out does; a reference to no file at all stays E5002.
+#[test]
+fn xml_loading_an_excluded_file_is_w5004() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"xmlx\", \"version\": \"1.0.0\" }, \"build\": { \"exclude\": [\"src/Scratch.lua\"] }, \"profiles\": { \"release\": { \"exclude\": [\"src/Dev/**\"] } } }\n",
+            ),
+            (
+                "src/ui.xml",
+                "<Ui>\n    <Script file=\"Main.lua\"/>\n    <Script file=\"Dev\\Tools.lua\"/>\n    <Script file=\"Scratch.lua\"/>\n</Ui>\n",
+            ),
+            ("src/Main.lua", "print(\"main\")\n"),
+            ("src/Dev/Tools.lua", "print(\"tools\")\n"),
+            ("src/Scratch.lua", "print(\"scratch\")\n"),
+        ],
+    );
+    for (args, warnings) in [(&["build"][..], 1), (&["build", "--release"], 2)] {
+        let assert = wowlua(dir.path())
+            .args(args)
+            .args(["--message-format", "short"])
+            .assert()
+            .success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert_eq!(
+            stderr.matches("warning[W5004]").count(),
+            warnings,
+            "{args:?}: {stderr}"
+        );
+        assert!(stderr.contains("`Scratch.lua`"), "{args:?}: {stderr}");
+        assert!(!stderr.contains("E5002"), "{args:?}: {stderr}");
+    }
+    fs::write(
+        dir.path().join("src/ui.xml"),
+        "<Ui>\n    <Script file=\"Main.lua\"/>\n    <Script file=\"Nowhere.lua\"/>\n</Ui>\n",
+    )
+    .unwrap();
+    wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("error[E5002]"));
+}
+
 /// Code `@if` removes may use the names of an import `@if` removes too
 /// (spec §6.4.3): a release build checks clean, kept code gets E1020.
 #[test]
