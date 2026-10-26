@@ -2986,9 +2986,7 @@ declare class Font extends FrameScriptObject
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Font_SetFont)
     function SetFont(fontFile: FontFile, height: uiFontHeight, flags: TBFFlags)
-    --- Sets the font's height.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Preserves all flags, does correct height conversion due to fixedHeight.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Font_SetFontHeight)
     function SetFontHeight(height: number)

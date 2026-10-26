@@ -8834,105 +8834,53 @@ declare class AbbreviatedNumberFormatter extends NumericFormatter
 end
 
 declare class DurationTextBindingObject
-    --- Whether the binding has what it needs to format its text.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns true if this binding has enough configuration to produce formatted text.
     function CanFormatText(): boolean
-    --- Whether the binding can update its font string.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns true if this binding has enough configuration to update its font string with formatted text.
     function CanUpdateFontString(): boolean
-    --- Disables the binding so it stops updating its text.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Disables automatic updates for this duration text binding.
     function Disable()
-    --- Enables the binding so it updates its text.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Enables automatic updates for this duration text binding.
     function Enable()
-    --- Returns the duration the binding displays, or nil if none is set.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns the duration object used by this duration text binding.
     function GetDuration(): LuaDurationObject?
-    --- Returns the text shown once the duration has expired, or nil if none is set.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns the text shown when the duration has fully expired.
     function GetExpiredText(): string?
-    --- Returns the font string the binding writes to, or nil if none is set.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns the font string updated by this duration text binding.
     function GetFontString(): FontString?
-    --- Returns the binding's text formatted for the current time.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns the text that would currently be assigned to the configured font string.
     function GetFormattedText(): string
-    --- Returns the time modifier applied to the duration before it is formatted.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns the time modifier used when sampling duration values for this binding.
     function GetTimeModifier(): DurationTimeModifier
-    --- Returns how often the binding updates its text.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns the minimum number of seconds between automatic text updates. A value of zero updates every game tick.
     function GetUpdateInterval(): number
-    --- Returns the text shown for a zero duration, or nil if none is set.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns the text shown when the duration is not configured, or represents a zero-duration time span.
     function GetZeroDurationText(): string?
-    --- Whether the binding holds values that are hidden from addons.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns true if the duration text binding has been configured with any secret values.
     function HasSecretValues(): boolean
-    --- Whether the binding is enabled.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns true if this duration text binding updates its font string automatically.
     function IsEnabled(): boolean
-    --- Sets the duration the binding displays.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Configures the duration object used by this duration text binding.
     function SetDuration(duration: LuaDurationObject)
-    --- Sets whether the binding is enabled.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Configures whether this duration text binding updates its font string automatically.
     function SetEnabled(enabled: boolean)
-    --- Sets the text shown once the duration has expired.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Configures the text shown when the duration has fully expired.
     function SetExpiredText(text: string?)
-    --- Sets the font string the binding writes its text to.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Configures the font string updated by this duration text binding.
     function SetFontString(fontString: FontString)
-    --- Sets the formatter that turns the duration into text.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Configures the text format used by this duration text binding to display the remaining duration using the supplied formatter.
     function SetFormatter(formatter: NumericFormatter)
-    --- Sets the format string and the duration components inserted into it.
-    ---
-    --- **Parameters**
-    --- - `components`: The duration components filled into the format string, in order.
-    --- - `formatString`: Format string for the text.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Configures the text format used by this duration text binding. The format string may contain '{}' placeholders, each of which is substituted by the corresponding component in the supplied array.
     function SetTextFormat(format: string, components: DurationTextBindingFormatComponent[])
-    --- Sets the time modifier applied to the duration before it is formatted.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Configures the time modifier used when sampling duration values for this binding.
     function SetTimeModifier(modifier: DurationTimeModifier)
-    --- Resets all of the binding's settings to their defaults.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Resets this duration text binding to its default state, clearing the configured font string, duration, format, formatter, and fallback text.
     function SetToDefaults()
-    --- Sets how often the binding updates its text.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Configures the minimum number of seconds between automatic text updates. A value of zero updates every game tick.
     function SetUpdateInterval(updateInterval: number)
-    --- Sets the text shown for a zero duration.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Configures the text shown when the duration is not configured, or represents a zero-duration time span.
     function SetZeroDurationText(text: string?)
-    --- Updates the font string with the binding's current text.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Immediately updates the configured font string from the current duration state.
     function UpdateFontString()
 end
 
@@ -9147,9 +9095,7 @@ declare class ModelSceneFrameActorBase
     ---
     --- *Description by wowlua: the API's documentation has none.*
     function SetPosition(positionX: number, positionY: number, positionZ: number)
-    --- Sets whether the actor uses its model's collision bounds for its bounding box.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- If true, will try to use the collision bounds of models for sizing and centering. Will fall back to default model bounds if set to False, or if collision bounds are unavailable.
     function SetPreferModelCollisionBounds(preferCollisionBounds: boolean)
     --- Sets the actor's roll rotation.
     ---
@@ -9384,9 +9330,7 @@ declare class ModelSceneFrame
     ---
     --- *Description by wowlua: the API's documentation has none.*
     function GetCameraFarClip(): number
-    --- Returns the camera's field of view.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Field of view in radians
     function GetCameraFieldOfView(): number
     --- Returns the camera's forward direction vector.
     ---
@@ -9472,9 +9416,7 @@ declare class ModelSceneFrame
     ---
     --- *Description by wowlua: the API's documentation has none.*
     function SetCameraFarClip(farClip: number)
-    --- Sets the camera's field of view.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Field of view in radians
     function SetCameraFieldOfView(fov: number)
     --- Sets the camera's near clipping distance.
     ---
@@ -9710,9 +9652,7 @@ declare class Tooltip
 end
 
 declare class DurationClockObject
-    --- Returns the clock's current time.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns the current time value represented by this clock.
     function GetTime(): FrameTime
 end
 
@@ -49232,14 +49172,7 @@ declare namespace C_ChallengeMode
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_ChallengeMode.IsChallengeModeResettable)
     function IsChallengeModeResettable(): boolean
-    --- Requests a page of the challenge mode leaderboard for the given map from the server.
-    ---
-    --- **Parameters**
-    --- - `challengeModeID`: ID of the challenge mode.
-    --- - `mapID`: ID of the map.
-    --- - `page`: Which page of the leaderboard to request.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Request a page of challenge mode leaderboards that will be returned in a 'CHALLENGE_MODE_LEADERBOARD_RESULT' event
     function RequestChallengeModeLeaderboard(mapID: number, challengeModeID: number, page: number)
     --- Asks the server for the best runs in a challenge mode dungeon.
     ---
@@ -49628,14 +49561,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.CreateClub)
     function CreateClub(name: string, shortName: string?, description: string, clubType: ClubType, avatarId: number, isCrossFaction: boolean?)
-    --- Creates a chat stream in a community.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    --- - `leadersAndModeratorsOnly`: Whether only leaders and moderators can see the stream.
-    --- - `subject`: The stream's subject.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Check the canCreateStream privilege.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.CreateStream)
     function CreateStream(clubId: ClubId, name: string, subject: string, leadersAndModeratorsOnly: boolean)
@@ -49656,12 +49582,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.DeclineInvitation)
     function DeclineInvitation(clubId: ClubId)
-    --- Deletes a community.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Check the canDestroy privilege.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.DestroyClub)
     function DestroyClub(clubId: ClubId)
@@ -49676,23 +49597,11 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.DestroyMessage)
     function DestroyMessage(clubId: ClubId, streamId: ClubStreamId, messageId: ClubMessageIdentifier)
-    --- Deletes a chat stream of a community.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    --- - `streamId`: The stream's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Check canDestroyStream privilege.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.DestroyStream)
     function DestroyStream(clubId: ClubId, streamId: ClubStreamId)
-    --- Deletes an invite link of a community.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    --- - `ticketId`: The invite link's ticket ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Check canDestroyTicket privilege.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.DestroyTicket)
     function DestroyTicket(clubId: ClubId, ticketId: string)
@@ -49711,16 +49620,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.DoesCommunityHaveMembersOfTheOppositeFaction)
     function DoesCommunityHaveMembersOfTheOppositeFaction(clubId: ClubId): boolean
-    --- Changes a community's name, description, avatar or other settings; nil keeps a setting as it is.
-    ---
-    --- **Parameters**
-    --- - `avatarId`: The ID of the community's avatar.
-    --- - `broadcast`: The community's message of the day.
-    --- - `clubId`: The community's ID.
-    --- - `crossFaction`: Whether players of both factions can join.
-    --- - `shortName`: The community's short name.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- nil arguments will not change existing club data
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.EditClub)
     function EditClub(clubId: ClubId, name: string?, shortName: string?, description: string?, avatarId: number?, broadcast: string?, crossFaction: boolean?)
@@ -49735,14 +49635,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.EditMessage)
     function EditMessage(clubId: ClubId, streamId: ClubStreamId, messageId: ClubMessageIdentifier, message: string)
-    --- Changes a community stream's name, subject or visibility; nil keeps a setting as it is.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    --- - `leadersAndModeratorsOnly`: Whether only leaders and moderators can see the stream.
-    --- - `streamId`: The stream's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Check the canSetStreamName, canSetStreamSubject, canSetStreamAccess privileges. nil arguments will not change existing stream data.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.EditStream)
     function EditStream(clubId: ClubId, streamId: ClubStreamId, name: string?, subject: string?, leadersAndModeratorsOnly: boolean?)
@@ -50010,12 +49903,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.RedeemTicket)
     function RedeemTicket(ticketId: string)
-    --- Asks the server for a community's pending invitations.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Request invitations for this club from server. Check canGetInvitation privilege.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.RequestInvitationsForClub)
     function RequestInvitationsForClub(clubId: ClubId)
@@ -50032,12 +49920,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.RequestTicket)
     function RequestTicket(ticketId: string)
-    --- Asks the server for a community's invite links.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Request tickets from server. Check canGetTicket privilege.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.RequestTickets)
     function RequestTickets(clubId: ClubId)
@@ -50073,13 +49956,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.SendMessage)
     function SendMessage(clubId: ClubId, streamId: ClubStreamId, message: string)
-    --- Marks a community stream as read automatically as messages arrive.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    --- - `streamId`: The stream's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Only one stream can be set for auto-advance at a time. Focused streams will have their view times advanced automatically.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.SetAutoAdvanceStreamViewMarker)
     function SetAutoAdvanceStreamViewMarker(clubId: ClubId, streamId: ClubStreamId)
@@ -50097,12 +49974,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.SetClubMemberNote)
     function SetClubMemberNote(clubId: ClubId, memberId: ClubMemberOpaqueId, note: string)
-    --- Starts receiving online status updates of a community's members.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- You can only be subscribed to 0 or 1 clubs for presence.  Subscribing to a new club automatically unsuscribes you to existing subscription.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.SetClubPresenceSubscription)
     function SetClubPresenceSubscription(clubId: ClubId)
@@ -57764,6 +57636,11 @@ end
 declare namespace C_TableUtil
     --- Returns counts of the entries in the given table.
     ---
+    --- **Returns**
+    --- - `numTableNodes`: Total number of elements within the table
+    --- - `numArrayNodes`: Total number of elements within the table that had integral keys in the range [1..numTableNodes]
+    --- - `maxArrayIndex`: Largest integral key within the table, or zero if no such keys were found
+    ---
     --- *Description by wowlua: the API's documentation has none.*
     function count(table: unknown): (number?, number?, number?)
     --- Creates a new table with space reserved for the given number of entries.
@@ -57778,13 +57655,9 @@ declare namespace C_TableUtil
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_TableUtil.FindIndexedMismatch)
     function FindIndexedMismatch(t1: unknown, t2: unknown): number?
-    --- Freezes the given table so that it can no longer be changed.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Marks a supplied table as frozen, preventing any modifications to its contents, or replacement of its metatable. If the table has a pre-existing metatable with a '__newindex' table or function, assignments will pass through without raising errors. For tainted code, only tables created by the same addon making this function call are permitted to be frozen.
     function freeze(table: unknown)
-    --- Whether the given table is frozen.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Returns true if a table has been marked as frozen.
     function isfrozen(table: unknown): boolean
 end
 
@@ -62399,12 +62272,10 @@ declare namespace C_Spell
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Spell.CancelSpellByID)
     function CancelSpellByID(spellID: number)
-    --- Whether the given spell exists.
+    --- Returns true if the spell exists, regardless of whether the player has learned it
     ---
     --- **Parameters**
     --- - `spellIdentifier`: Using name will always check for an override on that spell
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Spell.DoesSpellExist)
     function DoesSpellExist(spellIdentifier: SpellIdentifier): boolean
@@ -64740,27 +64611,19 @@ declare namespace C_UI
 end
 
 declare namespace C_ModelInfo
-    --- Registers a model scene frame as showing a model scene.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- This function does nothing in public clients
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_ModelInfo.AddActiveModelScene)
     function AddActiveModelScene(modelSceneFrame: ModelSceneFrame, modelSceneID: number)
-    --- Registers a model scene actor as showing an actor of a model scene.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- This function does nothing in public clients
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_ModelInfo.AddActiveModelSceneActor)
     function AddActiveModelSceneActor(modelSceneFrameActor: ModelSceneFrameActor, modelSceneActorID: number)
-    --- Unregisters a model scene frame's model scene.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- This function does nothing in public clients
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_ModelInfo.ClearActiveModelScene)
     function ClearActiveModelScene(modelSceneFrame: ModelSceneFrame)
-    --- Unregisters a model scene actor's actor.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- This function does nothing in public clients
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_ModelInfo.ClearActiveModelSceneActor)
     function ClearActiveModelSceneActor(modelSceneFrameActor: ModelSceneFrameActor)
@@ -65887,9 +65750,7 @@ declare namespace C_VoiceChat
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_VoiceChat.Logout)
     function Logout(): VoiceChatStatusCode
-    --- Marks the voice chat channels as discovered by the player.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Once the UI has enumerated all channels, use this to reset the channel discovery state, it will be updated again if appropriate
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_VoiceChat.MarkChannelsDiscovered)
     function MarkChannelsDiscovered()
@@ -65947,9 +65808,7 @@ declare namespace C_VoiceChat
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_VoiceChat.SetMemberMuted)
     function SetMemberMuted(playerLocation: PlayerLocationMixin, muted: boolean)
-    --- Sets the volume at which the player hears a voice chat member.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Adjusts member volume across all channels
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_VoiceChat.SetMemberVolume)
     function SetMemberVolume(playerLocation: PlayerLocationMixin, volume: number)
@@ -65996,9 +65855,7 @@ declare namespace C_VoiceChat
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_VoiceChat.SetVADSensitivity)
     function SetVADSensitivity(sensitivity: number)
-    --- Whether the player should be told about voice chat channels to discover.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Use this while loading to determine if the UI should attempt to rediscover the previously joined/active voice channels
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_VoiceChat.ShouldDiscoverChannels)
     function ShouldDiscoverChannels(): boolean
@@ -75495,6 +75352,11 @@ declare event TRACKED_ACHIEVEMENT_LIST_CHANGED(achievementID: number?, added: bo
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event TRACKED_ACHIEVEMENT_UPDATE(achievementID: number, criteriaID: number?, elapsed: number?, duration: number?)
+--- Used in conjunction with EnableActionRangeCheck to inform the UI when an action goes in or out of range with its current target.
+---
+--- **Parameters**
+--- - `isInRange`: Whether or not the current target is in range of the action. Should not be used if the 'checksRange' parameter is false.
+--- - `checksRange`: Can be false if a range check was not made for any reason, for example there is not a current target.
 declare event ACTION_RANGE_CHECK_UPDATE(slot: number, isInRange: boolean, checksRange: boolean)
 --- Fires when actions become usable or unusable. Blizzard's action buttons update the slots listed in the changes.
 ---
@@ -75694,6 +75556,7 @@ declare event AUCTION_BIDDER_LIST_UPDATE()
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event AUCTION_CANCELED(auctionID: number)
+--- This signal is not used in the base UI but is included for AddOn ease-of-use.
 declare event AUCTION_HOUSE_AUCTION_CREATED(auctionID: number)
 --- Fires when an auction expires.
 ---
@@ -75744,6 +75607,7 @@ declare event AUCTION_HOUSE_ITEM_DELIVERY_DELAY_UPDATE(purchasedItemDeliveryDela
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event AUCTION_HOUSE_NEW_BID_RECEIVED(auctionID: number)
+--- This signal is not used in the base UI but is included for AddOn ease-of-use. Payload is nil for browse queries.
 declare event AUCTION_HOUSE_NEW_RESULTS_RECEIVED(itemKey: ItemKey?)
 --- Fires when the player tries to post an auction but posting is blocked. Blizzard's UI shows a popup saying items can't be posted right now (`AUCTION_POSTING_ERROR_TEXT`).
 ---
@@ -77936,9 +77800,9 @@ declare event CLUB_MESSAGE_ADDED(clubId: ClubId, streamId: ClubStreamId, message
 --- Fires when older messages of a club stream have been downloaded. Blizzard's communities chat fills in the history when that stream is shown.
 ---
 --- **Parameters**
+--- - `downloadedRange`: Range of history messages received.
+--- - `contiguousRange`: Range of contiguous messages that the received messages are in.
 --- - `clubId`: The club.
---- - `contiguousRange`: The range of messages now held without gaps.
---- - `downloadedRange`: The range of messages that was downloaded.
 --- - `streamId`: The stream.
 ---
 --- *Description by wowlua: the API's documentation has none.*
@@ -78058,8 +77922,8 @@ declare event INITIAL_CLUBS_LOADED()
 --- Fires when the read marker of a club stream changes. Blizzard's communities list updates its unread notification for that club.
 ---
 --- **Parameters**
+--- - `lastReadTime`: nil if stream view is at current
 --- - `clubId`: The club.
---- - `lastReadTime`: When the stream was last read, if known.
 --- - `streamId`: The stream.
 ---
 --- *Description by wowlua: the API's documentation has none.*
@@ -78086,11 +77950,17 @@ declare event CLUB_FINDER_APPLICATIONS_UPDATED(type: ClubFinderRequestType, club
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event CLUB_FINDER_CAN_WHISPER_APPLICANT(applicant: string)
+--- Signals when we recieve club data that can be used
 declare event CLUB_FINDER_CLUB_LIST_RETURNED(type: ClubFinderRequestType)
+--- Sends an update to the UI about a reported guild or community.
 declare event CLUB_FINDER_CLUB_REPORTED(type: ClubFinderRequestType, clubFinderGUID: string)
+--- Signals to the UI that you (the player) have joined a community offline.
 declare event CLUB_FINDER_COMMUNITY_OFFLINE_JOIN(clubId: ClubId)
+--- Sends an update to the UI that the club finder feature has been enabled or disabled.
 declare event CLUB_FINDER_ENABLED_OR_DISABLED()
+--- Sends an update to the UI if the realm name of a guild was found asynchronously.
 declare event CLUB_FINDER_GUILD_REALM_NAME_UPDATED(clubFinderGUID: string, realmName: string)
+--- When a player clicks a club link, this returns that information back about the club they clicked on
 declare event CLUB_FINDER_LINKED_CLUB_RETURNED(clubInfo: RecruitingClubInfo)
 --- Fires when the club finder's list of the player's memberships changes. Blizzard's club finder frame listens for it.
 ---
@@ -78114,7 +77984,9 @@ declare event CLUB_FINDER_POST_UPDATED(clubFinderGUIDs: string[])
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event CLUB_FINDER_RECRUIT_LIST_CHANGED()
+--- Signals when our recruitment post we just requested is returned back to us
 declare event CLUB_FINDER_RECRUITMENT_POST_RETURNED(type: ClubFinderRequestType)
+--- Signals when we recieve the recruits list
 declare event CLUB_FINDER_RECRUITS_UPDATED(type: ClubFinderRequestType)
 --- Fires when a color override changes, such as an item quality color. Blizzard's scrolling message frames and widgets redraw.
 ---
@@ -78157,10 +78029,10 @@ declare event COMBAT_LOG_APPLY_FILTER_SETTINGS(filterSettings: LuaValueVariant)
 --- Fires with a formatted combat log line to show. Blizzard's combat log frame adds it in the given color.
 ---
 --- **Parameters**
+--- - `message`: A preformatted combat log message protected by a |K string wrapper.
 --- - `colorB`: The blue part of the line's color.
 --- - `colorG`: The green part of the line's color.
 --- - `colorR`: The red part of the line's color.
---- - `message`: The text of the line.
 --- - `order`: Where the line goes in the log (`Enum.CombatLogMessageOrder`).
 ---
 --- *Description by wowlua: the API's documentation has none.*
@@ -78388,8 +78260,8 @@ declare event COOLDOWN_VIEWER_DATA_LOADED()
 --- Fires when a spell shown in the cooldown manager gains or loses an override spell. Blizzard's cooldown viewer items update.
 ---
 --- **Parameters**
---- - `baseSpellID`: The base spell that is gaining or losing an override.
---- - `overrideSpellID`: The spell now overriding the base spell, or nil when the override is removed.
+--- - `baseSpellID`: The base spell that is either being overridden or losing its override spell.
+--- - `overrideSpellID`: The spell overriding the base spell. A nil value indicates that the override spell is being removed from the base spell.
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED(baseSpellID: number, overrideSpellID: number?)
@@ -78590,10 +78462,10 @@ declare event ENABLE_LOW_LEVEL_RAID()
 --- Fires when a boss encounter ends, whether it was won or not.
 ---
 --- **Parameters**
+--- - `encounterUnitStatus`: List of all boss units engaged during this encounter.
 --- - `difficultyID`: The difficulty it was fought on.
 --- - `encounterID`: The encounter.
 --- - `encounterName`: The encounter's name.
---- - `encounterUnitStatus`: The boss units engaged during the encounter.
 --- - `groupSize`: The number of players in the group.
 --- - `success`: Whether the encounter was won, as a number.
 ---
@@ -78643,16 +78515,27 @@ declare event EJ_DIFFICULTY_UPDATE(difficultyID: number)
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event EJ_LOOT_DATA_RECIEVED(itemID: number?)
+--- Fired when an event has been added to the timeline.
 declare event ENCOUNTER_TIMELINE_EVENT_ADDED(eventInfo: EncounterTimelineEventInfo)
+--- Fired when an event has transitioned into or out of a 'blocked' status.
 declare event ENCOUNTER_TIMELINE_EVENT_BLOCK_STATE_CHANGED(eventID: EncounterTimelineEventID)
+--- Fired when an event has met a condition that should trigger a color change.
 declare event ENCOUNTER_TIMELINE_EVENT_COLOR_CHANGED(eventID: EncounterTimelineEventID)
+--- Fired when an event has met a condition that should trigger its highlight glow animation.
 declare event ENCOUNTER_TIMELINE_EVENT_HIGHLIGHT(eventID: EncounterTimelineEventID)
+--- Fired when an event has been removed from the timeline. This is guaranteed to fire after an event has transitioned to a 'final' state such as Canceled or Finished, and will be delayed at least one game tick to allow for API queries to still access event data in OnUpdate scripts. This is fired post-removal of the event, and so queries using the supplied event ID will return nil.
 declare event ENCOUNTER_TIMELINE_EVENT_REMOVED(eventID: EncounterTimelineEventID)
+--- Fired when an event has changed state.
 declare event ENCOUNTER_TIMELINE_EVENT_STATE_CHANGED(eventID: EncounterTimelineEventID)
+--- Fired when an event has changed track, or has been re-ordered within its existing track.
 declare event ENCOUNTER_TIMELINE_EVENT_TRACK_CHANGED(eventID: EncounterTimelineEventID)
+--- Fired when the layout of tracks on the timeline has been updated. This can include changes to the minimum or maximum durations of tracks.
 declare event ENCOUNTER_TIMELINE_LAYOUT_UPDATED()
+--- Signaled when conditions controlling the visibility of the encounter timeline are updated.
 declare event ENCOUNTER_TIMELINE_STATE_UPDATED()
+--- Fired when a new timeline view is being activated. This is fired after a full layout and timeline data update, allowing the UI to immediately query the API and get usable results.
 declare event ENCOUNTER_TIMELINE_VIEW_ACTIVATED(viewType: EncounterTimelineViewType)
+--- Fired when the current timeline view is being deactivated. The UI should clear all stored timeline event data and release all frames back to pools during this event.
 declare event ENCOUNTER_TIMELINE_VIEW_DEACTIVATED(viewType: EncounterTimelineViewType)
 --- Fires when a boss encounter shows a warning. Blizzard's encounter warnings frame displays it.
 ---
@@ -79503,8 +79386,8 @@ declare event HOUSING_DECOR_PLACE_FAILURE(housingResult: HousingResult)
 --- Fires when a decor item has been placed or moved in the house. Blizzard's house editor plays a sound for the item's size and adds new items to its placed decor list.
 ---
 --- **Parameters**
+--- - `isNew`: Will be true if the decor is newly placed from storage, false if it was already placed and just moved
 --- - `decorGUID`: The decor item placed.
---- - `isNew`: True if the decor was newly placed from storage, false if it was already placed and only moved.
 --- - `isPreview`: Whether the placement is a preview.
 --- - `size`: The size of the decor (`Enum.HousingCatalogEntrySize`).
 ---
@@ -79588,9 +79471,13 @@ declare event HOUSING_INSPECT_MODE_DECOR_HOVERED_CHANGED()
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event HOUSING_INSPECT_MODE_STATE_UPDATED()
+--- Fired when one of the door nodes of an already placed room has been selected
 declare event HOUSING_LAYOUT_DOOR_SELECTED(roomGUID: string, componentID: number)
+--- Fired when one of the door nodes of an already placed room has been selected or deselected
 declare event HOUSING_LAYOUT_DOOR_SELECTION_CHANGED(hasSelection: boolean)
+--- Fired when an already placed room has either started or stopped being dragged
 declare event HOUSING_LAYOUT_DRAG_TARGET_CHANGED(isDraggingRoom: boolean)
+--- Fired when a room option in the House Chest has been selected or deselected
 declare event HOUSING_LAYOUT_FLOORPLAN_SELECTION_CHANGED(hasSelection: boolean, roomID: number)
 declare event HOUSING_LAYOUT_NUM_FLOORS_CHANGED(prevNumFloors: number, numFloors: number)
 --- Fires when the house editor's layout mode adds a pin frame.
@@ -79625,11 +79512,17 @@ declare event HOUSING_LAYOUT_ROOM_COMPONENT_THEME_SET_CHANGED(roomGUID: string, 
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event HOUSING_LAYOUT_ROOM_MOVE_INVALID()
+--- Fired when a previously placed room has been moved to a different position or rotation
 declare event HOUSING_LAYOUT_ROOM_MOVED()
+--- Fired when info for a newly placed room has been recieved while in Layout Mode
 declare event HOUSING_LAYOUT_ROOM_RECEIVED(prevNumFloors: number, currNumFloors: number, isUpstairs: boolean)
+--- Fired when a previously placed room has been removed while in Layout Mode
 declare event HOUSING_LAYOUT_ROOM_REMOVED()
+--- Fired when a room that was being dragged is let go of without being placed, and is returned to the House Chest
 declare event HOUSING_LAYOUT_ROOM_RETURNED()
+--- Fired when an already placed room has been selected or deselected
 declare event HOUSING_LAYOUT_ROOM_SELECTION_CHANGED(hasSelection: boolean)
+--- Fired when a room being dragged has been snapped to a particular door connection
 declare event HOUSING_LAYOUT_ROOM_SNAPPED()
 --- Fires when the floor viewed in the house editor's layout mode changes.
 ---
@@ -79958,6 +79851,7 @@ declare event TRACKED_HOUSE_CHANGED(trackedHouse: string?)
 declare event VIEW_HOUSES_LIST_RECIEVED(houseInfos: HouseInfo[])
 declare event IMMERSIVE_INTERACTION_BEGIN()
 declare event IMMERSIVE_INTERACTION_END()
+--- Signaled when the in-progress state of an encounter changes.
 declare event ENCOUNTER_STATE_CHANGED(isInProgress: boolean)
 declare event INSTANCE_ENCOUNTER_ADD_TIMER(timeRemaining: number)
 --- Fires when the units of an encounter, the `boss1` to `boss5` unit tokens, change. Blizzard's boss frames update.
@@ -81857,6 +81751,7 @@ declare event ADDON_ACTION_BLOCKED(isTainted: string, function_: string)
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event ADDON_ACTION_FORBIDDEN(isTainted: string, function_: string)
+--- Fired when the state of an addon restriction type is changing. This event is sequenced such that it will always be fired before a restriction becomes active, or after it is deactivated.
 declare event ADDON_RESTRICTION_STATE_CHANGED(type: AddOnRestrictionType, state: AddOnRestrictionState)
 --- Fires when a macro tried an action that is protected right now, usually during combat. Blizzard's UI prints a notice that an action was blocked.
 ---
@@ -82263,18 +82158,18 @@ declare event SPELL_UPDATE_CHARGES()
 --- Fires when the cooldown of one of the player's spells changes. Blizzard's action buttons and cooldown displays refresh their cooldowns.
 ---
 --- **Parameters**
---- - `baseSpellID`: The base spell of `spellID`.
---- - `category`: The cooldown category that changed.
+--- - `spellID`: Can be a base spell or an override spell. A nil value indicates that all cooldowns should be updated, rather than just a specific one.
+--- - `baseSpellID`: Will be set to the base spell if the spellID parameter is an override spell.
+--- - `category`: If the spellID parameter is set, the cooldown category of the spell. A nil value indicates the spell does not have a cooldown category.
+--- - `startRecoveryCategory`: If the spellID parameter is set, the cooldown start recovery category of the spell. A nil value indicates the spell does not have a cooldown start recovery category.
 --- - `itemID`: The item whose cooldown changed.
---- - `spellID`: The spell whose cooldown changed.
---- - `startRecoveryCategory`: The global cooldown category that changed.
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event SPELL_UPDATE_COOLDOWN(spellID: number?, baseSpellID: number?, category: number?, startRecoveryCategory: number?)
 --- Fires when the icon of one of the player's spells changes. Blizzard's action buttons and cooldown viewer refresh their icons.
 ---
 --- **Parameters**
---- - `spellID`: The spell whose icon changed.
+--- - `spellID`: Always refers to the base spell. A nil value indicates that all icons should be updated, rather than just a specific one.
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event SPELL_UPDATE_ICON(spellID: number?)
@@ -82285,8 +82180,8 @@ declare event SPELL_UPDATE_USABLE()
 --- Fires when the remaining uses of one of the player's spells change. Blizzard's cooldown viewer updates.
 ---
 --- **Parameters**
---- - `baseSpellID`: The base spell of `spellID`.
---- - `spellID`: The spell.
+--- - `spellID`: Can be a base spell or override spell.
+--- - `baseSpellID`: Will be set to the base spell if the spellID parameter is an override spell.
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event SPELL_UPDATE_USES(spellID: number, baseSpellID: number?)
@@ -82346,6 +82241,11 @@ declare event ENCHANT_SPELL_SELECTED()
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event SPELL_DATA_LOAD_RESULT(spellID: number, success: boolean)
+--- Used in conjunction with EnableSpellRangeCheck to inform the UI when a spell goes in or out of range with the current target.
+---
+--- **Parameters**
+--- - `isInRange`: Whether or not the current target is in range of the spell. Should not be used if the 'checksRange' parameter is false.
+--- - `checksRange`: Can be false if a range check was not made for any reason, for example there is not a current target.
 declare event SPELL_RANGE_CHECK_UPDATE(spellIdentifier: SpellIdentifier, isInRange: boolean, checksRange: boolean)
 --- Fires when a spell's description text has been updated. Blizzard's frames redraw tooltips for that spell.
 ---
@@ -82539,6 +82439,7 @@ declare event HIDE_HYPERLINK_TOOLTIP()
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event SHOW_HYPERLINK_TOOLTIP(hyperlink: string)
+--- Sends an update to the UI that a sparse or cache lookup has resolved
 declare event TOOLTIP_DATA_UPDATE(dataInstanceID: number?)
 --- Fires when the player learns a new toy. Blizzard's UI shows the new toy toast.
 ---
@@ -83309,6 +83210,7 @@ declare event SPELL_CONFIRMATION_TIMEOUT(spellID: number, effectValue: number)
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event UNIT_ABSORB_AMOUNT_CHANGED(unitTarget: string)
+--- Only signaled when the active player is a commentator or spectator.
 declare event UNIT_ARENA_COOLDOWNS_UPDATE(unitTarget: string)
 --- Fires when a unit's melee attack values change. Blizzard's character frame refreshes its stats.
 ---

@@ -8850,9 +8850,7 @@ declare class ModelSceneFrame
     ---
     --- *Description by wowlua: the API's documentation has none.*
     function GetCameraFarClip(): number
-    --- Returns the camera's field of view.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Field of view in radians
     function GetCameraFieldOfView(): number
     --- Returns the camera's forward direction vector.
     ---
@@ -8934,9 +8932,7 @@ declare class ModelSceneFrame
     ---
     --- *Description by wowlua: the API's documentation has none.*
     function SetCameraFarClip(farClip: number)
-    --- Sets the camera's field of view.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Field of view in radians
     function SetCameraFieldOfView(fov: number)
     --- Sets the camera's near clipping distance.
     ---
@@ -9138,9 +9134,7 @@ declare class Browser extends Frame
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Browser_NavigateStop)
     function NavigateStop()
-    --- Loads the given URL in the browser frame.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Not functional in public builds
     function NavigateTo(url: string)
     --- Opens the current page in the system's web browser.
     ---
@@ -38157,14 +38151,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.CreateClub)
     function CreateClub(name: string, shortName: string?, description: string, clubType: ClubType, avatarId: number, isCrossFaction: boolean?)
-    --- Creates a chat stream in a community.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    --- - `leadersAndModeratorsOnly`: Whether only leaders and moderators can see the stream.
-    --- - `subject`: The stream's subject.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Check the canCreateStream privilege.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.CreateStream)
     function CreateStream(clubId: ClubId, name: string, subject: string, leadersAndModeratorsOnly: boolean)
@@ -38185,12 +38172,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.DeclineInvitation)
     function DeclineInvitation(clubId: ClubId)
-    --- Deletes a community.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Check the canDestroy privilege.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.DestroyClub)
     function DestroyClub(clubId: ClubId)
@@ -38205,23 +38187,11 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.DestroyMessage)
     function DestroyMessage(clubId: ClubId, streamId: ClubStreamId, messageId: ClubMessageIdentifier)
-    --- Deletes a chat stream of a community.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    --- - `streamId`: The stream's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Check canDestroyStream privilege.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.DestroyStream)
     function DestroyStream(clubId: ClubId, streamId: ClubStreamId)
-    --- Deletes an invite link of a community.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    --- - `ticketId`: The invite link's ticket ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Check canDestroyTicket privilege.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.DestroyTicket)
     function DestroyTicket(clubId: ClubId, ticketId: string)
@@ -38240,16 +38210,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.DoesCommunityHaveMembersOfTheOppositeFaction)
     function DoesCommunityHaveMembersOfTheOppositeFaction(clubId: ClubId): boolean
-    --- Changes a community's name, description, avatar or other settings; nil keeps a setting as it is.
-    ---
-    --- **Parameters**
-    --- - `avatarId`: The ID of the community's avatar.
-    --- - `broadcast`: The community's message of the day.
-    --- - `clubId`: The community's ID.
-    --- - `crossFaction`: Whether players of both factions can join.
-    --- - `shortName`: The community's short name.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- nil arguments will not change existing club data
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.EditClub)
     function EditClub(clubId: ClubId, name: string?, shortName: string?, description: string?, avatarId: number?, broadcast: string?, crossFaction: boolean?)
@@ -38264,14 +38225,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.EditMessage)
     function EditMessage(clubId: ClubId, streamId: ClubStreamId, messageId: ClubMessageIdentifier, message: string)
-    --- Changes a community stream's name, subject or visibility; nil keeps a setting as it is.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    --- - `leadersAndModeratorsOnly`: Whether only leaders and moderators can see the stream.
-    --- - `streamId`: The stream's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Check the canSetStreamName, canSetStreamSubject, canSetStreamAccess privileges. nil arguments will not change existing stream data.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.EditStream)
     function EditStream(clubId: ClubId, streamId: ClubStreamId, name: string?, subject: string?, leadersAndModeratorsOnly: boolean?)
@@ -38530,12 +38484,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.RedeemTicket)
     function RedeemTicket(ticketId: string)
-    --- Asks the server for a community's pending invitations.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Request invitations for this club from server. Check canGetInvitation privilege.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.RequestInvitationsForClub)
     function RequestInvitationsForClub(clubId: ClubId)
@@ -38552,12 +38501,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.RequestTicket)
     function RequestTicket(ticketId: string)
-    --- Asks the server for a community's invite links.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Request tickets from server. Check canGetTicket privilege.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.RequestTickets)
     function RequestTickets(clubId: ClubId)
@@ -38593,13 +38537,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.SendMessage)
     function SendMessage(clubId: ClubId, streamId: ClubStreamId, message: string)
-    --- Marks a community stream as read automatically as messages arrive.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    --- - `streamId`: The stream's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Only one stream can be set for auto-advance at a time. Focused streams will have their view times advanced automatically.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.SetAutoAdvanceStreamViewMarker)
     function SetAutoAdvanceStreamViewMarker(clubId: ClubId, streamId: ClubStreamId)
@@ -38617,12 +38555,7 @@ declare namespace C_Club
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.SetClubMemberNote)
     function SetClubMemberNote(clubId: ClubId, memberId: number, note: string)
-    --- Starts receiving online status updates of a community's members.
-    ---
-    --- **Parameters**
-    --- - `clubId`: The community's ID.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- You can only be subscribed to 0 or 1 clubs for presence.  Subscribing to a new club automatically unsuscribes you to existing subscription.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Club.SetClubPresenceSubscription)
     function SetClubPresenceSubscription(clubId: ClubId)
@@ -46969,12 +46902,10 @@ declare namespace C_SpellBook
 end
 
 declare namespace C_Spell
-    --- Whether the given spell exists.
+    --- Returns true if the spell exists, regardless of whether the player has learned it
     ---
     --- **Parameters**
     --- - `spellIdentifier`: Using name will always check for an override on that spell
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_Spell.DoesSpellExist)
     function DoesSpellExist(spellIdentifier: SpellIdentifier): boolean
@@ -48592,27 +48523,19 @@ declare namespace C_UI
 end
 
 declare namespace C_ModelInfo
-    --- Registers a model scene frame as showing a model scene.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- This function does nothing in public clients
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_ModelInfo.AddActiveModelScene)
     function AddActiveModelScene(modelSceneFrame: ModelSceneFrame, modelSceneID: number)
-    --- Registers a model scene actor as showing an actor of a model scene.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- This function does nothing in public clients
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_ModelInfo.AddActiveModelSceneActor)
     function AddActiveModelSceneActor(modelSceneFrameActor: ModelSceneFrameActor, modelSceneActorID: number)
-    --- Unregisters a model scene frame's model scene.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- This function does nothing in public clients
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_ModelInfo.ClearActiveModelScene)
     function ClearActiveModelScene(modelSceneFrame: ModelSceneFrame)
-    --- Unregisters a model scene actor's actor.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- This function does nothing in public clients
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_ModelInfo.ClearActiveModelSceneActor)
     function ClearActiveModelSceneActor(modelSceneFrameActor: ModelSceneFrameActor)
@@ -49748,9 +49671,7 @@ declare namespace C_VoiceChat
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_VoiceChat.Logout)
     function Logout(): VoiceChatStatusCode
-    --- Marks the voice chat channels as discovered by the player.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Once the UI has enumerated all channels, use this to reset the channel discovery state, it will be updated again if appropriate
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_VoiceChat.MarkChannelsDiscovered)
     function MarkChannelsDiscovered()
@@ -49808,9 +49729,7 @@ declare namespace C_VoiceChat
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_VoiceChat.SetMemberMuted)
     function SetMemberMuted(playerLocation: PlayerLocationMixin, muted: boolean)
-    --- Sets the volume at which the player hears a voice chat member.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Adjusts member volume across all channels
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_VoiceChat.SetMemberVolume)
     function SetMemberVolume(playerLocation: PlayerLocationMixin, volume: number)
@@ -49857,9 +49776,7 @@ declare namespace C_VoiceChat
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_VoiceChat.SetVADSensitivity)
     function SetVADSensitivity(sensitivity: number)
-    --- Whether the player should be told about voice chat channels to discover.
-    ---
-    --- *Description by wowlua: the API's documentation has none.*
+    --- Use this while loading to determine if the UI should attempt to rediscover the previously joined/active voice channels
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_VoiceChat.ShouldDiscoverChannels)
     function ShouldDiscoverChannels(): boolean
@@ -64485,6 +64402,7 @@ declare event AUCTION_BIDDER_LIST_UPDATE()
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event AUCTION_CANCELED(auctionID: number)
+--- This signal is not used in the base UI but is included for AddOn ease-of-use.
 declare event AUCTION_HOUSE_AUCTION_CREATED(auctionID: number)
 --- Fires when an auction expires.
 ---
@@ -64535,6 +64453,7 @@ declare event AUCTION_HOUSE_ITEM_DELIVERY_DELAY_UPDATE(purchasedItemDeliveryDela
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event AUCTION_HOUSE_NEW_BID_RECEIVED(auctionID: number)
+--- This signal is not used in the base UI but is included for AddOn ease-of-use. Payload is nil for browse queries.
 declare event AUCTION_HOUSE_NEW_RESULTS_RECEIVED(itemKey: ItemKey?)
 --- Fires when the player tries to post an auction but posting is blocked. Blizzard's UI shows a popup saying items can't be posted right now (`AUCTION_POSTING_ERROR_TEXT`).
 ---
@@ -66485,9 +66404,9 @@ declare event CLUB_MESSAGE_ADDED(clubId: ClubId, streamId: ClubStreamId, message
 --- Fires when older messages of a club stream have been downloaded. Blizzard's communities chat fills in the history when that stream is shown.
 ---
 --- **Parameters**
+--- - `downloadedRange`: Range of history messages received.
+--- - `contiguousRange`: Range of contiguous messages that the received messages are in.
 --- - `clubId`: The club.
---- - `contiguousRange`: The range of messages now held without gaps.
---- - `downloadedRange`: The range of messages that was downloaded.
 --- - `streamId`: The stream.
 ---
 --- *Description by wowlua: the API's documentation has none.*
@@ -66607,8 +66526,8 @@ declare event INITIAL_CLUBS_LOADED()
 --- Fires when the read marker of a club stream changes. Blizzard's communities list updates its unread notification for that club.
 ---
 --- **Parameters**
+--- - `lastReadTime`: nil if stream view is at current
 --- - `clubId`: The club.
---- - `lastReadTime`: When the stream was last read, if known.
 --- - `streamId`: The stream.
 ---
 --- *Description by wowlua: the API's documentation has none.*
@@ -66635,11 +66554,17 @@ declare event CLUB_FINDER_APPLICATIONS_UPDATED(type: ClubFinderRequestType, club
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event CLUB_FINDER_CAN_WHISPER_APPLICANT(applicant: string)
+--- Signals when we recieve club data that can be used
 declare event CLUB_FINDER_CLUB_LIST_RETURNED(type: ClubFinderRequestType)
+--- Sends an update to the UI about a reported guild or community.
 declare event CLUB_FINDER_CLUB_REPORTED(type: ClubFinderRequestType, clubFinderGUID: string)
+--- Signals to the UI that you (the player) have joined a community offline.
 declare event CLUB_FINDER_COMMUNITY_OFFLINE_JOIN(clubId: ClubId)
+--- Sends an update to the UI that the club finder feature has been enabled or disabled.
 declare event CLUB_FINDER_ENABLED_OR_DISABLED()
+--- Sends an update to the UI if the realm name of a guild was found asynchronously.
 declare event CLUB_FINDER_GUILD_REALM_NAME_UPDATED(clubFinderGUID: string, realmName: string)
+--- When a player clicks a club link, this returns that information back about the club they clicked on
 declare event CLUB_FINDER_LINKED_CLUB_RETURNED(clubInfo: RecruitingClubInfo)
 --- Fires when the club finder's list of the player's memberships changes. Blizzard's club finder frame listens for it.
 ---
@@ -66663,7 +66588,9 @@ declare event CLUB_FINDER_POST_UPDATED(clubFinderGUIDs: string[])
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event CLUB_FINDER_RECRUIT_LIST_CHANGED()
+--- Signals when our recruitment post we just requested is returned back to us
 declare event CLUB_FINDER_RECRUITMENT_POST_RETURNED(type: ClubFinderRequestType)
+--- Signals when we recieve the recruits list
 declare event CLUB_FINDER_RECRUITS_UPDATED(type: ClubFinderRequestType)
 --- Fires for each new combat log entry. Blizzard's docs mark it as a restricted callback event, delivered through callbacks rather than frame registration; Blizzard's combat log reads the entry with `C_CombatLogSecure.GetCurrentEventInfo`.
 ---
@@ -69790,6 +69717,7 @@ declare event HIDE_HYPERLINK_TOOLTIP()
 ---
 --- *Description by wowlua: the API's documentation has none.*
 declare event SHOW_HYPERLINK_TOOLTIP(hyperlink: string)
+--- Sends an update to the UI that a sparse or cache lookup has resolved
 declare event TOOLTIP_DATA_UPDATE(dataInstanceID: number?)
 --- Fires when the player learns a new toy. Blizzard's UI shows the new toy toast.
 ---

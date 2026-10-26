@@ -1187,6 +1187,12 @@ fn wiki_type(ty: &str, known: &HashSet<String>) -> String {
     out
 }
 
+/// What Blizzard's documentation says each function and event does, from
+/// [`blizzard::read_json`]'s list of systems.
+fn blizzard_descriptions(systems: &serde_json::Value) -> docs::Docs {
+    docs::from_blizzard(&serde_json::json!({ "systems": systems }))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn generate(
     flavors: &[FlavorDocs],
@@ -1204,9 +1210,18 @@ pub fn generate(
     // what the functions do: the wiki's, completed by each flavor's own
     // documentation
     let mut flavor_docs: HashMap<String, docs::Docs> = HashMap::new();
+    // Blizzard's descriptions of every flavor, the first flavor's first
+    // (for the declarations every flavor shares: the widgets' methods).
+    let mut blizzard_docs = docs::Docs::new();
     for f in flavors {
         let json = blizzard::read_json(&f.files)?;
-        let mut d = docs::merge(wiki_docs, &docs::from_blizzard(&json));
+        let blizzard = blizzard_descriptions(&json);
+        for (key, doc) in &blizzard {
+            blizzard_docs
+                .entry(key.clone())
+                .or_insert_with(|| doc.clone());
+        }
+        let mut d = docs::merge(wiki_docs, &blizzard);
         docs::add_written(&mut d, written);
         flavor_docs.insert(f.id.clone(), d);
         api.push((f.id.clone(), json));
@@ -2336,7 +2351,7 @@ pub fn generate(
     recorded_corrections(&mut shared);
     client_types(&mut shared, client, true);
     shared.without_any();
-    shared.docs = wiki_docs.clone();
+    shared.docs = docs::merge(wiki_docs, &blizzard_docs);
     docs::add_written(&mut shared.docs, written);
     Ok(Output {
         shared: shared.emit(&header),
@@ -2381,6 +2396,31 @@ mod tests {
             ret_vararg: Some("any".into()),
             ..model::Sig::default()
         }]
+    }
+
+    /// Blizzard's descriptions reach the declarations: `read_json` gives
+    /// the systems as a list.
+    #[test]
+    fn blizzard_descriptions_come_from_the_systems() {
+        let file = r#"APIDocumentation:AddDocumentationTable({
+            Name = "Test", Type = "System", Namespace = "C_Test",
+            Functions = {
+                { Name = "Do", Type = "Function", Documentation = { "Does the thing." },
+                  Arguments = { { Name = "count", Type = "number", Nilable = false, Documentation = { "How often." } } } },
+            },
+            Events = {
+                { Name = "TestDone", Type = "Event", LiteralName = "TEST_DONE", Documentation = { "The thing is done." } },
+            },
+            Tables = {},
+        })"#;
+        let json = blizzard::read_json(&[("Test.lua".into(), file.into())]).unwrap();
+        let d = blizzard_descriptions(&json);
+        assert_eq!(d["C_Test.Do"].summary, "Does the thing.");
+        assert_eq!(
+            d["C_Test.Do"].params,
+            [("count".into(), "How often.".into())]
+        );
+        assert_eq!(d["event:TEST_DONE"].summary, "The thing is done.");
     }
 
     /// A status bar's value and range read back secret, its scripts get
