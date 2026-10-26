@@ -72,7 +72,9 @@ s:test("router: commands added and removed", function(t)
     later:add("zulu", { run = function() record("zulu") end, help = "Z" }, owner)
     later:add("alpha", { args = { "number" }, run = function(n: number) record("alpha", n) end, aliases = { "a" } })
     later:dispatch("a 3")
-    t:eq(later:help(), "zulu - Z\nalpha <number>", "help in the order added")
+    -- Each line after the slash command whose handler runs (the suite's
+    -- runner), or the addon's first.
+    t:ok(later:help():match("^/stdtest%S* zulu %- Z\n/stdtest%S* alpha <number>$") ~= nil, `help in the order added: {later:help()}`)
     t:ok(not pcall(later.add, later, "A", { run = function() end }), "a taken name is refused")
     later:removeAll(owner)
     later:remove("alpha")
