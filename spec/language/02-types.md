@@ -836,6 +836,26 @@ which may be anything (decision L75). `pcall(f, ...)` of an overloaded `f`
 (`CreateFrame`) gives the results of the overload the arguments match:
 `pcall(CreateFrame, "ModelScene")` gives `(boolean, ModelScene)` (decision L82).
 
+These are the results where the function returns. Where it raises, `pcall`
+gives `false` and the error, which is `unknown` (`xpcall`: what its handler
+returns, `unknown` where that is not known). So the call gives `boolean`,
+then the first result or the error (`unknown` when the error is), then the
+other results or `nil` (`R?`). A `local ok, a, b = pcall(…)` (or the
+assignment `ok, a, b = pcall(…)` to locals) keeps the two outcomes apart, as
+a discriminated union does: where a condition narrows `ok` to `true`
+(`if ok then`, the code after `if not ok then return end`), `a` and `b` are
+the results; where it narrows `ok` to `false`, `a` is the error and `b` is
+`nil`. Assigning any of the locals ends this (decision L101).
+
+```wowlua
+local ok, frame = pcall(CreateFrame, "ModelScene")
+if ok then
+    frame:Show()                    -- frame: ModelScene
+else
+    print(tostring(frame))          -- frame: unknown, the error
+end
+```
+
 A last argument that gives several values (a call such as `unpack(t)`, or
 `...`) gives its values to the parameters from its position on, as in Lua:
 `tex:SetTexCoord(unpack(coords))` matches the four-number overload when

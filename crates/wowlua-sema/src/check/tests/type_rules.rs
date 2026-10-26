@@ -645,3 +645,94 @@ fn conditional_local_keeps_the_union() {
     let src = "import build from \"wowlua:meta\"\n@if(not build.debug)\nlocal items = {}\nitems = function() return 1 end\nprint(items)\n";
     assert!(errors(src, Mode::Strict).is_empty());
 }
+
+/// `pcall`'s results as the client gives them: `true` and the function's
+/// results, or `false` and the error; testing `ok` narrows the others
+/// (spec §2.7, decision L101).
+#[test]
+fn pcall_results_narrow_by_ok() {
+    let pre =
+        "local function f(): (number, string) return 1, \"a\" end\nlocal ok, a, b = pcall(f)\n";
+    let src = format!(
+        "{pre}if ok then\n local n: number = a\n local s: string = b\n print(n, s)\nelse\n print(tostring(a))\nend\n"
+    );
+    assert!(
+        errors(&src, Mode::Strict).is_empty(),
+        "{:?}",
+        errors(&src, Mode::Strict)
+    );
+    // untested, the first may be the error and the others `nil`
+    assert_eq!(
+        errors(
+            &format!("{pre}local n: number = a\nprint(n)\n"),
+            Mode::Strict
+        ),
+        ["E2001: `unknown` is not assignable to `number`"]
+    );
+    assert_eq!(
+        errors(
+            &format!("{pre}local s: string = b\nprint(s)\n"),
+            Mode::Strict
+        ),
+        ["E2001: `string?` is not assignable to `string`"]
+    );
+    // where it failed: the error, and `nil`
+    assert_eq!(
+        errors(
+            &format!(
+                "{pre}if not ok then\n local n: number = a\n local s: string = b\n print(n, s)\nend\n"
+            ),
+            Mode::Strict
+        ),
+        [
+            "E2001: `unknown` is not assignable to `number`",
+            "E2001: `nil` is not assignable to `string`"
+        ]
+    );
+    // a guard that returns narrows the rest
+    let guard =
+        format!("{pre}if not ok then return end\nlocal n: number = a\nprint(n, b:upper())\n");
+    assert!(errors(&guard, Mode::Strict).is_empty());
+    // `ok and a` narrows `a` further
+    let q = "local function q(): string | false return false end\nlocal ok, r = pcall(q)\nif ok and r then print(r .. \"!\") end\n";
+    assert!(errors(q, Mode::Strict).is_empty());
+    // and its fields
+    let h = "type H = { name: string? }\nlocal function get(): H return {} end\nlocal ok, h = pcall(get)\nif ok and h.name then print(h.name:upper()) end\n";
+    assert!(
+        errors(h, Mode::Strict).is_empty(),
+        "{:?}",
+        errors(h, Mode::Strict)
+    );
+}
+
+/// Assigning one of the locals drops the link; assigning them all from
+/// another `pcall` links them again.
+#[test]
+fn pcall_links_follow_assignments() {
+    let pre = "local function f(): number return 1 end\nlocal function g(): string return \"a\" end\nlocal ok, v = pcall(f)\n";
+    assert_eq!(
+        errors(
+            &format!("{pre}ok = true\nif ok then\n local n: number = v\n print(n)\nend\n"),
+            Mode::Strict
+        ),
+        ["E2001: `unknown` is not assignable to `number`"]
+    );
+    let again =
+        format!("{pre}ok, v = pcall(g)\nif ok then\n local s: string = v\n print(s)\nend\n");
+    assert!(
+        errors(&again, Mode::Strict).is_empty(),
+        "{:?}",
+        errors(&again, Mode::Strict)
+    );
+}
+
+/// `xpcall`'s error is what its handler returns.
+#[test]
+fn xpcall_error_is_the_handlers_result() {
+    let src = "local function f(): number return 1 end\nlocal ok, v = xpcall(f, function(e: any): string return tostring(e) end)\nif ok then\n local n: number = v\n print(n)\nelse\n local s: string = v\n print(s)\nend\n";
+    assert!(
+        errors(src, Mode::Strict).is_empty(),
+        "{:?}",
+        errors(src, Mode::Strict)
+    );
+}

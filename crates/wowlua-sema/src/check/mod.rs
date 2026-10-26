@@ -3521,7 +3521,7 @@ print(a, b, c, d, e, name, realm, more)
             "E2001",
         );
         strict_ok(
-            "local ok, h = pcall(function(): string return \"x\" end)\nlocal e: string = h\nprint(ok, e)\n",
+            "local ok, h = pcall(function(): string return \"x\" end)\nif ok then\n local e: string = h\n print(e)\nend\n",
         );
         // a function that only raises: what it raised, `unknown` (L75)
         strict_err(

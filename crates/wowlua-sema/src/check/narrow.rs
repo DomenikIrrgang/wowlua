@@ -271,6 +271,11 @@ impl Checker<'_, '_> {
             let present = self.env.types.non_nil(current);
             target.insert(v, present);
         }
+        // `if ok then` after `local ok, v = pcall(f)`: `v` is `f`'s result.
+        if !self.pcall_links.is_empty() {
+            self.apply_pcall_links(flow, &mut t_flow);
+            self.apply_pcall_links(flow, &mut f_flow);
+        }
         (t_flow, f_flow)
     }
 
@@ -290,7 +295,11 @@ impl Checker<'_, '_> {
                 rhs,
             } => {
                 let (lt, lf) = self.narrow(lhs, flow);
+                // the right side's paths read with the left's narrowing
+                // (`ok and h.profiles` after `local ok, h = pcall(…)`)
+                let outer = std::mem::replace(&mut self.flow, lt.clone());
                 let (rt, rf) = self.narrow(rhs, &lt);
+                self.flow = outer;
                 let f = self.join(&lf, &rf, true, true);
                 return (rt, f);
             }
@@ -300,7 +309,9 @@ impl Checker<'_, '_> {
                 rhs,
             } => {
                 let (lt, lf) = self.narrow(lhs, flow);
+                let outer = std::mem::replace(&mut self.flow, lf.clone());
                 let (rt, rf) = self.narrow(rhs, &lf);
+                self.flow = outer;
                 let t = self.join(&lt, &rt, true, true);
                 return (t, rf);
             }

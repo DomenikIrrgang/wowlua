@@ -699,6 +699,22 @@ impl Checker<'_, '_> {
                             *t = Types::UNKNOWN;
                         }
                     }
+                    // Where it raised: `false` and the error, `unknown`; for
+                    // `xpcall`, what the handler returns (decision L101).
+                    let err = if n.text() == "xpcall"
+                        && let Some(h) = Self::arg_exprs(args).get(1)
+                        && let Ty::Func(f) = {
+                            let ht = self.peek_or_check(h);
+                            self.env.types.get(ht).clone()
+                        }
+                        && let Some(&first) = f.ret.types.first()
+                        && !matches!(first, Types::ANY | Types::NEVER | Types::ERROR)
+                    {
+                        first
+                    } else {
+                        Types::UNKNOWN
+                    };
+                    results = self.pcall_outcomes(e.span(), results, err);
                 }
                 // `assert(v)` returns `v` only where it is truthy.
                 if let ExprKind::Name(n) = callee.kind()

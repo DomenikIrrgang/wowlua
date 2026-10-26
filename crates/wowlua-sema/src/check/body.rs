@@ -215,6 +215,13 @@ pub struct Checker<'e, 'p> {
     /// Locals declared with a table literal (`local t = { … }`): their open
     /// tables are the ones the file fills in (spec §2.4.2).
     pub(crate) literal_locals: FxHashSet<VarId>,
+    /// `pcall(…)`/`xpcall(…)` calls, by span: their results on success
+    /// (`true`, the function's) and on failure (`false`, the error).
+    pub(crate) pcall_packs: FxHashMap<(u32, u32), (Pack, Pack)>,
+    /// `local ok, a, b = pcall(…)`: by `ok`, the locals after it with their
+    /// types on success and on failure, which narrowing `ok` to `true` or
+    /// `false` gives them (spec §2.7). Assigning any of them drops it.
+    pub(crate) pcall_links: FxHashMap<VarId, Vec<(VarId, TypeId, TypeId)>>,
     /// The objects `setmetatable` made whose `__index` table is known by
     /// name (all its fields are known, spec §2.4.6).
     pub(crate) objects: FxHashSet<TypeId>,
@@ -443,6 +450,8 @@ impl<'e, 'p> Checker<'e, 'p> {
             method_lookup: false,
             file_block: None,
             literal_locals: FxHashSet::default(),
+            pcall_packs: FxHashMap::default(),
+            pcall_links: FxHashMap::default(),
             objects: FxHashSet::default(),
             stored_fields: FxHashMap::default(),
             private_methods: FxHashMap::default(),
@@ -884,6 +893,10 @@ impl<'e, 'p> Checker<'e, 'p> {
     /// updates the narrowed type.
     pub fn assign_var(&mut self, v: VarId, value: TypeId, span: Span) {
         self.forget_fields(v, None);
+        if !self.pcall_links.is_empty() {
+            self.pcall_links
+                .retain(|ok, links| *ok != v && !links.iter().any(|l| l.0 == v));
+        }
         let var = self.vars[v.0 as usize].clone();
         match var.declared {
             Some(d) => {
@@ -942,6 +955,103 @@ impl<'e, 'p> Checker<'e, 'p> {
                 };
                 self.set_base(v, base, assigned);
             }
+        }
+    }
+
+    /// `local ok, a, b = pcall(…)` (or the assignment): narrowing `ok` to
+    /// `true` gives `a`, `b` the function's results, to `false` the error
+    /// and `nil` (spec §2.7, decision L101).
+    fn link_pcall(&mut self, key: (u32, u32), ids: &[VarId]) {
+        if ids.len() < 2 || ids[1..].contains(&ids[0]) {
+            return;
+        }
+        let Some((ok, failed)) = self.pcall_packs.get(&key).cloned() else {
+            return;
+        };
+        let at = |p: &Pack, i: usize| {
+            p.types
+                .get(i)
+                .copied()
+                .or(match p.rest {
+                    Some(Rest::Variadic(t)) => Some(t),
+                    Some(Rest::Pack(_)) => Some(Types::UNKNOWN),
+                    None => None,
+                })
+                .unwrap_or(Types::NIL)
+        };
+        let links = ids[1..]
+            .iter()
+            .enumerate()
+            .map(|(j, &v)| (v, at(&ok, j + 1), at(&failed, j + 1)))
+            .collect();
+        self.pcall_links.insert(ids[0], links);
+    }
+
+    /// The results of `pcall(…)` or `xpcall(…)` as the client gives them:
+    /// `success` (`boolean` and the function's results) where it returned,
+    /// `false` and `err` where it raised. The call gives both together
+    /// (`boolean`, the first result or the error, the others or `nil`), and
+    /// keeps them apart for [`Self::link_pcall`].
+    pub(crate) fn pcall_outcomes(&mut self, span: Span, success: Pack, err: TypeId) -> Pack {
+        let mut ok = success.clone();
+        ok.types[0] = Types::TRUE;
+        let failed = Pack {
+            types: vec![Types::FALSE, err],
+            rest: None,
+        };
+        let mut merged = success;
+        merged.types[0] = Types::BOOLEAN;
+        for i in 1..merged.types.len() {
+            let t = merged.types[i];
+            merged.types[i] = if i > 1 {
+                self.env.types.optional(t)
+            } else if t == Types::UNKNOWN || err == Types::UNKNOWN {
+                Types::UNKNOWN
+            } else {
+                self.env.types.union(&[t, err])
+            };
+        }
+        if merged.types.len() == 1
+            && let Some(Rest::Variadic(t)) = merged.rest
+            && t != Types::UNKNOWN
+            && t != Types::ANY
+        {
+            let first = if err == Types::UNKNOWN {
+                Types::UNKNOWN
+            } else {
+                self.env.types.union(&[t, err])
+            };
+            merged.types.push(first);
+        }
+        self.pcall_packs
+            .insert((span.start, span.end), (ok, failed));
+        merged
+    }
+
+    /// Narrowing `ok` of `local ok, a = pcall(…)` to `true` or `false` in
+    /// `to` (from `from`) narrows `a` to its type on success or on failure.
+    pub(crate) fn apply_pcall_links(&mut self, from: &Flow, to: &mut Flow) {
+        let mut set: Vec<(VarId, TypeId)> = Vec::new();
+        for (ok, links) in &self.pcall_links {
+            let now = to.get(ok).copied();
+            if now == from.get(ok).copied() {
+                continue;
+            }
+            let success = match now {
+                Some(Types::TRUE) => true,
+                Some(Types::FALSE) => false,
+                _ => continue,
+            };
+            // (one the condition narrowed itself, as in `ok and v`, was
+            // narrowed from these already)
+            for &(v, s, f) in links {
+                if to.get(&v) == from.get(&v) {
+                    set.push((v, if success { s } else { f }));
+                }
+            }
+        }
+        for (v, t) in set {
+            to.insert(v, t);
         }
     }
 
@@ -1646,8 +1756,10 @@ impl<'e, 'p> Checker<'e, 'p> {
                     .iter()
                     .map(|n| (n.name.span(), n.name.text().to_string()))
                     .collect();
+                let single = single_value(values);
                 let values = self.expr_list_into(values, &expected, &spread);
                 let no_values = values.is_empty();
+                let mut ids: Vec<VarId> = Vec::new();
                 for (i, n) in names.iter().enumerate() {
                     let value = values.get(i).copied().unwrap_or(Types::NIL);
                     let declared = expected[i];
@@ -1674,6 +1786,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                     }
                     let id =
                         self.declare(n.name.text(), declared, value, false, Some(n.name.span()));
+                    ids.push(id);
                     if literal.get(i) == Some(&true) {
                         self.literal_locals.insert(id);
                     }
@@ -1708,6 +1821,9 @@ impl<'e, 'p> Checker<'e, 'p> {
                         self.flow.insert(id, narrowed);
                     }
                 }
+                if let Some(key) = single {
+                    self.link_pcall(key, &ids);
+                }
             }
             StmtKind::Assign { targets, values } => {
                 let expected: Vec<Option<TypeId>> =
@@ -1733,6 +1849,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                         self.index_of.insert(var, index.text().into());
                     }
                 }
+                let single = single_value(values);
                 let values = self.expr_list_into(values, &expected, &spread);
                 // A local function assigned again may hold another
                 // function: its count no longer holds (W2062).
@@ -1759,6 +1876,19 @@ impl<'e, 'p> Checker<'e, 'p> {
                         self.note_global_classes(value);
                     }
                     self.assign_target(t, value);
+                }
+                // `ok, err = pcall(…)` links them again.
+                if let Some(key) = single {
+                    let ids: Option<Vec<VarId>> = targets
+                        .iter()
+                        .map(|t| match t.kind() {
+                            ExprKind::Name(n) => self.lookup_var(n.text()),
+                            _ => None,
+                        })
+                        .collect();
+                    if let Some(ids) = ids {
+                        self.link_pcall(key, &ids);
+                    }
                 }
             }
             StmtKind::Compound { target, op, value } => {
@@ -3882,4 +4012,15 @@ fn stored_fields(block: Block<'_>) -> FxHashMap<Box<str>, FxHashSet<Box<str>>> {
         _ => {}
     });
     out
+}
+
+/// The span of an expression list's only value, if it is a call (whose
+/// results all reach the names).
+fn single_value(values: Exprs<'_>) -> Option<(u32, u32)> {
+    let mut it = values.iter();
+    let first = it.next()?;
+    if it.next().is_some() || !matches!(first.kind(), ExprKind::Call { .. }) {
+        return None;
+    }
+    Some((first.span().start, first.span().end))
 }

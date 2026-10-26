@@ -229,6 +229,21 @@ comparisons with `nil`, `assert`, functions that check a type
 ([Functions](functions.md#functions-that-check-a-type)) and tests whether a
 global exists ([Types §2.5](../../spec/language/02-types.md#25-narrowing)).
 
+`pcall` works the same way. Its first result says whether the function
+returned. If it did, the other results are the function's. If it raised an
+error, the second result is that error and the rest are `nil`. Test the first
+result before you use the others:
+
+```wowlua title=src/scene.wowlua
+--!strict
+local ok, scene = pcall(CreateFrame, "ModelScene")
+if ok then
+    scene:Show()                       -- a ModelScene here
+else
+    print(`no scene: {tostring(scene)}`) -- the error here
+end
+```
+
 ## Describe tables
 
 Most addon data lives in tables. These forms cover lists, lookups and records:
