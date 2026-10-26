@@ -4938,6 +4938,24 @@ UnitHealthPercent = function(u, predicted, curve) print("native", u, curve) retu
     assert_eq!(plain(&out), ["native player scale", "true"]);
 }
 
+/// A client with `UnitHealthPercent` but without `CurveConstants` (cata's
+/// declarations) would answer 0 to 1: `unit.healthPercent` computes 0 to
+/// 100 from the health there.
+#[test]
+fn unit_health_percent_without_the_curve() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as unit from \"wowlua:unit\"\n_G.StdUnit = unit\n",
+        )],
+        r#"CurveConstants = nil
+UnitHealthPercent = function(u, predicted, curve) print("native", u, curve) return 0.25 end
+Mock.units.party1 = { name = "Ally", guid = "Player-2-1", class = "Warrior", classFile = "WARRIOR", level = 60, health = 10, healthMax = 40, power = 0, powerMax = 100, isPlayer = true, connected = true }"#,
+        "Mock.loadAddon(\"Std\")\nprint(StdUnit.healthPercent(\"party1\"))\n",
+    );
+    assert_eq!(plain(&out), ["25"]);
+}
+
 /// `wowlua:unit` with secrets the caller hands in: secret group options
 /// count as no, a secret GUID (combat log GUIDs can be) finds no member.
 #[test]

@@ -83,7 +83,7 @@ end
 | `fullName` | `(unit: UnitToken) -> string?` | `"Name-Realm"`, from `GetUnitName(unit, true)`; the own realm is filled in (`GetNormalizedRealmName`). `nil` if the name is secret. |
 | `isSame` | `(a: UnitToken, b: UnitToken) -> boolean \| Secret<boolean>` | `UnitIsUnit`; may be secret in combat (read it with `secret.flag`) |
 | `health` | `(unit: UnitToken) -> (number \| Secret<number>, number \| Secret<number>)` | Current and maximum |
-| `healthPercent` | `(unit: UnitToken) -> (number \| Secret<number>)?` | 0 to 100. The client's `UnitHealthPercent` (with `CurveConstants.ScaleTo100`) where it has one, which may return a secret. Otherwise computed from `health` only when both values are accessible, else `nil`. |
+| `healthPercent` | `(unit: UnitToken) -> (number \| Secret<number>)?` | 0 to 100. The client's `UnitHealthPercent` with `CurveConstants.ScaleTo100` where it has both, which may return a secret (without the curve it answers 0 to 1). Otherwise computed from `health` only when both values are accessible, else `nil`. |
 | `power` | `(unit: UnitToken, powerType?: number) -> (number \| Secret<number>, number \| Secret<number>)` | |
 | `classColor` | `(unit: UnitToken) -> ColorMixin?` | From `wowlua:color` (honors `CUSTOM_CLASS_COLORS`); `nil` when the class is secret |
 | `group` | `(opts?: { includePlayer: boolean?, includePets: boolean? }) -> (() -> UnitToken?)` | Iterates `raid1..raidN` in a raid (the player's own raid token only with `includePlayer`), `party1..party4` (plus `player` when requested) in a party, and only `player` when solo. Pets follow their owner with `includePets`. A secret answer to "in a raid/group" or "is it me" counts as no, as do secret options. |
@@ -91,7 +91,7 @@ end
 | `inviteBnet` | `(gameAccountID: number)` | Invites a Battle.net friend to your group by the game account they play on, as the game's friends list does (`C_BattleNet.InviteFriend`, or the older `BNInviteFriend`) (decision S46) |
 | `groupSize` | `() -> number` | `GetNumGroupMembers()`, with 1 when solo |
 
-The client's newer APIs (`UnitHealthPercent`, `GetUnitName`) are detected at
+The client's newer APIs (`UnitHealthPercent` and `CurveConstants`, `GetUnitName`) are detected at
 run time in every flavor mode; the result is the same as a compile-time
 choice.
 
