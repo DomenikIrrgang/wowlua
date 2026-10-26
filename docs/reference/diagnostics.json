@@ -5617,7 +5617,7 @@
     },
     "E8080": {
       "area": "stdlib",
-      "text": "`launcher.register` is called more than once. An addon has one launcher: one\nminimap button, one Addon Compartment entry and one LDB object. The compiler\nreports a second call it can see in the code. A second call it can't see, such\nas one function that runs twice, raises an error at run time instead.\n\nRegister once, and change the launcher later with `launcher.setIcon`,\n`setLabel`, `showMinimap` and `refresh`.",
+      "text": "`launcher.register` is called more than once. An addon has one launcher: one\nminimap button, one Addon Compartment entry and one LDB object. The compiler\ncounts the calls that are statements at the top level of your files, and\nreports a second one. Any other second call, such as one in a function that\nruns twice or in a branch, raises an error at run time instead.\n\nRegister once, and change the launcher later with `launcher.setIcon`,\n`setLabel`, `showMinimap` and `refresh`.",
       "examples": [
         {
           "compiles": false,
@@ -6050,7 +6050,7 @@
     },
     "E8112": {
       "area": "stdlib",
-      "text": "The commands of a slash `router` (and a literal command given to\n`Router:add`) are checked at compile time. Each entry of `args` must be\n`\"string\"`, `\"number\"` or `\"boolean\"` (with `?` when optional), a list of\nchoice strings, or `\"rest\"` as the last one. `run` takes one parameter per\nargument, plus one for the flags table when `flags` is declared.\n\nMake `run`'s parameters match `args` and `flags`, or fix the invalid argument\nspec.",
+      "text": "The commands of a slash `router` (and a literal command given to\n`Router:add`) are checked at compile time. Each entry of `args` must be\n`\"string\"`, `\"number\"` or `\"boolean\"` (with `?` when optional), a list of\nchoice strings, or `\"rest\"` as the last one. `run` takes one parameter per\nargument, plus one for the flags table when `flags` is declared, and each\ntyped parameter takes what its argument converts to: a `number` for\n`\"number\"`, a `string` for `\"rest\"`, the choices' union for a list of choices,\na table of booleans for the flags.\n\nMake `run`'s parameters match `args` and `flags`, or fix the invalid argument\nspec.",
       "examples": [
         {
           "compiles": false,
@@ -6244,7 +6244,7 @@
     },
     "E8118": {
       "area": "stdlib",
-      "text": "A `wowlua:log` level function (`trace`, `debug`, `info`, `warn`, `error`) is\nused as a value instead of being called. The compiler removes log calls below\nthe profile's `log-level`, with their arguments, so they cost nothing in a\nrelease build. It can do that only for direct calls, never for a function that\nwas stored in a variable or passed along. Wrap the call in your own function.",
+      "text": "A `wowlua:log` level function (`trace`, `debug`, `info`, `warn`, `error`) is\nused as a value instead of being called, whether imported by name or read\nfrom the `log` object or a namespace import (`local f = log.warn`,\n`Log.debug`). The compiler removes log calls below\nthe profile's `log-level`, with their arguments, so they cost nothing in a\nrelease build. It can do that only for direct calls, never for a function that\nwas stored in a variable or passed along. Wrap the call in your own function.",
       "examples": [
         {
           "compiles": false,
@@ -6450,7 +6450,7 @@
     },
     "E8300": {
       "area": "stdlib",
-      "text": "A standard-library function, or a kind it takes, doesn't exist on one of\nthe flavors you build for, and the module has no fallback there. The\ncompiler reports it for `aura.container` on flavors without aura containers,\nand for tooltip kinds (`tooltip.hook`, `@onTooltip`) a flavor lacks: clients\nwithout the tooltip data system only hook `\"Item\"`, `\"Spell\"` and `\"Unit\"`\ntooltips. In game the call would raise an error on that flavor.\n\nKeep the code to the flavors that have it with `@if(flavor == …)` on the\ndeclaration (in split flavor mode), or use something every flavor has, such\nas `aura.each` instead of a container. Only `@if` counts here: a call inside\nan `if flavor == … then` branch is still checked for every flavor.",
+      "text": "A standard-library function, or a kind it takes, doesn't exist on one of\nthe flavors you build for, and the module has no fallback there. The\ncompiler reports it for `aura.container` on flavors without aura containers,\nand for tooltip kinds (`tooltip.hook`, `@onTooltip`) a flavor lacks: clients\nwithout the tooltip data system only hook `\"Item\"`, `\"Spell\"` and `\"Unit\"`\ntooltips. In game the call would raise an error on that flavor.\n\nKeep the code to the flavors that have it: in an `if flavor == … then`\nbranch (either flavor mode), or with `@if(flavor == …)` on the declaration\n(in split flavor mode). A call is checked only for the flavors that can run\nit. Or use something every flavor has, such as `aura.each` instead of a\ncontainer.",
       "examples": [
         {
           "compiles": false,
@@ -6491,8 +6491,41 @@
     },
     "W8301": {
       "area": "stdlib",
-      "text": "Meant for a standard-library function that falls back to a reduced version\non a targeted flavor, with the warning listing the missing fields or\nfeatures. The compiler doesn't report it yet: no module has such a fallback\nin this version. A function a flavor can't offer at all is E8300.",
-      "examples": [],
+      "text": "A standard-library function falls back to a reduced version on one of the\nflavors you build for, because that client lacks an API it uses. It still\nworks there, with less, and the warning lists what is missing:\n\n- `tooltip.hook` and `@onTooltip` for `\"Item\"`, `\"Spell\"` and `\"Unit\"` on\n  clients without the tooltip data system (the classic flavors) hook only\n  `GameTooltip`, `ItemRefTooltip` and the shopping tooltips (and those given\n  to `tooltip.attach`); the data has no `raw`, no `guid` for items and spells\n  and no `link` for spells and units.\n- `launcher.register` on clients without the Addon Compartment adds no\n  compartment entry; the minimap button and the LDB launcher work.\n\nKeep the call to the flavors that have the full version (an `if flavor == …`\nbranch or `@if`), turn the feature off where it has an option\n(`compartment = false`), or accept the warning. A function a flavor can't\noffer at all is E8300.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "wowlua.json",
+              "lang": "json",
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {}, \"vanilla\": {} }\n}\n"
+            },
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "import * as launcher from \"wowlua:launcher\"\n\nlauncher.register({ icon = \"Interface\\\\Icons\\\\INV_Misc_Book_09\", label = \"Playground\", onClick = function() end })\n"
+            }
+          ],
+          "output": "warning[W8301]: `launcher.register` uses a reduced fallback on vanilla, without `AddonCompartmentFrame`: no Addon Compartment entry (the minimap button and the LDB launcher work)\n  ┌─ src/main.wowlua:3:1\n  │\n3 │ launcher.register({ icon = \"Interface\\\\Icons\\\\INV_Misc_Book_09\", label = \"Playground\", onClick = function() end })\n  │ ^^^^^^^^^^^^^^^^^ reduced on some targeted flavors\n  │\n  = help: pass `compartment = false` where you don't want the entry"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "wowlua.json",
+              "lang": "json",
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {}, \"vanilla\": {} }\n}\n"
+            },
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "import * as launcher from \"wowlua:launcher\"\nimport flavor from \"wowlua:meta\"\n\nlauncher.register({\n    icon = \"Interface\\\\Icons\\\\INV_Misc_Book_09\",\n    label = \"Playground\",\n    onClick = function() end,\n    compartment = flavor == \"camelot\",\n})\n"
+            }
+          ],
+          "output": null
+        }
+      ],
       "related": [
         "E8300"
       ]
@@ -6831,7 +6864,7 @@
     },
     "W8430": {
       "area": "stdlib",
-      "text": "Inside a function passed to `jobs.start`, the job's context\n(`ctx:check`, `ctx:yield`, `ctx:sleep`, `ctx:waitFor`) is called inside a\nfunction literal handed to `pcall`, `xpcall`, `securecall`,\n`securecallfunction`, `table.sort` or `gsub`. Jobs are coroutines, and Lua 5.1\ncannot yield across these calls: at run time it raises \"attempt to yield\nacross metamethod/C-call boundary\". Yield before or after the call instead,\nor split the work so the callback doesn't need to yield.",
+      "text": "Inside a function passed to `jobs.start`, the job's context\n(`ctx:check`, `ctx:yield`, `ctx:sleep`, `ctx:waitFor`) is called inside a\nfunction literal handed to `pcall`, `xpcall`, `securecall`,\n`securecallfunction`, `table.sort` or `gsub`, or inside a metamethod\n(`setmetatable(t, { __index = function … end })`, `mt.__lt = function … end`).\nJobs are coroutines, and Lua 5.1 cannot yield across these calls: at run time it raises \"attempt to yield\nacross metamethod/C-call boundary\". Yield before or after the call instead,\nor split the work so the callback doesn't need to yield.",
       "examples": [
         {
           "compiles": false,
@@ -6842,7 +6875,7 @@
               "text": "import * as jobs from \"wowlua:jobs\"\n\nlocal items = { 3, 1, 2 }\njobs.start(function(ctx)\n    table.sort(items, function(a, b)\n        ctx:check()\n        return a < b\n    end)\nend)\n"
             }
           ],
-          "output": "warning[W8430]: a job cannot yield here: the coroutine would cross a pcall, sort or gsub callback\n  ┌─ src/main.wowlua:6:9\n  │\n6 │         ctx:check()\n  │         ^^^^^^^^^^^ yields inside a C call"
+          "output": "warning[W8430]: a job cannot yield here: the coroutine would cross a pcall, a metamethod, or a sort or gsub callback\n  ┌─ src/main.wowlua:6:9\n  │\n6 │         ctx:check()\n  │         ^^^^^^^^^^^ yields inside a C call"
         },
         {
           "compiles": true,

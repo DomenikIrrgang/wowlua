@@ -8,10 +8,25 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 - `wowlua explain` explains every error and warning: what triggers it, how to fix it, an example that reports it and one that compiles, and related codes. The same explanations are on each code's page on wowlua.dev.
 - Every WoW event and many more API functions now have a description, which the editor shows on hover and wowlua.dev's new WoW API reference shows on each entry's page with how far `wowlua test` emulates it.
+- W8301 warns when a standard-library function does less on a flavor you build for: Item, Spell and Unit tooltip hooks on the classic flavors, `launcher.register` without the Addon Compartment.
+
+### Changed
+
+- `if flavor == …` branches count for E8300, E8310 and E8330: a call is checked only for the flavors that run it.
+- The router's help and `Usage:` lines start with the slash command (`/mya scale <number>`).
 
 ### Fixed
 
 - Function descriptions taken from old-style warcraft.wiki.gg pages no longer include the page's raw markup (`----`, `;''Returns''`).
+- The router checks the types of `run`'s parameters against `args` and `flags` (E8112).
+- `L.KEY({...})` reports a missing or unknown placeholder.
+- `L["1ST"]` works for locale keys that start with a digit.
+- The minimap button of `wowlua:launcher` follows profile switches.
+- `print.to` accepts `ChatFrame3`, `chat.window(...)` and scrolling message frames.
+- `local f = log.warn` and `Log.debug` are E8118, and `debug.assert` used as a value is E3045.
+- W8430 finds yields inside metamethods.
+- E8340 rejects store fields that aren't a `FramePosition?`.
+- Two `launcher.register` calls in an if/else are no longer E8080.
 
 ## 0.12.0 (2026-10-26)
 
