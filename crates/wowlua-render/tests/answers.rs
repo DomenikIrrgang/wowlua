@@ -66,3 +66,10 @@ fn item_kinds() {
     check("C_Item.GetItemClassInfo(", 20);
     check("C_Item.GetItemSubClassInfo(", 109);
 }
+
+/// Spells' facts the API answers alone (the trainers' spells among them).
+#[test]
+fn spells() {
+    check("C_Spell.IsSpellPassive(", 1300);
+    check("GetSpellBaseCooldown(", 1300);
+}

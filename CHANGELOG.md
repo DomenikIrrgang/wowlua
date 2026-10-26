@@ -44,6 +44,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- With your WoW installation, trainer services' tooltips, descriptions and icons come from your client's spell data, and spell tooltips show combo points, melee and minimum ranges, passive, next-swing and channeled spells, and the forms, weapons, tools and reagents a spell needs.
+- With your WoW installation, profession recipes (`C_TradeSkillUI.GetRecipeSchematic`, `GetRecipeInfo`, `GetRecipeRequirements`, `GetCategoryInfo`) come from your client's game tables; what the character knows stays as recorded.
 - With your WoW installation, item class and subclass names (`C_Item.GetItemClassInfo`, `C_Item.GetItemSubClassInfo`) come from your client's game tables.
 - With your WoW installation, achievements' names, descriptions, points, icons, categories and series come from your client's game tables (`GetAchievementInfo`, `GetCategoryInfo`, `GetCategoryList`, …); whether the character earned them stays as recorded.
 - With your WoW installation, the world map's data (`C_Map.GetMapInfo`, `GetMapChildrenInfo`, `GetMapRectOnMap`, `GetMapWorldSize`, the map art and its tiles) comes from your client's game tables.

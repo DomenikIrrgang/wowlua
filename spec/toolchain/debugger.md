@@ -399,7 +399,27 @@ T310).
   (`C_TooltipInfo.GetSpellByID`, `GameTooltip:SetSpellByID`) shows its
   cost and range ("435 Mana", "30 yd range"), its cast time and cooldown
   ("Instant" or "10 sec cast", "8 sec cooldown") and the description, as
-  the trainers' recorded tooltips do. The installation's current data
+  the trainers' recorded tooltips do (decision T471: a cost on each line,
+  a finisher's "1 to 5 Combo |4Point:Points;"; "Melee Range" for a melee
+  range, "8-25 yd range" for one with a minimum, "Unlimited range"; the
+  range on the left for a spell without any cost; "Passive", "Next
+  melee" or "Channeled" in place of the cast time; "Requires Bear Form,
+  Dire Bear Form" in red for a spell that needs a form, "Requires
+  Daggers" for one that needs a weapon the player does not wield, its
+  tools and reagents in red, from `SpellShapeshift`,
+  `SpellEquippedItems`, `SpellTotems` and `SpellReagents`). A trainer's
+  service is its spell's tooltip without the rank, its description and
+  icon the client's, the description as for a spell not known (`$w1`, an
+  aura's live value, left as written; `GetSpellDescription` fills it;
+  decision T471). Checked against the
+  1,789 recorded trainer services: every icon the same, 1,624 tooltips
+  the same but for the character's numbers (its level, spell power, base
+  mana, haste); unverified: the rest (ranges no table tells, as Maul's
+  none, costs in health, reagents the character held).
+  `C_Spell.IsSpellPassive` (`SpellMisc`'s attributes 0, 0x40) and
+  `GetSpellBaseCooldown` (its own cooldown or its category's, the longer,
+  and the global one it starts; `SpellCooldowns`) answer from the tables:
+  the 1,343 and 1,307 recorded answers the same. The installation's current data
   wins over the recordings and camelot's scan of older builds (spells and
   items alike); a test's own data wins over both. Checked against the client's recorded descriptions (about
   2,000, `wowlua-casc`'s installation tests): the same, except where the
@@ -494,6 +514,25 @@ T310).
   `GetItemSubClassInfo` the subclass's verbose name, else its shown one,
   and whether it is an armor type (its flag 512; `ItemSubClass`; nothing
   for none). Checked against the 129 recorded answers: the same.
+
+  A profession window's recipes (decision T470) are the client's: a
+  recipe's schematic (its spell's name, the item it makes and how many,
+  `SpellEffect`'s create item; its reagents in order, `SpellReagents`), its
+  requirements (its spell focus, `SpellCastingRequirements` and
+  `SpellFocusObject`; its tools, `SpellTotems` and `TotemCategory`), its
+  category (`TradeSkillCategory`: a header without a parent, else a
+  subheader) and its info's own fields (category, skill line ability, its
+  lowest ID's, skill-ups, trivial rank, the item's icon and level). The
+  character's part stays the recorded window's: whether a recipe is
+  learned, its colour, whether it can be made or raise the skill, its link,
+  a requirement met, and the level of an item the tables lack (one the
+  server sent); a recipe not recorded is unlearned, without a link. Which
+  recipes a window lists and their order stay recorded (the order follows
+  the character's skill: the colours, then the trivial ranks and the
+  items' levels). An item with no icon of its own (`Item`) has its first
+  appearance's (`ItemAppearance`), for recipes and items alike. Checked
+  against the 1,609 recorded answers of blacksmithing and mining: the
+  same.
 - **Fonts**: the client's TrueType fonts from the installation; without
   them, the bundled stand-in fonts (open licenses), at the same pixel
   heights. Glyph positions follow the engine's measured widths (§17.6), so

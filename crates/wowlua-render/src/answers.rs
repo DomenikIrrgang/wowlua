@@ -6,7 +6,7 @@
 //! tiles, its text positions); the achievements' own data and their
 //! categories (decision T465: the character's part of an answer the
 //! engine keeps from the recordings); the item classes' and subclasses'
-//! names.
+//! names; the professions' recipes (decision T470).
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -564,6 +564,294 @@ impl ItemKinds {
     }
 }
 
+/// Spells' facts the API answers alone: passive, base cooldowns
+/// (decision T471).
+struct Spells {
+    names: Table,
+    misc: Table,
+    cooldowns: Option<Table>,
+}
+
+impl Spells {
+    fn open(casc: &Casc) -> Option<Spells> {
+        Some(Spells {
+            names: Table::open(casc, "SpellName")?,
+            misc: Table::open(casc, "SpellMisc")?,
+            cooldowns: Table::open(casc, "SpellCooldowns"),
+        })
+    }
+
+    /// The base difficulty's row of a table keyed by spell.
+    fn base<'a>(t: &'a Table, spell: u32) -> Option<wowlua_casc::tables::Row<'a>> {
+        let rows = t.rows_where("SpellID", spell);
+        rows.iter()
+            .copied()
+            .find(|r| r.int("DifficultyID") == 0)
+            .or_else(|| rows.first().copied())
+    }
+
+    fn answer(&self, name: &str, args: &[&str]) -> Option<String> {
+        let spell: u32 = args.first()?.parse().ok()?;
+        self.names.row(spell)?;
+        Some(match name {
+            "C_Spell.IsSpellPassive" => {
+                let passive = Self::base(&self.misc, spell)
+                    .is_some_and(|m| m.ints("Attributes").first().is_some_and(|a| a & 0x40 != 0));
+                format!("1: boolean {passive}")
+            }
+            // its cooldown (its own or its category's, the longer) and the
+            // global one it starts, in milliseconds
+            "GetSpellBaseCooldown" => {
+                let (cd, gcd) = self
+                    .cooldowns
+                    .as_ref()
+                    .and_then(|t| Self::base(t, spell))
+                    .map_or((0, 0), |r| {
+                        (
+                            r.int("RecoveryTime").max(r.int("CategoryRecoveryTime")),
+                            r.int("StartRecoveryTime"),
+                        )
+                    });
+                format!("2: number {cd}, number {gcd}")
+            }
+            _ => return None,
+        })
+    }
+}
+
+/// `Enum.SpellEffect` creating an item.
+const CREATE_ITEM: u32 = 24;
+
+/// The professions' recipes (decision T470): a recipe's spell, what it
+/// makes, its reagents, tools and spell focus, its category and skill.
+struct Professions {
+    names: Table,
+    reagents: Table,
+    casting: Table,
+    focus: Table,
+    totems: Table,
+    totem_kinds: Table,
+    categories: Table,
+    items: Table,
+    sparse: Option<Table>,
+    search: Option<Table>,
+    appearances: Option<Table>,
+    modified: Option<Table>,
+    /// A recipe's ability (`SkillLineAbility`, its lowest ID's): ID,
+    /// category, skill-ups, trivial rank.
+    abilities: HashMap<u32, (u32, u32, u32, u32)>,
+    /// A recipe's item made and how many.
+    makes: HashMap<u32, (u32, f32)>,
+}
+
+impl Professions {
+    fn open(casc: &Casc) -> Option<Professions> {
+        let open = |name: &str| Table::open(casc, name);
+        let mut abilities: HashMap<u32, (u32, u32, u32, u32)> = HashMap::new();
+        for r in open("SkillLineAbility")?.rows() {
+            let a = (
+                r.id(),
+                r.int("TradeSkillCategoryID"),
+                r.int("NumSkillUps"),
+                r.int("TrivialSkillLineRankHigh"),
+            );
+            abilities
+                .entry(r.int("Spell"))
+                .and_modify(|b| {
+                    if a.0 < b.0 {
+                        *b = a;
+                    }
+                })
+                .or_insert(a);
+        }
+        let mut makes = HashMap::new();
+        for r in open("SpellEffect")?.rows() {
+            if r.int("Effect") == CREATE_ITEM && r.int("DifficultyID") == 0 {
+                makes
+                    .entry(r.int("SpellID"))
+                    .or_insert((r.int("EffectItemType"), r.float("EffectBasePointsF")));
+            }
+        }
+        Some(Professions {
+            names: open("SpellName")?,
+            reagents: open("SpellReagents")?,
+            casting: open("SpellCastingRequirements")?,
+            focus: open("SpellFocusObject")?,
+            totems: open("SpellTotems")?,
+            totem_kinds: open("TotemCategory")?,
+            categories: open("TradeSkillCategory")?,
+            items: open("Item")?,
+            sparse: open("ItemSparse"),
+            search: open("ItemSearchName"),
+            appearances: open("ItemAppearance"),
+            modified: open("ItemModifiedAppearance"),
+            abilities,
+            makes,
+        })
+    }
+
+    fn name(&self, spell: u32) -> Option<String> {
+        self.names.row(spell)?.string("Name_lang")
+    }
+
+    /// An item's icon: its own, else its first appearance's (recorded:
+    /// 174 of 524 recipes' items have none of their own).
+    fn icon(&self, item: u32) -> Option<u32> {
+        let own = self.items.row(item)?.int("IconFileDataID");
+        if own != 0 {
+            return Some(own);
+        }
+        let appearance = self
+            .modified
+            .as_ref()?
+            .rows_where("ItemID", item)
+            .iter()
+            .min_by_key(|r| (r.int("ItemAppearanceModifierID"), r.int("OrderIndex")))?
+            .int("ItemAppearanceID");
+        Some(
+            self.appearances
+                .as_ref()?
+                .row(appearance)?
+                .int("DefaultIconFileDataID"),
+        )
+    }
+
+    /// An item's level, where the tables have it.
+    fn item_level(&self, item: u32) -> Option<u32> {
+        [&self.sparse, &self.search]
+            .into_iter()
+            .flatten()
+            .find_map(|t| t.row(item).map(|r| r.int("ItemLevel")))
+    }
+
+    /// A recipe's reagents: (item, count).
+    fn reagents(&self, spell: u32) -> Vec<(u32, u32)> {
+        self.reagents
+            .rows_where("SpellID", spell)
+            .first()
+            .map(|r| {
+                r.ints("Reagent")
+                    .into_iter()
+                    .zip(r.ints("ReagentCount"))
+                    .filter(|(i, _)| *i != 0)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn answer(&self, name: &str, args: &[&str]) -> Option<String> {
+        let id = |i: usize| -> Option<u32> { args.get(i)?.parse().ok() };
+        Some(match name {
+            "C_TradeSkillUI.GetRecipeSchematic" if args.get(1) != Some(&"true") => {
+                let spell = id(0)?;
+                self.abilities.get(&spell)?;
+                let (item, count) = self.makes.get(&spell).copied().unwrap_or((0, 0.0));
+                let slots: Vec<String> = self
+                    .reagents(spell)
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (item, n))| {
+                        let i = i + 1;
+                        format!(
+                            "{{dataSlotIndex=number {i},dataSlotType=number 1,hiddenInCraftingForm=boolean false,\
+                             orderSource=number 0,quantityRequired=number {n},reagentType=number 1,\
+                             reagents={{1={{itemID=number {item}}}}},required=boolean true,\
+                             slotIndex=number {i},variableQuantities={{}}}}"
+                        )
+                    })
+                    .collect();
+                let slots: Vec<String> = slots
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| format!("{}={v}", i + 1))
+                    .collect();
+                format!(
+                    "1: {{hasCraftingOperationInfo=boolean false,icon=number 0,isRecraft=boolean false,\
+                     name=string {},outputItemID=number {item},quantityMax=number {count},\
+                     quantityMin=number {count},reagentSlotSchematics={{{}}},recipeID=number {spell},\
+                     recipeType=number 1}}",
+                    self.name(spell)?,
+                    slots.join(",")
+                )
+            }
+            // Met: the character's (the engine's).
+            "C_TradeSkillUI.GetRecipeRequirements" => {
+                let spell = id(0)?;
+                self.abilities.get(&spell)?;
+                let mut out = Vec::new();
+                if let Some(focus) = self
+                    .casting
+                    .rows_where("SpellID", spell)
+                    .first()
+                    .map(|r| r.int("RequiresSpellFocus"))
+                    .filter(|f| *f != 0)
+                    .and_then(|f| self.focus.row(f)?.string("Name_lang"))
+                {
+                    out.push(format!(
+                        "{{met=boolean false,name=string {focus},type=number 0}}"
+                    ));
+                }
+                if let Some(r) = self.totems.rows_where("SpellID", spell).first() {
+                    for kind in r.ints("RequiredTotemCategoryID") {
+                        if let Some(tool) = (kind != 0)
+                            .then(|| self.totem_kinds.row(kind)?.string("Name_lang"))
+                            .flatten()
+                        {
+                            out.push(format!(
+                                "{{met=boolean false,name=string {tool},type=number 1}}"
+                            ));
+                        }
+                    }
+                }
+                list(out.into_iter())
+            }
+            "C_TradeSkillUI.GetCategoryInfo" => {
+                let cat = id(0)?;
+                let r = self.categories.row(cat)?;
+                let parent = r.int("ParentTradeSkillCategoryID");
+                let (kind, parent) = if parent == 0 {
+                    ("header", String::new())
+                } else {
+                    ("subheader", format!("parentCategoryID=number {parent},"))
+                };
+                format!(
+                    "1: {{categoryID=number {cat},enabled=boolean true,hasProgressBar=boolean false,\
+                     name=string {},{parent}skillLineID=number {},type=string {kind},uiOrder=number {}}}",
+                    r.string("Name_lang").unwrap_or_default(),
+                    r.int("SkillLineID"),
+                    r.int("OrderIndex")
+                )
+            }
+            // Its own fields; the character's (learned, its colour, …) the
+            // engine's (decision T470).
+            "C_TradeSkillUI.GetRecipeInfo" => {
+                let spell = id(0)?;
+                let &(ability, category, skill_ups, trivial) = self.abilities.get(&spell)?;
+                let item = self.makes.get(&spell).map(|m| m.0);
+                let icon = item.and_then(|i| self.icon(i)).unwrap_or(0);
+                let level = item
+                    .and_then(|i| self.item_level(i))
+                    .map(|l| format!("itemLevel=number {l},"))
+                    .unwrap_or_default();
+                format!(
+                    "1: {{alwaysUsesLowestQuality=boolean true,canCreateMultiple=boolean true,\
+                     canSkillUp=boolean true,categoryID=number {category},craftable=boolean true,\
+                     disabled=boolean false,favorite=boolean false,firstCraft=boolean false,\
+                     hasSingleItemOutput=boolean false,icon=number {icon},isDummyRecipe=boolean false,\
+                     isEnchantingRecipe=boolean false,isGatheringRecipe=boolean false,\
+                     isRecraft=boolean false,isSalvageRecipe=boolean false,{level}learned=boolean false,\
+                     maxTrivialLevel=number {trivial},name=string {},numSkillUps=number {skill_ups},\
+                     recipeID=number {spell},relativeDifficulty=number 0,\
+                     skillLineAbilityID=number {ability},supportsCraftingStats=boolean false,\
+                     supportsQualities=boolean false}}",
+                    self.name(spell)?
+                )
+            }
+            _ => return None,
+        })
+    }
+}
+
 /// A list's answer (`1: {1=…,2=…}`).
 fn list(items: impl Iterator<Item = String>) -> String {
     let items: Vec<String> = items
@@ -578,6 +866,8 @@ pub(crate) struct Answers {
     maps: Option<Maps>,
     achievements: Option<Achievements>,
     items: Option<ItemKinds>,
+    professions: Option<Professions>,
+    spells: Option<Spells>,
 }
 
 impl Answers {
@@ -586,6 +876,8 @@ impl Answers {
             maps: Maps::open(casc),
             achievements: Achievements::open(casc),
             items: ItemKinds::open(casc),
+            professions: Professions::open(casc),
+            spells: Spells::open(casc),
         }
     }
 
@@ -602,6 +894,12 @@ impl Answers {
         }
         if let Some(a) = self.items.as_ref().and_then(|i| i.answer(name, &args)) {
             return Some(a);
+        }
+        if let Some(a) = self.spells.as_ref().and_then(|s| s.answer(name, &args)) {
+            return Some(a);
+        }
+        if name.starts_with("C_TradeSkillUI.") {
+            return self.professions.as_ref()?.answer(name, &args);
         }
         self.achievements.as_ref()?.answer(name, &args)
     }

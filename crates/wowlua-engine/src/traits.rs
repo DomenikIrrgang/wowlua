@@ -173,7 +173,7 @@ impl Rv {
             .unwrap_or_default()
     }
 
-    fn set(&mut self, key: &str, value: Rv) {
+    pub(crate) fn set(&mut self, key: &str, value: Rv) {
         if let Rv::Table(fields) = self {
             match fields.iter_mut().find(|(k, _)| k == key) {
                 Some(slot) => slot.1 = value,
@@ -1982,7 +1982,7 @@ pub fn compare_with_recording(client: Arc<TraitTables>) -> (usize, Vec<String>) 
 
 /// An answer with its tables' fields in one order (a Lua table has none):
 /// numbers' keys by number, the others by name.
-fn canonical(rv: Rv) -> Rv {
+pub(crate) fn canonical(rv: Rv) -> Rv {
     let Rv::Table(fields) = rv else {
         return rv;
     };

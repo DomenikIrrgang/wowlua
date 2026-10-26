@@ -322,7 +322,27 @@ fn window(vm: &mut Vm, c: NativeCall) -> Ret {
     } else {
         open
     };
-    match calls.iter().find_map(|call| recorded(&key, call)) {
+    // The recipes' own data: the client's tables', where at hand
+    // (decision T470), with the character's part of the recorded window's.
+    let client = calls
+        .iter()
+        .find_map(|call| Some((call, crate::clientdata::answer(vm, call)?)));
+    let answer = match client {
+        Some((call, ours)) => Some(
+            Rv::answer(&ours)
+                .into_iter()
+                .map(|v| {
+                    with_character(
+                        &name,
+                        v,
+                        recorded(&key, call).and_then(|r| r.into_iter().next()),
+                    )
+                })
+                .collect(),
+        ),
+        None => calls.iter().find_map(|call| recorded(&key, call)),
+    };
+    match answer {
         Some(values) => Ok(values
             .into_iter()
             .map(|v| {
@@ -337,6 +357,93 @@ fn window(vm: &mut Vm, c: NativeCall) -> Ret {
             .collect()),
         None => not_in_window(vm, c, &name),
     }
+}
+
+/// The fields of a recipe's answers that are the character's, not the
+/// tables' (decision T470): whether it is learned, its colour, whether it
+/// can be made and raise the skill, the link (the character's level and
+/// spec in it); an item level the tables lack (an item the server sent).
+const CHARACTER_FIELDS: &[&str] = &[
+    "learned",
+    "relativeDifficulty",
+    "craftable",
+    "disabled",
+    "favorite",
+    "firstCraft",
+    "canSkillUp",
+    "hyperlink",
+];
+
+/// A client's answer with the character's part of the recorded one: a
+/// recipe's fields (`CHARACTER_FIELDS`), whether each requirement is met.
+fn with_character(name: &str, ours: Rv, theirs: Option<Rv>) -> Rv {
+    let Some(theirs) = theirs else {
+        return ours;
+    };
+    match name {
+        "C_TradeSkillUI.GetRecipeInfo" => {
+            let mut ours = ours;
+            for k in CHARACTER_FIELDS {
+                if let Some(v) = theirs.get(k) {
+                    ours.set(k, v.clone());
+                }
+            }
+            if ours.get("itemLevel").is_none()
+                && let Some(v) = theirs.get("itemLevel")
+            {
+                ours.set("itemLevel", v.clone());
+            }
+            ours
+        }
+        "C_TradeSkillUI.GetRecipeRequirements" => {
+            let (Rv::Table(list), Rv::Table(recorded)) = (ours, &theirs) else {
+                return theirs;
+            };
+            Rv::Table(
+                list.into_iter()
+                    .map(|(i, mut r)| {
+                        let met = recorded
+                            .iter()
+                            .find(|(j, _)| *j == i)
+                            .and_then(|(_, t)| t.get("met").cloned());
+                        if let Some(met) = met {
+                            r.set("met", met);
+                        }
+                        (i, r)
+                    })
+                    .collect(),
+            )
+        }
+        _ => ours,
+    }
+}
+
+/// The recorded windows' answers again from the client's tables
+/// (decision T470): the calls compared and those that differ.
+pub fn compare_with_client(client: &dyn crate::clientdata::ClientData) -> (usize, Vec<String>) {
+    let mut calls: Vec<_> = data().iter().collect();
+    calls.sort();
+    let (mut checked, mut wrong) = (0, Vec::new());
+    for ((key, call), answer) in calls {
+        let Some(ours) = client.answer(call) else {
+            continue;
+        };
+        let name = call.split('(').next().unwrap_or_default();
+        let theirs = Rv::answer(answer).into_iter().next();
+        let ours = Rv::answer(&ours)
+            .into_iter()
+            .next()
+            .map(|v| with_character(name, v, theirs.clone()));
+        checked += 1;
+        if ours.clone().map(crate::traits::canonical)
+            != theirs.clone().map(crate::traits::canonical)
+        {
+            wrong.push(format!(
+                "{key} {call}\n  ours:   {ours:?}\n  theirs: {theirs:?}"
+            ));
+        }
+    }
+    (checked, wrong)
 }
 
 /// Every recorded window's answer to a call, where they all agree (a
@@ -1654,4 +1761,49 @@ pub fn behaviours(flavor: &str) -> Vec<(&'static str, NativeFn)> {
             ("C_TradeSkillUI.CraftRecipe", craft_recipe),
         ])
         .collect()
+}
+
+#[cfg(test)]
+mod client_tests {
+    use super::*;
+
+    /// A recipe's own data the client's tables', the character's part the
+    /// recorded window's (decision T470).
+    #[test]
+    fn the_character_s_part_stays_recorded() {
+        let ours = Rv::answer(
+            "1: {categoryID=number 2460,icon=number 1,learned=boolean false,name=string Rough Sharpening Stone (new),relativeDifficulty=number 0}",
+        )
+        .remove(0);
+        let theirs = Rv::answer(
+            "1: {categoryID=number 2460,hyperlink=string |Hitem:2862|h,icon=number 1,itemLevel=number 11,learned=boolean true,name=string Rough Sharpening Stone,relativeDifficulty=number 3}",
+        )
+        .remove(0);
+        let merged = with_character("C_TradeSkillUI.GetRecipeInfo", ours, Some(theirs));
+        assert_eq!(
+            merged.get("name"),
+            Some(&Rv::Str("Rough Sharpening Stone (new)".into()))
+        );
+        assert_eq!(merged.get("learned"), Some(&Rv::Bool(true)));
+        assert_eq!(merged.get("relativeDifficulty"), Some(&Rv::Num(3.0)));
+        assert_eq!(merged.get("itemLevel"), Some(&Rv::Num(11.0)));
+        assert_eq!(
+            merged.get("hyperlink"),
+            Some(&Rv::Str("|Hitem:2862|h".into()))
+        );
+
+        let ours = Rv::answer(
+            "1: {1={met=boolean false,name=string Anvil,type=number 0},2={met=boolean false,name=string Blacksmith Hammer,type=number 1}}",
+        )
+        .remove(0);
+        let theirs = Rv::answer(
+            "1: {1={met=boolean false,name=string Anvil,type=number 0},2={met=boolean true,name=string Blacksmith Hammer,type=number 1}}",
+        )
+        .remove(0);
+        let merged = with_character("C_TradeSkillUI.GetRecipeRequirements", ours, Some(theirs));
+        assert_eq!(
+            merged.get("2").and_then(|r| r.get("met")),
+            Some(&Rv::Bool(true))
+        );
+    }
 }

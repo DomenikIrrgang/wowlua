@@ -122,6 +122,87 @@ fn recorded(key: &str, call: &str) -> Vec<Rv> {
         .unwrap_or_default()
 }
 
+/// A service's spell's tooltip and description as a trainer answers them
+/// from the client's tables (decision T471); `None` for a spell the tables
+/// lack.
+pub fn client_service(vm: &mut Vm, spell: i64) -> Option<(Vec<Value>, String)> {
+    let tooltip = crate::tooltip::trainer_service(vm, spell)?.ok()?;
+    Some((tooltip, service_description(vm, spell)))
+}
+
+/// A service's description from the client's tables, as for a spell not
+/// known; one they cannot fill exactly as recorded (decision T471).
+fn service_description(vm: &mut Vm, spell: i64) -> String {
+    crate::gamedata::client_description_unlearned(vm, spell)
+        .or_else(|| crate::gamedata::recorded_description(vm, spell))
+        .unwrap_or_default()
+}
+
+/// A recorded service: its spell, its tooltip's lines (left and right
+/// text), description and icon.
+pub struct RecordedService {
+    pub spell: i64,
+    pub lines: Vec<(String, String)>,
+    pub description: String,
+    pub icon: f64,
+}
+
+/// Every recorded service's spell with its tooltip's lines (left and
+/// right text), description and icon, to compare with the client's
+/// tables' (decision T471).
+pub fn recorded_services() -> Vec<RecordedService> {
+    let mut keys: Vec<(&str, &str)> = data()
+        .keys()
+        .filter(|(_, c)| c.starts_with("C_TooltipInfo.GetTrainerService("))
+        .copied()
+        .collect();
+    keys.sort_unstable();
+    keys.into_iter()
+        .filter_map(|(key, call)| {
+            let i = call
+                .strip_prefix("C_TooltipInfo.GetTrainerService(")?
+                .strip_suffix(')')?;
+            let tip = recorded(key, call).into_iter().next()?;
+            let spell = match tip.get("id") {
+                Some(Rv::Num(n)) => *n as i64,
+                _ => return None,
+            };
+            let text = |v: Option<&Rv>| match v {
+                Some(Rv::Str(s)) => s.clone(),
+                _ => String::new(),
+            };
+            let lines = match tip.get("lines") {
+                Some(Rv::Table(l)) => {
+                    let mut l: Vec<(f64, (String, String))> = l
+                        .iter()
+                        .filter_map(|(k, v)| {
+                            Some((
+                                k.parse().ok()?,
+                                (text(v.get("leftText")), text(v.get("rightText"))),
+                            ))
+                        })
+                        .collect();
+                    l.sort_by(|a, b| a.0.total_cmp(&b.0));
+                    l.into_iter().map(|(_, v)| v).collect()
+                }
+                _ => Vec::new(),
+            };
+            let description =
+                text(recorded(key, &format!("GetTrainerServiceDescription({i})")).first());
+            let icon = match recorded(key, &format!("GetTrainerServiceIcon({i})")).first() {
+                Some(Rv::Num(n)) => *n,
+                _ => 0.0,
+            };
+            Some(RecordedService {
+                spell,
+                lines,
+                description,
+                icon,
+            })
+        })
+        .collect()
+}
+
 /// A recorded trainer's service, as the data has it.
 #[derive(Clone, Debug)]
 struct Listed {
@@ -714,11 +795,27 @@ fn per_service(
     }
 }
 
+/// A service's spell as the client's tables have it (decision T471), else
+/// as its trainer's recording or the test has it.
+fn client_spell(vm: &mut Vm, c: &NativeCall) -> Option<(i64, crate::clientdata::ClientSpell)> {
+    let (_, s) = service(vm, c)?;
+    Some((s.spell, crate::clientdata::spell(vm, s.spell)?))
+}
+
 fn get_trainer_service_description(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some((spell, _)) = client_spell(vm, &c) {
+        let text = service_description(vm, spell);
+        return Ok(vec![vm.str(&text)]);
+    }
     per_service(vm, &c, "GetTrainerServiceDescription", |_, _| vec![])
 }
 
 fn get_trainer_service_icon(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some((_, s)) = client_spell(vm, &c)
+        && let Some(icon) = s.icon
+    {
+        return Ok(vec![Value::Num(f64::from(icon))]);
+    }
     per_service(vm, &c, "GetTrainerServiceIcon", |_, s| vec![s.icon])
 }
 
@@ -731,6 +828,11 @@ fn get_trainer_service_skill_req(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn get_trainer_service_tooltip(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some((spell, _)) = client_spell(vm, &c)
+        && let Some(r) = crate::tooltip::trainer_service(vm, spell)
+    {
+        return r;
+    }
     per_service(vm, &c, "C_TooltipInfo.GetTrainerService", |_, _| vec![])
 }
 

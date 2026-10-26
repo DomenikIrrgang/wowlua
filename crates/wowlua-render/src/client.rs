@@ -865,6 +865,14 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
             school_mask: s.school_mask,
             cooldown_ms: s.cooldown_ms.max(s.category_cooldown_ms),
             gcd_ms: s.gcd_ms,
+            melee: s.melee,
+            channeled: s.channeled,
+            next_swing: s.next_swing,
+            passive: s.passive,
+            tools: s.tools.clone(),
+            reagents: s.reagents.clone(),
+            equipped: s.equipped.clone(),
+            forms: s.forms.clone(),
             costs: s
                 .costs
                 .iter()
@@ -893,6 +901,21 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
         self.spells()?.describe(id, &caster)
     }
 
+    fn spell_description_unlearned(
+        &self,
+        id: u32,
+        caster: &wowlua_engine::clientdata::SpellCaster,
+    ) -> Option<String> {
+        let caster = wowlua_casc::spelltext::Caster {
+            level: caster.level,
+            spell_power: caster.spell_power,
+            healing_power: caster.healing_power,
+            attack_power: caster.attack_power,
+            damage_done: 1.0,
+        };
+        self.spells()?.describe_unlearned(id, &caster)
+    }
+
     fn item(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientItem> {
         self.with(|lib, casc| {
             let (icon, class, subclass, inventory_type) = {
@@ -903,6 +926,21 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
                     r.int("SubclassID"),
                     r.int("InventoryType"),
                 )
+            };
+            // None of its own: its first appearance's (decision T470;
+            // recorded: the professions' newer items).
+            let icon = if icon != 0 {
+                icon
+            } else {
+                let appearance = lib.table(casc, "ItemModifiedAppearance").and_then(|t| {
+                    t.rows_where("ItemID", id)
+                        .iter()
+                        .min_by_key(|r| (r.int("ItemAppearanceModifierID"), r.int("OrderIndex")))
+                        .map(|r| r.int("ItemAppearanceID"))
+                });
+                appearance
+                    .and_then(|a| lib.table(casc, "ItemAppearance")?.row(a))
+                    .map_or(0, |r| r.int("DefaultIconFileDataID"))
             };
             let mut item = wowlua_engine::clientdata::ClientItem {
                 icon,

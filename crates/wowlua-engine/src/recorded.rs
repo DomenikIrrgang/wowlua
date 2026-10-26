@@ -136,8 +136,10 @@ pub fn compare_with_client(
     }
     let mut calls: Vec<(&&str, &&str)> = answers()
         .iter()
+        .chain(trainer_answers().iter())
         .filter(|(k, _)| k.starts_with(prefix))
         .collect();
+    calls.dedup_by_key(|(k, _)| **k);
     calls.sort();
     let (mut checked, mut wrong) = (0, Vec::new());
     for (call, theirs) in calls {
@@ -157,21 +159,23 @@ pub fn compare_with_client(
 /// The trainers' recorded answers (`/stdtest engine trainer`,
 /// `data/camelot-trainers.txt`): by call, any trainer's.
 fn trainer_answer(call: &str) -> Option<&'static str> {
+    trainer_answers().get(call).copied()
+}
+
+/// The trainers' recorded answers by call, any trainer's.
+fn trainer_answers() -> &'static HashMap<&'static str, &'static str> {
     static BY_CALL: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
-    BY_CALL
-        .get_or_init(|| {
-            include_str!("../data/camelot-trainers.txt")
-                .lines()
-                .filter(|l| !l.starts_with('#'))
-                .filter_map(|l| {
-                    let (_, rest) = l.split_once('\t')?;
-                    let (call, answer) = rest.split_once('\t')?;
-                    Some((unescape(call), unescape(answer)))
-                })
-                .collect()
-        })
-        .get(call)
-        .copied()
+    BY_CALL.get_or_init(|| {
+        include_str!("../data/camelot-trainers.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| {
+                let (_, rest) = l.split_once('\t')?;
+                let (call, answer) = rest.split_once('\t')?;
+                Some((unescape(call), unescape(answer)))
+            })
+            .collect()
+    })
 }
 
 /// A call the probes of game data recorded (a profession window's, a

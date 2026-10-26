@@ -21,6 +21,13 @@ pub struct SpellTables {
     aura: Option<Table>,
     cooldowns: Option<Table>,
     power: Option<Table>,
+    shapeshift: Option<Table>,
+    forms: Option<Table>,
+    totems: Option<Table>,
+    totem_kinds: Option<Table>,
+    reagents: Option<Table>,
+    equipped: Option<Table>,
+    subclasses: Option<Table>,
 }
 
 /// A spell's power cost (`SpellPower`).
@@ -73,6 +80,24 @@ pub struct SpellInfo {
     pub school_mask: u32,
     pub costs: Vec<Cost>,
     pub duration_ms: Option<i32>,
+    /// Its range is the melee range (`SpellRange`'s flag 1).
+    pub melee: bool,
+    /// It is channeled (`SpellMisc`'s attributes 1, 0x4 or 0x40).
+    pub channeled: bool,
+    /// It strikes with the next melee swing (attributes 0, 0x4).
+    pub next_swing: bool,
+    /// It is passive (attributes 0, 0x40).
+    pub passive: bool,
+    /// The tools it needs (`SpellTotems`' kinds, `TotemCategory`).
+    pub tools: Vec<String>,
+    /// Its reagents: (item, count) (`SpellReagents`).
+    pub reagents: Vec<(u32, u32)>,
+    /// The kinds of item it needs equipped (`SpellEquippedItems`' class
+    /// and subclasses, their names: "Daggers").
+    pub equipped: Vec<String>,
+    /// The forms it needs (`SpellShapeshift`'s mask, by form ID; none for
+    /// one usable without).
+    pub forms: Vec<String>,
 }
 
 /// The base difficulty's row of a table keyed by spell.
@@ -100,6 +125,13 @@ impl SpellTables {
             aura: Table::open(casc, "SpellAuraOptions"),
             cooldowns: Table::open(casc, "SpellCooldowns"),
             power: Table::open(casc, "SpellPower"),
+            shapeshift: Table::open(casc, "SpellShapeshift"),
+            forms: Table::open(casc, "SpellShapeshiftForm"),
+            totems: Table::open(casc, "SpellTotems"),
+            totem_kinds: Table::open(casc, "TotemCategory"),
+            reagents: Table::open(casc, "SpellReagents"),
+            equipped: Table::open(casc, "SpellEquippedItems"),
+            subclasses: Table::open(casc, "ItemSubClass"),
         })
     }
 
@@ -136,6 +168,90 @@ impl SpellTables {
             if let Some(r) = self.range.as_ref().and_then(|t| t.row(m.int("RangeIndex"))) {
                 info.min_range = r.floats("RangeMin").first().copied().unwrap_or(0.0);
                 info.max_range = r.floats("RangeMax").first().copied().unwrap_or(0.0);
+                info.melee = r.int("Flags") & 1 != 0;
+            }
+        }
+        // The forms it needs, unless it needs none (`SpellMisc`'s
+        // attributes 2, 0x80000: usable in them, recorded Moonfire's).
+        info.passive =
+            misc.is_some_and(|m| m.ints("Attributes").first().is_some_and(|a| a & 0x40 != 0));
+        if let (Some(t), Some(kinds)) = (
+            self.totems
+                .as_ref()
+                .and_then(|t| t.rows_where("SpellID", id).first().copied()),
+            self.totem_kinds.as_ref(),
+        ) {
+            info.tools = t
+                .ints("RequiredTotemCategoryID")
+                .into_iter()
+                .filter(|k| *k != 0)
+                .filter_map(|k| kinds.row(k)?.string("Name_lang"))
+                .collect();
+        }
+        if let Some(r) = self
+            .reagents
+            .as_ref()
+            .and_then(|t| t.rows_where("SpellID", id).first().copied())
+        {
+            info.reagents = r
+                .ints("Reagent")
+                .into_iter()
+                .zip(r.ints("ReagentCount"))
+                .filter(|(i, n)| *i != 0 && *n != 0)
+                .collect();
+        }
+        if let (Some(e), Some(subclasses)) = (
+            self.equipped
+                .as_ref()
+                .and_then(|t| t.rows_where("SpellID", id).first().copied()),
+            self.subclasses.as_ref(),
+        ) {
+            let class = e.signed("EquippedItemClass");
+            let mask = e.int("EquippedItemSubclass");
+            if class >= 0 {
+                for bit in 0..32 {
+                    if mask & (1 << bit) == 0 {
+                        continue;
+                    }
+                    if let Some(r) = subclasses
+                        .rows()
+                        .find(|r| r.int("ClassID") == class as u32 && r.int("SubClassID") == bit)
+                    {
+                        let verbose = r.string("VerboseName_lang").unwrap_or_default();
+                        info.equipped.push(if verbose.is_empty() {
+                            r.string("DisplayName_lang").unwrap_or_default()
+                        } else {
+                            verbose
+                        });
+                    }
+                }
+            }
+        }
+        info.next_swing =
+            misc.is_some_and(|m| m.ints("Attributes").first().is_some_and(|a| a & 0x4 != 0));
+        info.channeled =
+            misc.is_some_and(|m| m.ints("Attributes").get(1).is_some_and(|a| a & 0x44 != 0));
+        let formless = misc.is_some_and(|m| {
+            m.ints("Attributes")
+                .get(2)
+                .is_some_and(|a| a & 0x80000 != 0)
+        });
+        if !formless
+            && let (Some(s), Some(forms)) = (
+                self.shapeshift.as_ref().and_then(|t| base(t, id)),
+                self.forms.as_ref(),
+            )
+        {
+            for (word, mask) in s.ints("ShapeshiftMask").into_iter().enumerate() {
+                for bit in 0..32 {
+                    if mask & (1 << bit) != 0
+                        && let Some(name) = forms
+                            .row(word as u32 * 32 + bit + 1)
+                            .and_then(|r| r.string("Name_lang"))
+                    {
+                        info.forms.push(name);
+                    }
+                }
             }
         }
         if let Some(c) = self.cooldowns.as_ref().and_then(|t| base(t, id)) {
@@ -164,6 +280,16 @@ impl SpellTables {
     pub fn describe(&self, id: u32, caster: &Caster) -> Option<String> {
         let text = self.spell.row(id)?.string("Description_lang")?;
         spelltext::describe(&text, id, self, caster)
+    }
+
+    /// Its description as a trainer shows it, the spell not known: an
+    /// aura's live value (`$w1`) left as written (recorded: the trainers'
+    /// Thorns, "causing $w1 Nature damage"; its `GetSpellDescription` 8).
+    pub fn describe_unlearned(&self, id: u32, caster: &Caster) -> Option<String> {
+        let text = self.spell.row(id)?.string("Description_lang")?;
+        // (kept from the placeholders' parser by another mark, put back)
+        let text = text.replace("$w", "\u{1}w");
+        spelltext::describe(&text, id, self, caster).map(|d| d.replace('\u{1}', "$"))
     }
 
     /// Its aura's description (the buff's tooltip), likewise.

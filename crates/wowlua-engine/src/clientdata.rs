@@ -175,6 +175,11 @@ pub trait ClientData: Send + Sync {
     fn spell_description(&self, _id: u32, _caster: &SpellCaster) -> Option<String> {
         None
     }
+    /// Its description as a trainer shows it, the spell not known (an
+    /// aura's live value left as written; decision T471).
+    fn spell_description_unlearned(&self, _id: u32, _caster: &SpellCaster) -> Option<String> {
+        None
+    }
     /// A glyph of one of the client's fonts (`Fonts\<file>`, the file's
     /// name in any case) at a pixel size: its advance and the right edge
     /// of its ink, in pixels (decision T392).
@@ -360,6 +365,22 @@ pub struct ClientSpell {
     pub cooldown_ms: u32,
     pub gcd_ms: u32,
     pub costs: Vec<SpellCost>,
+    /// Its range is the melee range ("Melee Range").
+    pub melee: bool,
+    /// It is channeled ("Channeled").
+    pub channeled: bool,
+    /// It strikes with the next melee swing ("Next melee").
+    pub next_swing: bool,
+    /// It is passive ("Passive").
+    pub passive: bool,
+    /// The tools it needs ("Earth Totem").
+    pub tools: Vec<String>,
+    /// Its reagents: (item, count).
+    pub reagents: Vec<(u32, u32)>,
+    /// The kinds of item it needs equipped ("Daggers").
+    pub equipped: Vec<String>,
+    /// The forms it needs ("Bear Form").
+    pub forms: Vec<String>,
 }
 
 /// A spell's power cost as `GetSpellPowerCost` gives it (rage and runic
@@ -389,6 +410,16 @@ pub struct SpellCaster {
 /// A spell as the client's tables have it.
 pub(crate) fn spell(vm: &Vm, id: i64) -> Option<ClientSpell> {
     data(vm)?.spell(u32::try_from(id).ok()?)
+}
+
+/// A spell's description as a trainer shows it, as the client's tables
+/// give it.
+pub(crate) fn spell_description_unlearned(
+    vm: &Vm,
+    id: i64,
+    caster: &SpellCaster,
+) -> Option<String> {
+    data(vm)?.spell_description_unlearned(u32::try_from(id).ok()?, caster)
 }
 
 /// A spell's description for a caster, as the client's tables give it.

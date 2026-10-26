@@ -392,6 +392,8 @@ const RED: (u8, u8, u8) = (255, 32, 32);
 
 /// `Enum.TooltipDataLineType`'s values used here.
 const LINE_NONE: f64 = 0.0;
+/// A spell's requirement (recorded 43: its required forms).
+const LINE_REQUIRES: f64 = 43.0;
 const LINE_UNIT_NAME: f64 = 2.0;
 const LINE_QUEST_OBJECTIVE: f64 = 8.0;
 const LINE_SPELL_NAME: f64 = 13.0;
@@ -831,6 +833,11 @@ fn get_toy_by_item_id(vm: &mut Vm, c: NativeCall) -> Ret {
 /// has its cost, range, cast time, cooldown and description (decision
 /// T391).
 fn spell_tooltip(vm: &mut Vm, id: i64) -> Ret {
+    spell_tooltip_as(vm, id, false)
+}
+
+/// A spell's tooltip; `unlearned`: as a trainer shows it (decision T471).
+fn spell_tooltip_as(vm: &mut Vm, id: i64, unlearned: bool) -> Ret {
     let defined = engine(vm).world.data.spells.get(&id).copied();
     let Some(spell) = defined.or_else(|| crate::gamedata::scanned_spell(vm, id)) else {
         return Ok(vec![]);
@@ -852,6 +859,14 @@ fn spell_tooltip(vm: &mut Vm, id: i64) -> Ret {
         Some(c) => spell_lines(c),
         None => Default::default(),
     };
+    // Without any cost (one in percent is one), the range on the left
+    // (recorded, the trainers').
+    let costless = client.as_ref().is_none_or(|c| c.costs.is_empty());
+    let (cost, range) = if cost.is_empty() && costless {
+        (range, String::new())
+    } else {
+        (cost, range)
+    };
     let mut lines = vec![
         double_line(vm, LINE_SPELL_NAME, (&name, WHITE), (&rank, GRAY)),
         double_line(vm, LINE_NONE, (&cost, WHITE), (&range, WHITE)),
@@ -864,12 +879,62 @@ fn spell_tooltip(vm: &mut Vm, id: i64) -> Ret {
             (&cooldown, WHITE),
         ));
     }
+    // The forms it needs, red, unusable (recorded: the trainers' "Requires
+    // Bear Form, Dire Bear Form"; unverified: in the form).
+    if let Some(forms) = client.as_ref().map(|c| &c.forms).filter(|f| !f.is_empty()) {
+        let text = format!("Requires {}", forms.join(", "));
+        let extra = [
+            ("requirementType", Value::Num(10.0)),
+            ("usable", Value::Bool(false)),
+        ];
+        lines.push(data_line(vm, LINE_REQUIRES, &text, RED, &extra));
+    }
+    // The kinds of item it needs equipped ("Requires Daggers"), its tools
+    // ("Tools: " each red) and reagents ("Reagents: |n" each red, a count
+    // above one after it), as the trainers' tooltips show them for a
+    // character without them (recorded; unverified: with them).
+    if let Some(c) = &client {
+        if !c.equipped.is_empty() && !wields(vm, &c.equipped) {
+            let text = format!("Requires {}", c.equipped.join(", "));
+            let extra = [("usable", Value::Bool(false))];
+            lines.push(data_line(vm, LINE_REQUIRES, &text, RED, &extra));
+        }
+        if !c.tools.is_empty() {
+            let tools: Vec<String> = c.tools.iter().map(|t| format!("|cffff2020{t}|r")).collect();
+            let text = format!("Tools: {}", tools.join(", "));
+            lines.push(data_line(vm, LINE_NONE, &text, WHITE, &[]));
+        }
+        if !c.reagents.is_empty() {
+            let reagents: Vec<String> = c
+                .reagents
+                .iter()
+                .map(|&(item, n)| {
+                    let name = crate::clientdata::item(vm, i64::from(item))
+                        .map(|i| i.name)
+                        .unwrap_or_default();
+                    if n > 1 {
+                        format!("|cffff2020{name} ({n})|r")
+                    } else {
+                        format!("|cffff2020{name}|r")
+                    }
+                })
+                .collect();
+            let text = format!("Reagents: |n{}", reagents.join(", "));
+            lines.push(data_line(vm, LINE_NONE, &text, WHITE, &[]));
+        }
+    }
     let description = field(vm, "description")
         .filter(|d| !d.is_empty())
         .or_else(|| {
             client
                 .is_some()
-                .then(|| crate::gamedata::client_description(vm, id))
+                .then(|| {
+                    if unlearned {
+                        crate::gamedata::client_description_unlearned(vm, id)
+                    } else {
+                        crate::gamedata::client_description(vm, id)
+                    }
+                })
                 .flatten()
         })
         .or_else(|| {
@@ -890,31 +955,91 @@ fn spell_tooltip(vm: &mut Vm, id: i64) -> Ret {
     )
 }
 
+/// Whether the player has an item of one of these kinds ("Daggers")
+/// equipped: in the main hand, the off hand or the ranged slot (its
+/// `GetItemInfoInstant` subtype).
+fn wields(vm: &mut Vm, kinds: &[String]) -> bool {
+    let player = vm.str("player");
+    (16..=18).any(|slot| {
+        let id = ask(
+            vm,
+            "GetInventoryItemID",
+            &[player, Value::Num(f64::from(slot))],
+        );
+        let Some(Value::Num(id)) = id.first().copied() else {
+            return false;
+        };
+        let info = ask(vm, "C_Item.GetItemInfoInstant", &[Value::Num(id)]);
+        info.get(2)
+            .copied()
+            .and_then(|v| text_of(vm, v))
+            .is_some_and(|kind| kinds.contains(&kind))
+    })
+}
+
+/// A trainer service's tooltip from the client's tables (decision T471):
+/// its spell's, without the rank (recorded: the trainers' leave it out);
+/// `None` for a spell the tables lack.
+pub(crate) fn trainer_service(vm: &mut Vm, spell: i64) -> Option<Ret> {
+    crate::clientdata::spell(vm, spell)?;
+    let r = spell_tooltip_as(vm, spell, true);
+    if let Ok(values) = &r
+        && let Some(Value::Table(t)) = values.first()
+    {
+        let k = vm.str("lines");
+        if let Value::Table(lines) = vm.heap.table(*t).get(k)
+            && let Value::Table(first) = vm.heap.table(lines).get(Value::Num(1.0))
+        {
+            let (k, empty) = (vm.str("rightText"), vm.str(""));
+            let _ = vm.heap.table_mut(first).set(k, empty);
+        }
+    }
+    Some(r)
+}
+
 /// A spell's cost, range, cast and cooldown lines as its tooltip shows
 /// them (recorded, the trainers' tooltips: "435 Mana" and "30 yd range",
 /// "Instant" or "10 sec cast", "8 sec cooldown"); empty where it has none.
-/// Unverified: a cost in percent (not shown), several costs (the first),
-/// a range under 6 yards (as any), a channeled spell (as a cast), a
-/// cooldown of minutes ("2 min cooldown").
+/// A melee spell's range "Melee Range", a channeled spell's cast
+/// "Channeled" (recorded, the trainers'; decision T471). Unverified: a cost
+/// in percent (not shown: the character's base mana), several costs (the
+/// first), a cooldown of minutes ("2 min cooldown").
 fn spell_lines(c: &crate::clientdata::ClientSpell) -> (String, String, String, String) {
+    // Each cost on its line: a power's, a finisher's combo points ("1 to 5
+    // Combo |4Point:Points;", its optional ones; recorded: Rip's).
     let cost = c
         .costs
         .iter()
-        .find(|k| k.percent == 0.0 && k.cost > 0)
-        .and_then(|k| {
+        .filter(|k| k.percent == 0.0 && k.cost > 0)
+        .filter_map(|k| {
             let power = match k.power_type {
                 0 => "Mana",
                 1 => "Rage",
                 2 => "Focus",
                 3 => "Energy",
-                4 => "Combo Points",
+                4 => {
+                    return Some(if k.min_cost > 0 && k.min_cost < k.cost {
+                        format!("{} to {} Combo |4Point:Points;", k.min_cost, k.cost)
+                    } else {
+                        format!("{} Combo |4Point:Points;", k.cost)
+                    });
+                }
                 6 => "Runic Power",
                 _ => return None,
             };
             Some(format!("{} {power}", k.cost))
         })
-        .unwrap_or_default();
-    let range = if c.max_range > 0.0 {
+        .collect::<Vec<_>>()
+        .join("\n");
+    // A range with a minimum "8-25 yd range", the whole world's
+    // "Unlimited range" (recorded, the trainers').
+    let range = if c.melee {
+        "Melee Range".to_string()
+    } else if c.max_range >= 50_000.0 {
+        "Unlimited range".to_string()
+    } else if c.min_range > 0.0 && c.max_range > 0.0 {
+        format!("{}-{} yd range", c.min_range, c.max_range)
+    } else if c.max_range > 0.0 {
         format!("{} yd range", c.max_range)
     } else {
         String::new()
@@ -927,7 +1052,13 @@ fn spell_lines(c: &crate::clientdata::ClientSpell) -> (String, String, String, S
             format!("{s:.1}")
         }
     };
-    let cast = if c.cast_ms == 0 {
+    let cast = if c.passive {
+        "Passive".to_string()
+    } else if c.next_swing {
+        "Next melee".to_string()
+    } else if c.channeled {
+        "Channeled".to_string()
+    } else if c.cast_ms == 0 {
         "Instant".to_string()
     } else {
         format!("{} sec cast", secs(c.cast_ms))

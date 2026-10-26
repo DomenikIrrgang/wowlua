@@ -407,6 +407,19 @@ pub fn scanned_spell(vm: &mut Vm, id: i64) -> Option<TableRef> {
 /// power. Unverified: talents and auras that change a spell's numbers
 /// (the client's own descriptions include them).
 pub(crate) fn client_description(vm: &mut Vm, id: i64) -> Option<String> {
+    let caster = client_caster(vm, id)?;
+    crate::clientdata::spell_description(vm, id, &caster)
+}
+
+/// Its description as a trainer shows it, the spell not known (decision
+/// T471).
+pub(crate) fn client_description_unlearned(vm: &mut Vm, id: i64) -> Option<String> {
+    let caster = client_caster(vm, id)?;
+    crate::clientdata::spell_description_unlearned(vm, id, &caster)
+}
+
+/// The player as a spell's description counts them.
+fn client_caster(vm: &mut Vm, id: i64) -> Option<crate::clientdata::SpellCaster> {
     let spell = crate::clientdata::spell(vm, id)?;
     let level = engine(vm).units.list[crate::units::PLAYER.0].level.max(1.0) as u32;
     // the school's index (1 physical … 7 arcane) by its lowest bit
@@ -423,13 +436,12 @@ pub(crate) fn client_description(vm: &mut Vm, id: i64) -> Option<String> {
     let player = vm.str("player");
     let attack = crate::leftovers2::ask(vm, "UnitAttackPower", &[player]);
     let attack_power = n(attack.clone(), 0) + n(attack.clone(), 1) + n(attack, 2);
-    let caster = crate::clientdata::SpellCaster {
+    Some(crate::clientdata::SpellCaster {
         level,
         spell_power: n(damage, 0),
         healing_power: n(healing, 0),
         attack_power,
-    };
-    crate::clientdata::spell_description(vm, id, &caster)
+    })
 }
 
 /// The icon of the recorded spellbook item holding the spell.
