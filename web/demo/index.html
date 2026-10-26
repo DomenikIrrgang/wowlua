@@ -28,6 +28,7 @@
   <button id="share">Share link</button>
   <button id="run">Run</button>
   <label><input type="checkbox" id="ui"> with Blizzard's UI</label>
+  <label>world profile <select id="profile"><option value="">(the fresh character)</option></select></label>
   <button id="stop">Stop</button>
   <button id="install">Use my WoW installation</button>
   <input type="file" id="installFiles" webkitdirectory hidden>
@@ -46,6 +47,11 @@
 <h2>Game</h2>
 <p id="game">Not running.</p>
 <canvas id="screen" width="1280" height="720"></canvas>
+<p>
+  <label for="world">Change the world (Lua, <code>mock</code> the controls):</label>
+  <input id="world" size="60" value="mock.player:setMoney(123456)">
+  <button id="worldRun">Run</button>
+</p>
 <h2>Chat</h2>
 <pre id="chat"></pre>
 <h2>Language server diagnostics</h2>
@@ -85,7 +91,15 @@ const request = (method, params) =>
     wowlua.lsp.send({ jsonrpc: "2.0", id, method, params });
   });
 
-const shared = location.hash.length > 1 && (await wowlua.call("openShared", location.hash));
+const shared = location.hash.length > 1 ? await wowlua.call("openShared", location.hash) : null;
+const listProfiles = async () => {
+  const chosen = $("profile").value || shared?.profile || "";
+  const names = await wowlua.call("profiles");
+  $("profile").replaceChildren(new Option("(the fresh character)", ""), ...names.map((n) => new Option(n, n)));
+  $("profile").value = names.includes(chosen) ? chosen : "";
+};
+await listProfiles();
+if (shared?.blizzardUI) $("ui").checked = true;
 const files = await wowlua.call("files");
 $("code").value = files["src/main.wowlua"] ?? "";
 $("status").textContent = `wowlua ${await wowlua.call("version")}${shared ? " (shared package)" : ""}`;
@@ -184,7 +198,8 @@ $("run").addEventListener("click", async () => {
   const breakpoints = $("lines").value.split(",").map((l) => parseInt(l, 10)).filter((l) => l > 0).map((line) => ({ line }));
   const debug = $("debug").checked ? { breakpoints: { "src/main.wowlua": breakpoints } } : undefined;
   if (debug) $("debugger").textContent = "Running.";
-  const started = await wowlua.call("run", { blizzardUI: $("ui").checked, debug });
+  await listProfiles();
+  const started = await wowlua.call("run", { blizzardUI: $("ui").checked, profile: $("profile").value || undefined, debug });
   $("game").textContent = started.ok
     ? `Running (drawn with ${backend}).`
     : `Did not start: ${started.error ?? started.diagnostics.map((d) => d.message).join("; ")}`;
@@ -214,8 +229,15 @@ $("stop").addEventListener("click", async () => {
   await wowlua.call("stop");
   $("game").textContent = "Stopped.";
 });
+$("worldRun").addEventListener("click", async () => {
+  try {
+    await wowlua.call("world", $("world").value);
+  } catch (e) {
+    $("chat").textContent += `world: ${e.message}\n`;
+  }
+});
 $("share").addEventListener("click", async () => {
-  location.hash = await wowlua.call("share");
+  location.hash = await wowlua.call("share", { flavor: "camelot", profile: $("profile").value || undefined, blizzardUI: $("ui").checked });
   $("output").textContent = location.href;
 });
 </script>

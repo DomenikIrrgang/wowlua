@@ -454,6 +454,12 @@ fn to_request(
             },
             None,
         ),
+        "wowlua/world" => (
+            Request::World {
+                script: s("script").unwrap_or_default(),
+            },
+            None,
+        ),
         "wowlua/profile" => match s("action").as_deref() {
             Some("start") => (Request::ProfileStart, None),
             Some("stop") => (Request::ProfileStop, None),

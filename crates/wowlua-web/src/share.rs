@@ -1,6 +1,7 @@
 //! Share links: a package's files in a URL's fragment. The files as JSON
-//! (`{"v":1,"files":{"<path>":"<text>",…}}`), deflated, in URL-safe base64
-//! without padding.
+//! (`{"v":1,"files":{"<path>":"<text>",…},"run":{…}}`; `run`, how it runs:
+//! its flavor, world profile, Blizzard's UI, may be left out), deflated,
+//! in URL-safe base64 without padding.
 
 use flate2::Compression;
 use flate2::read::DeflateDecoder;
@@ -16,12 +17,19 @@ const MAX: u64 = 8 << 20;
 
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-pub fn encode(files: &[(String, String)]) -> String {
+/// A link's contents: the files, and how it runs.
+pub type Shared = (Vec<(String, String)>, Option<Json>);
+
+pub fn encode(files: &[(String, String)], run: Option<&Json>) -> String {
     let map: Map<String, Json> = files
         .iter()
         .map(|(p, t)| (p.clone(), Json::String(t.clone())))
         .collect();
-    let body = json!({ "v": VERSION, "files": map }).to_string();
+    let mut body = json!({ "v": VERSION, "files": map });
+    if let Some(run) = run.filter(|r| r.is_object()) {
+        body["run"] = run.clone();
+    }
+    let body = body.to_string();
     let mut deflate = DeflateEncoder::new(Vec::new(), Compression::best());
     // (writing into memory cannot fail)
     let _ = deflate.write_all(body.as_bytes());
@@ -31,7 +39,7 @@ pub fn encode(files: &[(String, String)]) -> String {
 
 /// The files of a link (its fragment, with or without the `#`); `None`
 /// for anything else.
-pub fn decode(link: &str) -> Option<Vec<(String, String)>> {
+pub fn decode(link: &str) -> Option<Shared> {
     let fragment = link.rsplit_once('#').map_or(link, |(_, f)| f).trim();
     let packed = unbase64(fragment)?;
     let mut body = String::new();
@@ -44,14 +52,16 @@ pub fn decode(link: &str) -> Option<Vec<(String, String)>> {
         return None;
     }
     let files = value["files"].as_object()?;
-    files
+    let files = files
         .iter()
         .map(|(p, t)| {
             // (no way out of the package's folder)
             let safe = !p.split('/').any(|c| c == ".." || c.is_empty()) && !p.starts_with('/');
             safe.then(|| Some((p.clone(), t.as_str()?.to_string())))?
         })
-        .collect()
+        .collect::<Option<Vec<_>>>()?;
+    let run = value.get("run").filter(|r| r.is_object()).cloned();
+    Some((files, run))
 }
 
 pub(crate) fn base64(bytes: &[u8]) -> String {
@@ -93,12 +103,16 @@ mod tests {
             ("src/main.wowlua".to_string(), "print(\"é ✓\")\n".repeat(50)),
             ("wowlua.json".to_string(), "{}".to_string()),
         ];
-        let link = encode(&files);
+        let run = json!({ "flavor": "camelot", "profile": "stormwind" });
+        let link = encode(&files, Some(&run));
         assert!(link.bytes().all(|b| ALPHABET.contains(&b)), "{link}");
-        assert!(link.len() < 200, "compressed: {}", link.len());
-        let mut back = decode(&format!("https://wowlua.dev/playground#{link}")).unwrap();
+        assert!(link.len() < 220, "compressed: {}", link.len());
+        let (mut back, back_run) =
+            decode(&format!("https://wowlua.dev/playground#{link}")).unwrap();
         back.sort();
         assert_eq!(back, files);
+        assert_eq!(back_run, Some(run));
+        assert_eq!(decode(&encode(&files, None)).unwrap().1, None);
         for n in 0..8 {
             let bytes: Vec<u8> = (0..n).map(|i| (i * 37) as u8).collect();
             assert_eq!(unbase64(&base64(&bytes)).unwrap(), bytes);
@@ -108,7 +122,7 @@ mod tests {
 
     #[test]
     fn a_link_cannot_leave_the_package() {
-        let link = encode(&[("../etc/passwd".to_string(), "x".to_string())]);
+        let link = encode(&[("../etc/passwd".to_string(), "x".to_string())], None);
         assert_eq!(decode(&link), None);
     }
 }

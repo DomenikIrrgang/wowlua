@@ -174,12 +174,12 @@ impl Playground {
     /// files, the AddOn folder's (`{ path, text }`, or `{ path, base64 }`
     /// for one that is no UTF-8 text, such as a font; URL-safe base64).
     pub fn build(&self, profile: &str) -> Json {
-        self.build_with(profile, true)
+        self.build_with(profile, true, false)
     }
 
     /// [`build`](Self::build), keeping the compiled code or not (a check
-    /// reads none of it).
-    fn build_with(&self, profile: &str, keep_code: bool) -> Json {
+    /// reads none of it), with the test side or not.
+    fn build_with(&self, profile: &str, keep_code: bool, tests: bool) -> Json {
         let mut session = Session::new();
         let built = self.load(&mut session).and_then(|project| {
             let request = BuildRequest {
@@ -193,7 +193,7 @@ impl Playground {
                 only: None,
                 jobs: wowlua_driver::parallel::Jobs::one(),
                 keep_code,
-                tests: false,
+                tests,
                 left_out: Vec::new(),
             };
             wowlua_driver::build(&mut session, &project, &request)
@@ -225,7 +225,9 @@ impl Playground {
 
     /// Checks the package (`wowlua check`): its diagnostics.
     pub fn check(&self) -> Json {
-        let mut built = self.build_with("dev", false);
+        // (the test side too, as `wowlua check` checks it: test files, mocks,
+        // world profiles)
+        let mut built = self.build_with("dev", false, true);
         built["diagnostics"].take()
     }
 
@@ -332,21 +334,19 @@ impl Playground {
         self.game = None;
     }
 
-    /// The package's files in a link's fragment (compressed, URL-safe).
-    pub fn share(&self) -> String {
-        share::encode(&self.files())
+    /// The package's files in a link's fragment (compressed, URL-safe),
+    /// with how it runs when given (`{ flavor, profile, blizzardUI }`).
+    pub fn share(&self, run: Option<&Json>) -> String {
+        share::encode(&self.files(), run)
     }
 
-    /// Opens a shared package: its files replace these. False (and nothing
-    /// changed) when `link` is not one.
-    pub fn open_shared(&self, link: &str) -> bool {
-        match share::decode(link) {
-            Some(files) => {
-                self.reset(files);
-                true
-            }
-            None => false,
-        }
+    /// Opens a shared package: its files replace these; how it runs (`{}`
+    /// when the link does not say). `None` (and nothing changed) when
+    /// `link` is not one.
+    pub fn open_shared(&self, link: &str) -> Option<Json> {
+        let (files, run) = share::decode(link)?;
+        self.reset(files);
+        Some(run.unwrap_or_else(|| json!({})))
     }
 
     /// Hands the language server one of the editor's messages; its answers

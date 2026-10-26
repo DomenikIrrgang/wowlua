@@ -112,13 +112,18 @@ impl WebPlayground {
         self.0.format(path).to_string()
     }
 
-    pub fn share(&self) -> String {
-        self.0.share()
+    /// The package as a link's fragment; `run` (JSON, optional): how it
+    /// runs, `{ flavor, profile, blizzardUI }`.
+    pub fn share(&self, run: Option<String>) -> Result<String, JsError> {
+        let run: Option<Json> = run.map(|r| serde_json::from_str(&r)).transpose()?;
+        Ok(self.0.share(run.as_ref()))
     }
 
+    /// Opens a shared package: how it runs (JSON, `{}` when the link does
+    /// not say), or `undefined` when `link` is none.
     #[wasm_bindgen(js_name = openShared)]
-    pub fn open_shared(&self, link: &str) -> bool {
-        self.0.open_shared(link)
+    pub fn open_shared(&self, link: &str) -> Option<String> {
+        self.0.open_shared(link).map(|r| r.to_string())
     }
 
     /// Puts bytes at an absolute path (Blizzard's UI files the page fetched).
@@ -139,7 +144,8 @@ impl WebPlayground {
     }
 
     /// Builds and runs the package: `options` is `{ flavor, blizzardUI,
-    /// profile, debug }` (`debug`: the debugger's setup, see
+    /// profile, profileText, debug }` (`profile`: one of the package's
+    /// world profiles by name; `profileText`: a profile's JSON) (`debug`: the debugger's setup, see
     /// `debug::Setup`; the worker's mailbox carries its requests);
     /// `{ ok, diagnostics, error }`.
     pub fn run(&mut self, options: &str) -> Result<String, JsError> {
@@ -158,7 +164,11 @@ impl WebPlayground {
         let options = crate::run::Options {
             flavor: o["flavor"].as_str().unwrap_or("camelot").to_string(),
             blizzard_ui: o["blizzardUI"].as_bool().unwrap_or(false),
-            profile: o["profile"].as_str().map(str::to_string),
+            profile: match (o["profile"].as_str(), o["profileText"].as_str()) {
+                (_, Some(text)) => Some(crate::run::Profile::Text(text.to_string())),
+                (Some(name), None) => Some(crate::run::Profile::Named(name.to_string())),
+                (None, None) => None,
+            },
             debug,
             installation: None,
         };
@@ -212,6 +222,28 @@ impl WebPlayground {
         let game = self.0.game().ok_or_else(|| JsError::new("no addon runs"))?;
         game.input(&input).map_err(|e| JsError::new(&e))?;
         Ok(Json::Array(game.take_output()).to_string())
+    }
+
+    /// The package's world profiles' names (`tests/profiles/<name>.json`).
+    pub fn profiles(&self) -> Vec<String> {
+        wowlua_driver::profiles::list(std::path::Path::new(crate::ROOT))
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect()
+    }
+
+    /// The world profiles' JSON schema, for the page's editor.
+    #[wasm_bindgen(js_name = profileSchema)]
+    pub fn profile_schema() -> String {
+        wowlua_manifest::world::schema_json()
+    }
+
+    /// Changes the running world: Lua with `mock` the engine's controls;
+    /// a JSON array of what it printed and raised.
+    pub fn world(&mut self, script: &str) -> Result<String, JsError> {
+        let game = self.0.game().ok_or_else(|| JsError::new("no addon runs"))?;
+        let out = game.world(script).map_err(|e| JsError::new(&e))?;
+        Ok(Json::Array(out).to_string())
     }
 
     /// The running addon's screen size in pixels, `[width, height]`.

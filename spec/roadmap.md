@@ -744,7 +744,58 @@ options opened in Blizzard's settings panel (once
 Blizzard's UI waits for its on-demand addons' code by default (the
 settings panel's is one).
 
+World profiles everywhere (2026-10-26, T401; for the IDE, M15): checked
+with the package (E4400 to E4402) and described by a generated schema
+(`schema/world-profile-0.1.json`, applied by VS Code); a run starts in one
+by name or from its text; a `world` request changes the running world
+with the tests' controls (DAP `wowlua/world`, MCP `world`, the page's
+`world`); share links carry how the package runs. Checked natively
+(`crates/wowlua-web/tests/profiles.rs`, the debugger's DAP test), in Node
+and in Chrome: a link opened in its profile, the world's money changed
+from the page and seen by the addon.
+
 **Status: done (2026-10-26).** Not yet: dependencies other than the
-standard library in the page, world profiles in share links, Blizzard's
-UI for flavors other than camelot; the timing of `SETTINGS_PANEL_OPEN`
-(`tests/ingame/PROBES.md`).
+standard library in the page (M10's registry), Blizzard's UI for flavors
+other than camelot (the engine runs camelot's), the timing of
+`SETTINGS_PANEL_OPEN` (`tests/ingame/PROBES.md`); the IDE's needs are M15.
+
+## M15: Studio
+
+wowlua Studio, wowlua's own IDE: one front-end, in the browser and in a
+desktop shell, over the libraries M12 to M14 made (T300, T301), the
+language server, the debugger, the emulated client and the renderer. It
+edits real packages, with world profiles as a first-class part.
+
+- S1 Packages on disk: open a package or workspace folder (the File
+  System Access API with write access in the browser, the disk natively),
+  save to it, notice changes made outside, several packages at once; the
+  host over the opened folders; a folder remembered across visits.
+- S2 Two workers: the compiler and the language server in one, the game
+  and the debugger in another, the files kept in step; the editor answers
+  while the game is paused at a breakpoint.
+- S3 Tests: run a package's test files and single tests in the page,
+  their results, coverage (the HTML report), snapshots and screenshots
+  updated; a test explorer.
+- S4 One debugger for both: the browser speaks DAP as `wowlua debug`
+  does (or the desktop the page's protocol), so the debug views are one:
+  stack, variables, watches, the frame tree and inspector, events, the
+  profiler (speedscope's format).
+- S5 World profiles: a profile editor over the schema (forms for the
+  character, money, gear, bags, place, units around), the live world panel
+  (`world`), profiles from the user's own characters (a snapshot's or the
+  installation's SavedVariables).
+- S6 Install and publish: the build written into the installation's
+  `Interface/AddOns` (write access to the picked folder), the `wowlua dev`
+  loop (build on save, `/reload`); publishing through a proxy where the
+  sites refuse a browser's requests.
+- S7 The editor: semantic highlighting from the language server, the
+  grammar for the editor component, the outline, code actions; Blizzard's
+  UI for every flavor in the page (as the engine runs their UI code);
+  dependencies (with M10's registry).
+- S8 The desktop shell: the same front-end with the native backend
+  (`wowlua lsp`, `wowlua debug`, the disk, the installation found).
+
+**Exit:** SuuUI opened from disk in Studio in the browser: edited and
+checked, its tests run, run against the default UI in a world profile and
+debugged, the world changed while it runs, installed into the WoW folder;
+the same in the desktop shell.

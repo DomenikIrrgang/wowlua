@@ -56,7 +56,7 @@ pub fn parse(
     let raw: Value = match serde_json::from_str(text) {
         Ok(value) => value,
         Err(error) => {
-            diagnostics.push(json_syntax_error(db, file, &error));
+            diagnostics.push(json_syntax_error(db, file, &error, "E4001", "wowlua.json"));
             return fail(diagnostics);
         }
     };
@@ -102,7 +102,7 @@ pub fn parse(
     let manifest: Manifest = match serde_path_to_error::deserialize(&mut deserializer) {
         Ok(manifest) => manifest,
         Err(error) => {
-            diagnostics.push(schema_error(text, file, &error));
+            diagnostics.push(schema_error(text, file, &error, "E4002"));
             return fail(diagnostics);
         }
     };
@@ -127,14 +127,22 @@ pub fn parse(
     }
 }
 
-fn json_syntax_error(db: &SourceDb, file: FileId, error: &serde_json::Error) -> Diagnostic {
+pub(crate) fn json_syntax_error(
+    db: &SourceDb,
+    file: FileId,
+    error: &serde_json::Error,
+    code: &'static str,
+    what: &str,
+) -> Diagnostic {
     let source = db.get(file);
     let offset = source.offset(error.line(), error.column());
     let end = (offset + 1).min(source.text().len());
     let message = strip_position(&error.to_string());
-    Diagnostic::error("E4001", format!("invalid JSON: {message}"))
+    Diagnostic::error(code, format!("invalid JSON: {message}"))
         .with_label(Span::new(file, offset.min(end)..end), "here")
-        .with_note("wowlua.json is strict JSON: no comments and no trailing commas")
+        .with_note(format!(
+            "{what} is strict JSON: no comments and no trailing commas"
+        ))
 }
 
 /// Removes serde_json's " at line X column Y" suffix.
@@ -169,10 +177,11 @@ static UNKNOWN_FIELD: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^unknown field `([^`]*)`, (?:expected (.*)|there are no fields)").unwrap()
 });
 
-fn schema_error(
+pub(crate) fn schema_error(
     text: &str,
     file: FileId,
     error: &serde_path_to_error::Error<serde_json::Error>,
+    code: &'static str,
 ) -> Diagnostic {
     let path = JsonPath(
         error
@@ -195,7 +204,7 @@ fn schema_error(
         } else {
             format!("in `{parent}`")
         };
-        let mut diagnostic = Diagnostic::error("E4002", format!("unknown key `{key}` {location}"))
+        let mut diagnostic = Diagnostic::error(code, format!("unknown key `{key}` {location}"))
             .with_label(span_of(text, file, &path, false), "unknown key");
         let candidates: Vec<&str> = captures
             .get(2)
@@ -219,7 +228,7 @@ fn schema_error(
     } else {
         format!(" at `{path}`")
     };
-    Diagnostic::error("E4002", format!("{message}{location}")).with_label(at, label)
+    Diagnostic::error(code, format!("{message}{location}")).with_label(at, label)
 }
 
 /// The candidate closest to `word` by edit distance, if it is close enough to

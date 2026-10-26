@@ -1,0 +1,1526 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "World profile",
+  "description": "The world a wowlua test or run starts in (tests/profiles/<name>.json)",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "This schema's URL, for editors.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "client": {
+      "description": "The client a recorded profile comes from (`/stdtest snapshot`).",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "leaderBoards": {
+      "description": "The leader boards a snapshot recorded (kept, not applied)."
+    },
+    "character": {
+      "description": "The player's character (`mock.setPlayer`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/UnitData"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "items": {
+      "description": "Item data by item ID (`mock.defineItem`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/List"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "spells": {
+      "description": "Spell data by spell ID (`mock.defineSpell`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/List2"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "money": {
+      "description": "The character's money, in copper.",
+      "type": [
+        "number",
+        "null"
+      ],
+      "format": "double"
+    },
+    "stats": {
+      "description": "The character's stats by key (`mock.player:setStats`).",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "equipment": {
+      "description": "What is worn, by slot ID or the client's slot name\n(`MainHandSlot`): an item ID or an item.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/List3"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "bags": {
+      "description": "The bags by bag ID (0 the backpack).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/List4"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "actions": {
+      "description": "The action bars' actions by slot (`mock.setAction`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/List5"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "macros": {
+      "description": "The account's and the character's macros (`mock.setMacros`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Macros"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "mounts": {
+      "description": "The mount journal by mount ID (`mock.setMounts`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/List7"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "toys": {
+      "description": "The toy box by item ID (`mock.setToys`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/List8"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "appearances": {
+      "description": "The wardrobe (`mock.setAppearances`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Appearances"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "channels": {
+      "description": "The chat channels the character is in (`mock.setChannels`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Channels"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "position": {
+      "description": "Where the character is (`mock.moveTo`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Position"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "auras": {
+      "description": "The character's auras (`mock.player:applyAura`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/List11"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "units": {
+      "description": "The units around: creatures and other players (`mock.spawnUnit`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/List12"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "cvars": {
+      "description": "CVars by name.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "$ref": "#/$defs/Scalar"
+      }
+    },
+    "bindings": {
+      "description": "Key bindings: key to action (`SetBinding`).",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "savedVariables": {
+      "description": "SavedVariables by global name, as the addon finds them at load.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "UnitData": {
+      "description": "A unit's data (the character's, or a unit's around).",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lastName": {
+          "description": "A WoW Forever character's last name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "realm": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "guid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "level": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "class": {
+          "description": "The class by file name (`WARRIOR`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "classId": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "race": {
+          "description": "The race by file name (`Human`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sex": {
+          "description": "1 unknown, 2 male, 3 female.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "health": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "healthMax": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "maxHealth": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "power": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "powerMax": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "maxPower": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "powerType": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "reaction": {
+          "description": "`hostile`, `neutral` or `friendly`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "player": {
+          "description": "A player character (not a creature).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "dead": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "distance": {
+          "description": "Yards from the player.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "faction": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "npcId": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "classification": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "creatureType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "creatureFamily": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "zone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pvp": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "List": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Item"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Item"
+          }
+        }
+      ]
+    },
+    "Item": {
+      "description": "Item data (`GetItemInfo`'s fields by name).",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "link": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "quality": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "itemLevel": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "minLevel": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stackCount": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "equipLoc": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Scalar"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sellPrice": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "classId": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "subclassId": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "bindType": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "expansionId": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "cached": {
+          "description": "In the client's cache (true unless false).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "delay": {
+          "description": "Seconds until its data loads.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "missing": {
+          "description": "The server does not know it.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "Scalar": {
+      "description": "A string, number or boolean.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "type": "boolean"
+        }
+      ]
+    },
+    "List2": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Spell"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Spell"
+          }
+        }
+      ]
+    },
+    "Spell": {
+      "description": "Spell data.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "iconID": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "known": {
+          "description": "The player knows it.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "petKnown": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cooldown": true,
+        "charges": true,
+        "castTime": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "minRange": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "maxRange": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "cached": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "List3": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ItemRef"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ItemRef"
+          }
+        }
+      ]
+    },
+    "ItemRef": {
+      "description": "An item ID, or an item stack.",
+      "anyOf": [
+        {
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "$ref": "#/$defs/ItemStack"
+        }
+      ]
+    },
+    "ItemStack": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number",
+          "format": "double"
+        },
+        "count": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "link": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bound": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "locked": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cooldown": {
+          "description": "`{ remaining, duration }` in seconds."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": true
+    },
+    "List4": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Bag"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Bag"
+          }
+        }
+      ]
+    },
+    "Bag": {
+      "description": "A bag: its size and what is in it by slot.",
+      "type": "object",
+      "properties": {
+        "slots": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "items": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/List3"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "List5": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Action"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Action"
+          }
+        }
+      ]
+    },
+    "Action": {
+      "description": "An action bar slot's action.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "`spell`, `item`, `macro`, …",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Scalar"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "texture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Scalar"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "count": {
+          "description": "A number, or `\"\"` as the client reports none.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Scalar"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "usable": {
+          "description": "A boolean, or `{ usable, noPower }`."
+        }
+      },
+      "additionalProperties": true
+    },
+    "Macros": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/List6"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "character": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/List6"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "List6": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Macro"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Macro"
+          }
+        }
+      ]
+    },
+    "Macro": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Scalar"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "body": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "List7": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Mount"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Mount"
+          }
+        }
+      ]
+    },
+    "Mount": {
+      "type": "object",
+      "properties": {
+        "spellID": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Scalar"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "collected": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "usable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "favorite": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "List8": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Toy"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Toy"
+          }
+        }
+      ]
+    },
+    "Toy": {
+      "type": "object",
+      "properties": {
+        "collected": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "usable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "favorite": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "fanfare": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "Appearances": {
+      "type": "object",
+      "properties": {
+        "collected": {
+          "description": "Collected source IDs.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/List9"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "favorites": {
+          "description": "Favourite appearance IDs.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/List9"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "List9": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      ]
+    },
+    "Channels": {
+      "type": "object",
+      "properties": {
+        "joined": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/List10"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "groupChannels": true,
+        "regionalService": true
+      }
+    },
+    "List10": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      ]
+    },
+    "Position": {
+      "description": "Where the character is.",
+      "type": "object",
+      "properties": {
+        "mapID": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "zone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subZone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "x": {
+          "description": "On the map, 0 to 1.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "y": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "world": {
+          "description": "`UnitPosition`'s world coordinates."
+        },
+        "facing": {
+          "description": "Radians counter-clockwise from north.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "additionalProperties": true
+    },
+    "List11": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Aura"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Aura"
+          }
+        }
+      ]
+    },
+    "Aura": {
+      "description": "An aura (`applyAura`'s data).",
+      "type": "object",
+      "properties": {
+        "spellId": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Scalar"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "duration": {
+          "description": "Seconds.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "applications": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "harmful": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dispelName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stealable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "List12": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorldUnit"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/WorldUnit"
+          }
+        }
+      ]
+    },
+    "WorldUnit": {
+      "description": "A unit around the player, and how it relates to them.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lastName": {
+          "description": "A WoW Forever character's last name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "realm": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "guid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "level": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "class": {
+          "description": "The class by file name (`WARRIOR`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "classId": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "race": {
+          "description": "The race by file name (`Human`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sex": {
+          "description": "1 unknown, 2 male, 3 female.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "health": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "healthMax": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "maxHealth": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "power": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "powerMax": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "maxPower": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "powerType": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "reaction": {
+          "description": "`hostile`, `neutral` or `friendly`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "player": {
+          "description": "A player character (not a creature).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "dead": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "distance": {
+          "description": "Yards from the player.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "faction": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "npcId": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "classification": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "creatureType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "creatureFamily": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "zone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pvp": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "target": {
+          "description": "The player's target.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "focus": {
+          "description": "The player's focus.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "group": {
+          "description": "In the player's group: `party` or `raid`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GroupKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nameplate": {
+          "description": "Its nameplate shows.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "acceptsInvites": {
+          "description": "Another player accepts the player's invitations (true by default).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "auras": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/List11"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "GroupKind": {
+      "type": "string",
+      "enum": [
+        "party",
+        "raid"
+      ]
+    }
+  },
+  "$id": "https://raw.githubusercontent.com/DomenikIrrgang/wowlua/main/schema/world-profile-0.1.json"
+}

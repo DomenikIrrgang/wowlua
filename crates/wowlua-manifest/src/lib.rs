@@ -8,6 +8,7 @@ pub mod locate;
 pub mod model;
 pub mod profile;
 mod validate;
+pub mod world;
 
 use std::path::{Path, PathBuf};
 use wowlua_diagnostics::Diagnostics;

@@ -144,6 +144,28 @@ Without the worker, `Playground` has the same calls (`loadBlizzardUI`,
 `run`, `advance`, `input`, `stop`) and `createScreen(canvas)` with
 `playground.play(screen, onOutput)`.
 
+## World profiles
+
+A package's world profiles (`tests/profiles/<name>.json`, the world a
+test or a run starts in: the character, money, gear, bags, units around,
+…) work in the page as in tests:
+
+```js
+await wowlua.call("profiles");                         // ["rich", "stormwind"]
+await wowlua.call("run", { profile: "stormwind" });    // by name
+await wowlua.call("run", { profileText: json });       // or given as JSON
+await wowlua.call("world", "mock.player:setMoney(500)"); // change it while it runs
+const schema = await wowlua.call("profileSchema");     // for the editor's JSON support
+```
+
+A check reports a profile's mistakes like any other (E4400 to E4402, on
+the profile's file). `world` runs Lua with `mock` the controls tests use
+(`mock.player:enterCombat()`, `mock.player:target(mock.spawnUnit({ name =
+"Hogger", reaction = "hostile" }))`); while debugging, the debugger's
+`world` request does the same between frames. Share links can carry how
+the package runs: `call("share", { flavor, profile, blizzardUI })`, and
+`openShared` gives those settings back.
+
 ## The user's installation
 
 With the user's World of Warcraft folder the game draws with its own

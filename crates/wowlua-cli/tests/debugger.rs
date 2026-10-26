@@ -510,6 +510,16 @@ fn a_launch_starts_in_its_world_profile() {
         json!({ "expression": "strjoin(' ', UnitName('player')) .. ' ' .. UnitLevel('player')", "context": "repl" }),
     );
     assert_eq!(name["result"], "\"Ann Smith 42\"", "{name:#}");
+    // The world changes while it runs (`wowlua/world`, decision T401).
+    c.request(
+        "wowlua/world",
+        json!({ "script": "mock.player:setMoney(4242)" }),
+    );
+    let money = c.request(
+        "evaluate",
+        json!({ "expression": "GetMoney()", "context": "repl" }),
+    );
+    assert_eq!(money["result"], "4242", "{money:#}");
     c.request("disconnect", json!({ "terminateDebuggee": true }));
 }
 

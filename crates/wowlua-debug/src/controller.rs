@@ -481,8 +481,12 @@ impl Controller {
     /// Serves the requests waiting, without stopping (a running session:
     /// the VM polled the interrupt flag, or the driver is between frames).
     pub fn serve_waiting(&mut self, vm: &mut Vm, between_frames: bool) {
-        let runs_code =
-            |r: &Request| matches!(r, Request::Input { .. } | Request::FireEvent { .. });
+        let runs_code = |r: &Request| {
+            matches!(
+                r,
+                Request::Input { .. } | Request::FireEvent { .. } | Request::World { .. }
+            )
+        };
         if between_frames {
             let deferred = std::mem::take(&mut self.shared().deferred);
             for (id, req) in deferred {
@@ -512,6 +516,7 @@ impl Controller {
                 }
                 req @ (Request::Input { .. }
                 | Request::FireEvent { .. }
+                | Request::World { .. }
                 | Request::Screenshot { .. }
                 | Request::FrameTree { .. }
                 | Request::FindFrames { .. }
@@ -638,6 +643,7 @@ impl Controller {
             Request::FireEvent { event, args } => {
                 crate::ui::fire_event(vm, &event, &args).map(|()| Response::Ok)
             }
+            Request::World { script } => crate::ui::world(vm, &script).map(|()| Response::Ok),
             Request::Advance { seconds, frames } => {
                 if self.shared.borrow().drives_time && paused.is_none() {
                     self.shared().advance = Some((id, seconds, frames));

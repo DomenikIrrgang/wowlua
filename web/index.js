@@ -117,14 +117,21 @@ export class Playground {
         return JSON.parse(this.raw.format(path));
     }
 
-    /** The package as a link's fragment: `https://…/playground#${share()}`. */
-    share() {
-        return this.raw.share();
+    /**
+     * The package as a link's fragment: `https://…/playground#${share()}`;
+     * `run` (optional) says how it runs: `{ flavor, profile, blizzardUI }`.
+     */
+    share(run) {
+        return this.raw.share(run === undefined ? undefined : JSON.stringify(run));
     }
 
-    /** Opens a shared package (a link or its fragment); false if it is none. */
+    /**
+     * Opens a shared package (a link or its fragment): how it runs (`{}`
+     * when the link does not say), or `null` when it is none.
+     */
     openShared(link) {
-        return this.raw.openShared(link);
+        const run = this.raw.openShared(link);
+        return run === undefined ? null : JSON.parse(run);
     }
 
     /**
@@ -168,13 +175,36 @@ export class Playground {
 
     /**
      * Builds the package and runs it: `{ flavor = "camelot", blizzardUI =
-     * false, profile, debug }` (`profile`: a world profile's JSON text;
-     * `debug`: the debugger's breakpoints, for a worker with a mailbox, see
-     * client.js). `{ ok, diagnostics, error }`.
+     * false, profile, profileText, debug }` (`profile`: one of the
+     * package's world profiles by name, `profileText` a profile's JSON,
+     * else the manifest's `test.profile` or a fresh character; `debug`: the
+     * debugger's breakpoints, for a worker with a mailbox, see client.js).
+     * `{ ok, diagnostics, error }`.
      */
-    run({ flavor = "camelot", blizzardUI = false, profile, debug } = {}) {
+    run({ flavor = "camelot", blizzardUI = false, profile, profileText, debug } = {}) {
         this.tick();
-        return JSON.parse(this.raw.run(JSON.stringify({ flavor, blizzardUI, profile, debug })));
+        return JSON.parse(this.raw.run(JSON.stringify({ flavor, blizzardUI, profile, profileText, debug })));
+    }
+
+    /** The package's world profiles by name (`tests/profiles/<name>.json`). */
+    profiles() {
+        return Array.from(this.raw.profiles());
+    }
+
+    /** The world profiles' JSON schema (for an editor's JSON support). */
+    profileSchema() {
+        return JSON.parse(Raw.profileSchema());
+    }
+
+    /**
+     * Changes the running world: Lua with `mock` the engine's controls, as
+     * tests drive it (`mock.player:setMoney(500)`, `mock.player:target(
+     * mock.spawnUnit({ name = "Hogger", reaction = "hostile" }))`). What it
+     * printed and raised.
+     */
+    world(script) {
+        this.tick();
+        return JSON.parse(this.raw.world(script));
     }
 
     stop() {

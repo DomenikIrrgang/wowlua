@@ -260,6 +260,12 @@ fn tools() -> Json {
             &["event"]
         ),
         t(
+            "world",
+            "Changes the game world while the addon runs: Lua with `mock` the engine's controls, as tests drive it (`mock.player:setMoney(500)`, `mock.player:target(mock.spawnUnit({ name = \"Hogger\", reaction = \"hostile\" }))`, `mock.player:enterCombat()`).",
+            json!({ "script": { "type": "string" } }),
+            &["script"]
+        ),
+        t(
             "eval",
             "Evaluates Lua in the stopped frame (or the globals): locals and upvalues are readable and assignable.",
             json!({ "expression": { "type": "string" }, "frame": { "type": "integer", "description": "A stack frame's id (stopped)" } }),
@@ -659,6 +665,12 @@ impl Server {
                         .and_then(Json::as_array)
                         .cloned()
                         .unwrap_or_default(),
+                },
+                true,
+            ),
+            "world" => self.simple(
+                Request::World {
+                    script: str_arg(a, "script").unwrap_or_default(),
                 },
                 true,
             ),

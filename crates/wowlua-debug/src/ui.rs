@@ -234,3 +234,37 @@ pub fn base64(bytes: &[u8]) -> String {
     }
     out
 }
+
+/// Changes the world: runs `script` (Lua) with `mock` the engine's
+/// controls, untainted as the world's own state, as a world profile is
+/// applied (decision T401). Other names are the globals.
+pub fn world(vm: &mut Vm, script: &str) -> Result<(), String> {
+    let controls = wowlua_engine::controls::table(vm);
+    let env = vm.new_table();
+    let meta = vm.new_table();
+    let index = vm.str("__index");
+    let globals = Value::Table(vm.globals);
+    let _ = vm.heap.table_mut(meta).set(index, globals);
+    vm.heap.table_mut(env).meta = Some(meta);
+    let key = vm.str("mock");
+    let _ = vm.heap.table_mut(env).set(key, Value::Table(controls));
+    let saved = *vm.taint();
+    {
+        let t = vm.taint_mut();
+        t.stack = wowlua_vm::Taint::SECURE;
+        t.fixed = wowlua_vm::Taint::SECURE;
+        t.new_object = wowlua_vm::Taint::SECURE;
+        t.new_closure = wowlua_vm::Taint::SECURE;
+    }
+    let result = vm.load(script.as_bytes(), "=[world]").and_then(|f| {
+        if let Value::Func(func) = f {
+            vm.set_func_env(func, env);
+        }
+        vm.call(f, &[]).map(drop).map_err(|e| match e.value {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            other => format!("{other:?}"),
+        })
+    });
+    *vm.taint_mut() = saved;
+    result
+}

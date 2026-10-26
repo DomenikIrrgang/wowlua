@@ -549,7 +549,10 @@ then shows that one), else not (a stop in Blizzard's UI as it loads shows
 there). Once a session ends, nothing more loads.
 Custom requests: `wowlua/screenshot` (PNG as base64), `wowlua/frameTree`,
 `wowlua/findFrames`, `wowlua/input` (click, hover, drag, type, key),
-`wowlua/advance`, `wowlua/fireEvent`, `wowlua/profile` (`start`, `stop`:
+`wowlua/advance`, `wowlua/fireEvent`, `wowlua/world` (`script`: Lua with
+`mock` the engine's controls, run between frames as a world profile is
+applied, so the running world changes: `mock.player:setMoney(500)`;
+decision T401), `wowlua/profile` (`start`, `stop`:
 the report). A value's taint shows in its type (`string · tainted by
 MyAddon`), a secret's value after `secret`.
 
@@ -583,7 +586,7 @@ tools: `start_session` (a test file or the addon, flavor, profile, screen),
 `frame_tree` (optionally under a frame, with hidden frames or not),
 `find_frames` (by name, type or text), `click` (a frame, or a point in the
 screenshot's pixels), `hover`, `drag`, `type_text`, `press_key`, `slash` (a
-slash command), `advance`, `fire_event`, `eval`, `set_breakpoints`, `continue`,
+slash command), `advance`, `fire_event`, `world` (as `wowlua/world`), `eval`, `set_breakpoints`, `continue`,
 `step`, `stack`, `variables`, `profile_start`, `profile_stop`, `output`
 (what the session printed and the errors it raised). Sessions are `manual`
 clocked unless asked otherwise. A tool that runs code (`continue`, `step`,

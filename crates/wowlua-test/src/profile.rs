@@ -16,29 +16,7 @@ pub fn named_in(source: &[u8]) -> Option<String> {
 /// A literal text a test file's `config({ … })` gives `key` (read from its
 /// syntax, before anything loads: `profile`, `platform`).
 pub fn config_text(source: &[u8], key: &str) -> Option<String> {
-    let file = wowlua_span::SourceDb::new().add("", "");
-    let parse = wowlua_syntax::parse(source, file);
-    parse.view().block().stmts().iter().find_map(|s| {
-        let StmtKind::Call(call) = s.kind() else {
-            return None;
-        };
-        let ExprKind::Call { callee, args } = call.kind() else {
-            return None;
-        };
-        if !matches!(callee.kind(), ExprKind::Name(n) if n.text() == "config") {
-            return None;
-        }
-        let ExprKind::Table(fields) = args.exprs().first()?.kind() else {
-            return None;
-        };
-        fields.iter().find_map(|f| match f {
-            TableField::Named { name, value, .. } if name.text() == key => match value.kind() {
-                ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value()).into_owned()),
-                _ => None,
-            },
-            _ => None,
-        })
-    })
+    wowlua_driver::profiles::config_text(source, key).map(|(text, _)| text)
 }
 
 /// The number literals of the table a test file's `config({ … })` gives

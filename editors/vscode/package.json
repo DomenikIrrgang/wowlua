@@ -33,6 +33,16 @@
     "onCommand:wowlua.showUI"
   ],
   "contributes": {
+    "jsonValidation": [
+      {
+        "fileMatch": "wowlua.json",
+        "url": "https://raw.githubusercontent.com/DomenikIrrgang/wowlua/main/schema/wowlua-0.1.json"
+      },
+      {
+        "fileMatch": "**/tests/profiles/*.json",
+        "url": "https://raw.githubusercontent.com/DomenikIrrgang/wowlua/main/schema/world-profile-0.1.json"
+      }
+    ],
     "languages": [
       {
         "id": "wowlua",

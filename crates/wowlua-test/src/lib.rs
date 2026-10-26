@@ -45,6 +45,9 @@ pub struct Suite<'a> {
     pub blizzard_ui: Option<UiSource>,
     /// `test.profile`: the world profile of files that name none.
     pub profile: Option<String>,
+    /// A world profile's JSON text, over `profile` for files that name
+    /// none (a playground run's, decision T401).
+    pub profile_text: Option<String>,
     /// `test.platform`: the machine of files that name none (decision T236).
     pub platform: wowlua_engine::Platform,
     /// `test.screen`: the screen of files that name none (decision T237).
@@ -684,7 +687,10 @@ fn load_vm(
     wowlua_engine::widgets::keep(&mut vm, Value::Table(ns));
     let table = Value::Table(ns);
     // The world profile, before the addon (decision T213).
-    if let Some(name) = profile::named_in(&source).or_else(|| suite.profile.clone()) {
+    let named = profile::named_in(&source);
+    if let (None, Some(text)) = (&named, &suite.profile_text) {
+        profile::apply_text(&mut vm, controls, text, "given")?;
+    } else if let Some(name) = named.or_else(|| suite.profile.clone()) {
         let path = suite
             .root
             .join("tests")

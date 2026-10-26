@@ -204,6 +204,9 @@ is reported as the warning with the same number (`E2001` → `W2001`, `E2030` �
 | W4329 | GitHub target skipped: build is not on a tag and no `--tag` given |
 | W4332 | `.pkgmeta` `move-folders` use that cannot be converted |
 | E4334 | Both a hand-written `Bindings.xml` and `wowlua:bindings` declarations |
+| E4400 | World profile is not valid JSON, or not a JSON object |
+| E4401 | World profile does not match its schema (unknown part, wrong type, a key that is no ID) |
+| E4402 | `test.profile` or a test file's `config({ profile })` names no world profile of the package |
 | E4335 | Packager `@version-…@` blocks in a multi-version build |
 | W4333 | `.pkgmeta` hg external cannot be converted |
 | W6001 | Code reads a Lua file name from `debugstack` or `debuglocals`, which shows the bundle's when bundled |

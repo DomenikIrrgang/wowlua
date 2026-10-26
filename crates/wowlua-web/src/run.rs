@@ -6,7 +6,7 @@
 
 use serde_json::{Value as Json, json};
 use std::cell::RefCell;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 use wowlua_driver::BuildOutput;
 use wowlua_vm::Vm;
@@ -86,14 +86,23 @@ fn ui_source(flavor: &str) -> Option<wowlua_test::UiSource> {
     })
 }
 
+/// A run's world profile.
+#[derive(Clone, Debug)]
+pub enum Profile {
+    /// One of the package's (`tests/profiles/<name>.json`).
+    Named(String),
+    /// A profile's JSON text.
+    Text(String),
+}
+
 /// How a run starts.
 pub struct Options {
     pub flavor: String,
     /// Load Blizzard's UI first (the page fetched it).
     pub blizzard_ui: bool,
-    /// The world profile's text (`tests/profiles/<name>.json`'s); none: the
-    /// manifest's, else a fresh character's.
-    pub profile: Option<String>,
+    /// The world it starts in; none: the manifest's `test.profile`, else
+    /// the flavor's fresh character.
+    pub profile: Option<Profile>,
     /// Debug it (the debugger attached from the first line it loads).
     pub debug: Option<crate::debug::Setup>,
     /// The user's installation (its client of the flavor): the game's
@@ -113,6 +122,8 @@ pub struct Game {
     last_ms: Option<f64>,
     /// The debugging session, when debugged.
     debug: Option<wowlua_debug::SharedRef>,
+    /// The world profile it started in (a `/reload` starts in it again).
+    profile: Option<Profile>,
     /// The installation's client, when the page opened it.
     installation: Option<std::sync::Arc<wowlua_casc::Casc>>,
 }
@@ -134,12 +145,15 @@ impl Game {
         } else {
             None
         };
-        if let Some(text) = &options.profile {
-            // (the suite reads a profile by name from the package's tests)
-            let path = project.root().join("tests/profiles/playground.json");
-            wowlua_host::create_dir_all(path.parent().unwrap_or(Path::new("/")))
-                .map_err(|e| e.to_string())?;
-            wowlua_host::write(&path, text).map_err(|e| e.to_string())?;
+        if let Some(Profile::Named(name)) = &options.profile
+            && !wowlua_driver::profiles::list(project.root())
+                .iter()
+                .any(|(n, _)| n == name)
+        {
+            return Err(format!(
+                "no world profile `{name}` (`{}/{name}.json`)",
+                wowlua_manifest::world::PROFILES_DIR
+            ));
         }
         let output: Rc<RefCell<Vec<Json>>> = Rc::default();
         let sink = output.clone();
@@ -162,7 +176,7 @@ impl Game {
                 &build,
                 &options.flavor,
                 blizzard_ui.clone(),
-                options.profile.is_some(),
+                options.profile.clone(),
                 debugged,
                 installation.clone(),
             );
@@ -197,6 +211,7 @@ impl Game {
             output,
             last_ms: None,
             debug,
+            profile: options.profile.clone(),
             installation,
         })
     }
@@ -230,7 +245,7 @@ impl Game {
                 &self.build,
                 &self.flavor,
                 self.blizzard_ui.clone(),
-                wowlua_host::exists(self.project.root().join("tests/profiles/playground.json")),
+                self.profile.clone(),
                 self.debug.is_some(),
                 self.installation.clone(),
             );
@@ -267,6 +282,9 @@ impl Game {
                 wowlua_debug::Request::FireEvent { event, args } => {
                     wowlua_debug::ui::fire_event(vm, event, args)
                         .map(|()| wowlua_debug::Response::Ok)
+                }
+                wowlua_debug::Request::World { script } => {
+                    wowlua_debug::ui::world(vm, script).map(|()| wowlua_debug::Response::Ok)
                 }
                 _ => Err("not a request that runs code".into()),
             };
@@ -318,6 +336,13 @@ impl Game {
         )
     }
 
+    /// Changes the world while it runs: Lua with `mock` the engine's
+    /// controls (`mock.player:setMoney(500)`); what it printed and raised.
+    pub fn world(&mut self, script: &str) -> Result<Vec<Json>, String> {
+        wowlua_debug::ui::world(&mut self.session.vm, script)?;
+        Ok(self.take_output())
+    }
+
     /// The screen's size in pixels.
     pub fn screen(&mut self) -> (u32, u32) {
         let scene = wowlua_engine::scene::build(&mut self.session.vm);
@@ -339,7 +364,7 @@ fn suite<'a>(
     build: &'a BuildOutput,
     flavor: &str,
     blizzard_ui: Option<wowlua_test::UiSource>,
-    own_profile: bool,
+    profile: Option<Profile>,
     debugged: bool,
     installation: Option<std::sync::Arc<wowlua_casc::Casc>>,
 ) -> wowlua_test::Suite<'a> {
@@ -350,10 +375,13 @@ fn suite<'a>(
         root: project.root().to_path_buf(),
         src: project.manifest.manifest.build.src.clone(),
         blizzard_ui,
-        profile: if own_profile {
-            Some("playground".into())
-        } else {
-            test.profile.clone()
+        profile: match &profile {
+            Some(Profile::Named(name)) => Some(name.clone()),
+            _ => test.profile.clone(),
+        },
+        profile_text: match profile {
+            Some(Profile::Text(text)) => Some(text),
+            _ => None,
         },
         platform: match test.platform {
             Some(wowlua_manifest::model::TestPlatform::Windows) => wowlua_test::Platform::Windows,

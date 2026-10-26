@@ -6,6 +6,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- World profiles are checked with your package: `wowlua check`, the editor and `wowlua test` report an unknown part (a typo the world ignored before), a wrong type, and a `test.profile` or `config({ profile = "…" })` that names no profile (E4400, E4401, E4402). VS Code completes a profile's parts and fields from its schema (`schema/world-profile-0.1.json`).
+- While debugging an addon session, `wowlua/world` (and the MCP tool `world`) changes the running world with the same controls tests use, such as `mock.player:setMoney(500)` or `mock.player:enterCombat()`.
 - **wowlua in the browser**: wowlua's checker, language server, emulated client and debugger now run in a web page, the base for the playground on wowlua.dev. A package can be edited, checked, built and shared as a link, run against Blizzard's default UI and debugged with breakpoints, with the game's art from your own installation read in the browser and never uploaded. Each release has the package attached (`wowlua-web-<version>.tgz`).
 
 ### Fixed

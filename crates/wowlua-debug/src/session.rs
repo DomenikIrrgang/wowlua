@@ -386,6 +386,7 @@ fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<Strin
                 Request::FireEvent { event, args } => {
                     crate::ui::fire_event(vm, event, args).map(|()| Response::Ok)
                 }
+                Request::World { script } => crate::ui::world(vm, script).map(|()| Response::Ok),
                 _ => Err("not a request that runs code".into()),
             };
             shared.borrow_mut().link.respond(id, r);

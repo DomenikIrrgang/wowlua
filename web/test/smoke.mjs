@@ -20,7 +20,7 @@ assert.equal(found[0].file, "src/main.wowlua");
 
 const link = p.share();
 p.reset({ "wowlua.json": "{}" });
-assert.equal(p.openShared(link), true);
+assert.deepEqual(p.openShared(link), {});
 assert.ok("src/main.wowlua" in p.files());
 
 // the addon runs: login, frames, a click (no canvas in Node: not drawn)
@@ -45,6 +45,18 @@ printed = p.input({ action: "click", x: w / 2, y: h / 2 }).map((o) => o.text);
 assert.deepEqual(printed, ["clicked"]);
 p.stop();
 assert.equal(p.running, false);
+
+// world profiles: by name, and the world changed while it runs
+p.writeFile("tests/profiles/rich.json", '{ "character": { "name": "Thrall" }, "money": 99 }');
+assert.deepEqual(p.profiles(), ["rich"]);
+assert.equal(p.profileSchema().title, "World profile");
+p.writeFile("src/main.wowlua", 'print(UnitName("player"), GetMoney())\n');
+assert.equal(p.run({ profile: "rich" }).ok, true);
+assert.deepEqual(p.advance().map((o) => o.text), ["Thrall 99"]);
+p.world("mock.player:setMoney(5)");
+assert.equal(p.world("print(GetMoney())")[0].text, "5");
+p.stop();
+assert.equal(p.openShared(p.share({ profile: "rich" })).profile, "rich");
 
 // the debugger through the page's link (the worker's mailbox stands in
 // here: requests for when it waits, everything sent kept)

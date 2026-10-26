@@ -959,6 +959,7 @@ fn make_suite<'a>(
         src: project.manifest.manifest.build.src.clone(),
         blizzard_ui,
         profile: test_settings.profile.clone(),
+        profile_text: None,
         platform: match test_settings.platform {
             Some(wowlua_manifest::model::TestPlatform::Windows) => wowlua_test::Platform::Windows,
             _ => wowlua_test::Platform::Mac,

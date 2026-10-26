@@ -379,6 +379,20 @@ toy, the toy box's checks opened for it and put back, and the wardrobe's
 collected sources); object keys that are whole numbers become number keys. Every part
 stays drivable during the test.
 
+A profile's parts and their fields are described by
+`schema/world-profile-0.1.json` (editors complete them: a profile may
+name it in `$schema`, and the VS Code extension applies it to
+`tests/profiles/*.json`). A check of the package (`wowlua check`, the
+language server, `wowlua test`) checks every profile: E4400 when it is
+no JSON object, E4401 when a part is unknown (the world would ignore
+it), has the wrong type, or is keyed by something other than IDs where
+the schema says so; a part's fields beyond the schema's pass to the
+controls as they are. A profile `test.profile` or a test file's
+`config({ profile })` names must be there (E4402). A debugging session
+or a playground run starts in a profile by name too, or in one given as
+text, and changes its world while it runs with a script of the controls
+(`wowlua/world`, decision T401).
+
 **Raw events.** `mock.fireEvent(name, ...)` and `mock.fireUnitEvent(name,
 unit, ...)` fire any event the flavor documents, the payload checked against
 its documentation (count, types, and secrets where the documentation says);

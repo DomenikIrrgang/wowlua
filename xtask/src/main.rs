@@ -2,7 +2,8 @@
 //!
 //! - `cargo xtask codes`: regenerate the diagnostic code table from
 //!   `spec/appendix/diagnostics.md`.
-//! - `cargo xtask schema`: regenerate the manifest JSON schema in `schema/`.
+//! - `cargo xtask schema`: regenerate the manifest's and the world
+//!   profiles' JSON schemas in `schema/`.
 //! - `cargo xtask runtime`: compile the runtime's wowlua sources into the
 //!   Lua the compiler embeds (`crates/wowlua-runtime/lua`).
 //! - `cargo xtask check`: fail if generated files are out of date (used in CI).
@@ -87,7 +88,13 @@ fn main() -> Result<()> {
             };
             profile::run(Path::new(&saved), Path::new(&out))
         }
-        "schema" => write_if_changed(&schema_path(&root), &wowlua_manifest::schema_json()),
+        "schema" => {
+            write_if_changed(&schema_path(&root), &wowlua_manifest::schema_json())?;
+            write_if_changed(
+                &world_schema_path(&root),
+                &wowlua_manifest::world::schema_json(),
+            )
+        }
         "fullprobe-plan" => {
             if std::env::args().nth(2).as_deref() == Some("--stats") {
                 fullprobe::stats(&root)
@@ -130,6 +137,11 @@ fn main() -> Result<()> {
             check_current(
                 &schema_path(&root),
                 &wowlua_manifest::schema_json(),
+                "schema",
+            )?;
+            check_current(
+                &world_schema_path(&root),
+                &wowlua_manifest::world::schema_json(),
                 "schema",
             )?;
             check_current(
@@ -260,6 +272,14 @@ fn schema_path(root: &Path) -> PathBuf {
     root.join(format!(
         "schema/wowlua-{}.json",
         wowlua_manifest::SCHEMA_VERSION
+    ))
+}
+
+/// The world profiles' schema (decision T401).
+fn world_schema_path(root: &Path) -> PathBuf {
+    root.join(format!(
+        "schema/world-profile-{}.json",
+        wowlua_manifest::world::SCHEMA_VERSION
     ))
 }
 

@@ -36,6 +36,7 @@ pub mod packaging;
 pub mod parallel;
 pub mod pkgmeta;
 mod private_names;
+pub mod profiles;
 pub mod project;
 #[cfg(feature = "native")]
 pub mod publish;

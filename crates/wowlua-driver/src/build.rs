@@ -443,6 +443,15 @@ fn build_inner(
             ),
         }
     }
+    // The world profiles the test side starts in (decision T401).
+    if request.tests && request.only.is_none() {
+        let tests: Vec<(FileId, Arc<[u8]>)> = files
+            .iter()
+            .filter(|(s, _)| sources::TestRole::of(&s.rel) == Some(sources::TestRole::Test))
+            .filter_map(|(s, id)| Some((*id, raw.get(&s.rel)?.clone())))
+            .collect();
+        crate::profiles::check(session, project, tests.iter().map(|(id, b)| (*id, &b[..])));
+    }
     // The code examples of the addon's doc comments, as test files (decision
     // T222): each source's next to it, its text the source's diagnostics
     // name (an example's lines and columns are its comment's).

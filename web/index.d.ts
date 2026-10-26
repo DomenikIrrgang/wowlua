@@ -39,13 +39,23 @@ export interface Output {
     stack?: string;
 }
 
+/** How a shared package runs. */
+export interface RunSettings {
+    flavor?: string;
+    /** One of the package's world profiles, by name. */
+    profile?: string;
+    blizzardUI?: boolean;
+}
+
 export interface RunOptions {
     /** The flavor to run (default "camelot", the one the playground has Blizzard's UI for). */
     flavor?: string;
     /** Load Blizzard's UI first (`loadBlizzardUI` fetched it). */
     blizzardUI?: boolean;
-    /** A world profile's JSON text (`tests/profiles/<name>.json`'s). */
+    /** One of the package's world profiles by name (`tests/profiles/<name>.json`). */
     profile?: string;
+    /** A world profile's JSON text (over `profile`). */
+    profileText?: string;
     /** Debug the run (through the worker, a cross-origin isolated page). */
     debug?: DebugSetup | true;
 }
@@ -111,8 +121,16 @@ export class Playground {
     check(): Diagnostic[];
     build(profile?: string): Built;
     format(path: string): Formatted;
-    share(): string;
-    openShared(link: string): boolean;
+    /** The package as a link's fragment, with how it runs when given. */
+    share(run?: RunSettings): string;
+    /** Opens a shared package: how it runs (`{}` when it does not say), or null. */
+    openShared(link: string): RunSettings | null;
+    /** The package's world profiles by name (`tests/profiles/<name>.json`). */
+    profiles(): string[];
+    /** The world profiles' JSON schema (for an editor's JSON support). */
+    profileSchema(): object;
+    /** Changes the running world: Lua with `mock` the engine's controls. */
+    world(script: string): Output[];
     languageServer(onMessage: (message: LspMessage) => void): LanguageServer;
     /**
      * Fetches a flavor's Blizzard UI code (from jsDelivr by default, or
@@ -143,6 +161,7 @@ export type PlaygroundCall =
     | "files" | "reset" | "writeFile" | "readFile" | "deleteFile"
     | "check" | "build" | "format" | "share" | "openShared" | "version"
     | "loadBlizzardUI" | "run" | "stop" | "input" | "screenSize" | "useInstallation"
+    | "profiles" | "profileSchema" | "world"
     /** The game's screen as a PNG Blob (`call("snapshot", scale)`). */
     | "snapshot";
 

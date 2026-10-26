@@ -61,9 +61,12 @@ fn a_page_edits_checks_builds_shares_and_asks_the_language_server() {
     );
 
     // a link gives the files back
-    let link = p.share();
+    let link = p.share(None);
     p.reset([("wowlua.json".to_string(), "{}".to_string())]);
-    assert!(p.open_shared(&format!("https://wowlua.dev/playground#{link}")));
+    assert!(
+        p.open_shared(&format!("https://wowlua.dev/playground#{link}"))
+            .is_some()
+    );
     assert!(p.files().iter().any(|(path, _)| path == "src/util.wowlua"));
 
     // the language server: the open file's diagnostics, then its hover

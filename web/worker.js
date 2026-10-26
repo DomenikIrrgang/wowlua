@@ -6,7 +6,8 @@
 //   { id, call: "<method>", args: [...] }  → { id, result } or { id, error }
 //       methods: files, reset, writeFile, readFile, deleteFile, check,
 //                build, format, share, openShared, version,
-//                loadBlizzardUI, run, stop, input, screenSize,
+//                loadBlizzardUI, run, stop, input, screenSize, profiles,
+//                profileSchema, world,
 //                snapshot (the game's screen as a PNG Blob),
 //                useInstallation(source, { flavor }) (the user's WoW folder:
 //                a FileSystemDirectoryHandle, or a folder input's files)
@@ -30,7 +31,7 @@ import { Installation } from "./installation.js";
 const CALLS = new Set([
     "files", "reset", "writeFile", "readFile", "deleteFile",
     "check", "build", "format", "share", "openShared",
-    "run", "stop", "input", "screenSize",
+    "run", "stop", "input", "screenSize", "profiles", "profileSchema", "world",
 ]);
 
 let playground = null;
@@ -118,7 +119,7 @@ onmessage = async (event) => {
         } else if (CALLS.has(m.call)) {
             result = playground[m.call](...(m.args ?? []));
             // (what input made the game print goes where the frames' does)
-            if (m.call === "input") for (const output of result) postMessage({ output });
+            if (m.call === "input" || m.call === "world") for (const output of result) postMessage({ output });
         } else {
             throw new Error(`no method ${m.call}`);
         }

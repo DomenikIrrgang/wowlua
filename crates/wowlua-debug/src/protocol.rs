@@ -215,6 +215,12 @@ pub enum Request {
         #[serde(default)]
         args: Vec<serde_json::Value>,
     },
+    /// Changes the world while the session runs: Lua with `mock` the
+    /// engine's controls, as a world profile is applied (`mock.player:
+    /// setMoney(500)`, `mock.player:enterCombat()`; decision T401).
+    World {
+        script: String,
+    },
     ProfileStart,
     ProfileStop,
     /// What was printed and raised since the last time asked.
