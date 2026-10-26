@@ -586,7 +586,10 @@ fn build_inner(
         None => vcs::info(&root),
     };
     let version = build_version(session, project, &profile, vcs.as_ref())?;
-    let build_id = build_id(session, project, &profile.name, &flavors, &files, &assets);
+    // The settings as resolved: a publish target's `minify` or `bundle`
+    // over the profile's, and `nolib`, make another build.
+    let settings = format!("{profile:?} nolib={}", request.nolib);
+    let build_id = build_id(session, project, &settings, &flavors, &files, &assets);
     let asset_rels: Vec<String> = assets.iter().map(|a| a.rel.clone()).collect();
 
     // Packager keywords in passthrough files (spec CLI §12.6). Flavor blocks
@@ -3640,19 +3643,19 @@ fn build_version(
     Some(version)
 }
 
-/// Stable build id: a hash of the compiler version, profile, flavors,
-/// manifest and every input file.
+/// Stable build id: a hash of the compiler version, the profile's resolved
+/// settings, flavors, manifest and every input file.
 fn build_id(
     session: &Session,
     project: &Project,
-    profile: &str,
+    settings: &str,
     flavors: &[String],
     files: &[(Source, FileId)],
     assets: &[sources::Asset],
 ) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(crate::COMPILER_VERSION.as_bytes());
-    hasher.update(profile.as_bytes());
+    hasher.update(settings.as_bytes());
     for flavor in flavors {
         hasher.update(flavor.as_bytes());
     }

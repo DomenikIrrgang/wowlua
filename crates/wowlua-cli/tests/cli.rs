@@ -3643,6 +3643,71 @@ print("shown", console.window:IsShown(), type(WowluaDevDB_Win))
     );
 }
 
+/// A publish target that minifies further than its profile is another
+/// build with its own id (spec meta §6.2: a hash of the inputs), so `wowlua
+/// trace` decodes its errors with its own maps, also next to the profile's
+/// build in `dist/` (spec tooling §16.4).
+#[test]
+fn a_target_with_other_settings_has_its_own_build_id() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"my-addon\", \"version\": \"1.0.0\" }, \"addon\": { \"title\": \"MyAddon\" }, \"publish\": { \"targets\": { \"gh\": { \"type\": \"github\", \"repository\": \"o/r\", \"minify\": \"max\" } } } }\n",
+            ),
+            (
+                "src/ui/window.wowlua",
+                "export class Window\n    private frame: Frame? = nil\n\n    function refresh()\n        local frame = self.frame\n        frame:Show()\n    end\nend\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import Window from \"./ui/window\"\n\nlocal w = Window.new()\n\nlocal function onLogin()\n    w:refresh()\nend\n\nonLogin()\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("package").assert().success();
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let id = |toc: &str| {
+        let text = fs::read_to_string(dir.path().join(toc)).unwrap();
+        text.lines()
+            .find_map(|l| l.strip_prefix("## X-Wowlua-Build: "))
+            .unwrap()
+            .to_string()
+    };
+    let target = id("dist/targets/gh/MyAddon/MyAddon.toc");
+    let release = id("dist/release/MyAddon/MyAddon.toc");
+    assert_ne!(target, release);
+    // The target's error, with its build id, as the newer release build
+    // sits next to it.
+    let code = fs::read_to_string(dir.path().join("dist/targets/gh/MyAddon/MyAddon.lua")).unwrap();
+    let line_of = |text: &str| code.lines().position(|l| l == text).unwrap() + 1;
+    let (show, call) = (line_of("a:Show()"), line_of("a:refresh()"));
+    let input = format!(
+        "MyAddon/MyAddon.lua:{show}: attempt to index local 'a' (a nil value)\n[string \"@Interface/AddOns/MyAddon/MyAddon.lua\"]:{call}: in function <MyAddon/MyAddon.lua:{}>\n",
+        call - 1
+    );
+    let build = target.split_whitespace().last().unwrap();
+    let assert = wowlua(dir.path())
+        .args(["trace", "--build", build])
+        .write_stdin(input)
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).into_owned();
+    assert!(
+        stdout.contains("  → src/ui/window.wowlua:6 in Window:refresh   ('a' is 'frame')\n"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("  → src/main.wowlua:6 in onLogin\n"),
+        "{stdout}"
+    );
+}
+
 /// `wowlua trace` (spec tooling §16.4): locations from the game mapped to
 /// source files, with the enclosing function.
 #[test]

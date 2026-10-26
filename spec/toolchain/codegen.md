@@ -478,7 +478,10 @@ Each TOC contains, in order:
 5. verbatim `addon.toc-extra` fields, then the lines of the flavor's
    `addon.toc-data` files ([Manifest §9.3.2](manifest.md#932-toc-data-files)),
 6. `## X-Wowlua-Build: <profile> <build id>` and the publish-target ID fields
-   (`## X-Curse-Project-ID`, `## X-Wago-ID`, `## X-WoWI-ID`) when configured,
+   (`## X-Curse-Project-ID`, `## X-Wago-ID`, `## X-WoWI-ID`) when configured.
+   The build id hashes the inputs, the profile's settings as resolved (a
+   publish target's `minify` and `bundle` included) and the flavors, so two
+   builds that differ in their output never share one,
 7. the file list (§14.9.2), using `\` separators. `build.external-files`
    lines (`..\<AddOn>\src\…`) are listed verbatim at their load-order
    position; `build.shared-files` are shipped but not listed
