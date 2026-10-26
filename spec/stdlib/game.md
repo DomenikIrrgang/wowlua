@@ -290,7 +290,10 @@ error policy ([Infrastructure: errors](infrastructure.md#errors)).
 
 `wowlua:tooltip` provides typed post-hooks for tooltips. On clients with the
 tooltip data system it uses `TooltipDataProcessor.AddTooltipPostCall`, and
-elsewhere it hooks the `OnTooltipSet*` scripts of the standard tooltips.
+elsewhere it hooks the `OnTooltipSet*` scripts of the standard tooltips. A
+client has the data system when it has `C_TooltipInfo`, at run time as at
+compile time (`TooltipKind` below); the classic clients' UI defines
+`TooltipDataProcessor` too, but their tooltips do not call it.
 
 ```wowlua
 import onTooltip from "wowlua:tooltip"

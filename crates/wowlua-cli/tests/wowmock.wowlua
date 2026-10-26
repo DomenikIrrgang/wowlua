@@ -572,7 +572,10 @@ UnitTokenFromGUID = (function(guid: any): any
     return guid:match("^GUID%-(.+)$")
 end) :: any
 
--- The tooltip data system (setups without it set TooltipDataProcessor to nil).
+-- The tooltip data system: the client's `C_TooltipInfo` (from the engine),
+-- with the UI's `TooltipDataProcessor`. Classic clients have the latter
+-- alone, and their tooltips run only the scripts; setups without the data
+-- system set either to nil.
 _G.Enum = {
     TooltipDataType = { Item = 0, Spell = 1, Unit = 2, Currency = 5, Mount = 10 },
     SpellBookSpellBank = { Player = 0, Pet = 1 },
@@ -600,7 +603,7 @@ function Mock.showTooltip(kind: string, data: Shown?, tip: any): string[]
     shown.kind = kind
     t.lines = {}
     t.showing = shown
-    if _G.TooltipDataProcessor then
+    if _G.C_TooltipInfo and _G.TooltipDataProcessor then
         const dataType = _G.Enum.TooltipDataType[kind]
         const raw = { type = dataType, id = shown.id, guid = shown.guid, hyperlink = shown.link }
         for _, fn in ipairs(Mock.tooltipCalls[dataType] ?? {}) do

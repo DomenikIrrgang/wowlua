@@ -40,7 +40,10 @@ end
 
 const processor = _G.TooltipDataProcessor :: DataProcessor?
 const dataTypes = (_G.Enum?.TooltipDataType ?? {}) :: { [string]: number }
-const modern = processor?.AddTooltipPostCall ~= nil
+-- The data system is the client's `C_TooltipInfo`, as the compiler decides
+-- per flavor (spec stdlib "tooltip"): classic clients' UI defines
+-- `TooltipDataProcessor` too, but their tooltips never call its post-calls.
+const modern = (_G :: { [string]: unknown }).C_TooltipInfo ~= nil and processor?.AddTooltipPostCall ~= nil
 
 -- Without the data system: the kinds there are, by the script that shows
 -- them, and the standard tooltips.

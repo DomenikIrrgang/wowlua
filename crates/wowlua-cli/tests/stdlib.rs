@@ -4243,7 +4243,9 @@ show("Item", thunderfury, custom)
 "#;
 
 /// `wowlua:tooltip`: the same post-hooks with the tooltip data system and
-/// through the tooltips' scripts, in every build mode.
+/// through the tooltips' scripts, in every build mode. A client has the
+/// data system when it has `C_TooltipInfo`: classic clients' UI defines
+/// `TooltipDataProcessor` too, but their tooltips never call it.
 #[test]
 fn tooltip_post_hooks_with_and_without_the_data_system() {
     let link = "|cffff8000|Hitem:19019::|h[Thunderfury]|h|r";
@@ -4256,7 +4258,7 @@ fn tooltip_post_hooks_with_and_without_the_data_system() {
         format!("Item: item 19019 {link} | second"),
         format!("Item: item 19019 {link} | second"),
     ];
-    for setup in ["", "TooltipDataProcessor = nil"] {
+    for setup in ["", "TooltipDataProcessor = nil", "C_TooltipInfo = nil"] {
         let out = modes(&[("src/main.wowlua", TOOLTIP)], setup, TOOLTIP_SCRIPT);
         assert_eq!(plain(&out), expected, "setup {setup:?}");
         // A failing handler is reported; the others still run.
