@@ -463,10 +463,11 @@ class Movable implements MovableHandle
     end
 
     function restore()
-        local pos = self:stored()
-        if not pos then
+        const stored = self:stored()
+        if not stored then
             return
         end
+        local pos: FramePosition = stored
         const name = self:layout()
         if name then
             const own = self:layouts()?.[name]

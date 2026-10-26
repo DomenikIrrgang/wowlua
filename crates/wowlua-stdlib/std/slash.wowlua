@@ -343,7 +343,7 @@ class SlashRouter implements Router
         local rest = ""
         for i = 2, #tokens do
             if restAt and #positional == restAt - 1 then
-                rest = msg:sub(starts[i]):match("^(.-)%s*$")
+                rest = msg:sub(starts[i]):match("^(.-)%s*$") ?? ""
                 break
             end
             local flag = tokens[i]:match("^%-%-(.+)$")

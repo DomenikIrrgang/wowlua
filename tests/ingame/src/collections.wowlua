@@ -241,7 +241,7 @@ export function journalsProbe()
     end
     -- A collected toy's.
     local toyID: number? = nil
-    local toyFavorite = false
+    local toyFavorite: unknown = false
     local function toggleToy()
         for i = 1, C_ToyBox.GetNumFilteredToys() do
             const id = C_ToyBox.GetToyFromIndex(i)

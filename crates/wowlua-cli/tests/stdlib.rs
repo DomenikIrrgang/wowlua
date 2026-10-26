@@ -1883,7 +1883,7 @@ local db = saved.bind("StdDB", {
 })
 
 -- Locked until loaded, for reads and writes.
-local ok, err = pcall(function() return db.scale end)
+local ok: boolean, err: unknown = pcall(function() return db.scale end)
 Mock.check(not ok and tostring(err):match("Std: StdDB accessed before it was loaded; use @onLoad") ~= nil, "early read")
 ok, err = pcall(function() db.scale = 2 end)
 Mock.check(not ok and tostring(err):match("accessed before it was loaded") ~= nil, "early write")
