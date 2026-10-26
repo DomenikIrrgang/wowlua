@@ -86,14 +86,34 @@ the rest of `check`.
 
 ## wowlua explain
 
-`wowlua explain` prints a code's kind and summary, without a network
-connection:
+`wowlua explain` prints what a code means, without a network connection:
+its summary, how to fix it, an example that reports it and one that
+compiles, and related codes.
 
 ```console
 $ wowlua explain E2001
 E2001 (error): Type mismatch: S is not assignable to T
 
-See the diagnostics reference: spec/appendix/diagnostics.md
+A value's type doesn't fit where it is used: an argument, an assignment to an
+annotated local or field, or a return value. The same code covers an operator
+used on a type it doesn't take, such as comparing a number with a string or
+doing arithmetic on a boolean. Change the value, or widen the annotation if
+the value is right.
+
+In a plain Lua file (no wowlua syntax, no `--!strict`) the checker reports the
+warning with the same number, W2001, so existing code keeps building.
+
+Reports it:
+    local count: number = "3"
+    print(count)
+
+Compiles:
+    local count: number = 3
+    print(count)
+
+Related: W2001, E2005
+
+https://wowlua.dev/docs/reference/diagnostics/E2001
 ```
 
 Lowercase works too (`wowlua explain w1003`). For the warning form of a plain
