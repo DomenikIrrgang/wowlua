@@ -2327,17 +2327,20 @@ warn("silent")
         ]
         .join("\n")
     );
-    // A level function as a value cannot be stripped (E8118).
-    fs::write(
-        dir.path().join("src/main.wowlua"),
+    // A level function as a value cannot be stripped (E8118), also read
+    // from the `log` object or a namespace import.
+    for source in [
         "import info from \"wowlua:log\"\nlocal f = info\nf(\"x\")\n",
-    )
-    .unwrap();
-    wowlua(dir.path())
-        .args(["build", "--message-format", "short"])
-        .assert()
-        .code(1)
-        .stderr(predicate::str::contains("error[E8118]"));
+        "import log from \"wowlua:log\"\nlocal f = log.warn\nf(\"x\")\n",
+        "import * as Log from \"wowlua:log\"\nlocal f = Log.debug\nf(\"x\")\n",
+    ] {
+        fs::write(dir.path().join("src/main.wowlua"), source).unwrap();
+        wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("error[E8118]"));
+    }
 }
 
 /// Profiling and tracing (spec §7.3, §7.4): instrument levels, `@profile`,

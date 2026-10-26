@@ -2239,6 +2239,10 @@ impl<'a> Lowerer<'a> {
                 if let Some(v) = self.enum_member(obj, name.text(), name.span(), pos) {
                     return v;
                 }
+                // `local f = log.warn`: a helper used as a value.
+                if let Some(id) = self.member_intrinsic(obj, name.text()) {
+                    self.check_intrinsic_value(&id, e.span());
+                }
                 K::Field {
                     obj: Box::new(self.expr(obj)),
                     name: self.ident(name),

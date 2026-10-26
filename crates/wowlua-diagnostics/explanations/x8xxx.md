@@ -918,7 +918,9 @@ Related: E8021
 ## E8118
 
 A `wowlua:log` level function (`trace`, `debug`, `info`, `warn`, `error`) is
-used as a value instead of being called. The compiler removes log calls below
+used as a value instead of being called, whether imported by name or read
+from the `log` object or a namespace import (`local f = log.warn`,
+`Log.debug`). The compiler removes log calls below
 the profile's `log-level`, with their arguments, so they cost nothing in a
 release build. It can do that only for direct calls, never for a function that
 was stored in a variable or passed along. Wrap the call in your own function.

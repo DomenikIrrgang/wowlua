@@ -29,17 +29,7 @@ impl<'a> Lowerer<'a> {
                 Some(Binding::Intrinsic(id)) => id.clone(),
                 _ => return None,
             },
-            ExprKind::Field { obj, name } => match obj.kind() {
-                ExprKind::Name(m) => match self.lookup(m.text()) {
-                    Some(Binding::IntrinsicNamespace(map)) => map.get(name.text())?.clone(),
-                    // `log.info(…)` through the `log` object.
-                    Some(Binding::Intrinsic(obj_id)) if obj_id == "log.object" => {
-                        format!("log.{}", name.text())
-                    }
-                    _ => return None,
-                },
-                _ => return None,
-            },
+            ExprKind::Field { obj, name } => self.member_intrinsic(obj, name.text())?,
             _ => return None,
         };
         (id.starts_with("debug.")
@@ -47,6 +37,24 @@ impl<'a> Lowerer<'a> {
             || log_rank(&id).is_some()
             || id == "color.hex")
             .then_some(id)
+    }
+
+    /// The `@intrinsic` id of `obj.name`: a member of a namespace import
+    /// (`debug.assert`, `Log.debug`) or of the `log` object (`log.info`).
+    pub(crate) fn member_intrinsic(&self, obj: Expr<'a>, name: &str) -> Option<String> {
+        if !self.scopes.seen().intrinsics {
+            return None;
+        }
+        let ExprKind::Name(m) = obj.kind() else {
+            return None;
+        };
+        match self.lookup(m.text()) {
+            Some(Binding::IntrinsicNamespace(map)) => map.get(name).cloned(),
+            Some(Binding::Intrinsic(obj_id)) if obj_id == "log.object" => {
+                Some(format!("log.{name}"))
+            }
+            _ => None,
+        }
     }
 
     /// A call of a `wowlua:log` level function: removed below the
@@ -326,6 +334,14 @@ impl<'a> Lowerer<'a> {
     fn intrinsic_callee(&mut self, callee: Expr<'a>) -> ir::Expr {
         match callee.kind() {
             ExprKind::Name(n) => name_expr(self.ident(n)),
+            // Called, so not a value (E8118 is for values).
+            ExprKind::Field { obj, name } => ir::Expr::new(
+                ir::ExprKind::Field {
+                    obj: Box::new(self.expr(obj)),
+                    name: self.ident(name),
+                },
+                self.span_pos(callee.span()),
+            ),
             _ => self.expr(callee),
         }
     }
