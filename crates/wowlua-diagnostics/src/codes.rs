@@ -40,7 +40,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E1015", summary: "Module not found" },
     CodeInfo { code: "E1016", summary: "An `export` redeclares a module-level name (a `local`, function, import, …), or a name is exported twice" },
     CodeInfo { code: "E1020", summary: "Reference to a declaration removed by `@if` or static elimination" },
-    CodeInfo { code: "E1031", summary: "Duplicate (non-ambient) interface in the same scope" },
+    CodeInfo { code: "E1031", summary: "Duplicate type name in the same scope: two (non-ambient) interfaces, or any two of an interface, a type alias, a class and an enum" },
     CodeInfo { code: "E1032", summary: "Top-level `return` in a module" },
     CodeInfo { code: "W1033", summary: "Load order cannot be determined (dynamic names, several writers, external names); files keep their source order" },
     CodeInfo { code: "W1034", summary: "Name read at load time but only defined at run time" },

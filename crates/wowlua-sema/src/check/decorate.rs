@@ -180,6 +180,23 @@ impl Checker<'_, '_> {
         current
     }
 
+    /// [`Self::apply_decorators`]'s type without reporting anything (the
+    /// type a function's body sees of itself, before its declaration is
+    /// checked and its decorators applied for good).
+    pub(crate) fn decorated_quietly(
+        &mut self,
+        values: &[DecoratorValue],
+        target: TypeId,
+    ) -> TypeId {
+        if values.is_empty() {
+            return target;
+        }
+        let reported = self.diagnostics.len();
+        let t = self.apply_decorators(values, target, "function");
+        self.diagnostics.truncate(reported);
+        t
+    }
+
     /// One decorator applied to a value of type `current`: the type it
     /// gives, if it replaces the value with a function.
     fn decorator_result(

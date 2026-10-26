@@ -445,11 +445,13 @@ Related: E1040, E1039
 
 ## E1031
 
-Two interfaces with the same name are declared in the same scope. Only
-ambient `declare interface` declarations merge (as for the addon namespace);
-give the other interface its own name, or merge the two into one.
+Two types with the same name are declared in the same scope: two interfaces,
+or an interface, a type alias, a class or an enum with the name of another.
+A type name means one type in a scope. Only ambient `declare interface`
+declarations merge (as for the addon namespace); give the other type its own
+name, or merge the two into one.
 
-An interface under `@if` counts only where the build keeps it, so two
+A declaration under `@if` counts only where the build keeps it, so two
 alternatives for different builds may share a name.
 
 ```wowlua fails

@@ -202,7 +202,9 @@ change signatures.
   A result of `nil`, `any` or anything but a function keeps the value's
   type; a `F?` result gives `F`. Functions and methods get the result's
   type (a method's without its `self`); callers checked after the
-  declaration see it, the function's own body is checked as declared.
+  declaration see it, and so do a function's own recursive calls, which go
+  through the decorated value (§4.5.3). A method's body is checked as
+  declared.
   Constructors, accessors, classes and fields keep their declared types.
 - Wrapping framework decorators (§4.4) are checked and typed like user
   decorators; registering ones are checked by their own rules (the event

@@ -1872,6 +1872,9 @@ impl<'e, 'p> Checker<'e, 'p> {
                 // Callers (and the body, recursing) see the overloads.
                 let set = self.take_overloads(name.text(), impl_t);
                 let t = set.unwrap_or(impl_t);
+                // The body's recursive calls go through the decorated
+                // value (spec §4.5.3).
+                let t = self.decorated_quietly(&decorators, t);
                 let id = self.declare(name.text(), None, t, false, Some(name.span()));
                 let handler = self.next_handler.take();
                 let actual = self.function_body(
@@ -2307,6 +2310,20 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.take_overloads(name.path().at(0).text(), declared)
             })
             .flatten();
+        // The body's recursive calls go through the decorated value (spec
+        // §4.5.3), also where the module hoisted the function.
+        let hoisted = (name.path().len() == 1 && !method && !decorators.is_empty())
+            .then(|| self.lookup_var(name.path().at(0).text()))
+            .flatten()
+            .filter(|v| self.vars[v.0 as usize].declared.is_some());
+        if let Some(v) = hoisted
+            && let Some(declared) = self.vars[v.0 as usize].declared
+        {
+            let decorated = self.decorated_quietly(&decorators, declared);
+            self.vars[v.0 as usize].declared = Some(decorated);
+            self.vars[v.0 as usize].base = decorated;
+            self.flow.insert(v, decorated);
+        }
         let t = self.function_body(&FnSig::of(func), expected, self_ty);
         if let Some(h) = self.hovers.as_mut() {
             let at = name

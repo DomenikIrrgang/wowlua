@@ -443,3 +443,71 @@ fn script_handlers_are_checked() {
     let found = codes(&check_with(src, Mode::Strict, Some(WIDGETS), None));
     assert!(has(&found, "E2001"), "{found:#?}");
 }
+
+/// A type name is declared once in a scope (E1031): an interface, a type
+/// alias, a class and an enum share the names of types.
+#[test]
+fn duplicate_type_names_are_e1031() {
+    for (a, b) in [
+        (
+            "type Row = { a: number }\n",
+            "interface Row\n    b: number\nend\n",
+        ),
+        ("interface Row\n    b: number\nend\n", "class Row\nend\n"),
+        ("class Row\nend\n", "type Row = { a: number }\n"),
+        ("enum Row { A }\n", "class Row\nend\n"),
+        ("type Row = number\n", "type Row = string\n"),
+        ("class Row\nend\n", "export class Row\nend\n"),
+    ] {
+        let found = strict_codes(&format!("{a}{b}print(1)\n"));
+        assert!(
+            found
+                .iter()
+                .any(|c| c.starts_with("E1031:") && c.contains("`Row`")),
+            "{a}{b}{found:#?}"
+        );
+    }
+    // Different scopes, and `@if` alternatives.
+    let found = strict_codes(
+        "type Row = number\nlocal function f()\n    type Row = string\n    local r: Row = \"x\"\n    print(r)\nend\nf()\n",
+    );
+    assert!(!has(&found, "E1031"), "{found:#?}");
+    let found = strict_codes("@if(false)\ntype Row = number\nclass Row\nend\nprint(Row)\n");
+    assert!(!has(&found, "E1031"), "{found:#?}");
+}
+
+/// A decorated function's recursive calls go through the decorated value
+/// (spec §4.5.3): its body sees the decorator's result type.
+#[test]
+fn recursion_sees_the_decorated_function() {
+    let wrap = "local function stringly(fn: (n: number) -> (), _: DecoratorContext): (s: string) -> ()\n    return function(s: string) fn(tonumber(s) or 0) end\nend\n";
+    for decl in ["local function", "export function"] {
+        let found = decorated(
+            &format!(
+                "{wrap}@stringly\n{decl} F(n: number)\n    if n > 0 then F(tostring(n - 1)) end\nend\nF(\"3\")\n"
+            ),
+            Mode::Basic,
+        );
+        assert!(
+            !found.iter().any(|c| c.starts_with('E')),
+            "{decl}: {found:#?}"
+        );
+        let found = decorated(
+            &format!(
+                "{wrap}@stringly\n{decl} F(n: number)\n    if n > 0 then F(n - 1) end\nend\nF(\"3\")\n"
+            ),
+            Mode::Basic,
+        );
+        assert!(has(&found, "E2001"), "{decl}: {found:#?}");
+        // (reported once)
+        let found = decorated(
+            "local function onNumbers(fn: (n: number) -> (), _: DecoratorContext) return fn end\n@onNumbers\nlocal function g(s: string) if s == \"\" then g(\"x\") end end\ng(\"\")\n",
+            Mode::Basic,
+        );
+        assert_eq!(
+            found.iter().filter(|c| c.starts_with("E3022")).count(),
+            1,
+            "{found:#?}"
+        );
+    }
+}

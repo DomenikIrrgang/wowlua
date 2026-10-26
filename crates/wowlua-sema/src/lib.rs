@@ -366,7 +366,7 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
                 _ => seen_other = true,
             }
         }
-        duplicate_interfaces(parse, &info, f.meta.or(meta), &mut analysis.diagnostics);
+        duplicate_types(parse, &info, f.meta.or(meta), &mut analysis.diagnostics);
         if info.is_module {
             export_redeclarations(parse, &info, f.meta.or(meta), &mut analysis.diagnostics);
             for s in parse.view().block().stmts() {
@@ -1221,11 +1221,11 @@ fn kept_by_if(s: Stmt<'_>, info: &ModuleInfo, meta: Option<&Meta>) -> bool {
     })
 }
 
-/// E1031: two interfaces with one name in one block (spec §3.3). Only
-/// ambient `declare interface`s merge; declarations under `@if` count
-/// where the build keeps them (alternatives for different builds may share
-/// a name).
-fn duplicate_interfaces(
+/// E1031: two types with one name in one block (spec §3.3): interfaces,
+/// type aliases, classes and enums. Only ambient `declare interface`s
+/// merge; declarations under `@if` count where the build keeps them
+/// (alternatives for different builds may share a name).
+fn duplicate_types(
     parse: &Parse,
     info: &ModuleInfo,
     meta: Option<&Meta>,
@@ -1233,7 +1233,7 @@ fn duplicate_interfaces(
 ) {
     let mut blocks = vec![parse.view().block()];
     while let Some(b) = blocks.pop() {
-        let mut seen: HashMap<&str, Name<'_>> = HashMap::new();
+        let mut seen: HashMap<&str, (Name<'_>, &str)> = HashMap::new();
         for s in b.stmts() {
             let inner = match s.kind() {
                 StmtKind::Export(inner) => inner,
@@ -1251,27 +1251,37 @@ fn duplicate_interfaces(
                     }
                 }
             }
-            let StmtKind::Interface(i) = inner.kind() else {
-                continue;
+            let (name, what) = match inner.kind() {
+                StmtKind::Interface(i) => (i.name(), "an interface"),
+                StmtKind::TypeAlias(a) => (a.name(), "a type alias"),
+                StmtKind::Class(c) => (c.name(), "a class"),
+                StmtKind::Enum(e) => (e.name(), "an enum"),
+                _ => continue,
             };
             if !kept_by_if(s, info, meta) || !kept_by_if(inner, info, meta) {
                 continue;
             }
-            let name = i.name();
             match seen.get(name.text()) {
-                Some(first) => out.push(
-                    Diagnostic::error(
-                        "E1031",
-                        format!("the interface `{}` is declared twice in this scope", name.text()),
-                    )
-                    .with_label(name.span(), "declared again here")
-                    .with_label(first.span(), "first declared here")
-                    .with_help(
-                        "only ambient `declare interface` declarations merge: rename one of them, or merge the two",
-                    ),
-                ),
+                Some(&(first, first_what)) => {
+                    let message = if first_what == what {
+                        format!("{what} `{}` is declared twice in this scope", name.text())
+                    } else {
+                        format!(
+                            "`{}` is declared twice in this scope: as {first_what} and as {what}",
+                            name.text()
+                        )
+                    };
+                    out.push(
+                        Diagnostic::error("E1031", message)
+                            .with_label(name.span(), "declared again here")
+                            .with_label(first.span(), "first declared here")
+                            .with_help(
+                                "a type name means one type in a scope (only ambient `declare interface` declarations merge): rename one of them, or merge the two",
+                            ),
+                    );
+                }
                 None => {
-                    seen.insert(name.text(), name);
+                    seen.insert(name.text(), (name, what));
                 }
             }
         }

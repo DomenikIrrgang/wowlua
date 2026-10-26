@@ -55,7 +55,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E1015 | Module not found |
 | E1016 | An `export` redeclares a module-level name (a `local`, function, import, …), or a name is exported twice |
 | E1020 | Reference to a declaration removed by `@if` or static elimination |
-| E1031 | Duplicate (non-ambient) interface in the same scope |
+| E1031 | Duplicate type name in the same scope: two (non-ambient) interfaces, or any two of an interface, a type alias, a class and an enum |
 | E1032 | Top-level `return` in a module |
 | E1035 | `build.load-order` contradicts a computed load-time dependency |
 | E1036 | Flavors need incompatible load orders and `toc-layout = "single"` is forced |

@@ -507,9 +507,11 @@ end
 - Interfaces may be declared in any block and are scoped to it.
 - Two interfaces with the same name in the same scope are error E1031. Only
   ambient `declare interface` declarations merge
-  ([Types §2.4.7](02-types.md#247-the-addon-namespace)). An interface under
-  `@if` counts where the build keeps it, so alternatives for different
-  builds may share a name.
+  ([Types §2.4.7](02-types.md#247-the-addon-namespace)). An interface, a
+  type alias, a class and an enum share one namespace of type names: two of
+  them with one name in one scope are E1031 too. A declaration under `@if`
+  counts where the build keeps it, so alternatives for different builds may
+  share a name.
 
 ## 3.4 Enums
 
