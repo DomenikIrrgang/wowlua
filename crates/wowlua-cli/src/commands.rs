@@ -622,6 +622,156 @@ pub fn logout(out: &Output, site: crate::Site) -> bool {
     }
 }
 
+/// `wowlua yank <name>@<version> [--undo]` (spec CLI §12.4).
+pub fn yank(out: &Output, package: &str, undo: bool, registry: Option<&str>) -> bool {
+    use wowlua_driver::publish::registry as reg;
+    let Some((name, version)) = package
+        .split_once('@')
+        .filter(|(n, v)| !n.is_empty() && semver::Version::parse(v).is_ok())
+    else {
+        report(
+            out,
+            Diagnostic::plain_error(format!("`{package}` is not `<name>@<version>`"))
+                .with_help("for example `wowlua yank lib-tooltip@1.2.3`"),
+        );
+        return false;
+    };
+    let registry = reg::chosen_registry(registry);
+    let status = out.status_sink();
+    let http = wowlua_driver::publish::http::Http::default();
+    let done = reg::token(&registry, Some(&status))
+        .and_then(|t| reg::yank(&http, &registry, &t, name, version, undo));
+    match done {
+        Ok(()) => {
+            out.status(
+                if undo { "Unyanked" } else { "Yanked" },
+                format!("{name} {version} ({registry})"),
+            );
+            true
+        }
+        Err(d) => {
+            report(out, d);
+            false
+        }
+    }
+}
+
+/// `wowlua owner list|add|remove <name> [logins]`.
+pub fn owner(out: &Output, action: crate::OwnerAction) -> bool {
+    use wowlua_driver::publish::registry::{self as reg, OwnerChange};
+    let (change, name, logins, registry) = match action {
+        crate::OwnerAction::List { name, registry } => {
+            (OwnerChange::List, name, Vec::new(), registry)
+        }
+        crate::OwnerAction::Add {
+            name,
+            logins,
+            registry,
+        } => (OwnerChange::Add, name, logins, registry),
+        crate::OwnerAction::Remove {
+            name,
+            logins,
+            registry,
+        } => (OwnerChange::Remove, name, logins, registry),
+    };
+    let registry = reg::chosen_registry(registry.as_deref());
+    let http = wowlua_driver::publish::http::Http::default();
+    let token = match change {
+        OwnerChange::List => None,
+        _ => match reg::token(&registry, Some(&out.status_sink())) {
+            Ok(t) => Some(t),
+            Err(d) => {
+                report(out, d);
+                return false;
+            }
+        },
+    };
+    match reg::owners(&http, &registry, token.as_deref(), &name, change, &logins) {
+        Ok(owners) => {
+            if change == OwnerChange::List {
+                let mut text = String::new();
+                for o in &owners {
+                    text.push_str(o);
+                    text.push('\n');
+                }
+                out.print(text);
+            } else {
+                out.status("Owners", format!("{name}: {}", owners.join(", ")));
+            }
+            true
+        }
+        Err(d) => {
+            report(out, d);
+            false
+        }
+    }
+}
+
+/// `wowlua search <words>`.
+pub fn search(
+    out: &Output,
+    words: &str,
+    page: usize,
+    limit: usize,
+    registry: Option<&str>,
+) -> bool {
+    use wowlua_driver::publish::registry as reg;
+    let registry = reg::chosen_registry(registry);
+    let http = wowlua_driver::publish::http::Http::default();
+    let found = match reg::search(&http, &registry, words, page.max(1), limit.clamp(1, 100)) {
+        Ok(f) => f,
+        Err(d) => {
+            report(out, d);
+            return false;
+        }
+    };
+    if found.packages.is_empty() {
+        out.status(
+            "Found",
+            if found.total == 0 {
+                "no packages match".to_string()
+            } else {
+                format!("{} packages, none on page {}", found.total, found.page)
+            },
+        );
+        return true;
+    }
+    let wn = found
+        .packages
+        .iter()
+        .map(|p| p.name.len())
+        .max()
+        .unwrap_or(0);
+    let wv = found
+        .packages
+        .iter()
+        .map(|p| p.vers.len())
+        .max()
+        .unwrap_or(0);
+    let mut text = String::new();
+    for p in &found.packages {
+        text.push_str(format!("{:wn$}  {:wv$}  {}", p.name, p.vers, p.description).trim_end());
+        text.push('\n');
+    }
+    out.print(text);
+    let first = (found.page - 1) * found.per_page + 1;
+    let last = first + found.packages.len() - 1;
+    let more = if last < found.total {
+        format!("; `--page {}` for more", found.page + 1)
+    } else {
+        String::new()
+    };
+    out.status(
+        "Found",
+        format!(
+            "{} package{}, {first}–{last} shown{more}",
+            found.total,
+            if found.total == 1 { "" } else { "s" }
+        ),
+    );
+    true
+}
+
 pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String>) -> bool {
     let mut session = Session::new();
     let request = BuildRequest {

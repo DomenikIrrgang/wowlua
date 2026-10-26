@@ -67,6 +67,9 @@ fn write(root: &Path, files: &[(&str, &str)]) {
     }
 }
 
+/// A test that passes: `wowlua publish` runs the tests first.
+const PASSING_TEST: &str = "import test, expect from \"wowlua:test\"\n\n@test(\"ok\")\nlocal function ok()\n    expect(1).toBe(1)\nend\n";
+
 /// A wowlua library `name` at `version` in `<root>/<name>-<version>`.
 fn library(e: &Env, name: &str, version: &str, deps: &str, body: &str) -> PathBuf {
     let dir = e.root.join(format!("{name}-{version}"));
@@ -83,8 +86,8 @@ fn library(e: &Env, name: &str, version: &str, deps: &str, body: &str) -> PathBu
             ),
             ("LICENSE", "MIT License\n"),
             ("src/init.wowlua", body),
-            ("tests/init.test.wowlua", "-- a test\n"),
-            ("src/thing.test.wowlua", "-- another test\n"),
+            ("tests/init.test.wowlua", PASSING_TEST),
+            ("src/thing.test.wowlua", PASSING_TEST),
             (".github/workflows/ci.yml", "on: push\n"),
         ],
     );
@@ -495,4 +498,113 @@ fn addons_and_git_dependencies_stay_off_the_registry() {
     .unwrap()
     .status();
     assert_eq!(status, 404);
+}
+
+#[test]
+fn yank_owner_and_search_commands() {
+    let e = env();
+    let alice = e.registry.token("alice");
+    let bob = e.registry.token("bob");
+    let tip = library(
+        &e,
+        "lib-tooltip",
+        "1.2.3",
+        "",
+        "export const VERSION = \"1\"\n",
+    );
+    // A description and keywords for search.
+    let manifest = fs::read_to_string(tip.join("wowlua.json"))
+        .unwrap()
+        .replace(
+            r#""license": "MIT" }"#,
+            r#""license": "MIT", "description": "Tooltips for frames", "keywords": ["ui"] }"#,
+        );
+    fs::write(tip.join("wowlua.json"), manifest).unwrap();
+    publish(&e, &tip, &alice).success();
+    let other = library(
+        &e,
+        "lib-other",
+        "0.1.0",
+        "",
+        "export const VERSION = \"1\"\n",
+    );
+    publish(&e, &other, &alice).success();
+    let run = |args: &[&str], token: Option<&str>| {
+        let mut c = wowlua(&e.root, &e.home);
+        c.args(args);
+        if let Some(t) = token {
+            c.env("WOWLUA_REGISTRY_TOKEN", t);
+        }
+        c.assert()
+    };
+
+    run(&["search", "tooltip"], None)
+        .success()
+        .stdout(predicate::str::contains(
+            "lib-tooltip  1.2.3  Tooltips for frames",
+        ))
+        .stdout(predicate::str::contains("lib-other").not())
+        .stderr(predicate::str::contains("Found 1 package, 1–1 shown"));
+    run(&["search", "--limit", "1"], None)
+        .success()
+        .stderr(predicate::str::contains(
+            "2 packages, 1–1 shown; `--page 2` for more",
+        ));
+    run(&["search", "nothing-like-it"], None)
+        .success()
+        .stderr(predicate::str::contains("no packages match"));
+
+    // Yanking needs a token and an owner.
+    run(&["yank", "lib-tooltip@1.2.3"], None)
+        .failure()
+        .stderr(predicate::str::contains("error[E4201]"));
+    run(&["yank", "lib-tooltip@1.2.3"], Some(&bob))
+        .failure()
+        .stderr(predicate::str::contains("HTTP 403"))
+        .stderr(predicate::str::contains("not-owner"));
+    run(&["yank", "lib-tooltip"], Some(&alice))
+        .failure()
+        .stderr(predicate::str::contains("is not `<name>@<version>`"));
+    run(&["yank", "lib-tooltip@1.2.3"], Some(&alice))
+        .success()
+        .stderr(predicate::str::contains("Yanked lib-tooltip 1.2.3"));
+    let index = |name: &str| {
+        let mut r = ureq::get(&format!("{}/index/{name}", e.registry.url()))
+            .call()
+            .unwrap();
+        wowlua_pkg::registry::parse_index(&r.body_mut().read_to_string().unwrap())
+    };
+    assert!(index("lib-tooltip")[0].yanked);
+    // Search shows packages with a version that is not yanked.
+    run(&["search", "tooltip"], None)
+        .success()
+        .stderr(predicate::str::contains("no packages match"));
+    run(&["yank", "lib-tooltip@1.2.3", "--undo"], Some(&alice))
+        .success()
+        .stderr(predicate::str::contains("Unyanked lib-tooltip 1.2.3"));
+    assert!(!index("lib-tooltip")[0].yanked);
+
+    // Owners.
+    run(&["owner", "add", "lib-tooltip", "bob"], Some(&alice))
+        .success()
+        .stderr(predicate::str::contains("Owners lib-tooltip: alice, bob"));
+    run(&["owner", "list", "lib-tooltip"], None)
+        .success()
+        .stdout("alice\nbob\n");
+    run(
+        &["owner", "add", "lib-tooltip", "nobody-here"],
+        Some(&alice),
+    )
+    .failure()
+    .stderr(predicate::str::contains("unknown-user"));
+    run(&["yank", "lib-tooltip@1.2.3"], Some(&bob)).success();
+    run(&["owner", "remove", "lib-tooltip", "alice"], Some(&bob))
+        .success()
+        .stderr(predicate::str::contains("Owners lib-tooltip: bob"));
+    run(&["owner", "remove", "lib-tooltip", "bob"], Some(&bob))
+        .failure()
+        .stderr(predicate::str::contains("last-owner"));
+    run(&["owner", "list", "lib-nope"], None)
+        .failure()
+        .stderr(predicate::str::contains("HTTP 404"));
 }

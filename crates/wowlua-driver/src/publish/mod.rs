@@ -183,6 +183,12 @@ pub fn publish(
         }
         commit = head;
     }
+    // Registry targets (§11.8) upload an archive, not a zip; an addon with
+    // one stops here (E4230), before the tests.
+    let registry_jobs = registry::plan(session, projects, &request.package.targets);
+    if session.has_errors() {
+        return None;
+    }
     // Step 3: the tests.
     if let Some(tests) = &request.tests
         && !(tests.0)()
@@ -216,11 +222,6 @@ pub fn publish(
         report.notes.push(format!(
             "created the tag `{tag}` (local; the GitHub release creates it remotely)"
         ));
-    }
-    // Registry targets (§11.8) upload an archive, not a zip.
-    let registry_jobs = registry::plan(session, projects, &request.package.targets);
-    if session.has_errors() {
-        return None;
     }
     let registry_names: Vec<&str> = registry_jobs
         .iter()

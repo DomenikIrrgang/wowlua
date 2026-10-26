@@ -191,6 +191,32 @@ pub struct PublishArgs {
     pub flavor: Vec<String>,
 }
 
+#[derive(Subcommand, Debug)]
+pub enum OwnerAction {
+    /// The package's owners
+    List {
+        name: String,
+        #[arg(long)]
+        registry: Option<String>,
+    },
+    /// Add GitHub users as owners
+    Add {
+        name: String,
+        #[arg(required = true, value_name = "LOGIN")]
+        logins: Vec<String>,
+        #[arg(long)]
+        registry: Option<String>,
+    },
+    /// Remove owners
+    Remove {
+        name: String,
+        #[arg(required = true, value_name = "LOGIN")]
+        logins: Vec<String>,
+        #[arg(long)]
+        registry: Option<String>,
+    },
+}
+
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Site {
     Curseforge,
@@ -318,6 +344,37 @@ enum Command {
         /// The site
         #[arg(value_enum)]
         site: Site,
+    },
+    /// Yank a version of a registry package, or undo the yank
+    Yank {
+        /// `<name>@<version>`
+        #[arg(value_name = "NAME@VERSION")]
+        package: String,
+        /// Undo the yank
+        #[arg(long)]
+        undo: bool,
+        /// The registry: a URL or a name of config.json's `registries`
+        #[arg(long)]
+        registry: Option<String>,
+    },
+    /// List, add or remove the owners of a registry package
+    Owner {
+        #[command(subcommand)]
+        action: OwnerAction,
+    },
+    /// Search the wowlua registry by name, description and keywords
+    Search {
+        /// The words; every one must match
+        words: Vec<String>,
+        /// The page of results
+        #[arg(long, default_value_t = 1)]
+        page: usize,
+        /// Results per page (at most 100)
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+        /// The registry: a URL or a name of config.json's `registries`
+        #[arg(long)]
+        registry: Option<String>,
     },
     /// Check the sources without writing a build
     Check {
@@ -759,6 +816,18 @@ fn run() -> ExitCode {
             no_verify,
         } => commands::login(&out, site, token, no_verify),
         Command::Logout { site } => commands::logout(&out, site),
+        Command::Yank {
+            package,
+            undo,
+            registry,
+        } => commands::yank(&out, &package, undo, registry.as_deref()),
+        Command::Owner { action } => commands::owner(&out, action),
+        Command::Search {
+            words,
+            page,
+            limit,
+            registry,
+        } => commands::search(&out, &words.join(" "), page, limit, registry.as_deref()),
         Command::Check {
             profile,
             flavor,

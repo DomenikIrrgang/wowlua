@@ -447,6 +447,235 @@ pub fn upload(
     }
 }
 
+// ---- yank, owners and search (CLI §12.4) --------------------------------------
+
+/// The registry a command names with `--registry` (a URL or a name in
+/// `config.json`), else the default.
+pub fn chosen_registry(declared: Option<&str>) -> String {
+    crate::project::registries().url(declared)
+}
+
+/// The registry's API base, from its `config.json`.
+pub fn api_base(http: &Http, registry: &str) -> Result<String, Diagnostic> {
+    if !wowlua_pkg::registry::allowed_url(registry) {
+        return Err(Diagnostic::error(
+            "E4102",
+            if registry.contains("://") {
+                format!("the registry `{registry}` must be reached over HTTPS")
+            } else {
+                format!("unknown registry `{registry}`")
+            },
+        ));
+    }
+    match http.retried("GET", &format!("{registry}/config.json"), &[], None) {
+        Ok(r) if r.ok() => r
+            .json()
+            .and_then(|j| j["api"].as_str().map(wowlua_pkg::registry::normalize_url))
+            .ok_or_else(|| {
+                Diagnostic::plain_error(format!(
+                    "`{registry}/config.json` is not a registry configuration"
+                ))
+            }),
+        Ok(r) => Err(refused(registry, &r)),
+        Err(e) => Err(Diagnostic::plain_error(format!(
+            "cannot reach the registry `{registry}`: {e}"
+        ))),
+    }
+}
+
+/// The registry token: `WOWLUA_REGISTRY_TOKEN`, else what `wowlua login
+/// registry` saved; E4201 without one.
+pub fn token(registry: &str, status: Option<&crate::Status>) -> Result<String, Diagnostic> {
+    if let Some(t) = std::env::var("WOWLUA_REGISTRY_TOKEN")
+        .ok()
+        .filter(|t| !t.trim().is_empty())
+    {
+        return Ok(t.trim().to_string());
+    }
+    if let Some(s) = status
+        && crate::credentials::reads_store()
+    {
+        (s.0)(
+            "Reading",
+            "the registry token `wowlua login` saved (the OS credential store may ask you to allow wowlua)",
+        );
+    }
+    crate::credentials::get("registry").map_err(|_| {
+        Diagnostic::error("E4201", "no API token for the wowlua registry").with_help(format!(
+            "set `WOWLUA_REGISTRY_TOKEN`, or run `wowlua login registry`; sign in at {registry}/login to create a token"
+        ))
+    })
+}
+
+fn refused(registry: &str, r: &super::http::Response) -> Diagnostic {
+    Diagnostic::plain_error(format!(
+        "the registry `{registry}` refused it (HTTP {}): {}",
+        r.status,
+        error_text(&r.body).unwrap_or_else(|| r.body.trim().to_string())
+    ))
+}
+
+/// `wowlua yank <name>@<version> [--undo]`.
+pub fn yank(
+    http: &Http,
+    registry: &str,
+    token: &str,
+    name: &str,
+    version: &str,
+    undo: bool,
+) -> Result<(), Diagnostic> {
+    let api = api_base(http, registry)?;
+    let (method, url) = if undo {
+        ("PUT", format!("{api}/v1/packages/{name}/{version}/unyank"))
+    } else {
+        ("DELETE", format!("{api}/v1/packages/{name}/{version}"))
+    };
+    let headers = [
+        ("authorization", format!("Bearer {token}")),
+        ("accept", "application/json".to_string()),
+    ];
+    match http.retried(method, &url, &headers, None) {
+        Ok(r) if r.ok() => Ok(()),
+        Ok(r) => Err(refused(registry, &r)),
+        Err(e) => Err(Diagnostic::plain_error(format!(
+            "cannot reach the registry `{registry}`: {e}"
+        ))),
+    }
+}
+
+/// What `wowlua owner` does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OwnerChange {
+    List,
+    Add,
+    Remove,
+}
+
+/// `wowlua owner list|add|remove <name> [logins]`: the owners afterwards.
+pub fn owners(
+    http: &Http,
+    registry: &str,
+    token: Option<&str>,
+    name: &str,
+    change: OwnerChange,
+    users: &[String],
+) -> Result<Vec<String>, Diagnostic> {
+    let api = api_base(http, registry)?;
+    let url = format!("{api}/v1/packages/{name}/owners");
+    let mut headers = vec![("accept", "application/json".to_string())];
+    if let Some(t) = token {
+        headers.push(("authorization", format!("Bearer {t}")));
+    }
+    let body = serde_json::json!({ "users": users }).to_string();
+    let result = match change {
+        OwnerChange::List => http.retried("GET", &url, &headers, None),
+        OwnerChange::Add | OwnerChange::Remove => {
+            headers.push(("content-type", "application/json".to_string()));
+            let method = if change == OwnerChange::Add {
+                "PUT"
+            } else {
+                "DELETE"
+            };
+            http.retried(method, &url, &headers, Some(body.as_bytes()))
+        }
+    };
+    let r = result.map_err(|e| {
+        Diagnostic::plain_error(format!("cannot reach the registry `{registry}`: {e}"))
+    })?;
+    if !r.ok() {
+        return Err(refused(registry, &r));
+    }
+    let json = r.json().unwrap_or_default();
+    Ok(json["users"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|u| {
+                    u.as_str()
+                        .or_else(|| u["login"].as_str())
+                        .map(str::to_string)
+                })
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+/// One search result.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Found {
+    pub name: String,
+    pub vers: String,
+    pub description: String,
+}
+
+/// A page of results and how many there are.
+#[derive(Clone, Debug, Default)]
+pub struct SearchPage {
+    pub packages: Vec<Found>,
+    pub total: usize,
+    pub page: usize,
+    pub per_page: usize,
+}
+
+fn encode(value: &str) -> String {
+    let mut out = String::new();
+    for b in value.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// `wowlua search <words>`: `GET {api}/v1/search`.
+pub fn search(
+    http: &Http,
+    registry: &str,
+    words: &str,
+    page: usize,
+    per_page: usize,
+) -> Result<SearchPage, Diagnostic> {
+    let api = api_base(http, registry)?;
+    let url = format!(
+        "{api}/v1/search?q={}&page={page}&per_page={per_page}",
+        encode(words)
+    );
+    let r = http
+        .retried(
+            "GET",
+            &url,
+            &[("accept", "application/json".to_string())],
+            None,
+        )
+        .map_err(|e| {
+            Diagnostic::plain_error(format!("cannot reach the registry `{registry}`: {e}"))
+        })?;
+    if !r.ok() {
+        return Err(refused(registry, &r));
+    }
+    let json = r.json().unwrap_or_default();
+    let field = |v: &serde_json::Value, k: &str| v[k].as_str().unwrap_or("").to_string();
+    Ok(SearchPage {
+        packages: json["packages"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|p| Found {
+                        name: field(p, "name"),
+                        vers: field(p, "vers"),
+                        description: field(p, "description"),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        total: json["total"].as_u64().unwrap_or(0) as usize,
+        page: json["page"].as_u64().unwrap_or(page as u64) as usize,
+        per_page: json["per_page"].as_u64().unwrap_or(per_page as u64) as usize,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
