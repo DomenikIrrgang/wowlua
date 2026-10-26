@@ -54,14 +54,29 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "image tag: $tag"
 
+      # Until the production environment has the token, there is nothing to
+      # push to: skip with a notice instead of failing main.
+      - name: Check for the registry token
+        id: token
+        env:
+          TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::notice::DIGITALOCEAN_ACCESS_TOKEN is not set on the production environment; no image is built"
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: digitalocean/action-doctl@3cb3953159719656269e044e0e24ca16dd2a690f # v2.5.2
+        if: steps.token.outputs.missing != 'true'
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
       - name: Skip when this commit's image exists
         id: skip
         run: |
-          if doctl registry repository list-tags "$REPOSITORY" --format Tag --no-header 2>/dev/null | grep -qx "${{ steps.v.outputs.tag }}"; then
+          if [ "${{ steps.token.outputs.missing }}" = true ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif doctl registry repository list-tags "$REPOSITORY" --format Tag --no-header 2>/dev/null | grep -qx "${{ steps.v.outputs.tag }}"; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "image ${{ steps.v.outputs.tag }} exists"
           fi
