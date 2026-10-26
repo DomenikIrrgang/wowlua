@@ -475,6 +475,74 @@ fn store_lock(
     Some(())
 }
 
+/// `wowlua types sync [--flavor <f>…]` (spec Package manager §10.9): pins
+/// the loaded projects' lockfile to the compiler's flavor table: its
+/// version, the pinned interface numbers (of `only`'s flavors, when given)
+/// and the client aliases, with W4313 for each alias the table moved to
+/// another ruleset. The `wow-api-<flavor>` declarations ship with the
+/// compiler until the registry provides them (decision T83), so no types
+/// package is locked. Returns the changes, one line each (`None` on an
+/// error: `--locked` with a change is E4104).
+pub fn types_sync(
+    session: &mut Session,
+    options: &LoadOptions,
+    projects: &[Project],
+    only: Option<&[String]>,
+) -> Option<Vec<String>> {
+    let first = projects.first()?;
+    let root = first
+        .workspace_root
+        .clone()
+        .unwrap_or_else(|| first.root().to_path_buf());
+    let mut aliases: Vec<String> = projects
+        .iter()
+        .flat_map(|p| lockfile::client_aliases(&p.manifest))
+        .collect();
+    aliases.sort();
+    aliases.dedup();
+    let pinned = &first.lock;
+    let (lock, moved) = lockfile::sync(pinned, wowlua_flavors::table(), only, &aliases);
+    for m in &moved {
+        session.push(
+            Diagnostic::warning(
+                "W4313",
+                format!(
+                    "the flavor alias `{}` now names `{}`, not `{}`",
+                    m.alias, m.to, m.from
+                ),
+            )
+            .with_path(&first.manifest.path)
+            .with_help(format!(
+                "commit the updated wowlua.lock to build `{}` for `{}`; to keep building for `{}`, name it `{}` in `flavors`",
+                m.alias, m.to, m.from, m.from
+            )),
+        );
+    }
+    let mut changes = Vec::new();
+    if lock.flavor_table.version != pinned.flavor_table.version {
+        changes.push(format!(
+            "flavor table {} -> {}",
+            pinned.flavor_table.version, lock.flavor_table.version
+        ));
+    }
+    for (id, pins) in &lock.flavor_table.interfaces {
+        let before = pinned.flavor_table.interfaces.get(id);
+        if before != Some(pins) {
+            let list = |l: &[u32]| l.iter().map(u32::to_string).collect::<Vec<_>>().join(", ");
+            changes.push(format!(
+                "{id} interface {} -> {}",
+                before.map_or_else(String::new, |b| list(b)),
+                list(pins)
+            ));
+        }
+    }
+    for m in &moved {
+        changes.push(format!("alias {} {} -> {}", m.alias, m.from, m.to));
+    }
+    store_lock(session, options, &root, Some(pinned), &lock)?;
+    Some(changes)
+}
+
 /// Loads the projects a command works on: the package, or the selected
 /// members of a workspace (`-p`, the member around the current directory,
 /// `default-members`, or all members).
@@ -522,7 +590,7 @@ pub fn standalone_project(
     let text = "{ \"package\": { \"name\": \"compiled\", \"version\": \"0.0.0\" }, \"build\": { \"src\": \".\" } }\n";
     let path = root.join(wowlua_manifest::MANIFEST_FILE);
     let manifest = parse_manifest(session, options, &path, text.to_string())?;
-    let lock = lockfile::required(None, &manifest.flavors);
+    let lock = lockfile::required(None, &manifest.flavors, &[]);
     let interfaces = interfaces_of(&manifest, &lock);
     Some(Project {
         manifest,
@@ -559,7 +627,11 @@ fn load_single(session: &mut Session, options: &LoadOptions, path: &Path) -> Opt
         .filter(|id| !explicit.contains_key(*id))
         .cloned()
         .collect();
-    let mut lock = lockfile::required(pinned.as_ref(), &pinned_flavors);
+    let mut lock = lockfile::required(
+        pinned.as_ref(),
+        &pinned_flavors,
+        &lockfile::client_aliases(&manifest),
+    );
     let deps = if options.skip_dependencies {
         wowlua_pkg::Resolution::default()
     } else {
@@ -708,9 +780,16 @@ fn load_workspace(
                 .cloned(),
         );
     }
+    let mut aliases: Vec<String> = manifests
+        .iter()
+        .flat_map(lockfile::client_aliases)
+        .collect();
+    aliases.sort();
+    aliases.dedup();
     let mut lock = lockfile::required(
         pinned.as_ref(),
         &pinned_flavors.into_iter().collect::<Vec<_>>(),
+        &aliases,
     );
     let members: HashMap<String, PathBuf> = manifests
         .iter()

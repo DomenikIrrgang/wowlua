@@ -2121,6 +2121,50 @@ pub fn fix(out: &Output, global: &GlobalArgs, migrate: bool) -> bool {
     out.flush(&mut session)
 }
 
+/// `wowlua types sync [--flavor <f>…]` (spec Package manager §10.9).
+pub fn types_sync(out: &Output, global: &GlobalArgs, flavors: &[String]) -> bool {
+    let mut session = Session::new();
+    let options = load_options(out, global);
+    let Some(projects) = load_projects(global, &mut session, &options) else {
+        out.flush(&mut session);
+        return false;
+    };
+    let mut only = Vec::new();
+    for f in flavors {
+        match wowlua_flavors::table().resolve(f) {
+            Some(flavor) => only.push(flavor.id.clone()),
+            None => session.push(Diagnostic::error("E4004", format!("unknown flavor `{f}`"))),
+        }
+    }
+    if session.has_errors() {
+        out.flush(&mut session);
+        return false;
+    }
+    let changes = wowlua_driver::types_sync(
+        &mut session,
+        &options,
+        &projects,
+        (!flavors.is_empty()).then_some(only.as_slice()),
+    );
+    let ok = out.flush(&mut session);
+    let Some(changes) = changes.filter(|_| ok) else {
+        return false;
+    };
+    if changes.is_empty() {
+        out.status(
+            "Fresh",
+            format!(
+                "wowlua.lock is pinned to the flavor table {}",
+                wowlua_flavors::table().version
+            ),
+        );
+    }
+    for change in changes {
+        out.status("Updating", change);
+    }
+    true
+}
+
 /// `wowlua types convert <path> [--out <dir>]`.
 pub fn types_convert(out: &Output, path: &Path, out_dir: Option<&Path>) -> bool {
     let cwd = cwd();

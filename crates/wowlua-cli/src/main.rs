@@ -499,6 +499,13 @@ pub struct AddArgs {
 
 #[derive(Subcommand, Debug)]
 enum TypesCommand {
+    /// Pin wowlua.lock to the compiler's flavor table: its interface
+    /// numbers and what client aliases name (after a game patch)
+    Sync {
+        /// Only these flavors' interface numbers
+        #[arg(long, value_delimiter = ',')]
+        flavor: Vec<String>,
+    },
     /// Convert LuaLS `---@` annotations into a .d.wowlua declaration file
     Convert {
         /// An annotated .lua file, or a directory of them
@@ -719,6 +726,9 @@ fn run() -> ExitCode {
         Command::Types {
             command: TypesCommand::Convert { path, out: dir },
         } => commands::types_convert(&out, &path, dir.as_deref()),
+        Command::Types {
+            command: TypesCommand::Sync { flavor },
+        } => commands::types_sync(&out, &cli.global, &flavor),
         Command::Explain { code } => commands::explain(&out, &code),
     };
     if ok {

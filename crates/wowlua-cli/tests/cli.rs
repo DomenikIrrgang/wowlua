@@ -1317,6 +1317,88 @@ fn features_are_selected_on_the_command_line() {
         .stderr(predicate::str::contains("error[E4314]").and(predicate::str::contains("`nope`")));
 }
 
+/// `wowlua types sync` (spec Package manager §10.9) pins wowlua.lock to the
+/// compiler's flavor table, and reports W4313 for a client alias that names
+/// another ruleset than the lockfile pinned (Manifest §9.4.1).
+#[test]
+fn types_sync_moves_the_pins_to_the_flavor_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let table_version = |lock: &serde_json::Value| lock["flavor-table"]["version"].clone();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "synced", "version": "1.0.0" },
+  "flavors": { "standard": {}, "anniversary": {}, "vanilla": { "interface": [11507] } } }
+"#,
+            ),
+            ("src/main.lua", "print(1)\n"),
+            (
+                "wowlua.lock",
+                r#"{ "version": 1, "flavor-table": { "version": "2026.01.01",
+  "interfaces": { "standard": [110200], "tbc": [20505] },
+  "aliases": { "anniversary": "wrath" } } }
+"#,
+            ),
+        ],
+    );
+    let read_lock = || -> serde_json::Value {
+        serde_json::from_str(&fs::read_to_string(dir.path().join("wowlua.lock")).unwrap()).unwrap()
+    };
+    // Builds keep the pins.
+    wowlua(dir.path()).arg("build").assert().success();
+    let toc = fs::read_to_string(dir.path().join("dist/dev/Synced/Synced.toc")).unwrap();
+    assert!(toc.contains("110200"), "{toc}");
+    // `--locked` refuses to move them.
+    wowlua(dir.path())
+        .args(["types", "sync", "--locked"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E4104]"));
+    assert_eq!(table_version(&read_lock()), "2026.01.01");
+    wowlua(dir.path())
+        .args(["types", "sync", "--flavor", "retail"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("warning[W4313]"))
+        .stderr(predicate::str::contains(
+            "`anniversary` now names `tbc`, not `wrath`",
+        ))
+        .stderr(predicate::str::contains(
+            "Updating standard interface 110200 -> 120100",
+        ));
+    let lock = read_lock();
+    assert_ne!(table_version(&lock), "2026.01.01");
+    assert_eq!(
+        lock["flavor-table"]["interfaces"]["standard"],
+        serde_json::json!([120100])
+    );
+    assert_eq!(
+        lock["flavor-table"]["interfaces"]["tbc"],
+        serde_json::json!([20505]),
+        "only --flavor's pins move"
+    );
+    assert_eq!(lock["flavor-table"]["aliases"]["anniversary"], "tbc");
+    assert!(
+        lock["flavor-table"]["interfaces"].get("vanilla").is_none(),
+        "explicit interfaces are not pinned"
+    );
+    wowlua(dir.path())
+        .args(["types", "sync"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "Updating tbc interface 20505 -> 20506",
+        ));
+    wowlua(dir.path())
+        .args(["types", "sync"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Fresh"))
+        .stderr(predicate::str::contains("W4313").not());
+}
+
 #[test]
 fn parallel_builds_equal_sequential_builds() {
     let dir = tempfile::tempdir().unwrap();

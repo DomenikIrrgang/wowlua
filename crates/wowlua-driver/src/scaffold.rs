@@ -1685,7 +1685,7 @@ fn write_pins(
         return Ok(());
     }
     let flavors: Vec<String> = pins.keys().cloned().collect();
-    let mut lock = crate::lockfile::required(None, &flavors);
+    let mut lock = crate::lockfile::required(None, &flavors, &[]);
     for (flavor, list) in pins {
         lock.flavor_table.interfaces.insert(flavor, list);
     }

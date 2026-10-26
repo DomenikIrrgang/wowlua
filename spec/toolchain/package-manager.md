@@ -195,7 +195,8 @@ libraries.
   "version": 1,
   "flavor-table": {
     "version": "2026.10.11",
-    "interfaces": { "standard": [120100], "mists": [50504], "vanilla": [11509] }
+    "interfaces": { "standard": [120100], "mists": [50504], "vanilla": [11509] },
+    "aliases": { "anniversary": "tbc" }
   },
   "packages": [
     {
@@ -220,8 +221,15 @@ libraries.
 
 - **Flavor table.** The lockfile pins the flavor-table version and the
   resolved interface numbers of every targeted flavor, so every machine
-  generates identical TOCs. `wowlua types sync` updates them deliberately; the
-  change shows up in the lockfile diff.
+  generates identical TOCs. `aliases` records the ruleset each client alias
+  the manifest uses (`anniversary`, `titan`, `forever`) named when the
+  lockfile was made; it is left out when the manifest uses none. `wowlua
+  types sync` updates them deliberately (W4313 for an alias that now names
+  another ruleset, [Manifest §9.4.1](manifest.md#941-flavor-table)); the
+  change shows up in the lockfile diff. `--flavor` limits which flavors'
+  interface numbers move. Until the registry provides the `wow-api-<flavor>`
+  packages (§10.9), their declarations ship with the compiler (decision T83),
+  so `types sync` locks none.
 - Checksums cover the normalized file tree of the package (sorted paths,
   contents, executable bit ignored) and are verified on every fetch (E4103).
 - `--locked` fails if the lockfile would change (E4104). `--offline` uses only
