@@ -272,7 +272,8 @@ getter like `get` above: `get(DEFAULTS, "scael")` is E2014, and the result of
 `get(DEFAULTS, "scale")` is a `number`.
 
 Add `export` to use an alias in other files (`export type Settings = …`, see
-[Modules](modules.md)). An alias may refer to itself inside a table or
+[Modules](modules.md)). A `type` or `interface` declared inside a function or
+a `do` block belongs to that block, like a `local`. An alias may refer to itself inside a table or
 function type, as in `type Tree = { value: number, children: Tree[] }`.
 
 ## Allow only certain values

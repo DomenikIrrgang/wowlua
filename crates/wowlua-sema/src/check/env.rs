@@ -191,6 +191,9 @@ pub struct Env<'p> {
     pub events: IndexMap<Box<str>, Pack, FxBuildHasher>,
     pub messages: IndexMap<Box<str>, Pack, FxBuildHasher>,
     pub diagnostics: Vec<Diagnostic>,
+    /// The `type` and `interface` declarations of the blocks being checked
+    /// (spec §1.3: scoped to their block), innermost last.
+    block_types: Vec<(Box<str>, DefId)>,
     /// Aliases whose bodies are not resolved yet (while building), with the
     /// module of their scope.
     lazy_aliases: FxHashMap<DefId, (TypeAlias<'p>, Option<usize>)>,
@@ -857,6 +860,114 @@ impl<'p> Env<'p> {
         }
     }
 
+    /// An interface's bases and members, resolved in `scope`.
+    fn resolve_interface(&mut self, def: DefId, i: InterfaceDecl<'_>, mut scope: Scope) {
+        self.def_type_params(def, i.type_params(), &mut scope);
+        scope.self_ty = Some(self.instance(def));
+        for e in i.extends() {
+            let t = self.resolve(e, &scope);
+            self.def_mut(def).bases.push(t);
+        }
+        for member in i.members() {
+            let (name, m) = match member {
+                InterfaceMember::Field {
+                    readonly,
+                    name,
+                    optional,
+                    ty,
+                } => {
+                    let mut t = self.resolve(ty, &scope);
+                    if optional {
+                        t = self.types.optional(t);
+                    }
+                    (
+                        name,
+                        Member {
+                            ty: t,
+                            kind: MemberKind::Field,
+                            optional,
+                            readonly,
+                            visibility: Visibility::Public,
+                            renamable: false,
+                            span: Some(name.span()),
+                        },
+                    )
+                }
+                InterfaceMember::Method { name, sig } => {
+                    let f = self.func_sig(&FnSig::of(sig), &scope, true);
+                    let t = self.types.func(f);
+                    (
+                        name,
+                        Member {
+                            ty: t,
+                            kind: MemberKind::Method,
+                            optional: false,
+                            readonly: true,
+                            visibility: Visibility::Public,
+                            renamable: false,
+                            span: Some(name.span()),
+                        },
+                    )
+                }
+            };
+            self.add_member(def, name.text(), m, false);
+        }
+    }
+
+    /// Declares the `type` and `interface` statements of block `b` (not a
+    /// file's top level, whose types the environment has from the start)
+    /// for the rest of the block: they refer to each other in any order, and
+    /// to what `scope` has (spec §1.3). The mark to pop them with.
+    pub fn push_block_types(&mut self, b: Block<'_>, scope: &Scope) -> usize {
+        let mark = self.block_types.len();
+        let mut aliases = Vec::new();
+        let mut interfaces = Vec::new();
+        for s in b.stmts() {
+            match s.kind() {
+                StmtKind::TypeAlias(a) => {
+                    let def = Def::new(a.name().text(), DefKind::Alias).at(a.name().span());
+                    let id = self.add_def(def);
+                    self.block_types.push((a.name().text().into(), id));
+                    aliases.push((id, a));
+                }
+                StmtKind::Interface(i) => {
+                    let def = Def::new(i.name().text(), DefKind::Interface).at(i.name().span());
+                    let id = self.add_def(def);
+                    self.block_types.push((i.name().text().into(), id));
+                    interfaces.push((id, i));
+                }
+                _ => {}
+            }
+        }
+        // (twice: an alias may name one declared after it)
+        for _ in 0..2 {
+            for &(id, a) in &aliases {
+                let mut scope = scope.clone();
+                self.def_type_params(id, a.type_params(), &mut scope);
+                self.set_alias_body(id, a, &scope);
+            }
+        }
+        for &(id, i) in &interfaces {
+            self.resolve_interface(id, i, scope.clone());
+        }
+        mark
+    }
+
+    /// Ends the block of [`Env::push_block_types`]'s `mark`.
+    pub fn pop_block_types(&mut self, mark: usize) {
+        self.block_types.truncate(mark);
+    }
+
+    /// The block-scoped alias `name` is, if one is in scope.
+    pub fn block_alias(&self, name: &str) -> Option<DefId> {
+        self.block_types
+            .iter()
+            .rev()
+            .find(|(n, _)| &**n == name)
+            .map(|&(_, d)| d)
+            .filter(|&d| self.def(d).kind == DefKind::Alias)
+    }
+
     fn scope_of(&self, module: usize, sources: &[Source]) -> Scope {
         let declaration = sources.iter().any(|s| s.index == module && s.declaration);
         Scope {
@@ -873,57 +984,8 @@ impl<'p> Env<'p> {
                 self.set_alias_body(def, *a, &scope);
             }
             Pending::Interface(i, m) => {
-                let mut scope = self.scope_of(*m, sources);
-                self.def_type_params(def, i.type_params(), &mut scope);
-                scope.self_ty = Some(self.instance(def));
-                for e in i.extends() {
-                    let t = self.resolve(e, &scope);
-                    self.def_mut(def).bases.push(t);
-                }
-                for member in i.members() {
-                    let (name, m) = match member {
-                        InterfaceMember::Field {
-                            readonly,
-                            name,
-                            optional,
-                            ty,
-                        } => {
-                            let mut t = self.resolve(ty, &scope);
-                            if optional {
-                                t = self.types.optional(t);
-                            }
-                            (
-                                name,
-                                Member {
-                                    ty: t,
-                                    kind: MemberKind::Field,
-                                    optional,
-                                    readonly,
-                                    visibility: Visibility::Public,
-                                    renamable: false,
-                                    span: Some(name.span()),
-                                },
-                            )
-                        }
-                        InterfaceMember::Method { name, sig } => {
-                            let f = self.func_sig(&FnSig::of(sig), &scope, true);
-                            let t = self.types.func(f);
-                            (
-                                name,
-                                Member {
-                                    ty: t,
-                                    kind: MemberKind::Method,
-                                    optional: false,
-                                    readonly: true,
-                                    visibility: Visibility::Public,
-                                    renamable: false,
-                                    span: Some(name.span()),
-                                },
-                            )
-                        }
-                    };
-                    self.add_member(def, name.text(), m, false);
-                }
+                let scope = self.scope_of(*m, sources);
+                self.resolve_interface(def, *i, scope);
             }
             Pending::Class(c, m) => self.resolve_class(def, *c, *m, sources),
             Pending::DeclClass(type_params, extends, members, m) => {
@@ -1669,6 +1731,9 @@ impl<'p> Env<'p> {
     /// Looks up a type name in a scope: type parameters, the module's own
     /// and imported types, then declared types.
     pub fn lookup_type(&self, name: &str, scope: &Scope) -> Option<DefId> {
+        if let Some(&(_, d)) = self.block_types.iter().rev().find(|(n, _)| &**n == name) {
+            return Some(d);
+        }
         if let Some(m) = scope.module {
             if let Some(&d) = self.module_types.get(&m).and_then(|t| t.get(name)) {
                 return Some(d);

@@ -202,3 +202,28 @@ fn overloads_of_a_global_function() {
     // the results are the overload's
     err(&format!("{f}local n: number = findItem(1)\n"), "E2001");
 }
+
+/// `type` and `interface` in a block are scoped to it (spec §1.3): used in
+/// the block, unknown after it.
+#[test]
+fn types_declared_in_a_block() {
+    let src = "do\n    interface P\n        x: number\n        q: Q\n    end\n    type Q = { y: number }\n    local p: P = { x = 1, q = { y = 2 } }\n    print(p.x, p.q.y)\nend\nlocal function f<T>(v: T): number\n    type Box = { value: T, n: number }\n    local b: Box = { value = v, n = 1 }\n    return b.n\nend\nprint(f(1))\n";
+    strict_ok(src);
+    err(
+        "do\n    type Q = { y: number }\n    local q: Q = { y = \"no\" }\n    print(q)\nend\n",
+        "E2001",
+    );
+    // a block's `typeof` alias reads the block's values
+    err(
+        "local function f()\n    local defaults = { scale = 1 }\n    type D = typeof(defaults)\n    local d: D = { scale = \"x\" }\n    print(d)\nend\nf()\n",
+        "E2001",
+    );
+    // gone after the block; an outer type of the name again
+    err(
+        "do\n    type Q = number\nend\nlocal q: Q = 1\nprint(q)\n",
+        "E2002",
+    );
+    ok(
+        "type Q = string\ndo\n    type Q = number\n    local n: Q = 1\n    print(n)\nend\nlocal s: Q = \"x\"\nprint(s)\n",
+    );
+}

@@ -189,6 +189,9 @@ pub struct Checker<'e, 'p> {
     /// The next member lookup reads a field from an open table of this
     /// function's own (strict mode reports a missing one, spec §2.4.2).
     pub(crate) own_open: bool,
+    /// The span of the file's top-level block (whose types the environment
+    /// declares).
+    file_block: Option<(u32, u32)>,
     /// Locals declared with a table literal (`local t = { … }`): their open
     /// tables are the ones the file fills in (spec §2.4.2).
     pub(crate) literal_locals: FxHashSet<VarId>,
@@ -395,6 +398,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             fallback_fields: FxHashMap::default(),
             index_of: FxHashMap::default(),
             own_open: false,
+            file_block: None,
             literal_locals: FxHashSet::default(),
             objects: FxHashSet::default(),
             stored_fields: FxHashMap::default(),
@@ -675,6 +679,25 @@ impl<'e, 'p> Checker<'e, 'p> {
     /// reaches it, with the expressions' types there (spec §2.2.7): later
     /// annotations, and the modules checked after this one, see it.
     fn typeof_alias(&mut self, a: TypeAlias<'_>) {
+        // A block's alias: its `typeof` expressions are typed here.
+        if let Some(def) = self.env.block_alias(a.name().text())
+            && self.env.def(def).span == Some(a.name().span())
+        {
+            if super::env::uses_typeof(a.ty()) {
+                let mut exprs: Vec<Expr<'_>> = Vec::new();
+                typeof_exprs(a.ty(), &mut exprs);
+                for e in exprs {
+                    let ty = self.infer(e);
+                    let ty = self.env.types.widen(ty);
+                    self.env
+                        .typeof_types
+                        .insert((e.span().start, e.span().end), ty);
+                }
+                let scope = self.scope.clone();
+                self.env.resolve_alias_again(def, a, &scope);
+            }
+            return;
+        }
         // Top-level aliases only (function bodies have none of their own).
         let Some(module) = self.scope.module.filter(|_| self.fns.len() == 1) else {
             return;
@@ -971,6 +994,8 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.fns.push(top);
         self.top_vararg = Some((Types::STRING, ns_ty));
         self.stored_fields = stored_fields(parse.view().block());
+        let span = parse.view().block().span();
+        self.file_block = Some((span.start, span.end));
         self.hoist(parse.view().block());
         self.block_stmts(parse.view().block());
         // Calls of methods defined further down, now that all are known.
@@ -1185,6 +1210,13 @@ impl<'e, 'p> Checker<'e, 'p> {
 
     fn block_stmts(&mut self, b: Block<'_>) {
         let outer = self.in_dead;
+        // A block's `type` and `interface` declarations are its own (a
+        // file's top level has its types from the environment).
+        let span = b.span();
+        let types = (self.file_block != Some((span.start, span.end))).then(|| {
+            let scope = self.scope.clone();
+            self.env.push_block_types(b, &scope)
+        });
         for s in b.stmts() {
             // The first statement after a `return`, `break`, `continue` or
             // a call that never returns (W1005), once per region.
@@ -1220,6 +1252,9 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
         self.unimplemented_overloads();
         self.in_dead = outer;
+        if let Some(mark) = types {
+            self.env.pop_block_types(mark);
+        }
     }
 
     fn stmt(&mut self, s: Stmt<'_>) {
