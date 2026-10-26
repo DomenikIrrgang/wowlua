@@ -2,7 +2,7 @@
 
 use crate::output::Output;
 use crate::{AddArgs, BuildArgs, GlobalArgs, InstallTarget, Kind};
-use notify_debouncer_mini::{DebouncedEvent, new_debouncer, notify::RecursiveMode};
+use notify::{EventKind, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -911,21 +911,22 @@ fn shown_folder(path: &Path) -> String {
     if shown.is_empty() { ".".into() } else { shown }
 }
 
-/// Watches `root` and calls `run` once per batch of changes: changes saved
-/// while it runs make one more run, not one each. Changes in the output
-/// folders (which `run` may change), in `.git` and in temporary files are
-/// not changes, nor is a change reported again (the file is as the last
-/// run saw it). Runs until `run` returns false; false when the folder
-/// cannot be watched.
+/// Watches `root` and calls `run` once per batch of changes (until 300 ms
+/// pass without one): changes saved while it runs make one more run, not
+/// one each. Changes in the output folders (which `run` may change), in
+/// `.git` and in temporary files are not changes, nor are files read (inotify
+/// reports opening one) or a change reported again (the file is as the last
+/// run saw it). Runs until `run` returns false; false when the folder cannot
+/// be watched.
 fn watch(
     out: &Output,
     root: &Path,
     mut out_dirs: Vec<PathBuf>,
     mut run: impl FnMut(&mut Vec<PathBuf>) -> bool,
 ) -> bool {
-    let (tx, rx) = std::sync::mpsc::channel();
-    let mut debouncer = match new_debouncer(Duration::from_millis(300), tx) {
-        Ok(d) => d,
+    let (tx, rx) = std::sync::mpsc::channel::<notify::Result<notify::Event>>();
+    let mut watcher = match notify::recommended_watcher(tx) {
+        Ok(w) => w,
         Err(error) => {
             let mut session = Session::new();
             session.push(Diagnostic::plain_error(format!(
@@ -935,7 +936,7 @@ fn watch(
             return false;
         }
     };
-    if let Err(error) = debouncer.watcher().watch(root, RecursiveMode::Recursive) {
+    if let Err(error) = watcher.watch(root, RecursiveMode::Recursive) {
         let mut session = Session::new();
         session.push(Diagnostic::plain_error(format!(
             "cannot watch `{}`: {error}",
@@ -948,21 +949,32 @@ fn watch(
         "Watching",
         format!("{} for changes (Ctrl+C to stop)", shown_folder(root)),
     );
+    let changes = |result: notify::Result<notify::Event>, into: &mut Vec<PathBuf>| {
+        let Ok(event) = result else { return };
+        if matches!(event.kind, EventKind::Access(_)) {
+            return;
+        }
+        into.extend(event.paths);
+    };
     // Each changed path as the last run saw it: modification time and size,
     // `None` when gone. The watcher can report one save twice (under load,
     // in two batches), and the second report must not run again.
     let mut seen: HashMap<PathBuf, Option<(Option<SystemTime>, u64)>> = HashMap::new();
-    let mut relevant = |out_dirs: &[PathBuf], result: &Result<Vec<DebouncedEvent>, _>| {
-        let Ok(events) = result else {
-            return false;
-        };
+    while let Ok(first) = rx.recv() {
+        let mut paths = Vec::new();
+        changes(first, &mut paths);
+        // The rest of the batch, with what arrived during the last run.
+        while let Ok(result) = rx.recv_timeout(Duration::from_millis(300)) {
+            changes(result, &mut paths);
+        }
+        paths.sort();
+        paths.dedup();
         let mut changed = false;
-        for event in events {
-            let path = &event.path;
+        for path in paths {
             // (a folder that holds an output folder changes with it)
             if out_dirs
                 .iter()
-                .any(|d| path.starts_with(d) || d.starts_with(path))
+                .any(|d| path.starts_with(d) || d.starts_with(&path))
                 || path.components().any(|c| c.as_os_str() == ".git")
                 || path.to_string_lossy().contains(".wowlua-tmp")
                 // (the build's previous output, moved aside)
@@ -970,20 +982,12 @@ fn watch(
             {
                 continue;
             }
-            let now = std::fs::metadata(path)
+            let now = std::fs::metadata(&path)
                 .ok()
                 .map(|m| (m.modified().ok(), m.len()));
             // (without modification times, every report is a change)
             let unknown = now.is_some_and(|(modified, _)| modified.is_none());
-            changed |= seen.insert(path.clone(), now) != Some(now) || unknown;
-        }
-        changed
-    };
-    while let Ok(result) = rx.recv() {
-        let mut changed = relevant(&out_dirs, &result);
-        // Changes that arrived during the last run: one run for all.
-        while let Ok(result) = rx.try_recv() {
-            changed |= relevant(&out_dirs, &result);
+            changed |= seen.insert(path, now) != Some(now) || unknown;
         }
         if changed && !run(&mut out_dirs) {
             break;
@@ -1107,7 +1111,13 @@ fn test_once(
                     }
                 }
             };
-            let blizzard_ui = if test_settings.blizzard_ui {
+            // A flavor without test files (`build.flavor-files` keeps them to
+            // other flavors) runs none and needs no UI code.
+            let has_tests = build
+                .tests
+                .iter()
+                .any(|t| t.role == wowlua_driver::TestRole::Test);
+            let blizzard_ui = if test_settings.blizzard_ui && has_tests {
                 match wowlua_test::ui_source(&flavor, &|what| out.status("Fetching", what)) {
                     Ok(ui) => Some(ui),
                     Err(e) => {

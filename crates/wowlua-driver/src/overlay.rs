@@ -20,6 +20,20 @@ pub fn set(path: &Path, bytes: impl Into<Arc<[u8]>>) {
         .insert(key(path), bytes.into());
 }
 
+/// The editor's text of `path` when it has the file open (in the overlay);
+/// whether it had. One step with [`remove`]: a file closed meanwhile stays
+/// closed.
+pub fn set_open(path: &Path, bytes: impl Into<Arc<[u8]>>) -> bool {
+    let mut o = OVERLAY.write().unwrap_or_else(|e| e.into_inner());
+    match o.as_mut().and_then(|map| map.get_mut(&key(path))) {
+        Some(text) => {
+            *text = bytes.into();
+            true
+        }
+        None => false,
+    }
+}
+
 /// `path` as it is on disk again.
 pub fn remove(path: &Path) {
     let mut o = OVERLAY.write().unwrap_or_else(|e| e.into_inner());
@@ -71,6 +85,13 @@ mod tests {
         assert_eq!(read(&file).unwrap(), b"all");
         replace_all([]);
         assert_eq!(read(&file).unwrap(), b"disk");
+        // a closed file stays closed
+        assert!(!set_open(&file, b"late".to_vec()));
+        assert_eq!(read(&file).unwrap(), b"disk");
+        set(&file, b"open".to_vec());
+        assert!(set_open(&file, b"asked".to_vec()));
+        assert_eq!(read(&file).unwrap(), b"asked");
+        remove(&file);
         crate::host::remove_dir_all(&dir).ok();
     }
 }

@@ -704,21 +704,27 @@ fn run_check(
     job: &Job,
 ) -> Result<Vec<check::Checked>, Failure> {
     match checker {
-        Checker::InProcess => check_in_process(job, None),
+        // (the server thread sets each file as it opens, and removes it as
+        // it closes: one closed since the job was made must not come back)
+        Checker::InProcess => check_in_process(job, None, |path, text| {
+            wowlua_driver::overlay::set_open(path, text);
+        }),
         Checker::Worker(program) => check_in_worker(program, process, job),
     }
 }
 
 /// Runs a check in this process, with what `warm` kept from earlier checks.
 /// The open documents are the job's, a completion's text with its
-/// placeholder; the next job sets them again. Each is set alone: the
-/// crate's tests run servers side by side. A check here runs to its end.
+/// placeholder, which `set` puts in the overlay; the next job sets them
+/// again. Each is set alone: the crate's tests run servers side by side. A
+/// check here runs to its end.
 fn check_in_process(
     job: &Job,
     warm: Option<&mut check::Warm>,
+    set: impl Fn(&Path, Vec<u8>),
 ) -> Result<Vec<check::Checked>, Failure> {
     for (path, text) in &job.docs {
-        wowlua_driver::overlay::set(path, text.as_bytes().to_vec());
+        set(path, text.as_bytes().to_vec());
     }
     let open = job.docs.iter().map(|(p, _)| canonical(p)).collect();
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match &job.find {

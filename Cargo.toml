@@ -53,7 +53,7 @@ keyring = "4.2"
 insta = "1.49"
 junction = "2.1"
 mlua = { version = "0.12", features = ["lua51", "vendored"] }
-notify-debouncer-mini = "0.7"
+notify = "8.2"
 predicates = "3.1"
 pubgrub = "0.4"
 quick-xml = "0.42"

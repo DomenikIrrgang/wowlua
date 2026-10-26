@@ -134,7 +134,10 @@ impl Embedded {
                 break;
             };
             let result: Result<Vec<check::Checked>, Failure> =
-                crate::check_in_process(&job, Some(&mut self.warm));
+                crate::check_in_process(&job, Some(&mut self.warm), |path, text| {
+                    // (also those the page's package calls took out of the way)
+                    wowlua_driver::overlay::set(path, text);
+                });
             if on_checked(&mut self.server, &job.manifest, result, &mut out).is_err() {
                 break;
             }

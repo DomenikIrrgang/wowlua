@@ -134,6 +134,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua build --watch`, `check --watch` and `test --watch` no longer run twice for one save when the file watcher reports it twice under load.
 - In strict mode, the fast forms (`??` as `or`, `?.` as `and`, interpolation without `tostring`) now also apply inside class methods, constructors and accessors.
 - `wowlua publish` runs your tests before packaging, and stops when one fails; `--no-test` skips them. A `--tag` is created only once they pass.
+- `wowlua build --watch`, `check --watch` and `test --watch` on Linux no longer run twice for each change: reading a file is not a change.
+- `wowlua test` with `test.blizzard-ui` needs a flavor's UI code only when that flavor has test files to run.
 
 ## 0.12.0 (2026-10-26)
 
