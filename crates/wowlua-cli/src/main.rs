@@ -124,6 +124,29 @@ pub struct TestArgs {
 }
 
 #[derive(Args, Debug, Clone)]
+pub struct BenchArgs {
+    /// Only test files and benchmarks whose path or name contains one of
+    /// these (`path::name`: that benchmark exactly)
+    pub filter: Vec<String>,
+    /// Restrict to these flavors (default: the first one)
+    #[arg(long, value_delimiter = ',')]
+    pub flavor: Vec<String>,
+    /// The profile whose optimizations the optimized build has (default:
+    /// release)
+    #[arg(long)]
+    pub profile: Option<String>,
+    /// Batches per build (default: 10)
+    #[arg(long, value_name = "N")]
+    pub samples: Option<usize>,
+    /// How long a batch should take, in milliseconds (default: 20)
+    #[arg(long, value_name = "MS")]
+    pub batch_ms: Option<u64>,
+    /// Print the results as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Args, Debug, Clone)]
 pub struct ScreenshotArgs {
     /// The test file to run
     pub file: PathBuf,
@@ -306,6 +329,8 @@ enum Command {
     },
     /// Run the tests in the emulated client
     Test(TestArgs),
+    /// Run the `@bench` functions, optimized and unoptimized, and compare
+    Bench(BenchArgs),
     /// Serve the Model Context Protocol for AI agents: drive and debug the addon
     Mcp,
     /// Run a test file and write a screenshot of the UI as it ends
@@ -729,6 +754,7 @@ fn run() -> ExitCode {
             watch,
         } => commands::check(&out, &cli.global, &profile.name("dev"), flavor, watch),
         Command::Test(args) => commands::test(&out, &cli.global, &args),
+        Command::Bench(args) => commands::bench(&out, &cli.global, &args),
         Command::Debug { port } => debug::debug(&out, &cli.global, port),
         // exit code 1 when the client exits without `shutdown`
         Command::Lsp { worker: true } => match wowlua_lsp::run_worker() {

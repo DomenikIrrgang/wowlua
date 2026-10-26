@@ -25,6 +25,8 @@ type Entry = {
     timeout?: number,
     --- A compile-time test (`@expectError`): checked by the compiler, never run.
     compileTime?: boolean,
+    --- A benchmark (`@bench`): run by `wowlua bench`, never by `wowlua test`.
+    bench?: boolean,
 }
 
 type Job = {
@@ -241,6 +243,28 @@ export function expectError(...: string): TestDecorator
         e.test = true
         e.compileTime = true
     end
+end
+
+--- `@bench(name?)`: a benchmark, run by `wowlua bench` (decision T221),
+--- not by `wowlua test`; the name defaults to the function's. It is called
+--- many times, with the file's `@beforeAll` hooks run first and its
+--- `@beforeEach` and `@afterEach` hooks around every benchmark.
+export overload function bench(fn: function, ctx: DecoratorContext?)
+export overload function bench(name: string?): TestDecorator
+export function bench(name: string | function | nil, ctx: DecoratorContext?): TestDecorator?
+    local function mark(fn: Fn, c: DecoratorContext?)
+        local e = entry(fn, c)
+        e.bench = true
+        if type(name) == "string" then
+            local prefix = #groups > 0 and table.concat(groups, " › ") .. " › " or ""
+            e.name = prefix .. label(name)
+        end
+    end
+    if type(name) == "function" then
+        mark(name, ctx)
+        return nil
+    end
+    return mark
 end
 
 local function hook(kind: string): TestDecorator
@@ -1160,6 +1184,46 @@ wl.tests = {
     -- How long the running test's waits may take (virtual seconds).
     timeout = function(): number
         return current and current.timeout or settings.timeout
+    end,
+    -- Benchmarks (`@bench`, decision T221): how many, the i-th's name,
+    -- file, line, skip reason and whether the flavor runs it, and a run of
+    -- it `n` times.
+    benchCount = function(): number
+        local n = 0
+        for _, e in ipairs(tests) do
+            if e.bench then
+                n = n + 1
+            end
+        end
+        return n
+    end,
+    benchInfo = function(i: number, flavor: string): (string, string, number, string?, boolean)
+        local n = 0
+        for _, e in ipairs(tests) do
+            if e.bench then
+                n = n + 1
+                if n == i then
+                    return e.name, e.file, e.line, e.skip, selected(e, flavor)
+                end
+            end
+        end
+        error("no benchmark " .. i)
+    end,
+    benchRun = function(i: number, times: number)
+        local n = 0
+        local fn: Fn? = nil
+        for _, e in ipairs(tests) do
+            if e.bench then
+                n = n + 1
+                if n == i then
+                    fn = e.fn
+                end
+            end
+        end
+        local f = fn :: Fn
+        for _ = 1, times do
+            f()
+        end
     end,
 }
 

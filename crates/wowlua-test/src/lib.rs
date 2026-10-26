@@ -5,6 +5,7 @@
 //! registered them, each in a coroutine the runner steps, advancing the
 //! game's frames while a test waits.
 
+pub mod bench;
 mod blizzard;
 pub mod coverage;
 mod natives;

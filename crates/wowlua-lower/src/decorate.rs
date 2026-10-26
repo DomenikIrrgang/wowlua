@@ -56,7 +56,7 @@ pub(crate) fn intrinsic(id: &str) -> Option<Intrinsic> {
         // wowlua:test
         "test.test" | "test.skip" | "test.only" | "test.flavors" | "test.cases"
         | "test.expectError" | "test.beforeEach" | "test.afterEach" | "test.beforeAll"
-        | "test.afterAll" => Some(Intrinsic::Registering),
+        | "test.afterAll" | "test.bench" => Some(Intrinsic::Registering),
         _ => None,
     }
 }

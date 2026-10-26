@@ -5359,3 +5359,120 @@ fn data_pull_reports_a_missing_installation_or_flavor() {
         .failure()
         .stderr(predicates::str::contains("unknown flavor `nope`"));
 }
+
+/// `@bench` functions (decision T221) are run by `wowlua bench`, in the
+/// build the profile optimizes and without optimizations, after the file's
+/// `@beforeAll` hooks and with `@beforeEach` and `@afterEach` around each;
+/// `wowlua test` leaves them out. A benchmark that fails fails the run.
+#[test]
+fn bench_runs_benchmarks_that_test_leaves_out() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            ("src/tracker.wowlua", TRACKER),
+            (
+                "tests/tracker.test.wowlua",
+                r#"
+import test, bench, beforeAll, beforeEach, expect, skip from "wowlua:test"
+import Tracker, double from "/tracker"
+
+local tracker: Tracker
+local setUp = 0
+
+@beforeAll
+local function setup()
+    tracker = Tracker.create()
+end
+
+@beforeEach
+local function each()
+    setUp = setUp + 1
+end
+
+@test("doubles")
+local function doubles()
+    expect(double(2)).toBe(4)
+end
+
+@bench("records kills")
+local function records()
+    for _ = 1, 10 do
+        tracker:record(2)
+    end
+end
+
+@bench
+local function doubling()
+    double(setUp)
+end
+
+@bench("not yet")
+@skip("too slow")
+local function slow()
+    error("never runs")
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("doubles"), "{out}");
+    assert!(!out.contains("records kills"), "{out}");
+    let bench = |args: &[&str]| {
+        let out = wowlua(dir.path())
+            .arg("bench")
+            .args(["--samples", "2", "--batch-ms", "1"])
+            .args(args)
+            .output()
+            .unwrap();
+        (
+            out.status.success(),
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        )
+    };
+    let (ok, stdout, stderr) = bench(&["--json"]);
+    assert!(ok, "{stdout}{stderr}");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("JSON");
+    assert_eq!(json["profile"], "release");
+    let benches = json["files"][0]["benches"].as_array().unwrap();
+    let names: Vec<&str> = benches
+        .iter()
+        .map(|b| b["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["records kills", "doubling", "not yet"]);
+    for b in &benches[..2] {
+        assert!(b["unoptimized"]["nanos"].as_f64().unwrap() > 0.0, "{b}");
+        assert!(b["optimized"]["nanos"].as_f64().unwrap() > 0.0, "{b}");
+        assert!(b["speedup"].as_f64().unwrap() > 0.0, "{b}");
+        assert!(b["calls"].as_u64().unwrap() >= 1, "{b}");
+    }
+    assert_eq!(benches[2]["skipped"], "too slow");
+    // The table, one benchmark by a filter.
+    let (ok, stdout, stderr) = bench(&["doubling"]);
+    assert!(ok, "{stdout}{stderr}");
+    assert!(
+        stdout.contains("tests/tracker.test.wowlua (standard)"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("doubling"), "{stdout}");
+    assert!(!stdout.contains("records kills"), "{stdout}");
+    assert!(
+        stdout.contains("unoptimized") && stdout.contains("release"),
+        "{stdout}"
+    );
+    // A benchmark that fails fails the run, with its error.
+    fs::write(
+        dir.path().join("tests/broken.test.wowlua"),
+        "import bench from \"wowlua:test\"\n@bench(\"breaks\")\nlocal function breaks()\n    error(\"broken benchmark\")\nend\n",
+    )
+    .unwrap();
+    let (ok, stdout, _) = bench(&["breaks"]);
+    assert!(!ok, "{stdout}");
+    assert!(stdout.contains("broken benchmark"), "{stdout}");
+    // An unknown profile is E4006.
+    let (ok, _, stderr) = bench(&["--profile", "nope"]);
+    assert!(!ok);
+    assert!(stderr.contains("E4006"), "{stderr}");
+}

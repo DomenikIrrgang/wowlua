@@ -1263,10 +1263,23 @@ fn test_build(
     flavors: Vec<String>,
     dir: &str,
 ) -> Option<(BuildOutput, Vec<String>)> {
+    test_build_as(out, global, session, project, flavors, dir, "test")
+}
+
+/// [`test_build`] with another profile (`wowlua bench`'s builds).
+fn test_build_as(
+    out: &Output,
+    global: &GlobalArgs,
+    session: &mut Session,
+    project: &Project,
+    flavors: Vec<String>,
+    dir: &str,
+    profile: &str,
+) -> Option<(BuildOutput, Vec<String>)> {
     let mut left_out: Vec<String> = Vec::new();
     loop {
         let request = BuildRequest {
-            profile: "test".into(),
+            profile: profile.into(),
             flavors: Some(flavors.clone()),
             out_dir: Some(wowlua_test::build_dir(
                 &project.manifest.out_dir(),
@@ -2682,6 +2695,299 @@ pub fn cache_clean(out: &Output, all: bool) -> bool {
             )));
             out.flush(&mut session);
             false
+        }
+    }
+}
+
+/// The profiles `wowlua bench` builds with (spec Tooling §16.1.7): the test
+/// build, with the chosen profile's debugging settings that cost time
+/// (`runtime-checks`, `instrument`, `assertions`, `log-level`) and its
+/// line mode, and its optimizations or none.
+const BENCH_OPTIMIZED: &str = "wowlua-bench-optimized";
+const BENCH_UNOPTIMIZED: &str = "wowlua-bench-unoptimized";
+
+fn bench_profiles(
+    project: &mut Project,
+    profile: &str,
+) -> Result<(), wowlua_manifest::profile::ProfileError> {
+    use wowlua_manifest::model::{OptimizeSettings, ProfileSettings};
+    let manifest = &mut project.manifest.manifest;
+    let chosen = wowlua_manifest::profile::resolve(manifest, profile)?;
+    let settings = |o: &wowlua_manifest::profile::Optimize| ProfileSettings {
+        inherits: Some("test".into()),
+        runtime_checks: Some(chosen.runtime_checks),
+        instrument: Some(chosen.instrument),
+        assertions: Some(chosen.assertions),
+        log_level: Some(chosen.log_level),
+        // The profile's lines: a bundled build's code is not kept on its
+        // source lines, which some optimizations need.
+        line_mode: Some(chosen.effective_line_mode()),
+        optimize: Some(OptimizeSettings {
+            inline: Some(o.inline),
+            cache_globals: Some(o.cache_globals),
+            dead_code: Some(o.dead_code),
+            constants: Some(o.constants),
+            cache_fields: Some(o.cache_fields),
+            cache_upvalues: Some(o.cache_upvalues),
+            numeric_loops: Some(o.numeric_loops),
+            table_insert: Some(o.table_insert),
+            hoist_closures: Some(o.hoist_closures),
+        }),
+        ..ProfileSettings::default()
+    };
+    let optimized = settings(&chosen.optimize);
+    let unoptimized = settings(&wowlua_manifest::profile::Optimize::none());
+    manifest.profiles.insert(BENCH_OPTIMIZED.into(), optimized);
+    manifest
+        .profiles
+        .insert(BENCH_UNOPTIMIZED.into(), unoptimized);
+    Ok(())
+}
+
+/// `wowlua bench` (spec Tooling §16.1.7): the `@bench` functions of each
+/// addon's test files, in the build the profile optimizes and in the same
+/// build with every optimization off, for one flavor (the first, or each
+/// `--flavor`).
+pub fn bench(out: &Output, global: &GlobalArgs, args: &crate::BenchArgs) -> bool {
+    use termcolor::Color;
+    let mut session = Session::new();
+    let Some(projects) = load_projects(global, &mut session, &load_options(out, global)) else {
+        out.flush(&mut session);
+        return false;
+    };
+    let profile = args.profile.clone().unwrap_or_else(|| "release".into());
+    let wanted: Vec<String> = args
+        .flavor
+        .iter()
+        .filter_map(|f| wowlua_flavors::table().resolve(f).map(|f| f.id.clone()))
+        .collect();
+    let mut options = wowlua_test::bench::Options::default();
+    if let Some(n) = args.samples {
+        options.samples = n.max(1);
+    }
+    if let Some(ms) = args.batch_ms {
+        options.batch = Duration::from_millis(ms.max(1));
+    }
+    let mut ok = true;
+    let mut all: Vec<wowlua_test::bench::BenchFile> = Vec::new();
+    for mut project in projects {
+        if !matches!(project.kind(), PackageKind::Addon | PackageKind::Library) {
+            continue;
+        }
+        if let Err(e) = bench_profiles(&mut project, &profile) {
+            let message = match e {
+                wowlua_manifest::profile::ProfileError::Unknown(p) => format!("no profile `{p}`"),
+                other => format!("the profile `{profile}` does not resolve: {other:?}"),
+            };
+            session.push(Diagnostic::error("E4006", message));
+            out.flush(&mut session);
+            return false;
+        }
+        let flavors: Vec<String> = if wanted.is_empty() {
+            project.manifest.flavors.iter().take(1).cloned().collect()
+        } else {
+            project
+                .manifest
+                .flavors
+                .iter()
+                .filter(|f| wanted.contains(f))
+                .cloned()
+                .collect()
+        };
+        let shared_mode = project.manifest.manifest.build.flavor_mode
+            == wowlua_manifest::model::FlavorMode::Shared;
+        for flavor in flavors {
+            let built: Vec<String> = if shared_mode {
+                project.manifest.flavors.clone()
+            } else {
+                vec![flavor.clone()]
+            };
+            out.status(
+                "Building",
+                format!(
+                    "{} ({flavor}): optimized as `{profile}` and unoptimized",
+                    project.addon_name()
+                ),
+            );
+            let plain = test_build_as(
+                out,
+                global,
+                &mut session,
+                &project,
+                built.clone(),
+                &format!("bench-unoptimized-{flavor}"),
+                BENCH_UNOPTIMIZED,
+            );
+            let fast = test_build_as(
+                out,
+                global,
+                &mut session,
+                &project,
+                built,
+                &format!("bench-optimized-{flavor}"),
+                BENCH_OPTIMIZED,
+            );
+            let (Some((plain, _)), Some((fast, _))) = (plain, fast) else {
+                ok = false;
+                continue;
+            };
+            let blizzard_ui = if project.manifest.manifest.test.blizzard_ui {
+                match wowlua_test::ui_source(&flavor, &|what| out.status("Fetching", what)) {
+                    Ok(ui) => Some(ui),
+                    Err(e) => {
+                        out.colored(&[
+                            (Some(Color::Red), true, "error"),
+                            (None, false, &format!(": test.blizzard-ui: {e}\n")),
+                        ]);
+                        ok = false;
+                        continue;
+                    }
+                }
+            } else {
+                None
+            };
+            let switches = || SuiteSwitches {
+                update_snapshots: false,
+                coverage: false,
+                game_data: false,
+            };
+            let plain_suite = make_suite(
+                &project,
+                &plain,
+                &flavor,
+                blizzard_ui.clone(),
+                switches(),
+                None,
+            );
+            let fast_suite = make_suite(&project, &fast, &flavor, blizzard_ui, switches(), None);
+            out.status("Running", format!("benchmarks ({flavor})"));
+            let results =
+                wowlua_test::bench::run(&plain_suite, &fast_suite, &args.filter, &options);
+            ok &= results
+                .iter()
+                .all(|f| f.error.is_none() && f.benches.iter().all(|b| b.error.is_none()));
+            all.extend(results);
+        }
+    }
+    if args.json {
+        println!("{}", bench_json(&all, &profile, &options));
+    } else {
+        bench_table(out, &all, &profile);
+    }
+    ok
+}
+
+fn bench_json(
+    files: &[wowlua_test::bench::BenchFile],
+    profile: &str,
+    options: &wowlua_test::bench::Options,
+) -> String {
+    let timing = |t: &wowlua_test::bench::Timing| serde_json::json!({ "nanos": t.nanos, "spread": t.spread });
+    let files: Vec<serde_json::Value> = files
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "file": f.file,
+                "flavor": f.flavor,
+                "error": f.error,
+                "benches": f.benches.iter().map(|b| serde_json::json!({
+                    "name": b.name,
+                    "skipped": b.skipped,
+                    "error": b.error,
+                    "calls": b.calls,
+                    "unoptimized": timing(&b.unoptimized),
+                    "optimized": timing(&b.optimized),
+                    "speedup": b.speedup(),
+                })).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    serde_json::to_string_pretty(&serde_json::json!({
+        "profile": profile,
+        "samples": options.samples,
+        "batch_ms": options.batch.as_millis() as u64,
+        "files": files,
+    }))
+    .expect("JSON")
+}
+
+/// A time per call, in the unit that suits it.
+fn per_call(nanos: f64) -> String {
+    if nanos >= 1_000_000.0 {
+        format!("{:.2} ms", nanos / 1_000_000.0)
+    } else if nanos >= 1_000.0 {
+        format!("{:.2} µs", nanos / 1_000.0)
+    } else {
+        format!("{nanos:.0} ns")
+    }
+}
+
+fn bench_table(out: &Output, files: &[wowlua_test::bench::BenchFile], profile: &str) {
+    use termcolor::Color;
+    let width = files
+        .iter()
+        .flat_map(|f| f.benches.iter().map(|b| b.name.chars().count()))
+        .max()
+        .unwrap_or(0)
+        .max(9);
+    for f in files {
+        out.colored(&[(None, true, &format!("\n{} ({})\n", f.file, f.flavor))]);
+        if let Some(e) = &f.error {
+            out.colored(&[
+                (Some(Color::Red), true, "  error"),
+                (None, false, &format!(": {e}\n")),
+            ]);
+            continue;
+        }
+        out.colored(&[(
+            None,
+            false,
+            &format!(
+                "  {:<width$}  {:>20}  {:>20}  speed-up\n",
+                "benchmark", "unoptimized", profile
+            ),
+        )]);
+        for b in &f.benches {
+            if let Some(reason) = &b.skipped {
+                out.colored(&[(
+                    Some(Color::Yellow),
+                    false,
+                    &format!("  {:<width$}  skipped {reason}\n", b.name),
+                )]);
+                continue;
+            }
+            if let Some(e) = &b.error {
+                out.colored(&[
+                    (None, false, &format!("  {:<width$}  ", b.name)),
+                    (Some(Color::Red), true, "error"),
+                    (None, false, &format!(": {e}\n")),
+                ]);
+                continue;
+            }
+            let cell = |t: &wowlua_test::bench::Timing| {
+                format!("{} ± {:.1}%", per_call(t.nanos), t.spread * 100.0)
+            };
+            let speedup = b.speedup();
+            let color = if speedup >= 1.05 {
+                Some(Color::Green)
+            } else if speedup <= 0.95 {
+                Some(Color::Red)
+            } else {
+                None
+            };
+            out.colored(&[
+                (
+                    None,
+                    false,
+                    &format!(
+                        "  {:<width$}  {:>20}  {:>20}  ",
+                        b.name,
+                        cell(&b.unoptimized),
+                        cell(&b.optimized)
+                    ),
+                ),
+                (color, false, &format!("{speedup:.2}x\n")),
+            ]);
         }
     }
 }
