@@ -11,6 +11,11 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - W8301 warns when a standard-library function does less on a flavor you build for: Item, Spell and Unit tooltip hooks on the classic flavors, `launcher.register` without the Addon Compartment.
 - E2053, E2054, E2056, E2058 and E2059 are reported: recursive aliases, conflicting merged interface fields, misplaced type packs, an event and a message with the same name, defaults in event and message parameters.
 - In strict mode a misspelled field of a table you fill in (`stats.deths`) or of a `setmetatable` object's methods is E2003.
+- `implements` checks the class where it is declared (E3006).
+- Decorators are type-checked: their arguments (E2001, and E1003 for undefined names), whether the decorator accepts the declaration (E3022), and a decorator that returns a function gives the function its result type.
+- `@script` checks the script name and the handler's parameters against the frame type.
+- W3021 when a built-in decorator's name (`@profile`, …) hides a function of yours.
+- In optimized builds, `@inline` private methods are inlined where their class calls them, like `@inline` local functions.
 
 ### Changed
 
@@ -18,6 +23,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - The router's help and `Usage:` lines start with the slash command (`/mya scale <number>`).
 - Using a possibly secret value as a table key is E2040 (W2040 in basic mode).
 - In strict mode a table returned from a function is sealed: adding a new field to it is E2051 and reading an unknown one is E2003.
+- Extending an interface, a type alias, an enum or a plain table is E3008.
+- Two types with one name in one scope (an interface, a type alias, a class or an enum) are E1031; before, only two interfaces were reported, and otherwise the later one silently replaced the earlier.
+- `ns.__wowlua = …` is E2003.
+- `@inline` on a function that isn't local gives W3031.
 
 ### Fixed
 
@@ -39,6 +48,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `if r.maybe then` on a record no longer reports E2003 in strict mode.
 - A misspelled method says "has no method", and messages name `self` in `function T:m()` as `T`.
 - E4012 and E0101 (wowlua syntax in a `.lua` file) read as sentences.
+- Assigning a private or protected field, or using a private static member, from outside the class is E2011.
+- A subclass's inherited constructor no longer depends on file order (E2006 "expected 0").
+- In a decorated function, recursive calls are checked against the decorator's result type.
 
 ## 0.12.0 (2026-10-26)
 

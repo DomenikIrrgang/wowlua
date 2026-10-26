@@ -755,8 +755,31 @@
     },
     "E1003": {
       "area": "names",
-      "text": "A name used in a wowlua construct, such as a decorator argument, is not a\nlocal or upvalue in scope there. Declare the local before the construct, or\nfix the name.\n\nThe current compiler does not report this code: it is registered for this\nrule, but no check produces it yet, so there are no examples.",
-      "examples": [],
+      "text": "A name used in a wowlua construct, such as a decorator argument, is not a\nlocal or upvalue in scope there, nor a declared global. A decorator's\narguments are evaluated where the declaration is, when the file loads, so\nthe name must exist there. It is an error in every mode, where reading an\nundeclared global elsewhere is W1001 or E1001. Declare the local before the\ndeclaration, or fix the name.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "import throttle from \"wowlua:timer\"\n\n@throttle(delay)\nlocal function refresh()\nend\nrefresh()\n"
+            }
+          ],
+          "output": "error[E1003]: `delay` is not a local, an upvalue or a declared global here: decorator arguments are evaluated where the declaration is\n  ┌─ src/main.wowlua:3:11\n  │\n3 │ @throttle(delay)\n  │           ^^^^^ here"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "import throttle from \"wowlua:timer\"\n\nlocal delay = 0.5\n\n@throttle(delay)\nlocal function refresh()\nend\nrefresh()\n"
+            }
+          ],
+          "output": null
+        }
+      ],
       "related": [
         "E1001"
       ]
@@ -1161,8 +1184,31 @@
     },
     "E1031": {
       "area": "names",
-      "text": "Two interfaces with the same name are declared in the same scope. Only\nambient `declare interface` declarations merge (as for the addon namespace);\ngive the other interface its own name, or merge the two into one.\n\nThe current compiler does not report this code: the later interface replaces\nthe earlier one without a diagnostic, so there are no examples.",
-      "examples": [],
+      "text": "Two types with the same name are declared in the same scope: two interfaces,\nor an interface, a type alias, a class or an enum with the name of another.\nA type name means one type in a scope. Only ambient `declare interface`\ndeclarations merge (as for the addon namespace); give the other type its own\nname, or merge the two into one.\n\nA declaration under `@if` counts only where the build keeps it, so two\nalternatives for different builds may share a name.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "interface Named\n    name: string\nend\ninterface Named\n    id: number\nend\nlocal n: Named = { name = \"x\" }\nprint(n)\n"
+            }
+          ],
+          "output": "error[E1031]: an interface `Named` is declared twice in this scope\n  ┌─ src/main.wowlua:4:11\n  │\n1 │ interface Named\n  │           ----- first declared here\n  ·\n4 │ interface Named\n  │           ^^^^^ declared again here\n  │\n  = help: a type name means one type in a scope (only ambient `declare interface` declarations merge): rename one of them, or merge the two"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "interface Named\n    name: string\n    id: number\nend\nlocal n: Named = { name = \"x\", id = 1 }\nprint(n)\n"
+            }
+          ],
+          "output": null
+        }
+      ],
       "related": []
     },
     "E1032": {
@@ -2845,8 +2891,31 @@
     },
     "E3006": {
       "area": "classes",
-      "text": "A class says `implements I` but doesn't satisfy the interface `I`: a member\nis missing, or its type doesn't fit. Add the member or fix its type.\n\nThe checker doesn't report this code yet. A missing member shows up as E2001\nwhere an instance is used as the interface (`local p: Pet = Dog.new()`).",
-      "examples": [],
+      "text": "A class says `implements I` but doesn't satisfy the interface `I`: a member\nis missing, or its type doesn't fit. Add the member or fix its type.\n\nOnly public members count, as where an instance is used as the interface: a\n`private` or `protected` member doesn't satisfy it. Members the class\ninherits do, and so do those of the interfaces the interface extends.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "interface Pet\n    name: string\n    function play(): boolean\nend\nclass Dog implements Pet\n    name: string = \"Rex\"\nend\nprint(Dog)\n"
+            }
+          ],
+          "output": "error[E3006]: class `Dog` does not satisfy `Pet`: it has no public `play`\n  ┌─ src/main.wowlua:5:22\n  │\n5 │ class Dog implements Pet\n  │                      ^^^ here"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "interface Pet\n    name: string\n    function play(): boolean\nend\nclass Dog implements Pet\n    name: string = \"Rex\"\n    function play(): boolean\n        return true\n    end\nend\nprint(Dog)\n"
+            }
+          ],
+          "output": null
+        }
+      ],
       "related": [
         "E2001"
       ]
@@ -2885,8 +2954,30 @@
     },
     "E3008": {
       "area": "classes",
-      "text": "A class extends something that isn't a class. `extends` needs a class value\nto inherit from at run time. A class that `import type` brings is only a\ntype, with nothing to extend at run time: import it as a value\n(`import Animal from \"./animal\"`).\n\nThe checker reports the code for a class that `import type` brings; extending\nan interface, a type alias or an enum isn't reported yet.",
+      "text": "A class extends something that isn't a class: an interface, a type alias,\nan enum, or a value such as a table. `extends` needs a class value to inherit\nfrom at run time. To take an interface's shape, write `implements` instead\n(`class Dog implements Pet`). A class that `import type` brings is only a\ntype, with nothing to extend at run time: import it as a value\n(`import Animal from \"./animal\"`).",
       "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "interface Pet\n    name: string\nend\nclass Dog extends Pet\n    name: string = \"Rex\"\nend\nprint(Dog)\n"
+            }
+          ],
+          "output": "error[E3008]: class `Dog` extends `Pet`, an interface, not a class\n  ┌─ src/main.wowlua:4:19\n  │\n4 │ class Dog extends Pet\n  │                   ^^^ not a class\n  │\n  = help: a class extends one class; it implements interfaces (`implements I`)"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "interface Pet\n    name: string\nend\nclass Dog implements Pet\n    name: string = \"Rex\"\nend\nprint(Dog)\n"
+            }
+          ],
+          "output": null
+        },
         {
           "compiles": false,
           "files": [
@@ -3049,16 +3140,62 @@
     },
     "W3021": {
       "area": "classes",
-      "text": "A local or imported function has a core decorator's name (`profile`, `trace`,\n…) but isn't a re-export of that decorator. In decorator position a core\ndecorator's name always means the core decorator, so `@profile` ignores your\nfunction. Import it under another name (`import profile as myProfile from\n\"./perf\"`) and write `@myProfile`. Re-exports such as `import profile from\n\"wowlua:debug\"` are fine.\n\nThe checker doesn't report this code yet.",
-      "examples": [],
+      "text": "A local or imported function has a core decorator's name (`profile`, `trace`,\n…) but isn't a re-export of that decorator. In decorator position a core\ndecorator's name always means the core decorator, so `@profile` ignores your\nfunction; the warning is reported where `@profile` is written. Import it under another name (`import profile as myProfile from\n\"./perf\"`) and write `@myProfile`. Re-exports such as `import profile from\n\"wowlua:debug\"` are fine.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "local function profile(fn: () -> (), _ctx: DecoratorContext)\n    return fn\nend\n\n@profile\nlocal function refresh()\nend\nrefresh()\nprint(profile)\n"
+            }
+          ],
+          "output": "warning[W3021]: `@profile` is the core decorator: the function `profile` in scope is not used here\n  ┌─ src/main.wowlua:5:1\n  │\n5 │ @profile\n  │ ^^^^^^^^ the core decorator\n  │\n  = help: to decorate with your function, import it under another name (`import profile as myProfile from …`) and write that name"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "local function measured(fn: () -> (), _ctx: DecoratorContext)\n    return fn\nend\n\n@measured\nlocal function refresh()\nend\nrefresh()\n"
+            }
+          ],
+          "output": null
+        }
+      ],
       "related": [
         "E3020"
       ]
     },
     "E3022": {
       "area": "classes",
-      "text": "A user decorator's parameters don't accept the declaration it decorates: a\nfunction decorator is `(fn: F, ctx: DecoratorContext) -> F?`, and its `fn`\nmust take the decorated function's type. Fix the decorator's signature, or\ndecorate a fitting declaration.\n\nThe checker doesn't report this code yet.",
-      "examples": [],
+      "text": "A user decorator's parameters don't accept the declaration it decorates: a\nfunction decorator is `(fn: F, ctx: DecoratorContext) -> F?`, and its `fn`\nmust take the decorated function's type. A method's function takes `self`\nfirst, a class decorator gets the class table and a field decorator `nil`.\nThe second parameter must take the `DecoratorContext`, and any further\nparameters must be optional. Fix the decorator's signature, or decorate a\nfitting declaration.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "local function onNumbers(fn: (n: number) -> (), _ctx: DecoratorContext)\n    return fn\nend\n\n@onNumbers\nlocal function greet(name: string)\n    print(name)\nend\ngreet(\"Ana\")\n"
+            }
+          ],
+          "output": "error[E3022]: `@onNumbers` does not accept this function: it takes `(n: number) -> ()`, and the value is `(name: string) -> ()`\n  ┌─ src/main.wowlua:5:1\n  │\n5 │ @onNumbers\n  │ ^^^^^^^^^^ here"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "local function onNumbers(fn: (n: number) -> (), _ctx: DecoratorContext)\n    return fn\nend\n\n@onNumbers\nlocal function double(n: number)\n    print(n * 2)\nend\ndouble(2)\n"
+            }
+          ],
+          "output": null
+        }
+      ],
       "related": [
         "E3021"
       ]
@@ -3094,7 +3231,7 @@
     },
     "W3031": {
       "area": "classes",
-      "text": "`@inline` is ignored: the function can't be inlined. Only a `local function`\nwhose body is a single `return` expression is inlined, and only when it isn't\nrecursive and is used only by calling it; the warning says which rule failed.\nA method with `@inline` is reported too. Simplify the function, or remove\nthe hint.\n\nThe warning comes from `wowlua build` with a profile that inlines\n(`optimize.inline`, on in `release`), not from `wowlua check`.",
+      "text": "`@inline` is ignored: the function can't be inlined. Only a `local function`\nor a private method whose body is a single `return` expression is inlined,\nand only when it isn't recursive and (a local function) is used only by\ncalling it; the warning says which rule failed. A private method is inlined\nwhere its class calls it, as no other code can call it or replace it. A\npublic or protected method, or a function that isn't local (`function f()`,\n`function t.f()`), is reported too. Simplify the function, make the method\nprivate, or remove the hint.\n\nThe warning comes from `wowlua build` with a profile that inlines\n(`optimize.inline`, on in `release`), not from `wowlua check`.",
       "examples": [],
       "related": []
     },
