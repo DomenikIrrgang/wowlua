@@ -403,3 +403,20 @@ fn self_of_a_table_method_is_named() {
         "{d:#?}"
     );
 }
+
+/// Record keys that are no identifier, or a reserved word, show as they
+/// are written (`["1ST"]: string`, spec §2.2).
+#[test]
+fn record_keys_show_as_written() {
+    let d = errors(
+        "local r: { [\"1ST\"]: string, [\"end\"]?: number, [\"my-key\"]: boolean, name: string } = { [\"1ST\"] = \"a\", [\"my-key\"] = true, name = \"n\" }\nr:greet()\n",
+        Mode::Strict,
+    );
+    assert_eq!(
+        d,
+        [
+            "E2003: `{ [\"1ST\"]: string, [\"end\"]?: number, [\"my-key\"]: boolean, name: string }` has no method `greet`"
+        ],
+        "{d:#?}"
+    );
+}

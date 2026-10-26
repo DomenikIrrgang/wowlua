@@ -84,7 +84,11 @@ impl Env<'_> {
                             }
                             _ => d(f.ty),
                         };
-                        format!("{n}{}: {ty}", if f.optional { "?" } else { "" })
+                        format!(
+                            "{}{}: {ty}",
+                            field_key(n),
+                            if f.optional { "?" } else { "" }
+                        )
                     })
                     .collect();
                 if r.fields.len() > 4 {
@@ -936,4 +940,28 @@ fn sorted_subset(a: &[TypeId], b: &[TypeId]) -> bool {
         j += 1;
     }
     true
+}
+
+/// A record key as a type writes it: the name, or `["key"]` for one that is
+/// no identifier or is a reserved word (spec §2.2).
+fn field_key(name: &str) -> String {
+    let ident = name
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if ident && wowlua_syntax::token::TokenKind::keyword(name.as_bytes()).is_none() {
+        return name.to_string();
+    }
+    let mut out = String::from("[\"");
+    for c in name.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            c => out.push(c),
+        }
+    }
+    out.push_str("\"]");
+    out
 }
