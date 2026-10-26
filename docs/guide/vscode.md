@@ -5,6 +5,12 @@ WoW API on hover, runs your tests from the Testing view, and debugs your addon
 in wowlua's emulated WoW client with the game's screen beside your code. This
 page sets it up and walks through what it does.
 
+![VS Code debugging an addon with wowlua: paused at a breakpoint in Root.wowlua inside an @onLogin handler, with the call stack back to event PLAYER_LOGIN and the game's screen in the wowlua: UI panel](images/vscode-debugging.webp)
+
+*An addon paused at a breakpoint in an `@onLogin` handler: the call stack
+back to `event PLAYER_LOGIN` on the left, the game's screen in the
+`wowlua: UI` panel on the right.*
+
 ## Install the extension
 
 The extension lives in the wowlua repository, in
