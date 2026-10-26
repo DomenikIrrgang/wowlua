@@ -436,8 +436,17 @@ you work.
 
 By default a test only sees the items and spells it defines, so it gives the
 same result on every machine and in CI. With `--game-data`, what a test
-doesn't define (items, creatures, appearances, models) comes from your WoW
-installation.
+doesn't define (items, spells, creatures, appearances, models) comes from
+the client's own data. `wowlua data pull` reads that data from your WoW
+installation into wowlua's cache once (about 300 MiB a flavor; run it again
+after a game patch), and then `--game-data` needs no installation. Without a
+pull, it reads the installation itself. Nothing is shipped with wowlua: the
+data stays on your machine.
+
+```console
+$ wowlua data pull                     # the package's flavors, from the installation wowlua finds
+$ wowlua data pull --flavor camelot --wow "/Applications/World of Warcraft"
+```
 
 ## Coverage
 
