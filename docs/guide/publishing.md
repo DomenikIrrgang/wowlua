@@ -194,8 +194,9 @@ release and warns (W4329). The command and every site's protocol are in
 ## Publish from CI on every tag
 
 Start a project with `wowlua new MyAddon --ci github` and you get a GitHub
-Actions workflow, `.github/workflows/ci.yml`, that builds every push to
-`main` and every pull request, and publishes when you push a `v*` tag:
+Actions workflow, `.github/workflows/ci.yml`, that checks, tests and builds
+every push to `main` and every pull request, and publishes when you push a
+`v*` tag:
 
 ```yaml
 name: ci
@@ -211,13 +212,15 @@ jobs:
       contents: write # GitHub releases
     steps:
       - uses: actions/checkout@v5
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0 } # tags and history for build.version and changelogs
       - uses: DomenikIrrgang/wowlua/.github/actions/setup-wowlua@main
       - uses: actions/cache@v4
         with:
           path: ~/.wowlua/cache
           key: wowlua-${{ hashFiles('wowlua.lock') }}
-      - run: wowlua build --release --locked --message-format github
+      - run: wowlua check --locked --message-format github
+      - run: wowlua test --locked --message-format github
+      - run: wowlua build --release --locked
       - if: startsWith(github.ref, 'refs/tags/')
         run: wowlua publish
         env:
@@ -228,10 +231,12 @@ jobs:
 ```
 
 `fetch-depth: 0` fetches the tags and history the version and the changelog
-need. `--message-format github` turns errors into annotations on the pull
-request. To test every pull request too, add
-`- run: wowlua test --locked --reporter github` before the build. Releasing is
-then `git tag v1.4.2 && git push origin v1.4.2`.
+need. `--message-format github` turns errors and failed tests into
+annotations on the pull request. The tests run in wowlua's emulated client, so
+the runner needs no game and no display. Releasing is then
+`git tag v1.4.2 && git push origin v1.4.2`. A library's workflow (`--kind
+library`, `lua-library` or `types`) only checks and tests: a library is not
+published on its own.
 
 ## When players report errors
 

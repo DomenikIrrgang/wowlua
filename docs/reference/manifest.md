@@ -214,13 +214,16 @@ A number array. Default: the numbers pinned in `wowlua.lock`.
 The interface numbers written in that flavor's TOC. Leave it out: the first
 build pins the numbers of the flavor table that ships with wowlua in
 `wowlua.lock`, so every machine writes the same TOC, and later builds keep
-those pins. Set it to write other numbers. A flavor with neither is error
-E4318.
+those pins. After a game patch, `wowlua types sync` moves the pins to the
+flavor table of the wowlua you have. Set it to write other numbers. A flavor
+with neither is error E4318.
 
 The other keys of a flavor are `client-folders`, the folders under your WoW
 installation that `wowlua dev` and `wowlua install` copy the addon into
 (default: the flavor's own), and `types`, a version requirement for the
-flavor's API declarations.
+flavor's API declarations. wowlua ships one version of each flavor's
+declarations, the game version of its interface number (`12.1.0` for
+`120100`); a requirement it doesn't meet is error E4318.
 
 ## dependencies
 

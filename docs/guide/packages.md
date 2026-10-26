@@ -176,9 +176,11 @@ end
 
 A path dependency is handy while you work on both. When the library has its
 own repository, switch the entry to `git` with a tag. `wowlua check` in the
-library's folder checks it on its own, for every flavor it supports. The
-other templates are `--kind lua-library` for a plain Lua library that others
-embed, and `--kind types` for type declarations only.
+library's folder checks it on its own, for every flavor it supports, and
+`wowlua test` runs its tests. The other templates are `--kind lua-library`
+for a plain Lua library that others embed, and `--kind types` for type
+declarations only; `wowlua check` checks them as an addon that uses them
+would.
 
 ## Addon suites in one workspace
 

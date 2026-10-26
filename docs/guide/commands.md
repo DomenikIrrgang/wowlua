@@ -9,7 +9,7 @@ command.
 ```console
 $ wowlua new MyAddon                       # a new addon: wowlua.json, src/, tests/, locales/
 $ wowlua new MyAddon --flavors camelot     # for these flavors (default: standard)
-$ wowlua new MyAddon --ci github           # plus a workflow that builds and publishes on tags
+$ wowlua new MyAddon --ci github           # plus a workflow that checks, tests, builds and publishes tags
 $ wowlua new shared-utils --kind library   # a wowlua library; also lua-library and types
 $ wowlua init                              # adopt the addon in this folder, with its .pkgmeta if it has one
 $ wowlua init --from-pkgmeta               # the same, but require a .pkgmeta
@@ -37,6 +37,7 @@ the dev window. More: [Debugging](debugging.md).
 
 ```console
 $ wowlua check                             # type-check everything, tests included, without building
+$ wowlua check --watch                     # again on every change
 $ wowlua test                              # run the tests in the emulated client
 $ wowlua test "options window"             # only the files and tests whose path or name contains it
 $ wowlua test --watch                      # again on every change
@@ -92,6 +93,7 @@ $ wowlua fetch                     # download every dependency into the cache
 $ wowlua tree                      # the dependency graph
 $ wowlua tree --invert libstub     # what depends on it
 $ wowlua types convert src         # LuaLS annotations → src.d.wowlua
+$ wowlua types sync                # after a game patch: pin wowlua.lock to this wowlua's flavor table
 $ wowlua cache clean               # drop what nothing used for 30 days; --all for everything
 ```
 
@@ -110,6 +112,7 @@ $ wowlua publish --dry-run              # build, test, package and show what eac
 $ wowlua publish                        # upload to every target
 $ wowlua publish --tag v1.4.2           # tag HEAD and publish it as that tag
 $ wowlua package                        # only the zips, into dist/packages/
+$ wowlua package --target curseforge    # only these targets (one that doesn't exist is E4006)
 $ wowlua clean                          # remove dist/
 ```
 
@@ -126,7 +129,12 @@ More: [Building and publishing](publishing.md).
   `json` is one JSON object per line, for tools, and `short` one line per
   error.
 - `--deny-warnings` treats warnings as errors.
-- `-q` prints less. Tokens are never printed.
+- `-q` prints less, `-v` more: each `git` and `svn` command the package
+  manager runs and each request publishing makes. Tokens are never printed.
+- `--features a,b` turns on more of the package's
+  [features](../reference/manifest.md#features), and
+  `--no-default-features` turns its `default` ones off. With `wowlua add`,
+  they choose the new dependency's features instead.
 - `--manifest <path>` uses another `wowlua.json`, `--color never` turns colors
   off, and `-j <n>` sets the number of worker threads.
 

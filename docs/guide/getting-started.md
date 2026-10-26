@@ -28,8 +28,8 @@ $ cd MyAddon
 is WoW: Forever, the flavor wowlua's emulated client targets; without the
 option you get `standard`, the retail client. `--kind` picks the template
 (`addon`, `library`, `lua-library` or `types`), and `--ci github` adds a
-GitHub Actions workflow that builds every push and pull request and publishes
-when you push a `v*` tag. When `git` is installed and the folder is not inside
+GitHub Actions workflow that checks, tests and builds every push and pull
+request and publishes when you push a `v*` tag. When `git` is installed and the folder is not inside
 a repository yet, `new` also runs `git init`.
 
 ```text
