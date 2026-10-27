@@ -78,3 +78,18 @@ return before, C_Trainer.GetCategorizeTrainerUI(), l, r, t, b,
     );
     assert_eq!(r, ["true", "false", "2", "3", "4", "5", "false"]);
 }
+
+/// A processed option left out stays out unless all its fields have
+/// defaults: Blizzard's `SetDurationText` checks `options.textColor`, its
+/// `SetTooltipBackdrop` reads `anchorOffsets.left` unchecked.
+#[test]
+fn processed_aura_options_fill_only_what_has_defaults() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local text = C_AuraContainerUtil.ProcessCustomAuraButtonDurationTextOptions({})
+local tooltip = C_AuraContainerUtil.ProcessAuraTooltipBackdropOptions({ backdropInfo = {} })
+return text.textColor, text.textFormat, tooltip.anchorOffsets.left",
+    );
+    assert_eq!(r, ["nil", "nil", "0"]);
+}

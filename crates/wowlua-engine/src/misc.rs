@@ -303,10 +303,16 @@ fn processed(vm: &mut Vm, ty: &str, given: Value, depth: usize) -> Value {
                 Some(serde_json::Value::Bool(b)) => Value::Bool(*b),
                 Some(serde_json::Value::Number(n)) => Value::Num(n.as_f64().unwrap_or(0.0)),
                 Some(serde_json::Value::String(s)) => vm.str(s),
-                // A structure left out: its defaults, optional or not
-                // (Blizzard's `SetTooltipBackdrop` reads `anchorOffsets.left`
-                // after processing; documented optional).
-                _ if api.structure_fields.contains_key(field_ty) && depth < 6 => {
+                // A structure left out: its defaults, if it isn't optional
+                // or every field has one (Blizzard's `SetTooltipBackdrop`
+                // reads `anchorOffsets.left` after processing; its
+                // `SetDurationText` checks `options.textColor` first).
+                _ if depth < 6
+                    && api.structure_fields.get(field_ty).is_some_and(|sub| {
+                        f.get("Nilable") != Some(&serde_json::Value::Bool(true))
+                            || sub.iter().all(|s| s.get("Default").is_some())
+                    }) =>
+                {
                     processed(vm, field_ty, Value::Nil, depth + 1)
                 }
                 _ => crate::default_value(vm, api, f, depth + 1),

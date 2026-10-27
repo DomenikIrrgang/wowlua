@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- An aura button's `SetDurationText(fontString, {})` keeps its default text: options you leave out, such as `textColor`, stay out, as in the game; before, Blizzard's code errored with "a color curve expected".
+
 ## 0.13.4 (2026-10-28)
 
 ### New
