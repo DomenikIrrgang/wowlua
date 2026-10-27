@@ -1576,13 +1576,35 @@ fn unit_distance_squared(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `unit:setDistance(yards)` (`nil`: unknown); an NPC walked away from
-/// closes its gossip (`gossip::moved_away`).
+/// closes its gossip (`gossip::moved_away`); a group member crossing
+/// `UnitInRange`'s 38 yards tells it.
 pub fn control_set_distance(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     let d = num(c.arg(2));
+    let in_range = |d: Option<f64>| d.is_some_and(|d| d <= 38.0);
+    let was = in_range(engine(vm).units.list[me.0].distance);
     engine_mut(vm).units.list[me.0].distance = d;
     crate::gossip::moved_away(vm, me, d);
+    if was != in_range(d) && me != units::PLAYER && engine(vm).units.group.contains(&me) {
+        unit_in_range_update(vm, me, in_range(d));
+    }
     Ok(vec![])
+}
+
+/// `UNIT_IN_RANGE_UPDATE(unit, isInRange)` for each of a group member's
+/// group tokens; `isInRange` secret, as `UnitInRange`'s answer is (the
+/// documentation's `SecretPayloads`; unverified: which payloads, and the
+/// other tokens).
+fn unit_in_range_update(vm: &mut Vm, id: units::UnitId, in_range: bool) {
+    let tokens = units::tokens_of(&engine(vm).units, id);
+    for token in tokens
+        .iter()
+        .filter(|t| t.starts_with("party") || t.starts_with("raid"))
+    {
+        let t = vm.str(token);
+        let v = vm.secret_wrap(Value::Bool(in_range));
+        crate::widgets::fire_event(vm, "UNIT_IN_RANGE_UPDATE", &[t, v]);
+    }
 }
 
 // ------------------------------------------------------- bags and slots

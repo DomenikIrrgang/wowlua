@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- A group member moved in or out of range with `unit:setDistance` fires `UNIT_IN_RANGE_UPDATE`, so unit frames that fade out-of-range members (Blizzard's raid frames among them) react in tests; before, only `UnitInRange` changed.
+
 ## 0.13.4 (2026-10-28)
 
 ### New

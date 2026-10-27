@@ -174,3 +174,32 @@ return tooMuch, held, GetCursorMoney(), changes",
     );
     assert_eq!(r, ["0", "200", "0", "2"]);
 }
+
+/// A group member moving into or out of `UnitInRange`'s 38 yards fires
+/// `UNIT_IN_RANGE_UPDATE(unit, isInRange)`; a move within either side, or
+/// anyone outside the group, fires nothing. `isInRange` is secret, as
+/// `UnitInRange`'s answer is.
+#[test]
+fn group_members_moving_in_and_out_of_range_tell_it() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local mate = mock.spawnUnit({ name = 'Mate', reaction = 'friendly', player = true })
+mock.addToGroup(mate)
+mate:setDistance(10)
+local stranger = mock.spawnUnit({ name = 'Stranger', reaction = 'friendly' })
+local seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('UNIT_IN_RANGE_UPDATE')
+f:SetScript('OnEvent', function(_, _, unit, inRange) seen[#seen + 1] = unit .. '=' .. tostring(mock.sameSecret(inRange, true))
+    .. (issecretvalue(inRange) and ' secret' or '') end)
+mate:setDistance(20)
+mate:setDistance(50)
+mate:setDistance(nil)
+mate:setDistance(30)
+stranger:setDistance(5)
+stranger:setDistance(60)
+return table.concat(seen, ', ')",
+    );
+    assert_eq!(r, ["party1=false secret, party1=true secret"]);
+}
