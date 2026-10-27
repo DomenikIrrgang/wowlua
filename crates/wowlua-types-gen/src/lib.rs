@@ -453,12 +453,24 @@ fn with_secret(ty: &str) -> String {
     }
 }
 
+/// `ty` as a widget result that is secret only after a setter got a
+/// secret: `AspectSecret<T, T | Secret<T>>`, which the checker reads as
+/// `T` unless `check.secret-widget-results` is on (decision T474).
+fn aspect_secret(ty: &str) -> String {
+    let secret = with_secret(ty);
+    if secret == ty {
+        secret
+    } else {
+        format!("AspectSecret<{ty}, {secret}>")
+    }
+}
+
 /// An annotated method's results made possibly secret where Blizzard's
-/// documented ones are, one by one.
+/// documented ones are, one by one, as [`aspect_secret`] results.
 fn secret_returns(doc: &model::Sig, target: &mut model::Sig) {
     for (i, ty) in target.returns.iter_mut().enumerate() {
         if doc.returns.get(i).is_some_and(|d| d.contains("Secret<")) {
-            *ty = with_secret(ty);
+            *ty = aspect_secret(ty);
         }
     }
     if doc
@@ -467,7 +479,7 @@ fn secret_returns(doc: &model::Sig, target: &mut model::Sig) {
         .is_some_and(|d| d.contains("Secret<"))
         && let Some(v) = &mut target.ret_vararg
     {
-        *v = with_secret(v);
+        *v = aspect_secret(v);
     }
 }
 
@@ -1454,8 +1466,9 @@ pub fn generate(
                 // Results Blizzard documents as possibly secret
                 // (`SecretReturns`, `SecretReturnsForAspect`: a widget's
                 // aspect set from a secret, `FontString:GetText()` after a
-                // secret `SetText`) are `T | Secret<T>` in the annotated
-                // methods too.
+                // secret `SetText`) are `AspectSecret<T, T | Secret<T>>` in
+                // the annotated methods: `T` unless the package asks for
+                // them (decision T474).
                 if let Some(doc) = sigs.first() {
                     for t in targets.iter_mut() {
                         secret_returns(doc, t);
@@ -2599,7 +2612,8 @@ mod tests {
     }
 
     /// A method's results Blizzard documents as possibly secret are
-    /// `T | Secret<T>` in the annotations' signature too, one by one.
+    /// `AspectSecret<T, T | Secret<T>>` in the annotations' signature, one
+    /// by one.
     #[test]
     fn documented_secret_results_reach_annotated_methods() {
         assert_eq!(with_secret("number"), "number | Secret<number>");
@@ -2621,7 +2635,11 @@ mod tests {
         let doc = sig(&["number | Secret<number>", "boolean"]);
         let mut annotated = sig(&["number", "boolean"]);
         secret_returns(&doc, &mut annotated);
-        assert_eq!(annotated.returns, ["number | Secret<number>", "boolean"]);
+        assert_eq!(
+            annotated.returns,
+            ["AspectSecret<number, number | Secret<number>>", "boolean"]
+        );
+        assert_eq!(aspect_secret("unknown"), "unknown");
     }
 
     /// `FormatShortDate` without a year is the short date without one.

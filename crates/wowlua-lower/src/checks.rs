@@ -263,7 +263,8 @@ impl<'a> Lowerer<'a> {
                 }
             }
             RuntimeCheck::Table(fields) => {
-                let mut c = self.type_is(value.clone(), "table", pos);
+                let is_table = self.type_is(value.clone(), "table", pos);
+                let mut c: Option<ir::Expr> = None;
                 for (name, ty) in fields {
                     let key = self.string(name, pos);
                     let member = ir::Expr::new(
@@ -278,9 +279,31 @@ impl<'a> Lowerer<'a> {
                         Some(t) => self.type_is(member, t, pos),
                         None => binary(ir::BinOp::Ne, member, lit(ir::ExprKind::Nil, pos), pos),
                     };
-                    c = binary(ir::BinOp::And, c, part, pos);
+                    c = Some(match c {
+                        Some(c) => binary(ir::BinOp::And, c, part, pos),
+                        None => part,
+                    });
                 }
-                c
+                // A test's `mock.partial` fake has only the fields the test
+                // needs, and passes (spec §16, decision S42): asked only
+                // when a field is missing, so real values pay nothing.
+                match c {
+                    Some(c) => {
+                        let wl = self.runtime_ref(pos);
+                        let partial = call(
+                            field(field(wl, "check", pos), "partial", pos),
+                            vec![value],
+                            pos,
+                        );
+                        binary(
+                            ir::BinOp::And,
+                            is_table,
+                            paren(or(paren(c), partial, pos)),
+                            pos,
+                        )
+                    }
+                    None => is_table,
+                }
             }
             RuntimeCheck::AnyOf(parts) => {
                 let parts: Vec<ir::Expr> = parts

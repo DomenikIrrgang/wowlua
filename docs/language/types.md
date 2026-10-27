@@ -442,24 +442,30 @@ In basic mode and in plain Lua files it's the warning W2040.
 
 A widget can hold a secret too. Once one of its setters gets a secret
 (`SetText`, `SetAlpha`, `SetValue`, `SetScale`, …), the matching getters
-return secrets for that widget, so the getters Blizzard documents this way
-(`GetText`, `IsShown`, `GetWidth`, `GetAlpha`, `GetPoint` and many more) are
-typed `T | Secret<T>`. Check what they return before you compute or compare
-with it:
+(`GetText`, `IsShown`, `GetWidth`, `GetAlpha`, `GetPoint` and many more)
+return secrets for that widget. The checker can't tell which of your widgets
+got one, so these getters are typed plainly (`GetWidth()` is a `number`),
+and the emulated client in `wowlua test` returns secrets where the game does.
 
-```wowlua title=src/layout.wowlua
+To have them typed as Blizzard documents them, `T | Secret<T>`, set
+`"secret-widget-results": true` under `check` in `wowlua.json`. Then every
+use needs a check first, which pays off in code that feeds widgets from
+secret sources, such as a health bar filled from `UnitHealth`:
+
+```wowlua title=src/health.wowlua
 --!strict
-local frame = CreateFrame("Frame", nil, UIParent)
+local bar = CreateFrame("StatusBar", nil, UIParent)
 
-local function halfWidth(): number
-    local width = frame:GetWidth()              -- number | Secret<number>
-    if issecretvalue(width) then
+local function percent(): number
+    local value = bar:GetValue()  -- number | Secret<number> with the setting
+    local _, max = bar:GetMinMaxValues()
+    if issecretvalue(value) or issecretvalue(max) or max == 0 then
         return 0
     end
-    return width / 2
+    return value / max * 100
 end
 
-print(halfWidth())
+print(percent())
 ```
 
 The rules are in

@@ -243,6 +243,9 @@ interface WowluaRuntime
     check?: {
         --- Raises the error of a parameter that failed its check.
         fail: (index: number, name: string, fname: string, location: string, expected: string, value: any) -> (),
+        --- Whether a table is a test's `mock.partial` fake, which passes a
+        --- record's check without the fields the test left out.
+        partial: (value: table) -> boolean,
         --- Raises the error of a failed `::` assertion.
         castFail: (expected: string, value: any, location: string) -> (),
     }

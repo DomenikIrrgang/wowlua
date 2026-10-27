@@ -444,7 +444,8 @@ Mocking (decision T187):
   (decision T230). `mock.partial(fields)` is a fake of a record the game
   gives, with only the fields a test needs, typed by where it goes
   (`local info: BNetAccountInfo = mock.partial({ bnetAccountID = 1 })`), so
-  a stub can return it; the fields are not checked (decision S42).
+  a stub can return it; the fields are not checked (decision S42), by
+  the runtime checks either (decision S64).
 - **Scenario controls** set the game's state: combat, units, group, auras,
   spells, items, time, screen, locale, CVars, other addons and libraries.
 - **Taint in tests.** A protected action refused because of taint fails the

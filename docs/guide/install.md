@@ -65,7 +65,7 @@ Cargo puts the binary in `~/.cargo/bin`.
 
 ```console
 $ wowlua --version
-wowlua 0.13.0
+wowlua 0.13.1
 ```
 
 `wowlua help` lists every command, and `wowlua help <command>` (or
@@ -114,15 +114,15 @@ variables change what it installs and where:
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `WOWLUA_VERSION` | `latest` | The release tag to install, for example `v0.13.0` |
+| `WOWLUA_VERSION` | `latest` | The release tag to install, for example `v0.13.1` |
 | `WOWLUA_INSTALL_DIR` | `~/.wowlua/bin` (`$HOME\.wowlua\bin` on Windows) | Where the binary goes |
 
 ```console
-$ curl -fsSL https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.sh | WOWLUA_VERSION=v0.13.0 sh
+$ curl -fsSL https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.sh | WOWLUA_VERSION=v0.13.1 sh
 ```
 
 ```powershell
-$env:WOWLUA_VERSION = "v0.13.0"; irm https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.ps1 | iex
+$env:WOWLUA_VERSION = "v0.13.1"; irm https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.ps1 | iex
 ```
 
 A project names the wowlua versions it works with in `package.wowlua` of its

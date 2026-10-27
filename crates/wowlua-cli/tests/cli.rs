@@ -669,7 +669,11 @@ fn check_and_fmt() {
         .assert()
         .code(1)
         .stdout(predicate::str::contains("would reformat src/main.wowlua"));
-    wowlua(dir.path()).arg("fmt").assert().success();
+    wowlua(dir.path())
+        .arg("fmt")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Finished 1 of 1 file changed"));
     assert_eq!(
         fs::read_to_string(dir.path().join("src/main.wowlua")).unwrap(),
         "local t = { a = 1, b = \"x\" } -- keep\nif t.a then\n\tprint(t.b)\nend\n"
@@ -1906,8 +1910,8 @@ print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionT
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
     let diagnostics: Vec<&str> = stderr.lines().filter(|l| l.starts_with("src/")).collect();
     // Only the spell cooldown's start time may be secret (an item's never
-    // is) and an alpha animation's target alpha (its alpha aspect), and a
-    // unit's name may be absent.
+    // is; an alpha animation's target alpha only with
+    // `check.secret-widget-results`, T474), and a unit's name may be absent.
     assert_eq!(
         diagnostics,
         [
@@ -1916,12 +1920,63 @@ print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionT
             // (the cursor's id depends on what it holds: unknown, T288)
             "src/main.wowlua:35:7: error[E2001]: `unknown?` is not assignable to `number`",
             "src/main.wowlua:39:7: error[E2001]: `boolean` is not assignable to `string`",
-            "src/main.wowlua:42:7: error[E2001]: `number | Secret<number>` is not assignable to `string`",
+            "src/main.wowlua:42:7: error[E2001]: `number` is not assignable to `string`",
             "src/main.wowlua:45:7: error[E2001]: `number | \"\"` is not assignable to `string`",
             "src/main.wowlua:51:7: error[E2001]: `number` is not assignable to `string`",
             "src/main.wowlua:52:7: error[E2001]: `number` is not assignable to `string`",
         ],
         "{stderr}"
+    );
+}
+
+/// A widget's results Blizzard documents as possibly secret (secret only
+/// after a setter got one), a status bar's value among them, are plain by
+/// default and `T | Secret<T>` with `check.secret-widget-results`
+/// (decision T474).
+#[test]
+fn secret_widget_results_are_typed_on_request() {
+    let source = r#"local f = CreateFrame("Frame")
+local width: number = f:GetWidth()
+local label = f:CreateFontString()
+local text: string = label:GetText() or ""
+local bar = CreateFrame("StatusBar")
+local value: number = bar:GetValue()
+print(width, text, value)
+"#;
+    let check = |extra: &str| {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = format!(
+            r#"{{ "package": {{ "name": "widgets", "version": "1.0.0" }},
+  "flavors": {{ "camelot": {{}} }},
+  "check": {{ "mode": "strict"{extra} }} }}
+"#
+        );
+        write(
+            dir.path(),
+            &[
+                ("wowlua.json", manifest.as_str()),
+                ("src/main.wowlua", source),
+            ],
+        );
+        let output = wowlua(dir.path())
+            .args(["check", "--message-format", "short"])
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        stderr
+            .lines()
+            .filter(|l| l.starts_with("src/"))
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(check(""), Vec::<String>::new());
+    assert_eq!(
+        check(r#", "secret-widget-results": true"#),
+        [
+            "src/main.wowlua:2:7: error[E2001]: `number | Secret<number>` is not assignable to `number`",
+            "src/main.wowlua:4:7: error[E2001]: `string | Secret<string>` is not assignable to `string`",
+            "src/main.wowlua:6:7: error[E2001]: `number | Secret<number>` is not assignable to `number`",
+        ]
     );
 }
 

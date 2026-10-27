@@ -453,13 +453,13 @@ declare class Alpha extends Animation
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Alpha_GetFromAlpha)
-    function GetFromAlpha(): number | Secret<number>
+    function GetFromAlpha(): AspectSecret<number, number | Secret<number>>
     --- Returns the alpha the animation ends at.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Alpha_GetToAlpha)
-    function GetToAlpha(): number | Secret<number>
+    function GetToAlpha(): AspectSecret<number, number | Secret<number>>
     --- Sets the alpha the animation starts from.
     ---
     --- **Parameters**
@@ -569,7 +569,7 @@ declare class Animation extends Object
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Animation_HasScript)
-    function HasScript(scriptName: string): boolean | Secret<boolean>
+    function HasScript(scriptName: string): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Adds a handler that runs after the animation's existing handler for the script type.
     ---
     --- **Parameters**
@@ -831,7 +831,7 @@ declare class AnimationGroup extends Object
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_AnimationGroup_HasScript)
-    function HasScript(scriptName: ScriptAnimationGroup): boolean | Secret<boolean>
+    function HasScript(scriptName: ScriptAnimationGroup): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Adds a handler that runs after the group's existing handler for the script type.
     ---
     --- **Parameters**
@@ -1580,17 +1580,17 @@ declare class FrameScriptObject
     --- - `name`: The name of the frame. This is also a variable in the global namespace.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FrameScriptObject_GetName)
-    function GetName(): string | Secret<string>
+    function GetName(): AspectSecret<string, string | Secret<string>>
     --- Returns the object's widget type.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FrameScriptObject_GetObjectType)
-    function GetObjectType(): string | Secret<string>
+    function GetObjectType(): AspectSecret<string, string | Secret<string>>
     --- Whether any aspect of the object holds a secret value.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FrameScriptObject_HasAnySecretAspect)
-    function HasAnySecretAspect(): boolean | Secret<boolean>
+    function HasAnySecretAspect(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Whether the given aspect of the object holds a secret value.
     ---
     --- **Parameters**
@@ -1599,30 +1599,30 @@ declare class FrameScriptObject
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FrameScriptObject_HasSecretAspect)
-    function HasSecretAspect(aspect: number): boolean | Secret<boolean>
+    function HasSecretAspect(aspect: number): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Whether the object holds secret values.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FrameScriptObject_HasSecretValues)
-    function HasSecretValues(): boolean | Secret<boolean>
+    function HasSecretValues(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Returns whether this object has been explicitly marked as forbidden.
     ---
     --- **Returns**
     --- - `isForbidden`: True if this object has been explicitly marked as forbidden, regardless of the current Lua execution context.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FrameScriptObject_IsForbidden)
-    function IsForbidden(): boolean | Secret<boolean>
+    function IsForbidden(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Returns true if the widget object belongs to a given widget type or its subtypes.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FrameScriptObject_IsObjectType)
-    function IsObjectType(objectType: string): boolean | Secret<boolean>
+    function IsObjectType(objectType: string): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Whether the object refuses secret values.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FrameScriptObject_IsPreventingSecretValues)
-    function IsPreventingSecretValues(): boolean | Secret<boolean>
+    function IsPreventingSecretValues(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Sets the object to be forbidden from an insecure execution path.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FrameScriptObject_SetForbidden)
@@ -1945,7 +1945,7 @@ declare class Object extends FrameScriptObject
     --- Returns the parent object.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Object_GetParent)
-    function GetParent(): CScriptObject | Secret<CScriptObject>
+    function GetParent(): AspectSecret<CScriptObject, CScriptObject | Secret<CScriptObject>>
     --- Returns the key on the parent that references this object.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Object_GetParentKey)
@@ -1966,7 +1966,7 @@ declare class Region extends ScriptRegion
     --- - `alpha`: The alpha of the region. `0` is fully transparent, `1` is fully opaque.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Region_GetAlpha)
-    function GetAlpha(): SingleColorValue | Secret<SingleColorValue>
+    function GetAlpha(): AspectSecret<SingleColorValue, SingleColorValue | Secret<SingleColorValue>>
     --- Returns the layer in which the region is drawn.
     ---
     --- **Returns**
@@ -1981,14 +1981,14 @@ declare class Region extends ScriptRegion
     --- - `effectiveScale`: The effective scale after propagating from the parent region. This is equal to `f:GetScale() * f:GetParent():GetScale()`
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Region_GetEffectiveScale)
-    function GetEffectiveScale(): number | Secret<number>
+    function GetEffectiveScale(): AspectSecret<number, number | Secret<number>>
     --- Returns the scale of the region.
     ---
     --- **Returns**
     --- - `scale`: The scale of the region.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Region_GetScale)
-    function GetScale(): number | Secret<number>
+    function GetScale(): AspectSecret<number, number | Secret<number>>
     --- Returns the vertex color shading of the region.
     ---
     --- **Returns**
@@ -1998,7 +1998,7 @@ declare class Region extends ScriptRegion
     --- - `colorA`: Alpha (opacity) of the texture
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Region_GetVertexColor)
-    function GetVertexColor(): (number | Secret<number>, number | Secret<number>, number | Secret<number>, number | Secret<number>)
+    function GetVertexColor(): (AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>)
     --- Returns true if the region is ignoring parent alpha.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Region_IsIgnoringParentAlpha)
@@ -2195,7 +2195,7 @@ declare class ScriptRegion extends Object
     --- - `canChange`: True if addon scripts are currently allowed to change protected properties of the region (e.g. showing or hiding it, changing its position, or altering frame attributes).
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_CanChangeProtectedState)
-    function CanChangeProtectedState(): boolean | Secret<boolean>
+    function CanChangeProtectedState(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Whether mouse clicks on the region pass on to the frames under it.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -2235,13 +2235,13 @@ declare class ScriptRegion extends Object
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_GetBottom)
-    function GetBottom(): uiUnit | Secret<uiUnit>
+    function GetBottom(): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Returns the screen coordinates of the region's center.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_GetCenter)
-    function GetCenter(): (uiUnit | Secret<uiUnit>, uiUnit | Secret<uiUnit>)
+    function GetCenter(): (AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>, AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>)
     --- Returns the region's height.
     ---
     --- **Parameters**
@@ -2250,7 +2250,7 @@ declare class ScriptRegion extends Object
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_GetHeight)
-    function GetHeight(ignoreRect: boolean?): uiUnit | Secret<uiUnit>
+    function GetHeight(ignoreRect: boolean?): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Returns the offset of the named part of the region from the bottom left of the screen (game window), the offset is in the effective scale of the region.
     ---
     --- **Returns**
@@ -2261,7 +2261,7 @@ declare class ScriptRegion extends Object
     --- - `x, y`: Left and bottom side of the screen to the center of the region. `x = (left+right)/2`, `y = (bottom+top)/2`
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_GetLeft)
-    function GetLeft(): uiUnit | Secret<uiUnit>
+    function GetLeft(): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Returns the coords and size of the region.
     ---
     --- **Returns**
@@ -2271,19 +2271,19 @@ declare class ScriptRegion extends Object
     --- - `height`: Distance between the bottom and top edges.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_GetRect)
-    function GetRect(): (uiUnit | Secret<uiUnit>, uiUnit | Secret<uiUnit>, uiUnit | Secret<uiUnit>, uiUnit | Secret<uiUnit>)
+    function GetRect(): (AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>, AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>, AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>, AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>)
     --- Returns the distance of the region's right edge from the left of the screen.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_GetRight)
-    function GetRight(): uiUnit | Secret<uiUnit>
+    function GetRight(): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Returns the region's left, bottom, width and height in screen coordinates, with its effective scale applied.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_GetScaledRect)
-    function GetScaledRect(): (uiUnit | Secret<uiUnit>, uiUnit | Secret<uiUnit>, uiUnit | Secret<uiUnit>, uiUnit | Secret<uiUnit>)
+    function GetScaledRect(): (AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>, AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>, AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>, AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>)
     --- Returns the widget script handler.
     ---
     --- **Parameters**
@@ -2305,20 +2305,20 @@ declare class ScriptRegion extends Object
     --- - `height`: The height of the region.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_GetSize)
-    function GetSize(ignoreRect: boolean?): (uiUnit | Secret<uiUnit>, uiUnit | Secret<uiUnit>)
+    function GetSize(ignoreRect: boolean?): (AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>, AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>)
     --- Returns the script name and line number where the region was created.
     ---
     --- **Returns**
     --- - `location`: string - The script name and line number where the region was created.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_GetSourceLocation)
-    function GetSourceLocation(): string | Secret<string>
+    function GetSourceLocation(): AspectSecret<string, string | Secret<string>>
     --- Returns the distance of the region's top edge from the bottom of the screen.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_GetTop)
-    function GetTop(): uiUnit | Secret<uiUnit>
+    function GetTop(): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Returns the region's width.
     ---
     --- **Parameters**
@@ -2327,14 +2327,14 @@ declare class ScriptRegion extends Object
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_GetWidth)
-    function GetWidth(ignoreRect: boolean?): uiUnit | Secret<uiUnit>
+    function GetWidth(ignoreRect: boolean?): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Returns true if the region supports the given script type.
     ---
     --- **Parameters**
     --- - `scriptName`: Name of the script type, for example "OnShow".
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_HasScript)
-    function HasScript(scriptName: ScriptType): boolean | Secret<boolean>
+    function HasScript(scriptName: ScriptType): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Hides the region.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_Hide)
@@ -2363,20 +2363,20 @@ declare class ScriptRegion extends Object
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_Intersects)
-    function Intersects(region: ScriptRegion): boolean | Secret<boolean>
+    function Intersects(region: ScriptRegion): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Returns true if the region has cross-region anchoring restrictions applied.
     ---
     --- **Returns**
     --- - `isRestricted`: `true` if this region disallows anchors to exist between separate hierarchies.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_IsAnchoringRestricted)
-    function IsAnchoringRestricted(): boolean | Secret<boolean>
+    function IsAnchoringRestricted(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Whether the region's position depends on a secret value, so addons cannot read it.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_IsAnchoringSecret)
-    function IsAnchoringSecret(): boolean | Secret<boolean>
+    function IsAnchoringSecret(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Whether the region is collapsed and takes up no space in its parent's layout.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -2418,7 +2418,7 @@ declare class ScriptRegion extends Object
     --- - `isMouseOver`: True if the mouse cursor is currently over the region (as modified by the offset arguments); false otherwise.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_IsMouseOver)
-    function IsMouseOver(offsetTop: uiUnit?, offsetBottom: uiUnit?, offsetLeft: uiUnit?, offsetRight: uiUnit?): boolean | Secret<boolean>
+    function IsMouseOver(offsetTop: uiUnit?, offsetBottom: uiUnit?, offsetLeft: uiUnit?, offsetRight: uiUnit?): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Returns true if the region can receive mouse wheel input.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_IsMouseWheelEnabled)
@@ -2430,7 +2430,7 @@ declare class ScriptRegion extends Object
     --- - `isProtectedExplicitly`: true if the widget was explicitly specified as protected at the time of creation.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_IsProtected)
-    function IsProtected(): (boolean | Secret<boolean>, boolean | Secret<boolean>)
+    function IsProtected(): (AspectSecret<boolean, boolean | Secret<boolean>>, AspectSecret<boolean, boolean | Secret<boolean>>)
     --- Returns true if the region can be positioned on the screen.
     ---
     --- **Returns**
@@ -2444,14 +2444,14 @@ declare class ScriptRegion extends Object
     --- - `isShown`: True if the region should be shown, but it depends on the parents if it's visible.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_IsShown)
-    function IsShown(): boolean | Secret<boolean>
+    function IsShown(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Returns whether the region is visible.
     ---
     --- **Returns**
     --- - `isVisible`: True if the region and its parents are shown, making it effectively visible.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegion_IsVisible)
-    function IsVisible(): boolean | Secret<boolean>
+    function IsVisible(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Sets whether the region takes up no space in its parent's layout while hidden.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -2561,11 +2561,11 @@ declare class ScriptRegionResizing extends Object
     --- - `offsetY`: Offset up (negative for down).
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegionResizing_GetPoint)
-    function GetPoint(anchorIndex: number?, resolveCollapsed: boolean?): (FramePoint | Secret<FramePoint>, ScriptRegion | Secret<ScriptRegion>, FramePoint | Secret<FramePoint>, uiUnit | Secret<uiUnit>, uiUnit | Secret<uiUnit>)
+    function GetPoint(anchorIndex: number?, resolveCollapsed: boolean?): (AspectSecret<FramePoint, FramePoint | Secret<FramePoint>>, AspectSecret<ScriptRegion, ScriptRegion | Secret<ScriptRegion>>, AspectSecret<FramePoint, FramePoint | Secret<FramePoint>>, AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>, AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>)
     --- Returns an anchor point by name for the region.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScriptRegionResizing_GetPointByName)
-    function GetPointByName(point: FramePoint, resolveCollapsed: boolean?): (FramePoint | Secret<FramePoint>, ScriptRegion | Secret<ScriptRegion>, FramePoint | Secret<FramePoint>, uiUnit | Secret<uiUnit>, uiUnit | Secret<uiUnit>)
+    function GetPointByName(point: FramePoint, resolveCollapsed: boolean?): (AspectSecret<FramePoint, FramePoint | Secret<FramePoint>>, AspectSecret<ScriptRegion, ScriptRegion | Secret<ScriptRegion>>, AspectSecret<FramePoint, FramePoint | Secret<FramePoint>>, AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>, AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>)
     --- Positions the region the same as another region.
     ---
     --- **Parameters**
@@ -2691,7 +2691,7 @@ declare class TextureBase extends Region
     --- Returns the desaturation level of the texture.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_TextureBase_GetDesaturation)
-    function GetDesaturation(): normalizedValue | Secret<normalizedValue>
+    function GetDesaturation(): AspectSecret<normalizedValue, normalizedValue | Secret<normalizedValue>>
     --- Returns true if the texture is tiling horizontally.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_TextureBase_GetHorizTile)
@@ -2702,11 +2702,11 @@ declare class TextureBase extends Region
     --- - `radians`: Rotation angle in radians.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_TextureBase_GetRotation)
-    function GetRotation(): (number | Secret<number>, vector2 | Secret<vector2>)
+    function GetRotation(): (AspectSecret<number, number | Secret<number>>, AspectSecret<vector2, vector2 | Secret<vector2>>)
     --- Returns the texture space coordinates of the texture.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_TextureBase_GetTexCoord)
-    function GetTexCoord(): (number | Secret<number>, number | Secret<number>, number | Secret<number>, number | Secret<number>, number | Secret<number>, number | Secret<number>, number | Secret<number>, number | Secret<number>)
+    function GetTexCoord(): (AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>)
     --- Returns the texel snapping bias for the texture.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_TextureBase_GetTexelSnappingBias)
@@ -2755,7 +2755,7 @@ declare class TextureBase extends Region
     --- - `desaturated`: Returns true if desaturated with `TextureBase:SetDesaturated` or for any desaturation level `>0.0` via `TextureBase:SetDesaturation`.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_TextureBase_IsDesaturated)
-    function IsDesaturated(): boolean | Secret<boolean>
+    function IsDesaturated(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Returns true if the texture is snapping to the pixel grid.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_TextureBase_IsSnappingToPixelGrid)
@@ -3049,7 +3049,7 @@ declare class FontString extends Region
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FontString_CalculateScreenAreaFromCharacterSpan)
-    function CalculateScreenAreaFromCharacterSpan(leftIndex: number, rightIndex: number): (uiBoundsRect[] | Secret<uiBoundsRect[]>)?
+    function CalculateScreenAreaFromCharacterSpan(leftIndex: number, rightIndex: number): AspectSecret<uiBoundsRect[]?, (uiBoundsRect[] | Secret<uiBoundsRect[]>)?>
     --- Whether the font string can wrap lines in the middle of a word.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -3077,7 +3077,7 @@ declare class FontString extends Region
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FontString_FindCharacterIndexAtCoordinate)
-    function FindCharacterIndexAtCoordinate(x: uiUnit, y: uiUnit): (number | Secret<number>, boolean | Secret<boolean>)
+    function FindCharacterIndexAtCoordinate(x: uiUnit, y: uiUnit): (AspectSecret<number, number | Secret<number>>, AspectSecret<boolean, boolean | Secret<boolean>>)
     --- Returns the font string's alpha gradient.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -3144,7 +3144,7 @@ declare class FontString extends Region
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FontString_GetNumLines)
-    function GetNumLines(): number | Secret<number>
+    function GetNumLines(): AspectSecret<number, number | Secret<number>>
     --- Returns the font string's rotation in radians.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -3178,21 +3178,21 @@ declare class FontString extends Region
     --- Returns how tall the string would be, in pixels, without wrapping: Height= MyFontString:GetStringHeight();
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FontString_GetStringHeight)
-    function GetStringHeight(): uiUnit | Secret<uiUnit>
+    function GetStringHeight(): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- `FontString` provides three methods to determine the width of its text independently from the value returned by `Region:GetWidth`: ***GetStringWidth()** ignores `FontString:CanWordWrap` but includes `FontString:IsTruncated` ***GetUnboundedStringWidth()** ignores word wrap and truncation ***GetWrappedWidth()** includes word wrap and truncation
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FontString_GetStringWidth)
-    function GetStringWidth(): uiUnit | Secret<uiUnit>
+    function GetStringWidth(): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Returns the text from a `FontString` widget.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FontString_GetText)
-    function GetText(): (string | Secret<string>)?
+    function GetText(): AspectSecret<string?, (string | Secret<string>)?>
     --- Returns the font string's text color as red, green, blue and alpha.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FontString_GetTextColor)
-    function GetTextColor(): (number | Secret<number>, number | Secret<number>, number | Secret<number>, number | Secret<number>)
+    function GetTextColor(): (AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>)
     --- Returns the font string's text scale.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -3204,17 +3204,17 @@ declare class FontString extends Region
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FontString_GetUnboundedStringWidth)
-    function GetUnboundedStringWidth(): uiUnit | Secret<uiUnit>
+    function GetUnboundedStringWidth(): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Returns the width of the font string's text after it is wrapped.
     ---
     --- *Description by wowlua: the API's documentation has none.*
-    function GetWrappedWidth(): uiUnit | Secret<uiUnit>
+    function GetWrappedWidth(): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Whether the font string's text is cut off.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_FontString_IsTruncated)
-    function IsTruncated(): boolean | Secret<boolean>
+    function IsTruncated(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Updates the font string after its colors changed.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -3499,7 +3499,7 @@ declare class Button extends Frame
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Button_GetButtonState)
-    function GetButtonState(): SimpleButtonStateToken | Secret<SimpleButtonStateToken>
+    function GetButtonState(): AspectSecret<SimpleButtonStateToken, SimpleButtonStateToken | Secret<SimpleButtonStateToken>>
     --- Returns the font the button's text uses while disabled.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -3562,7 +3562,7 @@ declare class Button extends Frame
     --- Returns the text on the button.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Button_GetText)
-    function GetText(): (string | Secret<string>)?
+    function GetText(): AspectSecret<string?, (string | Secret<string>)?>
     --- Returns the height of the button's text.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -3578,7 +3578,7 @@ declare class Button extends Frame
     --- Returns true if the button is enabled.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Button_IsEnabled)
-    function IsEnabled(): boolean | Secret<boolean>
+    function IsEnabled(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Registers the button widget to receive OnClick script events.
     ---
     --- **Parameters**
@@ -4069,20 +4069,20 @@ declare class Cooldown extends Frame
     --- The returned duration unit is milliseconds, unaffected by modRate.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Cooldown_GetCooldownDisplayDuration)
-    function GetCooldownDisplayDuration(): number | Secret<number>
+    function GetCooldownDisplayDuration(): AspectSecret<number, number | Secret<number>>
     --- Returns the duration of the cooldown currently displayed by the Cooldown widget.
     ---
     --- **Returns**
     --- - `duration`: The returned duration unit is milliseconds and is multiplied by the modRate. Returns 0 if the widget is not currently playing a cooldown animation.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Cooldown_GetCooldownDuration)
-    function GetCooldownDuration(): number | Secret<number>
+    function GetCooldownDuration(): AspectSecret<number, number | Secret<number>>
     --- Returns the cooldown's start time and duration in milliseconds.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Cooldown_GetCooldownTimes)
-    function GetCooldownTimes(): (number | Secret<number>, number | Secret<number>)
+    function GetCooldownTimes(): (AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>)
     --- Returns the font string that shows the countdown numbers.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -4094,19 +4094,19 @@ declare class Cooldown extends Frame
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Cooldown_GetDrawBling)
-    function GetDrawBling(): boolean | Secret<boolean>
+    function GetDrawBling(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Whether the cooldown draws a bright edge on the swipe.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Cooldown_GetDrawEdge)
-    function GetDrawEdge(): boolean | Secret<boolean>
+    function GetDrawEdge(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Whether the cooldown draws its swipe.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Cooldown_GetDrawSwipe)
-    function GetDrawSwipe(): boolean | Secret<boolean>
+    function GetDrawSwipe(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Returns the scale of the cooldown's edge.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -4487,13 +4487,13 @@ declare class EditBox extends Frame
     --- Returns the position of the editbox cursor.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_EditBox_GetCursorPosition)
-    function GetCursorPosition(): number | Secret<number>
+    function GetCursorPosition(): AspectSecret<number, number | Secret<number>>
     --- Returns the text as the edit box shows it.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_EditBox_GetDisplayText)
-    function GetDisplayText(): string | Secret<string>
+    function GetDisplayText(): AspectSecret<string, string | Secret<string>>
     --- Returns the basic font properties.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_EditBox_GetFont)
@@ -4571,7 +4571,7 @@ declare class EditBox extends Frame
     --- - `number`: The number value in the edit box. Returns 0 if the text could not be converted to a number.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_EditBox_GetNumber)
-    function GetNumber(): (number | Secret<number>)?
+    function GetNumber(): AspectSecret<number?, (number | Secret<number>)?>
     --- Returns the color of the edit box's text shadow as red, green, blue and alpha.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -4596,7 +4596,7 @@ declare class EditBox extends Frame
     --- - `text`: The current text; however, "|" and "\" are escaped as "||" and "\\".
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_EditBox_GetText)
-    function GetText(): string | Secret<string>
+    function GetText(): AspectSecret<string, string | Secret<string>>
     --- Returns the edit box's text color as red, green, blue and alpha.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -4618,7 +4618,7 @@ declare class EditBox extends Frame
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_EditBox_GetUTF8CursorPosition)
-    function GetUTF8CursorPosition(): number | Secret<number>
+    function GetUTF8CursorPosition(): AspectSecret<number, number | Secret<number>>
     --- Returns the most bytes of text the edit box shows.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -4711,7 +4711,7 @@ declare class EditBox extends Frame
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_EditBox_IsSecureText)
-    function IsSecureText(): boolean | Secret<boolean>
+    function IsSecureText(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Resets the edit box's input mode.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -5198,7 +5198,7 @@ declare class Frame extends Region
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_CanChangeAttribute)
-    function CanChangeAttribute(): boolean | Secret<boolean>
+    function CanChangeAttribute(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Removes the frame's alpha gradient.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -5210,7 +5210,7 @@ declare class Frame extends Region
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_ClearAttribute)
-    function ClearAttribute(attributeName: string): boolean | Secret<boolean>
+    function ClearAttribute(attributeName: string): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Removes all attributes from the frame.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -5310,11 +5310,11 @@ declare class Frame extends Region
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_ExecuteAttribute)
-    function ExecuteAttribute(attributeName: string, ...: unknown): (boolean | Secret<boolean>, string?)
+    function ExecuteAttribute(attributeName: string, ...: unknown): (AspectSecret<boolean, boolean | Secret<boolean>>, string?)
     --- Returns the frame's opacity.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_GetAlpha)
-    function GetAlpha(): SingleColorValue | Secret<SingleColorValue>
+    function GetAlpha(): AspectSecret<SingleColorValue, SingleColorValue | Secret<SingleColorValue>>
     --- Returns the value of a secure frame attribute.
     ---
     --- **Parameters**
@@ -5361,11 +5361,11 @@ declare class Frame extends Region
     --- - `alpha`: The alpha of the region. `0` is fully transparent, `1` is fully opaque.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_GetEffectiveAlpha)
-    function GetEffectiveAlpha(): SingleColorValue | Secret<SingleColorValue>
+    function GetEffectiveAlpha(): AspectSecret<SingleColorValue, SingleColorValue | Secret<SingleColorValue>>
     --- Returns the effective scale after propagating from the parent region.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_GetEffectiveScale)
-    function GetEffectiveScale(): number | Secret<number>
+    function GetEffectiveScale(): AspectSecret<number, number | Secret<number>>
     --- Returns true if render layer flattening has been implicitly enabled.
     ---
     --- **Returns**
@@ -5383,11 +5383,11 @@ declare class Frame extends Region
     --- Returns the frame level of the frame.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_GetFrameLevel)
-    function GetFrameLevel(): number | Secret<number>
+    function GetFrameLevel(): AspectSecret<number, number | Secret<number>>
     --- Returns the layering strata of the frame.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_GetFrameStrata)
-    function GetFrameStrata(): FrameStrata | Secret<FrameStrata>
+    function GetFrameStrata(): AspectSecret<FrameStrata, FrameStrata | Secret<FrameStrata>>
     --- Returns the highest framelevel of the frame and its first order children, or all children if iterateAllChildren is true.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_GetHighestFrameLevel)
@@ -5406,15 +5406,15 @@ declare class Frame extends Region
     --- - `id`: The frame ID; the default value for new frames is `0`.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_GetID)
-    function GetID(): number | Secret<number>
+    function GetID(): AspectSecret<number, number | Secret<number>>
     --- Returns the number of child frames belonging to the frame.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_GetNumChildren)
-    function GetNumChildren(): number | Secret<number>
+    function GetNumChildren(): AspectSecret<number, number | Secret<number>>
     --- Returns the number of non-Frame child regions belonging to the frame.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_GetNumRegions)
-    function GetNumRegions(): number | Secret<number>
+    function GetNumRegions(): AspectSecret<number, number | Secret<number>>
     --- Returns whether the frame propagates keyboard events.
     ---
     --- **Returns**
@@ -5442,7 +5442,7 @@ declare class Frame extends Region
     --- Returns the scale of the frame.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_GetScale)
-    function GetScale(): number | Secret<number>
+    function GetScale(): AspectSecret<number, number | Secret<number>>
     --- Returns the window the frame belongs to.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -5573,14 +5573,14 @@ declare class Frame extends Region
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_IsShown)
-    function IsShown(): boolean | Secret<boolean>
+    function IsShown(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Returns whether this frame should raise its frame level on mouse interaction.
     ---
     --- **Returns**
     --- - `isTopLevel`: `true` if this is a toplevel frame.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_IsToplevel)
-    function IsToplevel(): boolean | Secret<boolean>
+    function IsToplevel(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Returns whether the frame has been moved by the user.
     ---
     --- **Returns**
@@ -5599,7 +5599,7 @@ declare class Frame extends Region
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_IsVisible)
-    function IsVisible(): boolean | Secret<boolean>
+    function IsVisible(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Sets the frame or button to always be drawn highlighted.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Frame_LockHighlight)
@@ -8999,11 +8999,11 @@ declare class ScrollFrame extends Frame
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScrollFrame_GetHorizontalScroll)
-    function GetHorizontalScroll(): uiUnit | Secret<uiUnit>
+    function GetHorizontalScroll(): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Returns the horizontal scroll range of the scroll frame
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScrollFrame_GetHorizontalScrollRange)
-    function GetHorizontalScrollRange(): uiUnit | Secret<uiUnit>
+    function GetHorizontalScrollRange(): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Returns the frame scrolled by the scroll frame
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScrollFrame_GetScrollChild)
@@ -9013,13 +9013,13 @@ declare class ScrollFrame extends Frame
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScrollFrame_GetVerticalScroll)
-    function GetVerticalScroll(): uiUnit | Secret<uiUnit>
+    function GetVerticalScroll(): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Returns how far the scroll frame can scroll vertically.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_ScrollFrame_GetVerticalScrollRange)
-    function GetVerticalScrollRange(): uiUnit | Secret<uiUnit>
+    function GetVerticalScrollRange(): AspectSecret<uiUnit, uiUnit | Secret<uiUnit>>
     --- Scrolls the scroll frame horizontally to the given offset.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -9143,7 +9143,7 @@ declare class SimpleHTML extends Frame
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_SimpleHTML_GetTextData)
-    function GetTextData(): HTMLContentNode[] | Secret<HTMLContentNode[]>
+    function GetTextData(): AspectSecret<HTMLContentNode[], HTMLContentNode[] | Secret<HTMLContentNode[]>>
     --- Sets the basic font properties.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_SimpleHTML_SetFont)
@@ -9560,7 +9560,7 @@ declare class StatusBar extends Frame
     --- Returns the current interpolated value displayed by the bar.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_StatusBar_GetInterpolatedValue)
-    function GetInterpolatedValue(): number | Secret<number>
+    function GetInterpolatedValue(): AspectSecret<number, number | Secret<number>>
     --- Returns the minimum and maximum values of a status bar.
     ---
     --- **Returns**
@@ -9568,7 +9568,7 @@ declare class StatusBar extends Frame
     --- - `maxValue`: The maximum value of the status bar.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_StatusBar_GetMinMaxValues)
-    function GetMinMaxValues(): (number | Secret<number>, number | Secret<number>)
+    function GetMinMaxValues(): (AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>)
     --- Returns whether the status bar is horizontal or vertical.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -9590,13 +9590,13 @@ declare class StatusBar extends Frame
     --- Returns the color of the status bar.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_StatusBar_GetStatusBarColor)
-    function GetStatusBarColor(): (number | Secret<number>, number | Secret<number>, number | Secret<number>, number | Secret<number>)
+    function GetStatusBarColor(): (AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>, AspectSecret<number, number | Secret<number>>)
     --- Returns how much the bar texture is desaturated, from 0 to 1.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_StatusBar_GetStatusBarDesaturation)
-    function GetStatusBarDesaturation(): normalizedValue | Secret<normalizedValue>
+    function GetStatusBarDesaturation(): AspectSecret<normalizedValue, normalizedValue | Secret<normalizedValue>>
     --- Returns the status bar's fill texture.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -9614,17 +9614,17 @@ declare class StatusBar extends Frame
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_StatusBar_GetValue)
-    function GetValue(): number | Secret<number>
+    function GetValue(): AspectSecret<number, number | Secret<number>>
     --- Returns true if the status bar is currently interpolating toward a target value.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_StatusBar_IsInterpolating)
-    function IsInterpolating(): boolean | Secret<boolean>
+    function IsInterpolating(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Whether the bar texture is shown desaturated.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_StatusBar_IsStatusBarDesaturated)
-    function IsStatusBarDesaturated(): boolean | Secret<boolean>
+    function IsStatusBarDesaturated(): AspectSecret<boolean, boolean | Secret<boolean>>
     --- Fills the status bar with a solid color.
     ---
     --- **Parameters**
@@ -11139,13 +11139,13 @@ declare class Texture extends TextureBase
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Texture_GetMaskTexture)
-    function GetMaskTexture(index: number): SimpleMaskTexture | Secret<SimpleMaskTexture>
+    function GetMaskTexture(index: number): AspectSecret<SimpleMaskTexture, SimpleMaskTexture | Secret<SimpleMaskTexture>>
     --- Returns the number of mask textures on the texture.
     ---
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_Texture_GetNumMaskTextures)
-    function GetNumMaskTextures(): size | Secret<size>
+    function GetNumMaskTextures(): AspectSecret<size, size | Secret<size>>
     --- Removes a mask texture from the texture.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -11311,28 +11311,28 @@ declare class DurationObject
     --- - `result`: If no curve is specified, a floating point percentage value. Else, the result of evaluating the curve with the percentage as the input.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_DurationObject_EvaluateElapsedDuration)
-    function EvaluateElapsedDuration(curve: CurveObjectBase, modifier: number?): LuaCurveEvaluatedResult | Secret<LuaCurveEvaluatedResult>
+    function EvaluateElapsedDuration(curve: CurveObjectBase, modifier: number?): AspectSecret<LuaCurveEvaluatedResult, LuaCurveEvaluatedResult | Secret<LuaCurveEvaluatedResult>>
     --- Calculates the elapsed duration as a percentage value and evaluates it against a supplied curve.
     ---
     --- **Returns**
     --- - `result`: If no curve is specified, a floating point percentage value. Else, the result of evaluating the curve with the percentage as the input.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_DurationObject_EvaluateElapsedPercent)
-    function EvaluateElapsedPercent(curve: CurveObjectBase, modifier: number?): LuaCurveEvaluatedResult | Secret<LuaCurveEvaluatedResult>
+    function EvaluateElapsedPercent(curve: CurveObjectBase, modifier: number?): AspectSecret<LuaCurveEvaluatedResult, LuaCurveEvaluatedResult | Secret<LuaCurveEvaluatedResult>>
     --- Calculates the remaining duration in seconds and evaluates it against a supplied curve.
     ---
     --- **Returns**
     --- - `result`: If no curve is specified, a floating point percentage value. Else, the result of evaluating the curve with the percentage as the input.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_DurationObject_EvaluateRemainingDuration)
-    function EvaluateRemainingDuration(curve: CurveObjectBase, modifier: number?): LuaCurveEvaluatedResult | Secret<LuaCurveEvaluatedResult>
+    function EvaluateRemainingDuration(curve: CurveObjectBase, modifier: number?): AspectSecret<LuaCurveEvaluatedResult, LuaCurveEvaluatedResult | Secret<LuaCurveEvaluatedResult>>
     --- Calculates the remaining duration as a percentage value and evaluates it against a supplied curve.
     ---
     --- **Returns**
     --- - `result`: If no curve is specified, a floating point percentage value. Else, the result of evaluating the curve with the percentage as the input.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_DurationObject_EvaluateRemainingPercent)
-    function EvaluateRemainingPercent(curve: CurveObjectBase, modifier: number?): LuaCurveEvaluatedResult | Secret<LuaCurveEvaluatedResult>
+    function EvaluateRemainingPercent(curve: CurveObjectBase, modifier: number?): AspectSecret<LuaCurveEvaluatedResult, LuaCurveEvaluatedResult | Secret<LuaCurveEvaluatedResult>>
     --- Returns the current time of the clock source used by this object.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_DurationObject_GetClockTime)

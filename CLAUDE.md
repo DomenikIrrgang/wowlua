@@ -75,7 +75,9 @@ Before setting a tag:
 4. Check it: `TAG=v<version> node .github/scripts/discord-release.mjs --dry-run`
    prints the Discord post. Run the whole test suite
    (`cargo test --workspace --no-fail-fast`), `cargo fmt --all -- --check`
-   and `cargo clippy --workspace --all-targets -- -D warnings`.
+   and `cargo clippy --workspace --all-targets -- -D warnings`, then
+   `cargo xtask check` (`docs/reference/diagnostics.json` quotes the
+   version: `cargo xtask diagnostics` updates it).
 5. Commit (`Release <version>`), create the tag
    (`git tag -a v<version> -m "wowlua <version>"`), and push both
    (`git push origin main && git push origin v<version>`). Then watch the

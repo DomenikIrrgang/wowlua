@@ -426,6 +426,7 @@ keys express this (decision T58):
 | `lua` | bool | `false` | Also type-check `.lua` files (warnings only) |
 | `globals` | string[] | `[]` | Extra allowed globals (typed `any`) |
 | `lints` | `{code: "allow"\|"warn"\|"deny"}` | `{}` | Severity overrides of warning codes, e.g. `{ "W1003": "allow" }`; also the warning forms of name and type errors in pure Lua files (`"W2001"`, appendix B.2) |
+| `secret-widget-results` | bool | `false` | Widget results Blizzard documents as possibly secret (`GetText`, `GetWidth`, `IsShown`, …) are typed `T \| Secret<T>` instead of `T` ([Types §2.11](../language/02-types.md), decision T474) |
 
 ## 9.9 `profiles`
 

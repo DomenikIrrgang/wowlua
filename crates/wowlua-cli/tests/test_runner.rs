@@ -1089,6 +1089,44 @@ end
     assert!(out.contains("1 passed, 0 failed"), "{out}");
 }
 
+/// A `mock.partial` fake passes the runtime check of a function taking the
+/// record it stands for; a table that only claims to be one still fails it.
+#[test]
+fn mock_partial_passes_runtime_checks() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                r#"export type Entry = { kills: number, name: string }
+export function total(e: Entry): number
+    return e.kills
+end
+"#,
+            ),
+            (
+                "tests/partial.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import total from "/main"
+
+@test
+local function partial()
+    expect(total(mock.partial({ kills = 3 }))).toBe(3)
+    local claimed: any = { kills = 3 }
+    expect(function()
+        total(claimed)
+    end).toThrow("bad argument #1 'e' to 'total'")
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("1 passed, 0 failed"), "{out}");
+}
+
 /// `import internal` (decision T223): a module's file-level locals and
 /// types in test files only (E8119 elsewhere); the addon build is
 /// unchanged.

@@ -378,6 +378,21 @@ strict mode whatever the mode is, and `check.lua` (default `false`) also
 type-checks the project's `.lua` files, reporting warnings only. See
 [Types](../language/types.md).
 
+### `check.secret-widget-results`
+
+A boolean. Default `false`.
+
+A widget's getter returns a secret once one of its setters got one, and the
+checker can't follow which widget did. By default the getters Blizzard
+documents this way (`GetText`, `GetWidth`, `IsShown`, `GetPoint`, …) are
+typed plainly; `true` types them `T | Secret<T>`, so every use needs
+`issecretvalue` or `canaccessvalue` first. A status bar's `GetValue()` and
+`GetMinMaxValues()` are among them.
+
+```json
+"check": { "mode": "strict", "secret-widget-results": true }
+```
+
 ### `check.lints`
 
 An object from a warning code to `"allow"`, `"warn"` or `"deny"`. Default

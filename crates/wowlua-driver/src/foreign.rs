@@ -72,6 +72,7 @@ impl Foreign {
                         mode: m.check.mode,
                         strict: crate::sources::glob_set(&m.check.strict),
                         lua: m.check.lua,
+                        secret_widget_results: m.check.secret_widget_results,
                         globals,
                         stdlib: wowlua_sema::stdlib::StdlibConfig::default(),
                         index: false,

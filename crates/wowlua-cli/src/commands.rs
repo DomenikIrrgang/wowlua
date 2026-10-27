@@ -1902,9 +1902,8 @@ pub fn fmt(out: &Output, global: &GlobalArgs, check: bool, paths: Vec<PathBuf>) 
     out.status(
         "Finished",
         format!(
-            "{} of {} {} {verb}{skipped}",
+            "{} of {} {verb}{skipped}",
             report.changed.len(),
-            total,
             plural(total, "file", "files")
         ),
     );

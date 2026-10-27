@@ -32,9 +32,10 @@ and `IsInterpolating` returns false.
 
 `SetValue` and `SetMinMaxValues` accept secret values. After a secret one,
 `GetValue` or `GetMinMaxValues` returns a secret, and `OnValueChanged` or
-`OnMinMaxChanged` gets the value or range as a secret, which is why their
-types are `number | Secret<number>`. They return plain numbers again after
-the next plain `SetValue` or `SetMinMaxValues`. In a camelot test, `UnitHealth("player")` returns a
+`OnMinMaxChanged` gets the value or range as a secret. The handlers' value
+is typed `number | Secret<number>`; the getters are typed `number`, or
+`number | Secret<number>` with `check.secret-widget-results`. They return
+plain numbers again after the next plain `SetValue` or `SetMinMaxValues`. In a camelot test, `UnitHealth("player")` returns a
 secret, so a health bar's `GetValue` returns one too.
 
 ## Example

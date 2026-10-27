@@ -619,6 +619,10 @@ pub struct Check {
     pub globals: Vec<String>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub lints: IndexMap<String, LintSetting>,
+    /// Widget results Blizzard documents as possibly secret are typed
+    /// `T | Secret<T>` (decision T474); off, they are `T`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub secret_widget_results: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

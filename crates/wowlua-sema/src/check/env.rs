@@ -236,6 +236,10 @@ pub struct Env<'p> {
     /// A completion check (spec §16.2): what was typed, and what the check
     /// found at the placeholder.
     pub completing: Option<super::complete::Completing>,
+    /// `check.secret-widget-results`: an `AspectSecret<T, S>` is `S` (the
+    /// widget results Blizzard documents as possibly secret), else `T`
+    /// (decision T474).
+    pub secret_widget_results: bool,
     /// Class methods without a result annotation, by class and name: their
     /// results are inferred from their bodies (spec §2.4, decision L56):
     /// `false` until the check reaches the body, the member's results
@@ -440,13 +444,20 @@ impl<'p> Env<'p> {
     /// [`Env::build`]; with `index`, it records what names refer to
     /// (`definitions`), from the declarations on.
     pub fn build_indexed(sources: &[Source<'p>], index: bool) -> Env<'p> {
-        Env::build_for(sources, index, None)
+        Env::build_for(sources, index, None, false)
     }
 
     /// [`Env::build_indexed`]; with `complete`, a completion check of what
-    /// was typed (`Env::completing`).
-    pub fn build_for(sources: &[Source<'p>], index: bool, complete: Option<&str>) -> Env<'p> {
+    /// was typed (`Env::completing`); `secret_widget_results` as
+    /// [`Env::secret_widget_results`].
+    pub fn build_for(
+        sources: &[Source<'p>],
+        index: bool,
+        complete: Option<&str>,
+        secret_widget_results: bool,
+    ) -> Env<'p> {
         let mut env = Env {
+            secret_widget_results,
             definitions: index.then(Vec::new),
             completing: complete.map(|prefix| super::complete::Completing {
                 prefix: prefix.into(),
@@ -2370,6 +2381,16 @@ impl<'p> Env<'p> {
                 "Secret" => {
                     let inner = arg_types.first().copied().unwrap_or(Types::UNKNOWN);
                     return self.types.intern(Ty::Secret(inner));
+                }
+                // A widget result that is secret only after a setter got a
+                // secret: plain unless the package asks (decision T474).
+                "AspectSecret" => {
+                    let pick = usize::from(self.secret_widget_results);
+                    return arg_types
+                        .get(pick)
+                        .or(arg_types.first())
+                        .copied()
+                        .unwrap_or(Types::UNKNOWN);
                 }
                 "ClassOf" => {
                     return match arg_types.first().map(|&a| self.types.get(a).clone()) {
