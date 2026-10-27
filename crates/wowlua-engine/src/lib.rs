@@ -1123,6 +1123,9 @@ const OVER_RECORDED: &[&str] = &[
     // Nothing at load (recorded), nil once logged in (the full probe).
     "C_VoiceChat.GetActiveChannelID",
     "C_QuestSession.GetSessionBeginDetails",
+    // The recorded first four slots' empty totem for every slot
+    // `GetNumTotemSlots` counts (`spellinfo.rs`).
+    "GetTotemInfo",
 ];
 
 /// The fill-in modules' behaviours: answers for functions no recording

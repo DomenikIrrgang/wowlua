@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- `GetTotemInfo` answers an empty slot for every slot `GetNumTotemSlots()` counts (8 on WoW Forever), not just the first four; slots 5 to 8 answered nothing.
+
 ## 0.13.4 (2026-10-28)
 
 ### New

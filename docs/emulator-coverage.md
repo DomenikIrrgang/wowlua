@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,111 of the 5,111 documented camelot functions have
-  behaviour (100.0%): 1,057 modelled, 355 answered from recordings, 3,699 by a
+  behaviour (100.0%): 1,057 modelled, 354 answered from recordings, 3,700 by a
   documentation-based fill-in. Of all 7,175 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
@@ -32,13 +32,13 @@ their clients answer differently is unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| standard | 4,871 | 4,506 (92.5%) | 0 | 1,438 | 1,430 (99.4%) | none |
-| camelot | 5,111 | 5,111 (100.0%) | 355 | 1,477 | 1,477 (100.0%) | all |
-| mists | 3,221 | 2,888 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| cata | 1,927 | 1,669 (86.6%) | 0 | 1,008 | 995 (98.7%) | none |
-| wrath | 3,227 | 2,895 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| tbc | 3,220 | 2,891 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| vanilla | 3,220 | 2,891 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| standard | 4,871 | 4,507 (92.5%) | 0 | 1,438 | 1,430 (99.4%) | none |
+| camelot | 5,111 | 5,111 (100.0%) | 354 | 1,477 | 1,477 (100.0%) | all |
+| mists | 3,221 | 2,889 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| cata | 1,927 | 1,670 (86.7%) | 0 | 1,008 | 995 (98.7%) | none |
+| wrath | 3,227 | 2,896 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| tbc | 3,220 | 2,892 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| vanilla | 3,220 | 2,892 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
 
 ## API behaviour
 
@@ -62,7 +62,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 748 | 101 | 1,253 | 0 |
+| `(globals)` | 2,102 | 748 | 100 | 1,254 | 0 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -348,13 +348,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,175 | 1,648 | 438 | 5,089 | 0 |
+| **All** | 7,175 | 1,648 | 437 | 5,090 | 0 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,111 | 1,057 | 355 | 3,699 | 0 |
+| Blizzard's API documentation | 5,111 | 1,057 | 354 | 3,700 | 0 |
 | the client's other C functions (`/stdtest inventory`) | 2,064 | 591 | 83 | 1,390 | 0 |
 | the engine's own, in neither list | 15 | 14 | 0 | 1 | 0 |
 
@@ -377,13 +377,13 @@ The modules that answer, by how many functions and methods:
 | `leftovers2` | fill-in | 388 |
 | `collections` | fill-in | 377 |
 | `social` | fill-in | 373 |
-| `recorded` | recorded | 321 |
+| `recorded` | recorded | 320 |
 | `questinfo` | fill-in | 316 |
 | `systeminfo` | fill-in | 308 |
 | `iteminfo` | fill-in | 228 |
 | `methods3` | fill-in | 215 |
+| `spellinfo` | fill-in | 198 |
 | `vm` | model | 198 |
-| `spellinfo` | fill-in | 197 |
 | `unitinfo` | fill-in | 172 |
 | `blanks` | fill-in | 153 |
 | `stats` | model | 136 |

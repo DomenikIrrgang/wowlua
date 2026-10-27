@@ -1243,6 +1243,28 @@ fn get_macro_item(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // --------------------------------------------------------- totems
 
+/// `GetTotemInfo(slot)`: an empty totem for every slot `GetNumTotemSlots`
+/// counts, as recorded for the first four (slots 5 to 8 unrecorded:
+/// Blizzard's cooldown viewer reads them all, and the API documentation's
+/// results are not nilable); slot 0 (none) nothing (the full probe).
+fn get_totem_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    match num(vm.hidden(c.arg(1))) {
+        Some(s) if (1.0..=crate::globalsinfo::TOTEM_SLOTS).contains(&s) => {
+            let name = vm.str("");
+            Ok(vec![
+                Value::Bool(false),
+                name,
+                Value::Num(0.0),
+                Value::Num(0.0),
+                Value::Nil,
+                Value::Num(0.0),
+                Value::Num(0.0),
+            ])
+        }
+        _ => Ok(vec![]),
+    }
+}
+
 /// `GetTotemDuration(slot)`: zero (no totem down: `GetTotemInfo` recorded
 /// every slot empty).
 fn get_totem_duration(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1730,6 +1752,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetMacroItem", get_macro_item),
         // Totems (none down), companions (none: Forever keeps mounts and
         // pets as items and spells), multi-cast bars (none in classic).
+        ("GetTotemInfo", get_totem_info),
         ("GetTotemDuration", get_totem_duration),
         ("GetTotemTimeLeft", totem_time_left),
         ("GetTotemCannotDismiss", totem_cannot_dismiss),
