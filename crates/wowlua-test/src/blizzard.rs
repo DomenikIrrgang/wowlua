@@ -64,6 +64,35 @@ pub fn ui_source_in(dir: &Path, flavor: &str) -> Option<UiSource> {
     })
 }
 
+/// The flavor's UI code when it is there already: in `WOWLUA_UI_SOURCE`, or
+/// fetched into the cache with its global strings. Never fetches (wowlua
+/// studio's start page shows whether a test run will have to).
+pub fn cached_ui_source(flavor: &str) -> Option<UiSource> {
+    let (commit, strings_commit) = commits(flavor)?;
+    if let Some(dir) = std::env::var_os("WOWLUA_UI_SOURCE") {
+        return ui_source_in(&PathBuf::from(dir), flavor);
+    }
+    let cache = wowlua_driver::cache_root()?.join("blizzard-ui");
+    let dir = cache.join(format!("{flavor}-{}", &commit[..12]));
+    if !wowlua_host::exists(dir.join(".wowlua-complete")) {
+        return None;
+    }
+    let strings = match strings_commit {
+        Some(c) => {
+            let path = cache.join("strings").join(format!("{c}.lua"));
+            if !wowlua_host::exists(&path) {
+                return None;
+            }
+            Some(path)
+        }
+        None => None,
+    };
+    Some(UiSource {
+        interface: dir.join("Interface"),
+        strings,
+    })
+}
+
 pub fn ui_source(flavor: &str, status: &dyn Fn(&str)) -> Result<UiSource, String> {
     let (commit, strings_commit) = commits(flavor).ok_or_else(|| {
         format!("the `{flavor}` declarations do not name their wow-ui-source commit")
@@ -71,6 +100,9 @@ pub fn ui_source(flavor: &str, status: &dyn Fn(&str)) -> Result<UiSource, String
     if let Some(dir) = std::env::var_os("WOWLUA_UI_SOURCE") {
         return ui_source_in(&PathBuf::from(dir), flavor)
             .ok_or_else(|| format!("no `{flavor}` UI code in WOWLUA_UI_SOURCE"));
+    }
+    if let Some(cached) = cached_ui_source(flavor) {
+        return Ok(cached);
     }
     let cache = wowlua_driver::cache_root()
         .ok_or("cannot find the cache (set `WOWLUA_HOME`)")?

@@ -12,6 +12,7 @@
 
 pub mod check;
 pub mod complete;
+pub mod editor;
 pub mod embedded;
 pub mod refs;
 pub mod symbols;
@@ -377,7 +378,7 @@ pub fn serve_with(
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
-        start_due(&mut server);
+        start_due(&mut server, out);
     }
 }
 
@@ -468,6 +469,9 @@ fn on_checked(
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
     let mut ran = server.running.take();
+    if ran.as_ref().is_some_and(|r| r.completion.is_none()) {
+        checking(out, manifest, "end", None, result.is_err())?;
+    }
     let finding = ran.as_mut().and_then(|r| r.finding.take());
     // a completion check: its answer, nothing published
     if let Some(Running {
@@ -516,10 +520,39 @@ fn on_checked(
     answer_waiting(server, manifest, out)
 }
 
+/// A check of a package began or ended (spec §16.2.9): the editor's
+/// background jobs show it.
+fn checking(
+    out: &mut impl std::io::Write,
+    manifest: &Path,
+    state: &str,
+    first: Option<bool>,
+    failed: bool,
+) -> std::io::Result<()> {
+    let mut params = json!({ "state": state, "manifest": text::uri_of(manifest) });
+    if let Some(first) = first {
+        params["first"] = json!(first);
+    }
+    if failed {
+        params["failed"] = json!(true);
+    }
+    notify(out, "wowlua/checking", params)
+}
+
+/// Starts the check that is due (see [`start_now`]), and tells the editor
+/// when one began.
+fn start_due(server: &mut Server, out: &mut impl std::io::Write) {
+    let idle = server.running.is_none();
+    start_now(server);
+    if idle && let Some(r) = server.running.as_ref().filter(|r| r.completion.is_none()) {
+        let _ = checking(out, &r.manifest.clone(), "begin", Some(r.focused), false);
+    }
+}
+
 /// Starts the check of the package whose edits settled first, else, when
 /// nothing was edited for `QUIET`, a saved package's workspace; unless a
 /// check runs.
-fn start_due(server: &mut Server) {
+fn start_now(server: &mut Server) {
     if server.running.is_some() {
         return;
     }
@@ -967,6 +1000,11 @@ fn initialized(out: &mut impl std::io::Write, id: &Json) -> std::io::Result<()> 
                 "hoverProvider": true,
                 "completionProvider": { "triggerCharacters": [".", ":", "\"", "'", "@"], "resolveProvider": true },
                 "signatureHelpProvider": { "triggerCharacters": ["(", ","], "retriggerCharacters": [","] },
+                "foldingRangeProvider": editor::capabilities()["foldingRangeProvider"],
+                "semanticTokensProvider": editor::capabilities()["semanticTokensProvider"],
+                "inlayHintProvider": editor::capabilities()["inlayHintProvider"],
+                "codeActionProvider": editor::capabilities()["codeActionProvider"],
+                "codeLensProvider": editor::capabilities()["codeLensProvider"],
             },
             "serverInfo": { "name": "wowlua", "version": env!("CARGO_PKG_VERSION") },
         }),
@@ -1237,6 +1275,63 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                 .unwrap_or_default();
             reply(out, id, Json::Array(symbols))?;
         }
+        "textDocument/foldingRange" => {
+            let ranges = server
+                .docs
+                .get(&uri)
+                .map(|d| editor::folding_ranges(&d.text))
+                .unwrap_or_default();
+            reply(out, id, Json::Array(ranges))?;
+        }
+        "textDocument/semanticTokens/full" => {
+            let data = server
+                .docs
+                .get(&uri)
+                .map(|d| editor::semantic_tokens(&d.text))
+                .unwrap_or_default();
+            reply(out, id, json!({ "data": data }))?;
+        }
+        "textDocument/inlayHint" => {
+            let line = |p: &Json| p["line"].as_u64().map(|l| l as usize);
+            let first = line(&params["range"]["start"]).unwrap_or(0);
+            let last = line(&params["range"]["end"]).unwrap_or(usize::MAX);
+            let hints = server
+                .docs
+                .get(&uri)
+                .map(|d| {
+                    let hovers = server
+                        .hovers
+                        .get(&d.canonical)
+                        .map_or(&[][..], Vec::as_slice);
+                    editor::inlay_hints(&d.text, hovers, first, last)
+                })
+                .unwrap_or_default();
+            reply(out, id, Json::Array(hints))?;
+        }
+        "textDocument/codeAction" => {
+            let diagnostics = params["context"]["diagnostics"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+            reply(out, id, Json::Array(editor::code_actions(&diagnostics)))?;
+        }
+        "textDocument/codeLens" => {
+            let lenses = server
+                .docs
+                .get(&uri)
+                .map(|d| {
+                    // Definitions name files by their canonical URI.
+                    let target = text::uri_of(&d.canonical);
+                    editor::reference_lenses(
+                        &d.text,
+                        &uri,
+                        &target,
+                        server.definitions.values().flatten(),
+                    )
+                })
+                .unwrap_or_default();
+            reply(out, id, Json::Array(lenses))?;
+        }
         _ => {
             // an unknown request still gets an answer
             if !id.is_null() {
@@ -1405,10 +1500,15 @@ fn hover(server: &Server, uri: &str, position: &Json) -> Json {
             && (tail == 0 || offset >= start + tail);
         named.then_some(n)
     });
-    let mut value = match name {
-        Some(n) => format!("```wowlua\n{n}: {}\n```", found.ty),
-        None => format!("```wowlua\n{}\n```", found.ty),
-    };
+    // a function's overloads one per line (T479)
+    let lines: Vec<String> = overloads(&found.ty)
+        .into_iter()
+        .map(|ty| match name {
+            Some(n) => format!("{n}: {ty}"),
+            None => ty.to_owned(),
+        })
+        .collect();
+    let mut value = format!("```wowlua\n{}\n```", lines.join("\n"));
     // the doc comment of what it refers to, else of what it declares here
     let target = server
         .definitions
@@ -1804,10 +1904,62 @@ fn format(doc: &Doc) -> Option<Vec<Json>> {
     })])
 }
 
+/// A type's overloads: an intersection of functions (`(a) -> A & (b) ->
+/// B`) split where its `&`s are outside brackets and strings; any other
+/// type whole.
+fn overloads(ty: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut quote: Option<char> = None;
+    let mut start = 0;
+    let mut prev = ' ';
+    for (i, c) in ty.char_indices() {
+        match (quote, c) {
+            (Some(q), c) if c == q && prev != '\\' => quote = None,
+            (Some(_), _) => {}
+            (None, '"' | '\'') => quote = Some(c),
+            (None, '(' | '[' | '{' | '<') => depth += 1,
+            // `->` is no closing bracket
+            (None, '>') if prev == '-' => {}
+            (None, ')' | ']' | '}' | '>') => depth -= 1,
+            (None, '&') if depth == 0 && ty[..i].ends_with(' ') && ty[i + 1..].starts_with(' ') => {
+                parts.push(ty[start..i - 1].trim());
+                start = i + 1;
+            }
+            _ => {}
+        }
+        prev = c;
+    }
+    parts.push(ty[start..].trim());
+    let functions = parts.len() > 1
+        && parts
+            .iter()
+            .all(|p| p.starts_with('(') || p.starts_with('<'));
+    if functions { parts } else { vec![ty] }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::generated;
+    use super::{generated, overloads};
     use std::path::Path;
+
+    #[test]
+    fn a_function_s_overloads_are_one_per_line() {
+        assert_eq!(
+            overloads(
+                r#"(frameType: "Button", name: string?) -> Button & (frameType: "Frame & more", parent: (A & B)?) -> Frame & <T>(x: T) -> T"#
+            ),
+            [
+                r#"(frameType: "Button", name: string?) -> Button"#,
+                r#"(frameType: "Frame & more", parent: (A & B)?) -> Frame"#,
+                "<T>(x: T) -> T",
+            ]
+        );
+        // not every part a function: the type whole
+        assert_eq!(overloads("Frame & Mixin"), ["Frame & Mixin"]);
+        assert_eq!(overloads("(a: number) -> A & B"), ["(a: number) -> A & B"]);
+        assert_eq!(overloads("number"), ["number"]);
+    }
 
     #[test]
     fn build_output_and_hidden_folders_of_a_package_are_generated() {

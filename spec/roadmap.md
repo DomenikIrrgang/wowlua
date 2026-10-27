@@ -803,7 +803,7 @@ wowlua studio, wowlua's own IDE, in its own repository
 ([wowlua-studio](https://github.com/DomenikIrrgang/wowlua-studio), with its
 roadmap and decisions in its `spec/`): a native Rust application for
 Windows, macOS and Linux, drawn on `wgpu` with egui, with no HTML or
-JavaScript (T475). It links the libraries M12 to M14 made in its own
+JavaScript (T480). It links the libraries M12 to M14 made in its own
 process (T300): the driver, the language server (`wowlua_lsp::embedded`),
 the test runner, the debugger, the emulated client and the renderer.
 Desktop first; a browser build stays possible, as the libraries below it

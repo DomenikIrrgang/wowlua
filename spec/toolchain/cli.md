@@ -26,8 +26,8 @@ wowlua <command> [options]
 
 | Command | Description |
 |---------|-------------|
-| `wowlua new <path> [--kind addon\|library\|lua-library\|types] [--name <Name>] [--flavors <f,…>] [--ci github]` | Create a new package from a template (§12.9) |
-| `wowlua init [--from-toc <file>] [--from-pkgmeta [<file>]]` | Create `wowlua.json` in an existing directory (§12.6) |
+| `wowlua new <path> [--kind addon\|library\|lua-library\|types] [--name <Name>] [--flavors <f,…>] [--ci github] [--check nocheck\|basic\|strict] [--no-git] [--world-profile]` | Create a new package from a template (§12.9) |
+| `wowlua init [--from-toc <file>] [--from-pkgmeta [<file>] \| --no-pkgmeta]` | Create `wowlua.json` in an existing directory (§12.6) |
 | `wowlua check [--flavor <f>…] [--watch]` | Parse and type-check without emitting, the test side (test files, mocks, helpers) included. A `lua-library` or `types` package is checked as an addon using it would check it: its entry files, their XML and load order, or its declarations (W4306 about its license is left to its consumers). `--watch` checks again after each change. |
 | `wowlua build [--profile <p> \| --release] [--flavor <f>…] [--watch] [--out <dir>] [--stats] [--reproducible]` | Build the AddOn into `dist/<profile>/<Name>/`. `--watch` builds again after each change (what the build writes, also into `--out`, is not a change, nor is a file the last build already saw as it is, or one only read). `--reproducible` takes `build.time` and `build.timestamp` (and the packager's build-time keywords) from `SOURCE_DATE_EPOCH`, else the commit time ([Meta §6.1.2](../language/06-meta.md#612-reproducibility)) |
 | `wowlua dev [--flavor <f>…] [--client <folder>…] [--link] [--wow <install>] [--force]` | Watch, build with the `dev` profile, and sync the AddOn into WoW (§12.5) |
@@ -220,9 +220,11 @@ each rebuild writes the same files and reports the same diagnostics as a fresh
    `addon.toc-data` files ([Manifest §9.3.2](manifest.md#932-toc-data-files)).
    Addons that load no code at all (data or archive addons) are valid. Lua and
    XML files that no TOC loads are listed in a warning and left in place.
-6. With `--from-pkgmeta` (or automatically if `.pkgmeta` / `pkgmeta.yaml` exists;
-   `--from-pkgmeta <file>` names another project file, and without one the
-   file the CI workflows pass to the packager with `-m` is used):
+6. With `--from-pkgmeta` (or automatically if `.pkgmeta` / `pkgmeta.yaml` exists,
+   unless `--no-pkgmeta` adopts from the TOC files only and leaves it as it is,
+   decision T477; `--from-pkgmeta <file>` names another project file, and
+   without one the file the CI workflows pass to the packager with `-m` is
+   used):
    - `externals` become `dependencies`: git, SVN and zip-archive externals are
      converted (decision T51); hg externals are listed with warning W4333 and
      must be replaced by a git mirror or archive. The common parent folder of the
@@ -418,7 +420,16 @@ pass. With `--ci github`, the template also contains the workflow of
 not commit their lockfile, so theirs only runs `wowlua check` (and, for
 `library`, `wowlua test`) on every push, without `--locked`, its cache keyed
 by `wowlua.json`. A Git repository is initialized when `git` is available
-and the target is not already inside one.
+and the target is not already inside one, unless `--no-git` is given.
+
+`--check <mode>` writes `check.mode` when it is not the default (`basic`);
+the templates check clean in every mode. `--world-profile` (`addon` and
+`library`, which have tests) adds `tests/profiles/default.json`, a Human
+Warrior named Player at the level cap of the package's first flavor (60
+for `camelot` and `vanilla`, 70 `tbc`, 80 `wrath`, 85 `cata`, 90 `mists`;
+`standard`, whose cap moves with every expansion, gets the client's
+default level), and sets `test.profile` to it, so every test starts there
+(decision T476).
 
 ## 12.10 Continuous integration
 

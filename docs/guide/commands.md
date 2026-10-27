@@ -10,9 +10,13 @@ command.
 $ wowlua new MyAddon                       # a new addon: wowlua.json, src/, tests/, locales/
 $ wowlua new MyAddon --flavors camelot     # for these flavors (default: standard)
 $ wowlua new MyAddon --ci github           # plus a workflow that checks, tests, builds and publishes tags
+$ wowlua new MyAddon --check strict        # strict type checking from the start (default: basic)
+$ wowlua new MyAddon --world-profile       # tests/profiles/default.json, where every test starts
+$ wowlua new MyAddon --no-git              # without a Git repository
 $ wowlua new shared-utils --kind library   # a wowlua library; also lua-library and types
 $ wowlua init                              # adopt the addon in this folder, with its .pkgmeta if it has one
 $ wowlua init --from-pkgmeta               # the same, but require a .pkgmeta
+$ wowlua init --no-pkgmeta                 # from the TOC files only, leaving .pkgmeta as it is
 ```
 
 More: [Getting started](getting-started.md), [Bring your addon](adopting.md).

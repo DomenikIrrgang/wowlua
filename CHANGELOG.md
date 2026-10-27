@@ -7,6 +7,13 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### New
 
 - **The registry's new pages** (https://registry.wowlua.dev), in wowlua.dev's design: search with filters by kind and flavor, a page per package with its install command, a usage example, its README, versions, dependencies and the packages that depend on it, and the account and reserved-name pages. A reserved name's page links a form to claim it.
+- `wowlua new` takes `--check strict` (or `basic`, `nocheck`) for the check mode, `--world-profile` for a starter world profile in `tests/profiles/default.json` that every test starts in, and `--no-git` to skip the Git repository.
+- `wowlua init --no-pkgmeta` adopts an addon from its TOC files only, leaving its `.pkgmeta` as it is.
+- **Editor colours, folds and hints**: the language server colours names by what they are (types, functions, parameters, fields, decorators, and `class`, `import` or `type` only where they are keywords), folds functions, blocks, tables, comments and imports, shows the types of locals declared without one, offers a warning's fixes as quick fixes (`Ctrl`/`Cmd` + `.`), and counts each function's references above it. VS Code shows all of them. Editors also learn when a check begins and ends (`wowlua/checking`).
+
+### Changed
+
+- Hovering a function with overloads, like `CreateFrame`, shows each overload on a line of its own instead of one long type joined by `&`.
 
 ## 0.13.1 (2026-10-27)
 

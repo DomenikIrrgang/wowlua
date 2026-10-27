@@ -283,6 +283,14 @@ pub enum Ci {
     Github,
 }
 
+/// `wowlua new --check`: the manifest's check modes.
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckArg {
+    Nocheck,
+    Basic,
+    Strict,
+}
+
 #[derive(Subcommand, Debug)]
 enum Command {
     /// Create a new package from a template
@@ -300,6 +308,15 @@ enum Command {
         /// Add a CI workflow
         #[arg(long, value_enum)]
         ci: Option<Ci>,
+        /// The check mode (default: basic)
+        #[arg(long, value_enum, value_name = "MODE")]
+        check: Option<CheckArg>,
+        /// Don't initialize a Git repository
+        #[arg(long)]
+        no_git: bool,
+        /// Add tests/profiles/default.json, which every test starts in
+        #[arg(long)]
+        world_profile: bool,
     },
     /// Create wowlua.json for the existing addon in the current directory
     Init {
@@ -310,6 +327,9 @@ enum Command {
         /// the given packager project file
         #[arg(long, value_name = "FILE", num_args = 0..=1, default_missing_value = "")]
         from_pkgmeta: Option<String>,
+        /// Adopt from the TOC files only, leaving a .pkgmeta as it is
+        #[arg(long, conflicts_with = "from_pkgmeta")]
+        no_pkgmeta: bool,
     },
     /// Build the AddOn into dist/<profile>/<Name>/
     Build(BuildArgs),
@@ -792,11 +812,27 @@ fn run() -> ExitCode {
             name,
             flavors,
             ci,
-        } => commands::new(&out, path, kind, name, flavors, ci.is_some()),
+            check,
+            no_git,
+            world_profile,
+        } => commands::new(
+            &out,
+            commands::NewArgs {
+                path,
+                kind,
+                name,
+                flavors,
+                ci_github: ci.is_some(),
+                check,
+                git: !no_git,
+                world_profile,
+            },
+        ),
         Command::Init {
             from_toc,
             from_pkgmeta,
-        } => commands::init(&out, from_toc, from_pkgmeta),
+            no_pkgmeta,
+        } => commands::init(&out, from_toc, from_pkgmeta, no_pkgmeta),
         Command::Build(args) => commands::build(&out, &cli.global, &args),
         Command::Package {
             targets,
