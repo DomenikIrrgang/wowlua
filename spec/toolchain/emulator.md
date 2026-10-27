@@ -247,6 +247,12 @@ as secrets, and `HasSecretAspect(Enum.SecretAspect.BarValue)` is true,
 until a plain value (or range) is set again (unverified: the scripts'
 values, and what the client keeps).
 
+A status bar's texture without points of its own is laid out over the
+part of the bar its value fills, from the right (or the top, vertical)
+when the bar fills in reverse, secret value or not, so a frame anchored to
+its edge follows the value (decision T490). `GetNumPoints` still gives 0
+(unverified: the points the client reports for it).
+
 A protected frame anchored to a region (a texture, a font string, a line,
 a mask texture) is refused with the client's error, out of combat too:
 "Action[SetPoint] failed because[Cannot anchor protected frames to

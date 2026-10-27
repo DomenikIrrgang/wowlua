@@ -364,6 +364,32 @@ pub(crate) fn thumb_place(vm: &Vm, thumb: WidgetId) -> Option<(WidgetId, f64, bo
     Some((slider, at, vertical))
 }
 
+/// A status bar's texture, the part its value fills: (the bar, how much of
+/// it, 0 to 1, whether it fills upwards, whether from the right or top).
+/// A bar without a value yet shows it whole.
+pub(crate) fn fill_place(vm: &Vm, tex: WidgetId) -> Option<(WidgetId, f64, bool, bool)> {
+    let bar_id = engine(vm).world.widgets[tex.0].parent?;
+    let props = engine(vm).world.widgets[bar_id.0].props;
+    let first = |stem| widgets::stored_ref(vm, props, stem).and_then(|v| v.first().copied());
+    let is_fill = ["StatusBarTexture", "StatusBarTextureObject"]
+        .into_iter()
+        .any(|k| first(k).and_then(|v| widgets::widget_of(vm, v)) == Some(tex));
+    if !is_fill {
+        return None;
+    }
+    let f = engine(vm).world.bars.get(&bar_id.0).map_or(1.0, |b| {
+        let range = b.max - b.min;
+        if range > 0.0 {
+            ((b.value - b.min) / range).clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
+    });
+    let vertical = matches!(first("Orientation").map(|v| vm.hidden(v)), Some(Value::Str(s)) if vm.str_bytes(s).eq_ignore_ascii_case(b"VERTICAL"));
+    let reverse = first("ReverseFill").is_some_and(|v| v.truthy());
+    Some((bar_id, f, vertical, reverse))
+}
+
 fn set_thumb_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     texture_slot(vm, id, "ThumbTexture", c.arg(2));
     Ok(vec![])

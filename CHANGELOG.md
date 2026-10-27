@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- A frame anchored to a status bar's texture (`bar:GetStatusBarTexture()`), such as a heal prediction or heal absorb bar at the health fill's edge, is placed and drawn, and follows the bar's value.
+
 ## 0.13.4 (2026-10-28)
 
 ### New
