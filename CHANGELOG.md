@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- A secure group header (`SecureGroupHeaderTemplate`) runs its `initialConfigFunction` for buttons made from your own template that has an `<OnLoad>`, as the game does; before, the header skipped it.
+
 ## 0.13.4 (2026-10-28)
 
 ### New

@@ -1222,12 +1222,19 @@ fn compile(vm: &mut Vm, cx: &Context, line: usize, src: &str) -> Option<Value> {
     // Blizzard's handler is made secure too, whoever makes the frame (an
     // addon's `CreateFrame` with `SecureHandlerClickTemplate`: its OnClick
     // runs the snippet on the user's click).
+    // An addon's handler carries its taint, but making it leaves the running
+    // execution's alone (Blizzard's secure group header applying an addon's
+    // template with an inline `OnLoad`, then running its
+    // `initialConfigFunction` for the new button).
     let blizzard = engine(vm).world.ui.code_of.is_none();
     match load_chunk(vm, src.as_bytes(), &chunk) {
         Ok(f) => match if blizzard {
             vm.call_secure(f, &[])
         } else {
-            vm.call(f, &[])
+            let saved = vm.taint().saved();
+            let r = vm.call(f, &[]);
+            vm.taint_mut().restore(saved);
+            r
         } {
             Ok(r) => r.first().copied(),
             Err(e) => {

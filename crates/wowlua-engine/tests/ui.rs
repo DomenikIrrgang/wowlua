@@ -394,6 +394,53 @@ return tostring(AtLoad.loadSecure), tostring(later.loadSecure), tostring(issecur
     );
 }
 
+/// Blizzard's secure code making a frame from an addon's template with an
+/// inline `OnLoad` stays secure after: the script compiles as the addon's
+/// code, its function carrying the addon's taint (the `OnLoad` runs
+/// tainted), without tainting the
+/// execution that applies the template (the client: a secure group header
+/// runs its `initialConfigFunction` for an addon's unit button template).
+#[test]
+fn an_addon_template_script_does_not_taint_its_secure_maker() {
+    let interface = tree(
+        "addon-template-secure-maker",
+        &[
+            ("AddOns/Blizzard_Box/Blizzard_Box.toc", "Box.lua\n"),
+            (
+                "AddOns/Blizzard_Box/Box.lua",
+                "function BoxMake(template)
+    local f = CreateFrame('Button', nil, UIParent, template)
+    return issecure(), f.loadSecure
+end
+",
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let addon = interface.parent().unwrap().join("MyAddon");
+    std::fs::create_dir_all(&addon).unwrap();
+    std::fs::write(
+        addon.join("templates.xml"),
+        r#"<Ui>
+  <Button name="MyLoadTemplate" virtual="true">
+    <Scripts><OnLoad>self.loadSecure = issecure()</OnLoad></Scripts>
+  </Button>
+</Ui>"#,
+    )
+    .unwrap();
+    let table = Value::Table(vm.new_table());
+    wowlua_engine::ui::load_user_file(&mut vm, &addon, "templates.xml", "MyAddon", table);
+    let make = vm.get_global("BoxMake");
+    let template = vm.str("MyLoadTemplate");
+    let r = vm.call_secure(make, &[template]).expect("runs");
+    assert!(
+        matches!(r[..], [Value::Bool(true), Value::Bool(false)]),
+        "the maker secure after, the addon's OnLoad tainted: {r:?}"
+    );
+}
+
 /// A load-on-demand Blizzard addon an addon loads while it loads is
 /// Blizzard's code, as when the addon loads one later: its functions stay
 /// secure and its files keep their names (spec §17.7: Blizzard's Lua files

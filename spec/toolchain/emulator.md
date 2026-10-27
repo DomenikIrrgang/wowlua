@@ -145,7 +145,11 @@ The client's security model, in the VM:
     then (a secure snippet sizing Blizzard's spells window). A template's script
     handlers from Blizzard's XML are Blizzard's code whoever makes the frame
     (decision T243): an addon's `SecureHandlerClickTemplate` button runs its
-    `_onclick` snippet on the user's click.
+    `_onclick` snippet on the user's click. An addon's template's handlers
+    are the addon's code, but making them does not taint the code applying
+    the template (decision T493): a secure group header runs its
+    `initialConfigFunction` for buttons of an addon's template with an
+    inline `OnLoad`.
     `C_RestrictedActions.CheckAllowProtectedFunctions(object)` follows the
     same rule for its object: false for tainted code in combat lockdown on a
     protected frame (UIParent among them), true on an unprotected one, so an
