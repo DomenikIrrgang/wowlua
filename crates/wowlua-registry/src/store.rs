@@ -9,7 +9,8 @@
 //! <data>/archives/<name>/<version>.tar.gz
 //! <data>/owners/<name>.json              {"users": [GitHub logins]}
 //! <data>/meta/<name>.json                the newest version's description, keywords and kind (search)
-//! <data>/tokens.json                     {"tokens": [{id, hash, login, name, created}]}
+//! <data>/versions/<name>/<version>.json  what the package page shows of a version (VersionMeta)
+//! <data>/tokens.json                    {"tokens": [{id, hash, login, name, created}]}
 //! <data>/reserved.json                   the admins' additions to the reserved names
 //! ```
 
@@ -72,6 +73,81 @@ pub struct Meta {
     pub kind: String,
 }
 
+/// What a package's page shows of one version, from its archive: the
+/// manifest's fields and the README.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VersionMeta {
+    /// Seconds since 1970.
+    #[serde(default)]
+    pub published: u64,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    #[serde(default)]
+    pub kind: String,
+    /// The `flavors` it builds for, in the manifest's order.
+    #[serde(default)]
+    pub flavors: Vec<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub license: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub repository: String,
+    /// `README.md`'s Markdown (up to [`README_LIMIT`] bytes).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub readme: String,
+}
+
+/// The most of a README the registry keeps.
+pub const README_LIMIT: usize = 256 * 1024;
+
+impl VersionMeta {
+    /// Reads an archive's files (`registry::read_archive`).
+    pub fn from_files(files: &BTreeMap<String, Vec<u8>>, published: u64) -> VersionMeta {
+        let manifest: serde_json::Value = files
+            .get(wowlua_manifest::MANIFEST_FILE)
+            .and_then(|b| serde_json::from_slice(b).ok())
+            .unwrap_or_default();
+        let package = &manifest["package"];
+        let text = |key: &str| package[key].as_str().unwrap_or("").to_string();
+        let readme = files
+            .iter()
+            .find(|(path, _)| path.eq_ignore_ascii_case("README.md"))
+            .map(|(_, bytes)| {
+                let mut text = String::from_utf8_lossy(bytes).into_owned();
+                if text.len() > README_LIMIT {
+                    let mut end = README_LIMIT;
+                    while !text.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    text.truncate(end);
+                }
+                text
+            })
+            .unwrap_or_default();
+        VersionMeta {
+            published,
+            description: text("description"),
+            keywords: package["keywords"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|k| k.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            kind: package["kind"].as_str().unwrap_or("addon").to_string(),
+            flavors: manifest["flavors"]
+                .as_object()
+                .map(|m| m.keys().cloned().collect())
+                .unwrap_or_default(),
+            license: text("license"),
+            repository: text("repository"),
+            readme,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct Owners {
     #[serde(default)]
@@ -98,7 +174,7 @@ pub enum PublishError {
 impl Store {
     /// Opens (and creates) the data directory.
     pub fn open(root: &Path) -> io::Result<Store> {
-        for dir in ["index", "archives", "owners", "meta", "tmp"] {
+        for dir in ["index", "archives", "owners", "meta", "versions", "tmp"] {
             std::fs::create_dir_all(root.join(dir))?;
         }
         let lock = File::options()
@@ -169,6 +245,59 @@ impl Store {
             .unwrap_or_default()
     }
 
+    fn version_path(&self, name: &str, version: &str) -> PathBuf {
+        self.root
+            .join("versions")
+            .join(name)
+            .join(format!("{version}.json"))
+    }
+
+    /// What the package page shows of a version. A version published before
+    /// the registry kept this has it read from its archive once (its
+    /// publish date is the archive's), and then saved.
+    pub fn version_meta(&self, name: &str, version: &str) -> Option<VersionMeta> {
+        let path = self.version_path(name, version);
+        if let Some(meta) = std::fs::read(&path)
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+        {
+            return Some(meta);
+        }
+        let archive = self.archive_path(name, version);
+        let bytes = std::fs::read(&archive).ok()?;
+        let files = wowlua_pkg::registry::read_archive(&bytes).ok()?;
+        let published = std::fs::metadata(&archive)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_secs());
+        let meta = VersionMeta::from_files(&files, published);
+        let _guard = self.lock();
+        let _ = self.write_file(&path, &serde_json::to_vec_pretty(&meta).unwrap_or_default());
+        Some(meta)
+    }
+
+    /// The packages whose newest version depends on `name` (on this
+    /// registry), sorted.
+    pub fn dependents(&self, name: &str) -> Vec<String> {
+        self.packages()
+            .into_iter()
+            .filter(|p| p != name)
+            .filter(|p| {
+                let entries = self.entries(p);
+                entries
+                    .iter()
+                    .filter(|e| !e.yanked)
+                    .max_by_key(|e| e.version())
+                    .is_some_and(|e| {
+                        e.deps
+                            .iter()
+                            .any(|d| d.name == name && d.registry.is_none())
+                    })
+            })
+            .collect()
+    }
+
     fn owners_path(&self, name: &str) -> PathBuf {
         self.root.join("owners").join(format!("{name}.json"))
     }
@@ -214,8 +343,9 @@ impl Store {
             .collect()
     }
 
-    /// Publishes a version: the archive, its index line, and for a new
-    /// package its first owner. `admin`: the user may publish any package.
+    /// Publishes a version: the archive, its index line, what its page
+    /// shows, and for a new package its first owner. `admin`: the user may
+    /// publish any package.
     pub fn publish(
         &self,
         entry: &IndexEntry,
@@ -223,6 +353,7 @@ impl Store {
         login: &str,
         admin: bool,
         meta: &Meta,
+        version_meta: &VersionMeta,
     ) -> Result<(), PublishError> {
         let _guard = self.lock();
         let io = |e: io::Error| PublishError::Io(e.to_string());
@@ -243,6 +374,11 @@ impl Store {
         }
         self.write_file(&self.archive_path(&entry.name, &entry.vers), archive)
             .map_err(io)?;
+        self.write_file(
+            &self.version_path(&entry.name, &entry.vers),
+            &serde_json::to_vec_pretty(version_meta).unwrap_or_default(),
+        )
+        .map_err(io)?;
         if new {
             let owners = Owners {
                 users: vec![login.to_string()],
@@ -378,9 +514,15 @@ impl Store {
     /// The reserved names: the built-in ones, with the admins' entries of
     /// `reserved.json` over them.
     pub fn reserved(&self) -> BTreeMap<String, Reserved> {
+        let mut all = self.reserved_all();
+        all.retain(|_, r| !r.released);
+        all
+    }
+
+    /// Every reserved name, with those the admins released.
+    pub fn reserved_all(&self) -> BTreeMap<String, Reserved> {
         let mut all = builtin_reserved();
         all.extend(self.reserved_file());
-        all.retain(|_, r| !r.released);
         all
     }
 
@@ -432,6 +574,7 @@ mod tests {
                 "Alice",
                 false,
                 &Meta::default(),
+                &VersionMeta::default(),
             )
             .unwrap();
         assert_eq!(
@@ -440,7 +583,8 @@ mod tests {
                 b"y",
                 "alice",
                 false,
-                &Meta::default()
+                &Meta::default(),
+                &VersionMeta::default()
             ),
             Err(PublishError::Exists)
         );
@@ -450,7 +594,8 @@ mod tests {
                 b"y",
                 "bob",
                 false,
-                &Meta::default()
+                &Meta::default(),
+                &VersionMeta::default()
             ),
             Err(PublishError::NotOwner)
         );
@@ -461,6 +606,7 @@ mod tests {
                 "ALICE",
                 false,
                 &Meta::default(),
+                &VersionMeta::default(),
             )
             .unwrap();
         assert_eq!(store.entries("lib-a").len(), 2);

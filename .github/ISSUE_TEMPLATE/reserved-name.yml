@@ -1,0 +1,39 @@
+name: Claim a reserved registry name
+description: You maintain a library whose name the wowlua registry keeps for its authors, and want to publish it.
+title: "Reserved name: "
+labels: ["registry", "reserved-name"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The registry keeps the names of well-known WoW libraries (LibStub, Ace3, LibSharedMedia-3.0, …) for their authors. Tell us which name is yours and where we can see that; an admin then adds your GitHub login to it, and `wowlua publish` takes it from you.
+  - type: input
+    id: name
+    attributes:
+      label: Name on the registry
+      description: As the registry spells it, as on its page (https://registry.wowlua.dev/packages/<name>).
+      placeholder: libsharedmedia-3-0
+    validations:
+      required: true
+  - type: input
+    id: logins
+    attributes:
+      label: GitHub logins that may publish it
+      description: Yours, and any co-maintainers', comma separated.
+      placeholder: your-login, a-co-maintainer
+    validations:
+      required: true
+  - type: textarea
+    id: proof
+    attributes:
+      label: Where we can see it is yours
+      description: The library's repository, its CurseForge, Wago or WoWInterface page, or a commit or release you made. A link we can check is enough.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: For example a different name you would rather publish under.
+    validations:
+      required: false

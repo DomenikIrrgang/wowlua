@@ -143,6 +143,11 @@ impl TestRegistry {
     pub fn token(&self, login: &str) -> String {
         sign_in_token(self.url(), &self.github.url, login)
     }
+
+    /// Signs in as `login`; returns the session's `Cookie` header value.
+    pub fn session(&self, login: &str) -> String {
+        sign_in_session(self.url(), &self.github.url, login)
+    }
 }
 
 fn agent() -> ureq::Agent {
@@ -192,8 +197,8 @@ fn query_value(url: &str, key: &str) -> Option<String> {
 }
 
 /// The sign-in flow against a registry at `registry` whose GitHub is at
-/// `github`; returns the new token.
-pub fn sign_in_token(registry: &str, github: &str, login: &str) -> String {
+/// `github`; returns the session's cookie (`wlr_session=…`).
+pub fn sign_in_session(registry: &str, github: &str, login: &str) -> String {
     let agent = agent();
     let start = agent
         .get(&format!("{registry}/login/github"))
@@ -224,10 +229,16 @@ pub fn sign_in_token(registry: &str, github: &str, login: &str) -> String {
         .call()
         .expect("the callback answers");
     assert!(back.status().is_redirection(), "{}", back.status());
-    let session = cookies(&back)
+    cookies(&back)
         .into_iter()
         .find(|c| c.starts_with("wlr_session="))
-        .expect("a session cookie");
+        .expect("a session cookie")
+}
+
+/// The sign-in flow, then a token from the account page; returns the token.
+pub fn sign_in_token(registry: &str, github: &str, login: &str) -> String {
+    let agent = agent();
+    let session = sign_in_session(registry, github, login);
     let mut account = agent
         .get(&format!("{registry}/account"))
         .header("Cookie", &session)
@@ -248,7 +259,7 @@ pub fn sign_in_token(registry: &str, github: &str, login: &str) -> String {
         .send(format!("csrf={csrf}&name=tests"))
         .expect("the token form");
     let page = created.body_mut().read_to_string().expect("a page");
-    page.split("<code class=\"token\">")
+    page.split("<code class=\"wl-copy-cmd__text\" data-new-token>")
         .nth(1)
         .and_then(|r| r.split('<').next())
         .expect("the new token on the page")

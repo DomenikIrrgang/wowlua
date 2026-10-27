@@ -1,0 +1,135 @@
+/* wowlua — generated from tokens.json */
+:root, [data-theme="dark"] {
+  --bg-000: #0f0d0a;
+  --bg-100: #14120e;
+  --bg-200: #1a1813;
+  --bg-300: #24201a;
+  --bg-400: #2e2920;
+  --line: #353027;
+  --line-strong: #6e6554;
+  --ink: #ece6d6;
+  --ink-muted: #a39b8a;
+  --ink-faint: #756d5f;
+  --amber: #ffb547;
+  --on-amber: #1a1308;
+  --amber-ink: #ffb547;
+  --amber-soft: #2e2416;
+  --focus: var(--amber-ink);
+  --error: #ff7262;
+  --error-soft: #2c1613;
+  --on-error: #1a0b08;
+  --warning: #ecd660;
+  --warning-soft: #29250f;
+  --note: #74c7ec;
+  --note-soft: #10232b;
+  --success: #6fdcb4;
+  --success-soft: #0f2620;
+  --syn-keyword: #ffb547;
+  --syn-type: #74c7ec;
+  --syn-string: #9bd982;
+  --syn-number: #f49a6c;
+  --syn-decorator: #e59bd8;
+  --syn-function: #fff6e2;
+  --syn-comment: #8a8172;
+  --syn-punct: var(--ink-muted);
+  --overlay: rgba(8, 7, 5, 0.72);
+  --game-glass: rgba(20, 18, 14, 0.94);
+  --game-surface: #1a1813;
+  --game-sunk: #0f0d0a;
+  --game-raised: #24201a;
+  --game-selected: #2e2416;
+  --game-line: #3a342a;
+  --game-line-strong: #6e6554;
+  --game-ink: #ece6d6;
+  --game-muted: #a39b8a;
+  --game-faint: #756d5f;
+  --game-accent: #ffb547;
+  --game-on-accent: #1a1308;
+  --game-error: #ff7262;
+  --game-warning: #ecd660;
+  --game-note: #74c7ec;
+  --game-success: #6fdcb4;
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-key: 0 1px 0 #353027;
+}
+[data-theme="light"] {
+  --bg-000: #efece4;
+  --bg-100: #f7f6f2;
+  --bg-200: #ffffff;
+  --bg-300: #ebe8df;
+  --bg-400: #e0dbcd;
+  --line: #dcd8cc;
+  --line-strong: #8a8170;
+  --ink: #1a1813;
+  --ink-muted: #5c5548;
+  --ink-faint: #8f8778;
+  --amber: #ffb547;
+  --on-amber: #1a1308;
+  --amber-ink: #975200;
+  --amber-soft: #fbe9cc;
+  --focus: var(--amber-ink);
+  --error: #b82e1c;
+  --error-soft: #fbe4e0;
+  --on-error: #ffffff;
+  --warning: #7a5f00;
+  --warning-soft: #f6efcc;
+  --note: #0b6789;
+  --note-soft: #dcedf4;
+  --success: #14714f;
+  --success-soft: #dcf1e8;
+  --syn-keyword: #975200;
+  --syn-type: #0b6789;
+  --syn-string: #3b7420;
+  --syn-number: #a8481a;
+  --syn-decorator: #923585;
+  --syn-function: #1a1813;
+  --syn-comment: #6f6858;
+  --syn-punct: var(--ink-muted);
+  --overlay: rgba(26, 24, 19, 0.36);
+  --shadow-pop: 0 12px 32px rgba(26, 24, 19, 0.16);
+  --shadow-key: 0 1px 0 #c9c4b6;
+}
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --radius-0: 0;
+  --radius-1: 2px;
+  --radius-round: 999px;
+  --size-page: 1200px;
+  --size-prose: 72ch;
+  --size-sidebar: 248px;
+  --size-toc: 200px;
+  --size-header: 56px;
+  --size-control: 36px;
+  --size-control-s: 28px;
+  --size-row-game: 22px;
+  --size-hit: 24px;
+  --z-header: 50;
+  --z-overlay: 90;
+  --z-toast: 100;
+  --font-display: var(--font-martian), "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-mono: var(--font-plex), "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.display-xl { font-family: var(--font-display); font-size: 56px; line-height: 60px; font-weight: 800; letter-spacing: -0.03em; }
+.display-l { font-family: var(--font-display); font-size: 40px; line-height: 46px; font-weight: 700; letter-spacing: -0.025em; }
+.heading-1 { font-family: var(--font-display); font-size: 28px; line-height: 36px; font-weight: 700; letter-spacing: -0.02em; }
+.heading-2 { font-family: var(--font-display); font-size: 20px; line-height: 28px; font-weight: 700; letter-spacing: -0.015em; }
+.heading-3 { font-family: var(--font-mono); font-size: 16px; line-height: 24px; font-weight: 600; }
+.body-l { font-family: var(--font-mono); font-size: 17px; line-height: 28px; font-weight: 400; }
+.body { font-family: var(--font-mono); font-size: 15px; line-height: 26px; font-weight: 400; }
+.body-s { font-family: var(--font-mono); font-size: 13px; line-height: 21px; font-weight: 400; }
+.label { font-family: var(--font-mono); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.02em; }
+.caption { font-family: var(--font-mono); font-size: 11.5px; line-height: 16px; font-weight: 400; }
+.code { font-family: var(--font-mono); font-size: 13.5px; line-height: 22px; font-weight: 400; }
+.code-comment { font-family: var(--font-mono); font-size: 13.5px; line-height: 22px; font-weight: 400; font-style: italic; }
+.game-title { font-family: var(--font-display); font-size: 13px; line-height: 16px; font-weight: 700; }
+.game-tab { font-family: var(--font-mono); font-size: 12px; line-height: 16px; font-weight: 500; }
+.game-body { font-family: var(--font-mono); font-size: 12px; line-height: 16px; font-weight: 400; }
+.game-small { font-family: var(--font-mono); font-size: 10.5px; line-height: 14px; font-weight: 400; }

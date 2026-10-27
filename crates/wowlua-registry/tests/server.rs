@@ -641,3 +641,187 @@ fn forwarded_for_counts_only_from_a_trusted_proxy() {
     // Otherwise the header is ignored: one bucket for the connection's address.
     assert_eq!(reads(""), [200, 200, 429, 429, 429]);
 }
+
+/// A library with what its page shows: manifest fields and a README.
+fn full_archive(manifest: &serde_json::Value, readme: &str) -> (String, Vec<u8>) {
+    let text = serde_json::to_string_pretty(manifest).unwrap();
+    let mut files = BTreeMap::new();
+    files.insert("wowlua.json".to_string(), text.as_bytes().to_vec());
+    files.insert("src/init.wowlua".to_string(), b"return {}\n".to_vec());
+    files.insert("README.md".to_string(), readme.as_bytes().to_vec());
+    (
+        text,
+        wowlua_pkg::registry::write_archive(&files, 0).unwrap(),
+    )
+}
+
+fn page(r: &TestRegistry, path: &str, cookie: Option<&str>) -> Answer {
+    let mut req = agent()
+        .get(&format!("{}{path}", r.url()))
+        .header("Accept", "text/html");
+    if let Some(c) = cookie {
+        req = req.header("Cookie", c);
+    }
+    answer(req.call())
+}
+
+#[test]
+fn pages_show_packages_from_their_archives() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = TestRegistry::start(dir.path(), &["root"], &["alice", "root"], 1 << 20);
+    let alice = r.token("alice");
+    let (m, a) = full_archive(
+        &serde_json::json!({
+            "package": { "name": "lfg-core", "version": "1.2.3", "kind": "library",
+                "description": "Groups looking for players", "keywords": ["lfg", "group"],
+                "license": "MIT", "repository": "https://github.com/alice/lfg-core" },
+            "flavors": { "camelot": {}, "vanilla": {} },
+        }),
+        "# lfg-core\n\nFinds groups.\n\n## Use it\n\n```wowlua\nimport lfg from \"lfg-core\"\n```\n\n<script>alert(1)</script>\n\nSee [the design](docs/design.md).\n",
+    );
+    assert_eq!(
+        publish(&r, Some(&alice), &m, &a, "lfg-core", "1.2.3").status,
+        201
+    );
+    let (m, a) = full_archive(
+        &serde_json::json!({
+            "package": { "name": "lfg-extra", "version": "0.3.0", "kind": "library", "description": "More" },
+            "flavors": { "standard": {} },
+            "dependencies": { "lfg-core": "^1.2", "chat-colors": { "version": "^1.0", "optional": true } },
+            "features": { "colors": ["dep:chat-colors"] },
+        }),
+        "Extra.",
+    );
+    assert_eq!(
+        publish(&r, Some(&alice), &m, &a, "lfg-extra", "0.3.0").status,
+        201
+    );
+
+    // The list, its search and its filters.
+    let home = page(&r, "/", None);
+    assert_eq!(home.status, 200);
+    assert!(
+        home.body.contains(r#"href="/packages/lfg-core""#),
+        "{}",
+        home.body
+    );
+    assert!(home.body.contains("All packages"));
+    assert!(
+        home.body
+            .contains(r#"<span class="wl-badge">vanilla</span>"#)
+    );
+    let found = page(&r, "/?q=group", None);
+    assert!(
+        found.body.contains("1 package matches “group”"),
+        "{}",
+        found.body
+    );
+    assert!(
+        found
+            .body
+            .contains("matches the keyword group · description"),
+        "{}",
+        found.body
+    );
+    let flavored = page(&r, "/?f=1&kind=library&flavor=standard", None);
+    assert!(
+        flavored.body.contains("1 of 2 packages"),
+        "{}",
+        flavored.body
+    );
+    assert!(flavored.body.contains("/packages/lfg-extra"));
+    assert!(!flavored.body.contains(r#"href="/packages/lfg-core""#));
+    let none = page(&r, "/?f=1&kind=types", None);
+    assert!(
+        none.body.contains("No package matches these filters"),
+        "{}",
+        none.body
+    );
+
+    // A package's page: its archive's fields, its README (safely), who uses it.
+    let core = page(&r, "/packages/lfg-core", None);
+    assert_eq!(core.status, 200);
+    for want in [
+        "wowlua add <span class=\"rg-nowrap\">lfg-core@^1.2</span>",
+        "<dt>license</dt><dd>MIT</dd>",
+        r#"href="https://github.com/alice/lfg-core">repository ↗"#,
+        r#"<h3 class="heading-3" id="readme-use-it">Use it</h3>"#,
+        r#"href="https://github.com/alice/lfg-core/blob/HEAD/docs/design.md""#,
+        r#"<a href="/packages/lfg-extra">lfg-extra</a>"#,
+        "lfg-core 1.2.3 depends on the standard library only.",
+        r#"<span class="wl-code__file">src/main.wowlua</span>"#,
+    ] {
+        assert!(core.body.contains(want), "{want}\n{}", core.body);
+    }
+    assert!(!core.body.contains("<script>alert"), "{}", core.body);
+    let extra = page(&r, "/packages/lfg-extra/0.3.0", None);
+    assert!(
+        extra
+            .body
+            .contains(r#"<a href="/packages/lfg-core"><code class="wl-icode">lfg-core</code></a>"#),
+        "{}",
+        extra.body
+    );
+    assert!(extra.body.contains("feature colors"), "{}", extra.body);
+    assert!(
+        extra
+            .body
+            .contains("No package on this registry depends on lfg-extra yet.")
+    );
+    let stored: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(dir.path().join("versions/lfg-core/1.2.3.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(stored["flavors"], serde_json::json!(["camelot", "vanilla"]));
+
+    // Not there: a page for browsers, JSON for programs; reserved names can be claimed.
+    let missing = page(&r, "/packages/lfg-nope", None);
+    assert_eq!(missing.status, 404);
+    assert!(missing.body.contains("error[404]"), "{}", missing.body);
+    assert!(missing.body.contains("wowlua search lfg-nope"));
+    let reserved = page(&r, "/packages/libstub", None);
+    assert!(
+        reserved
+            .body
+            .contains("issues/new?template=reserved-name.yml"),
+        "{}",
+        reserved.body
+    );
+    assert_eq!(page(&r, "/packages/lfg-core/9.9.9", None).status, 404);
+    let json = answer(agent().get(&format!("{}/nowhere", r.url())).call());
+    assert_eq!((json.status, json.code().as_str()), (404, "not-found"));
+    assert_eq!(page(&r, "/nowhere", None).status, 404);
+
+    // The stylesheets and fonts are the server's own.
+    let css = agent()
+        .get(&format!("{}/assets/registry.css", r.url()))
+        .call()
+        .unwrap();
+    assert_eq!(
+        css.headers().get("content-type").unwrap(),
+        "text/css; charset=utf-8"
+    );
+    assert_eq!(
+        page(&r, "/assets/fonts/MartianMono-StdRg.woff2", None).status,
+        200
+    );
+    assert_eq!(page(&r, "/assets/nope.css", None).status, 404);
+
+    // Reserved names: admins only.
+    let root = r.session("root");
+    let list = page(&r, "/account/reserved", Some(&root));
+    assert_eq!(list.status, 200);
+    assert!(
+        list.body.contains(r#"data-name="libstub""#),
+        "{}",
+        list.body
+    );
+    let alice_session = r.session("alice");
+    assert_eq!(
+        page(&r, "/account/reserved", Some(&alice_session)).status,
+        403
+    );
+    let account = page(&r, "/account", Some(&alice_session));
+    assert!(account.body.contains("@alice"), "{}", account.body);
+    assert!(account.body.contains("yank 1.2.3"), "{}", account.body);
+}

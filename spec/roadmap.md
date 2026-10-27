@@ -587,7 +587,7 @@ a boss pull, taken in game with the dev window, is exported and opened with
 A debugger attaches to the emulated client (decision T209): the VM pauses and
 steps where the real client cannot be observed
 ([Debugger](toolchain/debugger.md), decisions T300 to T315). Built as
-libraries for wowlua Studio, natively and in the browser (T300, T301).
+libraries for wowlua studio, natively and in the browser (T300, T301).
 
 - The VM's debug hooks: line, call, return, error, load and the engine's
   dispatches, at no cost when off (T302, T303).
@@ -799,41 +799,30 @@ other than camelot (the engine runs camelot's), the timing of
 
 ## M15: Studio
 
-wowlua Studio, wowlua's own IDE: one front-end, in the browser and in a
-desktop shell, over the libraries M12 to M14 made (T300, T301), the
-language server, the debugger, the emulated client and the renderer. It
-edits real packages, with world profiles as a first-class part.
+wowlua studio, wowlua's own IDE, in its own repository
+([wowlua-studio](https://github.com/DomenikIrrgang/wowlua-studio), with its
+roadmap and decisions in its `spec/`): a native Rust application for
+Windows, macOS and Linux, drawn on `wgpu` with egui, with no HTML or
+JavaScript (T480). It links the libraries M12 to M14 made in its own
+process (T300): the driver, the language server (`wowlua_lsp::embedded`),
+the test runner, the debugger, the emulated client and the renderer.
+Desktop first; a browser build stays possible, as the libraries below it
+build for the browser (T301). It edits real packages, with world profiles
+as a first-class part, and pins a wowlua release.
 
-- S1 Packages on disk: open a package or workspace folder (the File
-  System Access API with write access in the browser, the disk natively),
-  save to it, notice changes made outside, several packages at once; the
-  host over the opened folders; a folder remembered across visits.
-- S2 Two workers: the compiler and the language server in one, the game
-  and the debugger in another, the files kept in step; the editor answers
-  while the game is paused at a breakpoint.
-- S3 Tests: run a package's test files and single tests in the page,
-  their results, coverage (the HTML report), snapshots and screenshots
-  updated; a test explorer.
-- S4 One debugger for both: the browser speaks DAP as `wowlua debug`
-  does (or the desktop the page's protocol), so the debug views are one:
-  stack, variables, watches, the frame tree and inspector, events, the
-  profiler (speedscope's format).
-- S5 World profiles: a profile editor over the schema (forms for the
-  character, money, gear, bags, place, units around), the live world panel
-  (`world`), profiles from the user's own characters (a snapshot's or the
-  installation's SavedVariables).
-- S6 Install and publish: the build written into the installation's
-  `Interface/AddOns` (write access to the picked folder), the `wowlua dev`
-  loop (build on save, `/reload`); publishing through a proxy where the
-  sites refuse a browser's requests.
-- S7 The editor: semantic highlighting from the language server, the
-  grammar for the editor component, the outline, code actions; Blizzard's
-  UI for every flavor in the page (as the engine runs their UI code);
-  dependencies (with M10's registry).
-- S8 The desktop shell: the same front-end with the native backend
-  (`wowlua lsp`, `wowlua debug`, the disk, the installation found).
+What wowlua adds for it:
 
-**Exit:** SuuUI opened from disk in Studio in the browser: edited and
-checked, its tests run, run against the default UI in a world profile and
-debugged, the world changed while it runs, installed into the WoW folder;
-the same in the desktop shell.
+- What Studio's milestones need from the libraries as they come, called
+  in process rather than over DAP or the language server's stdio.
+- Blizzard's UI for every flavor (as the engine runs their UI code).
+- For Studio's online workspace (a GitHub repository with no folder,
+  after its first release): a host per workspace instead of one for the
+  whole process (`wowlua_host`), and wowlua's commands callable in
+  process.
+- For the 3D world behind the UI (planned): unit positions in the engine
+  and in world profiles, a world renderer with the installation's models.
+
+**Exit:** SuuUI opened from disk in Studio on Windows, macOS and Linux:
+edited and checked, its tests run, run against the default UI in a world
+profile and debugged, the world changed while it runs, profiled,
+installed into the WoW folder and committed.

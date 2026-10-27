@@ -12,6 +12,33 @@ the droplet). Accounts are GitHub accounts: `/login` signs in with GitHub
 and the account page creates and revokes API tokens (stored as their
 SHA-256 only), yanks versions and manages owners.
 
+## Pages
+
+The pages follow the "wowlua registry" design canvas, in wowlua.dev's
+design system: wowlua.dev's header and footer around a registry bar.
+
+| Page | |
+|------|---|
+| `/?q&kind&flavor` | The packages: search (the ranking of `/v1/search`) and filters by kind and flavor |
+| `/packages/<name>[/<version>]` | A package: its manifest's description, flavors, keywords, license and repository, the install command, a usage example (its README's first wowlua block), the README, its versions, dependencies and the registry's packages that depend on it |
+| `/login` | Sign-in with GitHub |
+| `/account` | Tokens, the publish steps, your packages' versions (yank) and owners |
+| `/account/reserved` | Reserved names (admins) |
+
+The design system's stylesheets (`assets/tokens.css`, `design-system.css`,
+`chrome.css`) are copies of the website's, unchanged: copy them again when
+the website's change (`tests/assets.rs` compares them when the website is
+checked out next to this repository, or at `WOWLUA_WEBSITE`).
+`assets/registry.css` and `registry.js` are the registry's own; the
+fonts (Martian Mono, IBM Plex Mono, SIL OFL) are served from the binary
+too, so a registry needs nothing from wowlua.dev. Every page works without
+scripts; the script adds the theme toggle, the phone menu, copy buttons and
+filters that apply when changed.
+
+A README is rendered without its raw HTML, with links only to `http(s)`,
+`mailto` and anchors (relative ones to the package's GitHub repository) and
+images as links: a page loads nothing from elsewhere.
+
 ## Running it
 
 ```console
@@ -75,6 +102,7 @@ at a time, so concurrent requests are safe. Back it up as a folder.
 | `archives/<name>/<version>.tar.gz` | The package archives |
 | `owners/<name>.json` | `{"users": [GitHub logins]}` |
 | `meta/<name>.json` | The newest version's description, keywords and kind, for search |
+| `versions/<name>/<version>.json` | What the package page shows of a version: its publish time, the manifest's description, keywords, kind, flavors, license and repository, and its README. A version published before these were kept has them read from its archive once (its publish time is the archive's). |
 | `tokens.json` | API tokens: id, SHA-256, login, name, creation time |
 | `reserved.json` | The admins' reserved names, over the built-in ones |
 
@@ -87,7 +115,11 @@ Names of well-known WoW libraries (`libstub`, `ace3`, `aceaddon-3-0`,
 `libsharedmedia-3-0`, …) and wowlua's own (`wow-api-<flavor>`) are reserved
 for their authors: [`data/reserved.json`](data/reserved.json) lists them,
 with no authors assigned, so only admins can publish them until an admin
-assigns them. Admins extend and assign the list on the account page, or:
+assigns them. An author claims a name with the
+[claim form](https://github.com/DomenikIrrgang/wowlua/issues/new?template=reserved-name.yml)
+(`.github/ISSUE_TEMPLATE/reserved-name.yml`), which the name's page and the
+publish error link. Admins extend and assign the list on the reserved names
+page (`/account/reserved`), or:
 
 ```console
 $ curl -X PUT -H "Authorization: Bearer $TOKEN" -d '{"users": ["their-login"], "note": "LibFoo"}' \
