@@ -3971,6 +3971,8 @@ dependencies = [
  "wowlua-engine",
  "wowlua-flavors",
  "wowlua-host",
+ "wowlua-manifest",
+ "wowlua-render",
  "wowlua-span",
  "wowlua-syntax",
  "wowlua-toc",

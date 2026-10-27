@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- The reference count above an exported function or class method showed twice.
+
 ## 0.13.2 (2026-10-27)
 
 ### New
