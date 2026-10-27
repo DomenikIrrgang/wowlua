@@ -3012,7 +3012,8 @@ fn bounds_in(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
 fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Option<Rect> {
     let e = engine(vm);
     let w = &e.world.widgets[id.0];
-    if w.name.as_deref() == Some("UIParent") || depth > 64 {
+    // UIParent and WorldFrame cover the screen.
+    if matches!(w.name.as_deref(), Some("UIParent" | "WorldFrame")) || depth > 64 {
         let (w, h) = e.screen.ui_parent_size();
         return Some((0.0, 0.0, w, h));
     }

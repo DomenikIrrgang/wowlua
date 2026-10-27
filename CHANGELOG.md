@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- `WorldFrame` covers the screen as in the game: 768 units high at any resolution and UI scale, its width following the screen's aspect ratio. Before, it had no size, and frames anchored to it weren't drawn.
+
 ## 0.13.4 (2026-10-28)
 
 ### New

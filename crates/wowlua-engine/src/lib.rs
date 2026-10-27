@@ -282,6 +282,13 @@ impl Screen {
         let s = self.ui_parent_scale() as f32;
         (f64::from(wide / s), f64::from(768.0f32 / s))
     }
+
+    /// WorldFrame's size: 768 units high at any resolution and UI scale, its
+    /// width following the screen's aspect ratio (recorded on five 16:9
+    /// screens: 1365.3333740234 by 768).
+    pub fn world_frame_size(&self) -> (f64, f64) {
+        (f64::from((self.width * 768.0 / self.height) as f32), 768.0)
+    }
 }
 
 /// Sets the screen the client draws on (after `install`): UIParent's size
@@ -360,6 +367,12 @@ fn place_screen(vm: &mut Vm, screen: Screen) {
         widget.width = w;
         widget.height = h;
         widget.scale = screen.ui_parent_scale();
+        widgets::layout_changed(vm);
+    }
+    let world = vm.get_global("WorldFrame");
+    if let Some(id) = widgets::widget_of(vm, world) {
+        let widget = &mut engine_mut(vm).world.widgets[id.0];
+        (widget.width, widget.height) = screen.world_frame_size();
         widgets::layout_changed(vm);
     }
 }
@@ -753,7 +766,12 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             });
         }
     }
-    widgets::create(vm, "Frame", Some("WorldFrame".into()), None);
+    // WorldFrame covers the screen too (`widgets::bounds`), unscaled.
+    let world = widgets::create(vm, "Frame", Some("WorldFrame".into()), None);
+    if let Some(id) = widgets::widget_of(vm, world) {
+        let w = &mut engine_mut(vm).world.widgets[id.0];
+        (w.width, w.height) = Screen::default().world_frame_size();
+    }
     // What Blizzard's UI code defines that addons use as the client's
     // (until that code loads).
     standins::install(vm);
