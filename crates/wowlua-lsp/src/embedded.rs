@@ -127,9 +127,19 @@ impl Embedded {
     /// Runs the checks that are due now, one after the other; returns what
     /// they told the editor (diagnostics, answers that waited for them).
     pub fn run_due(&mut self) -> Vec<Json> {
-        let mut out = Vec::new();
+        let mut all = Vec::new();
+        self.run_due_with(|m| all.push(m));
+        all
+    }
+
+    /// [`run_due`](Self::run_due), handing each message to `tell` as soon
+    /// as it is made: a check's `wowlua/checking` beginning before the
+    /// check runs.
+    pub fn run_due_with(&mut self, mut tell: impl FnMut(Json)) {
         loop {
+            let mut out = Vec::new();
             start_due(&mut self.server, &mut out);
+            messages(&out).into_iter().for_each(&mut tell);
             let Some(job) = self.jobs.borrow_mut().pop_front() else {
                 break;
             };
@@ -138,11 +148,13 @@ impl Embedded {
                     // (also those the page's package calls took out of the way)
                     wowlua_driver::overlay::set(path, text);
                 });
-            if on_checked(&mut self.server, &job.manifest, result, &mut out).is_err() {
+            let mut out = Vec::new();
+            let failed = on_checked(&mut self.server, &job.manifest, result, &mut out).is_err();
+            messages(&out).into_iter().for_each(&mut tell);
+            if failed {
                 break;
             }
         }
-        messages(&out)
     }
 
     /// Whether the editor said `exit`.
