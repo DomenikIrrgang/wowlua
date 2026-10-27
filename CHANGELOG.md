@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- `wowlua mcp` and `wowlua debug` in a package that doesn't load (a dependency that can't be installed, say) show its errors, as `wowlua build` does; before, they said no `wowlua.json` was found.
+
 ## 0.13.4 (2026-10-28)
 
 ### New

@@ -1445,10 +1445,14 @@ pub fn with_suite(
     Ok(())
 }
 
-/// The package root of the current directory's addon.
+/// The package root of the current directory's addon; the errors of a
+/// package that does not load are shown.
 pub fn package_root(out: &Output, global: &GlobalArgs) -> Option<PathBuf> {
     let mut session = Session::new();
-    let projects = load_projects(global, &mut session, &load_options(out, global))?;
+    let Some(projects) = load_projects(global, &mut session, &load_options(out, global)) else {
+        out.flush(&mut session);
+        return None;
+    };
     projects
         .into_iter()
         .find(|p| p.kind() == PackageKind::Addon)
