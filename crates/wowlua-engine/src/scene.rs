@@ -64,7 +64,7 @@ pub enum Blend {
 /// A mask on a texture: its image, rectangle, and its part of the image
 /// (left, right, top, bottom; an atlas's region), with the atlas's name
 /// for a renderer with the build's own atlases.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Mask {
     pub image: Image,
     pub rect: Rect,
@@ -72,7 +72,7 @@ pub struct Mask {
     pub atlas: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Quad {
     pub widget: usize,
     pub rect: Rect,
@@ -106,7 +106,7 @@ pub struct Quad {
 }
 
 /// A run of characters of one color.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Run {
     pub text: String,
     pub color: [f32; 4],
@@ -114,7 +114,7 @@ pub struct Run {
     pub xs: Vec<f32>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TextLine {
     /// Where the line starts (its left edge and top).
     pub x: f32,
@@ -123,7 +123,7 @@ pub struct TextLine {
     pub runs: Vec<Run>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Text {
     pub widget: usize,
     /// The textures and atlases inline in it (`|T…|t`, `|A…|a`), drawn
@@ -226,7 +226,7 @@ pub struct Light {
 }
 
 /// A model frame or scene: what it draws into its rectangle.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Model {
     pub widget: usize,
     pub rect: Rect,
@@ -239,14 +239,14 @@ pub struct Model {
     pub time: f64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Item {
     Quad(Quad),
     Text(Text),
     Model(Model),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Scene {
     pub width: u32,
     pub height: u32,
