@@ -12,7 +12,7 @@ use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use wowlua_diagnostics::Diagnostic;
-use wowlua_manifest::model::PackageKind;
+use wowlua_manifest::model::{CheckMode, PackageKind};
 use wowlua_manifest::{MANIFEST_FILE, pascal_case, schema_url};
 
 /// `my addon`/`MyAddon` → `my-addon`.
@@ -60,6 +60,15 @@ pub struct NewRequest {
     pub flavors: Vec<String>,
     /// `--ci github`.
     pub ci_github: bool,
+    /// `--check`: the check mode, written to `check.mode` unless it is the
+    /// default.
+    pub check: Option<CheckMode>,
+    /// A Git repository when `git` is available and the folder is not in
+    /// one already; `--no-git` turns it off.
+    pub git: bool,
+    /// `--world-profile`: `tests/profiles/default.json`, which every test
+    /// starts in (`test.profile`).
+    pub world_profile: bool,
 }
 
 const GITIGNORE_ADDON: &str = "dist/\n";
@@ -141,6 +150,11 @@ pub fn new_package(request: &NewRequest) -> Result<Vec<PathBuf>, Diagnostic> {
             dir.display()
         )));
     }
+    if request.world_profile && !matches!(request.kind, PackageKind::Addon | PackageKind::Library) {
+        return Err(Diagnostic::plain_error(
+            "`--world-profile` needs tests, which only addon and library packages have",
+        ));
+    }
     let folder = dir
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -152,10 +166,12 @@ pub fn new_package(request: &NewRequest) -> Result<Vec<PathBuf>, Diagnostic> {
         .unwrap_or_else(|| pascal_case(&package_name));
 
     let mut flavors = Map::new();
+    let mut first_flavor = None;
     for name in &request.flavors {
         let flavor = wowlua_flavors::table()
             .resolve(name)
             .ok_or_else(|| Diagnostic::error("E4004", format!("unknown flavor `{name}`")))?;
+        first_flavor.get_or_insert_with(|| flavor.id.clone());
         flavors.insert(flavor.id.clone(), json!({}));
     }
 
@@ -228,6 +244,19 @@ pub fn new_package(request: &NewRequest) -> Result<Vec<PathBuf>, Diagnostic> {
             files.push((".gitignore".into(), GITIGNORE_LIBRARY.into()));
         }
     }
+    if let Some(mode) = request.check.filter(|m| *m != CheckMode::default()) {
+        manifest.insert(
+            "check".into(),
+            json!({ "mode": serde_json::to_value(mode).expect("modes serialize") }),
+        );
+    }
+    if request.world_profile {
+        manifest.insert("test".into(), json!({ "profile": "default" }));
+        files.push((
+            "tests/profiles/default.json".into(),
+            default_world_profile(first_flavor.as_deref()),
+        ));
+    }
     files.push(("README.md".into(), format!("# {display_name}\n\nBuilt with [wowlua](https://github.com/DomenikIrrgang/wowlua).\n\n```sh\nwowlua build\n```\n")));
     if request.ci_github {
         let workflow = match request.kind {
@@ -247,10 +276,35 @@ pub fn new_package(request: &NewRequest) -> Result<Vec<PathBuf>, Diagnostic> {
         })?;
         written.push(path);
     }
-    if vcs::git_available() && !vcs::inside_work_tree(dir) {
+    if request.git && vcs::git_available() && !vcs::inside_work_tree(dir) {
         vcs::git_init(dir);
     }
     Ok(written)
+}
+
+/// The starter world profile of `--world-profile`: a Human Warrior at the
+/// level cap of the package's first flavor. The current game's cap moves
+/// with every expansion, so `standard` takes the client's default level.
+fn default_world_profile(flavor: Option<&str>) -> String {
+    let level = match flavor.unwrap_or("standard") {
+        "camelot" | "vanilla" => Some(60),
+        "tbc" => Some(70),
+        "wrath" => Some(80),
+        "cata" => Some(85),
+        "mists" => Some(90),
+        _ => None,
+    };
+    let mut character = Map::new();
+    character.insert("name".into(), "Player".into());
+    character.insert("class".into(), "WARRIOR".into());
+    character.insert("race".into(), "Human".into());
+    if let Some(level) = level {
+        character.insert("level".into(), level.into());
+    }
+    pretty(&json!({
+        "$schema": wowlua_manifest::world::schema_url(),
+        "character": Value::Object(character),
+    }))
 }
 
 fn minor_requirement() -> String {
@@ -3355,6 +3409,9 @@ local other = "Interface/AddOns/OtherAddon/core.lua""#;
             name: None,
             flavors: vec!["retail".into(), "vanilla".into()],
             ci_github: true,
+            check: None,
+            git: true,
+            world_profile: false,
         })
         .unwrap();
         let mut db = wowlua_span::SourceDb::new();

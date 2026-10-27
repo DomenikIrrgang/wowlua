@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### New
+
+- `wowlua new` takes `--check strict` (or `basic`, `nocheck`) for the check mode, `--world-profile` for a starter world profile in `tests/profiles/default.json` that every test starts in, and `--no-git` to skip the Git repository.
+
 ## 0.13.1 (2026-10-27)
 
 ### New

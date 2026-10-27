@@ -6802,3 +6802,70 @@ fn removed_branches_are_not_checked() {
         "{release}"
     );
 }
+
+/// `wowlua new --check`, `--no-git` and `--world-profile` (spec CLI §12.9):
+/// the strict template still checks clean, its test passes in the starter
+/// profile, and no Git repository is made.
+#[test]
+fn new_package_with_check_mode_world_profile_and_no_git() {
+    let dir = tempfile::tempdir().unwrap();
+    wowlua(dir.path())
+        .args([
+            "new",
+            "pull-timer",
+            "--flavors",
+            "camelot",
+            "--check",
+            "strict",
+            "--world-profile",
+            "--no-git",
+        ])
+        .assert()
+        .success();
+    let project = dir.path().join("pull-timer");
+    let manifest: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(project.join("wowlua.json")).unwrap()).unwrap();
+    assert_eq!(manifest["check"]["mode"], "strict", "{manifest}");
+    assert_eq!(manifest["test"]["profile"], "default", "{manifest}");
+    let profile: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(project.join("tests/profiles/default.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(profile["character"]["level"], 60, "{profile}");
+    assert!(!project.join(".git").exists());
+
+    let check = wowlua(&project)
+        .args(["check", "--deny-warnings"])
+        .output()
+        .unwrap();
+    assert!(
+        check.status.success(),
+        "{}",
+        String::from_utf8_lossy(&check.stderr)
+    );
+    let test = wowlua(&project).arg("test").output().unwrap();
+    let stderr = String::from_utf8_lossy(&test.stderr);
+    assert!(test.status.success(), "{stderr}");
+    assert!(stderr.contains("1 passed, 0 failed"), "{stderr}");
+
+    // The current game's level cap moves: `standard` leaves it out.
+    wowlua(dir.path())
+        .args(["new", "retail-addon", "--world-profile", "--no-git"])
+        .assert()
+        .success();
+    let profile =
+        fs::read_to_string(dir.path().join("retail-addon/tests/profiles/default.json")).unwrap();
+    assert!(!profile.contains("level"), "{profile}");
+    let manifest = fs::read_to_string(dir.path().join("retail-addon/wowlua.json")).unwrap();
+    assert!(
+        !manifest.contains("\"check\""),
+        "basic is the default: {manifest}"
+    );
+
+    // Only addons and libraries have tests to start in a profile.
+    wowlua(dir.path())
+        .args(["new", "plain", "--kind", "lua-library", "--world-profile"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("only addon and library packages"));
+}

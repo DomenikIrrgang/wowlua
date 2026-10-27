@@ -1,7 +1,7 @@
 //! Command implementations. Each returns `true` on success.
 
 use crate::output::Output;
-use crate::{AddArgs, BuildArgs, GlobalArgs, InstallTarget, Kind};
+use crate::{AddArgs, BuildArgs, CheckArg, GlobalArgs, InstallTarget, Kind};
 use notify::{EventKind, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -10,7 +10,7 @@ use wowlua_diagnostics::Diagnostic;
 use wowlua_driver::install::{self, InstallRequest};
 use wowlua_driver::scaffold::{self, InitRequest, NewRequest};
 use wowlua_driver::{BuildOutput, BuildRequest, LoadOptions, Project, Session};
-use wowlua_manifest::model::PackageKind;
+use wowlua_manifest::model::{CheckMode, PackageKind};
 
 pub(crate) fn cwd() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
@@ -2138,26 +2138,49 @@ pub fn explain(out: &Output, code: &str) -> bool {
     true
 }
 
-pub fn new(
-    out: &Output,
-    path: PathBuf,
-    kind: Kind,
-    name: Option<String>,
-    flavors: Vec<String>,
-    ci_github: bool,
-) -> bool {
+/// `wowlua new`'s arguments.
+pub struct NewArgs {
+    pub path: PathBuf,
+    pub kind: Kind,
+    pub name: Option<String>,
+    pub flavors: Vec<String>,
+    pub ci_github: bool,
+    pub check: Option<CheckArg>,
+    pub git: bool,
+    pub world_profile: bool,
+}
+
+pub fn new(out: &Output, args: NewArgs) -> bool {
+    let NewArgs {
+        path,
+        kind,
+        name,
+        flavors,
+        ci_github,
+        check,
+        git,
+        world_profile,
+    } = args;
     let kind = match kind {
         Kind::Addon => PackageKind::Addon,
         Kind::Library => PackageKind::Library,
         Kind::LuaLibrary => PackageKind::LuaLibrary,
         Kind::Types => PackageKind::Types,
     };
+    let check = check.map(|c| match c {
+        CheckArg::Nocheck => CheckMode::Nocheck,
+        CheckArg::Basic => CheckMode::Basic,
+        CheckArg::Strict => CheckMode::Strict,
+    });
     let request = NewRequest {
         path: cwd().join(&path),
         kind,
         name,
         flavors,
         ci_github,
+        check,
+        git,
+        world_profile,
     };
     match scaffold::new_package(&request) {
         Ok(_) => {

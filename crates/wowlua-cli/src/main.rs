@@ -283,6 +283,14 @@ pub enum Ci {
     Github,
 }
 
+/// `wowlua new --check`: the manifest's check modes.
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckArg {
+    Nocheck,
+    Basic,
+    Strict,
+}
+
 #[derive(Subcommand, Debug)]
 enum Command {
     /// Create a new package from a template
@@ -300,6 +308,15 @@ enum Command {
         /// Add a CI workflow
         #[arg(long, value_enum)]
         ci: Option<Ci>,
+        /// The check mode (default: basic)
+        #[arg(long, value_enum, value_name = "MODE")]
+        check: Option<CheckArg>,
+        /// Don't initialize a Git repository
+        #[arg(long)]
+        no_git: bool,
+        /// Add tests/profiles/default.json, which every test starts in
+        #[arg(long)]
+        world_profile: bool,
     },
     /// Create wowlua.json for the existing addon in the current directory
     Init {
@@ -792,7 +809,22 @@ fn run() -> ExitCode {
             name,
             flavors,
             ci,
-        } => commands::new(&out, path, kind, name, flavors, ci.is_some()),
+            check,
+            no_git,
+            world_profile,
+        } => commands::new(
+            &out,
+            commands::NewArgs {
+                path,
+                kind,
+                name,
+                flavors,
+                ci_github: ci.is_some(),
+                check,
+                git: !no_git,
+                world_profile,
+            },
+        ),
         Command::Init {
             from_toc,
             from_pkgmeta,
