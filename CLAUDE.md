@@ -68,6 +68,7 @@ Before setting a tag:
 2. Choose the next version by the rules above. Set it in `Cargo.toml`
    (`workspace.package.version`; `cargo metadata` updates `Cargo.lock`), in
    `web/package.json` (the playground's package, attached to the release),
+   in `editors/vscode/package.json` (the VS Code extension's version),
    in `README.md`'s roadmap line and in `docs/guide/install.md`'s and
    `docs/reference/embedding.md`'s examples.
 3. Write the changelog section as above: rename `## Unreleased` and check it
