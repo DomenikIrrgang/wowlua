@@ -462,6 +462,41 @@ fn interacting_with(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(open)])
 }
 
+/// `C_VideoOptions.GetCurrentGameWindowSize(monitor, fullscreen)`: the
+/// screen's size, a `Vector2DMixin` (decision T482; recorded 1920 by 1080
+/// on the Mac, the screen's default).
+fn current_game_window_size(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let screen = crate::engine(vm).screen;
+    let size = crate::curves::mixin_table(
+        vm,
+        "Vector2DMixin",
+        &[
+            ("x", Value::Num(screen.width)),
+            ("y", Value::Num(screen.height)),
+        ],
+    );
+    Ok(vec![size])
+}
+
+/// `C_VideoOptions.SetGameWindowSize(x, y)`: the window takes that size,
+/// as the Graphics settings' window size does (decision T482); 0 by 0 the
+/// default (the recorded 1920 by 1080). Unverified: what the client does
+/// with a size its monitor does not list.
+fn set_game_window_size(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Num(x), Value::Num(y)) = (c.arg(1), c.arg(2)) else {
+        return Ok(vec![]);
+    };
+    let mut screen = crate::engine(vm).screen;
+    let default = crate::Screen::default();
+    (screen.width, screen.height) = if x <= 0.0 || y <= 0.0 {
+        (default.width, default.height)
+    } else {
+        (x.floor(), y.floor())
+    };
+    crate::change_screen(vm, screen);
+    Ok(vec![])
+}
+
 /// `GetScreenWidth()`: UIParent's width, as `GetScreenHeight` its height.
 fn screen_width(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(engine(vm).screen.ui_parent_size().0)])
@@ -854,6 +889,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetNormalizedRealmName", realm_name),
         ("GetScreenHeight", screen_height),
         ("GetScreenWidth", screen_width),
+        ("C_VideoOptions.SetGameWindowSize", set_game_window_size),
+        (
+            "C_VideoOptions.GetCurrentGameWindowSize",
+            current_game_window_size,
+        ),
         ("SetPortraitTexture", set_portrait_texture),
         ("C_NamePlate.SetNamePlateSize", not_drawn),
         ("GetSpecializationRole", specialization_role),

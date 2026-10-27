@@ -465,6 +465,71 @@ return tostring(UIParent:GetScale()), tostring(child:GetEffectiveScale()), tostr
     );
 }
 
+/// The game's settings change the screen while it runs (decision T482):
+/// "Use UI Scale" and its slider (the `useUiScale` and `uiScale` CVars)
+/// scale UIParent and tell `UI_SCALE_CHANGED`; turned off, the screen's
+/// own scale is back.
+#[test]
+fn the_ui_scale_cvars_scale_uiparent() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "Seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('UI_SCALE_CHANGED')
+f:RegisterEvent('DISPLAY_SIZE_CHANGED')
+f:SetScript('OnEvent', function(_, event) Seen[#Seen + 1] = event end)
+C_CVar.SetCVar('useUiScale', '1')
+C_CVar.SetCVar('uiScale', '0.8')
+local scaled, height = tostring(UIParent:GetScale()), tostring(GetScreenHeight())
+C_CVar.SetCVar('useUiScale', '0')
+return scaled, height, tostring(UIParent:GetScale()), table.concat(Seen, ' ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "0.80000001192093",
+            "960",
+            "0.71111112833023",
+            "UI_SCALE_CHANGED UI_SCALE_CHANGED UI_SCALE_CHANGED"
+        ]
+    );
+}
+
+/// The Graphics settings' window size (`C_VideoOptions.SetGameWindowSize`)
+/// resizes the screen and tells `DISPLAY_SIZE_CHANGED`, and
+/// `UI_SCALE_CHANGED` when UIParent's scale follows; the current size is
+/// the screen's; 0 by 0 is the default (decision T482).
+#[test]
+fn the_window_size_resizes_the_screen() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "Seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('UI_SCALE_CHANGED')
+f:RegisterEvent('DISPLAY_SIZE_CHANGED')
+f:SetScript('OnEvent', function(_, event) Seen[#Seen + 1] = event end)
+C_VideoOptions.SetGameWindowSize(1280, 720)
+local w, h = GetPhysicalScreenSize()
+local size = C_VideoOptions.GetCurrentGameWindowSize(0, false)
+local scale = tostring(UIParent:GetScale())
+C_VideoOptions.SetGameWindowSize(0, 0)
+local w2, h2 = GetPhysicalScreenSize()
+return w .. 'x' .. h, size.x .. 'x' .. size.y, scale, w2 .. 'x' .. h2, table.concat(Seen, ' ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "1280x720",
+            "1280x720",
+            "1",
+            "1920x1080",
+            "DISPLAY_SIZE_CHANGED UI_SCALE_CHANGED DISPLAY_SIZE_CHANGED UI_SCALE_CHANGED"
+        ]
+    );
+}
+
 /// Every atlas of the client from its own tables (decision T238): one
 /// never recorded has its size, file, coordinates and raw size (its 2x
 /// texture's, half the pixels); `useAtlasSize` takes the size; an atlas the

@@ -284,8 +284,52 @@ impl Screen {
 }
 
 /// Sets the screen the client draws on (after `install`): UIParent's size
-/// follows.
+/// follows, and with a UI scale "Use UI Scale" and its slider's CVars
+/// (`useUiScale`, `uiScale`) read as it (decision T482).
 pub fn set_screen(vm: &mut Vm, screen: Screen) {
+    place_screen(vm, screen);
+    if let Some(ui) = screen.ui_scale {
+        framescript::cvar_set(vm, "useUiScale", "1".into());
+        framescript::cvar_set(vm, "uiScale", format!("{ui:.6}"));
+    }
+}
+
+/// The screen changed while the client runs, as the game's settings change
+/// it (decision T482: the window's size, `C_VideoOptions.SetGameWindowSize`;
+/// the UI scale, the `useUiScale` and `uiScale` CVars): UIParent follows,
+/// then `DISPLAY_SIZE_CHANGED` when the size changed and `UI_SCALE_CHANGED`
+/// when UIParent's scale did (unverified: their order, and whether a size
+/// that changes UIParent's scale tells both).
+pub fn change_screen(vm: &mut Vm, screen: Screen) {
+    let before = engine(vm).screen;
+    if before == screen {
+        return;
+    }
+    place_screen(vm, screen);
+    if (before.width, before.height) != (screen.width, screen.height) {
+        widgets::fire_event(vm, "DISPLAY_SIZE_CHANGED", &[]);
+    }
+    if before.ui_parent_scale() != screen.ui_parent_scale() {
+        widgets::fire_event(vm, "UI_SCALE_CHANGED", &[]);
+    }
+}
+
+/// The screen with the UI scale its CVars set: `uiScale` when `useUiScale`
+/// is on, else none.
+pub(crate) fn screen_from_cvars(vm: &mut Vm) -> Screen {
+    let mut screen = engine(vm).screen;
+    let on = framescript::cvar_get(vm, "useUiScale").is_some_and(|v| v.trim() == "1");
+    // (a flavor without the client's CVars: the slider's default, 1)
+    let scale =
+        framescript::cvar_get(vm, "uiScale").map_or(Some(1.0), |v| v.trim().parse::<f64>().ok());
+    screen.ui_scale = match (on, scale) {
+        (true, Some(s)) if s > 0.0 => Some(s),
+        _ => None,
+    };
+    screen
+}
+
+fn place_screen(vm: &mut Vm, screen: Screen) {
     engine_mut(vm).screen = screen;
     let ui = vm.get_global("UIParent");
     if let Some(id) = widgets::widget_of(vm, ui) {

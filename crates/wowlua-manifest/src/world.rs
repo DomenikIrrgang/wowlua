@@ -82,6 +82,9 @@ pub struct WorldProfile {
     pub units: Option<List<WorldUnit>>,
     /// CVars by name.
     pub cvars: Option<BTreeMap<String, Scalar>>,
+    /// The screen the client draws on, over the manifest's `test.screen`
+    /// (decision T482): its size, DPI scale and UI scale.
+    pub screen: Option<crate::model::TestScreen>,
     /// Key bindings: key to action (`SetBinding`).
     pub bindings: Option<BTreeMap<String, String>>,
     /// SavedVariables by global name, as the addon finds them at load.

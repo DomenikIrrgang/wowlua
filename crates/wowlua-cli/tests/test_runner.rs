@@ -5265,6 +5265,66 @@ end
     assert!(out.contains("2 passed, 0 failed"), "{out}");
 }
 
+/// A world profile's `screen` (decision T482): over the manifest's
+/// `test.screen`, under a file's `config({ screen })`; its UI scale turns
+/// "Use UI Scale" on, as the client's CVars read.
+#[test]
+fn test_screen_from_the_world_profile() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            (
+                "tests/profiles/big.json",
+                r#"{ "screen": { "width": 2560, "height": 1440, "uiScale": 0.8 } }"#,
+            ),
+            (
+                "tests/big.test.wowlua",
+                r#"import test, expect, config from "wowlua:test"
+config({ profile = "big" })
+
+@test("the profile's screen")
+local function big()
+    local w, h = GetPhysicalScreenSize()
+    expect(w).toBe(2560)
+    expect(UIParent:GetScale()).toBe(0.80000001192092896)
+    expect(C_CVar.GetCVar("useUiScale")).toBe("1")
+end
+"#,
+            ),
+            (
+                "tests/own.test.wowlua",
+                r#"import test, expect, config from "wowlua:test"
+config({ profile = "big", screen = { width = 1280, height = 720 } })
+
+@test("a file's own screen over its profile's")
+local function own()
+    local w, h = GetPhysicalScreenSize()
+    expect(w).toBe(1280)
+end
+"#,
+            ),
+            (
+                "tests/manifest.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+
+@test("the manifest's screen without a profile")
+local function manifest()
+    local w, h = GetPhysicalScreenSize()
+    expect(w).toBe(1600)
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = r#"{ "package": { "name": "demo", "version": "1.0.0" }, "flavors": { "camelot": {} },
+  "addon": { "title": "Demo" }, "test": { "screen": { "width": 1600, "height": 900 } } }"#;
+    fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("3 passed, 0 failed"), "{out}");
+}
+
 /// A collection while a test waits (a timer's, between its steps) keeps
 /// the running test: only the runner held it, and the next step read a
 /// freed table ("stale handle").

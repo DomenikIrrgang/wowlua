@@ -658,6 +658,28 @@ pub fn chunk_file_mapper(suite: &Suite) -> ChunkMapper {
 /// that reached the error handler (a debug session's console).
 pub use natives::{Output, set_tee};
 
+/// The screen of the world profile a load applies (the file's, the
+/// given one, the suite's), when it has a `screen` part (decision T482).
+fn profile_screen(suite: &Suite, source: &[u8]) -> Result<Option<wowlua_engine::Screen>, String> {
+    let named = profile::named_in(source);
+    if let (None, Some(text)) = (&named, &suite.profile_text) {
+        return profile::screen_of(text, "given");
+    }
+    let Some(name) = named.or_else(|| suite.profile.clone()) else {
+        return Ok(None);
+    };
+    let path = suite
+        .root
+        .join("tests")
+        .join("profiles")
+        .join(format!("{name}.json"));
+    // (a profile that can't be read is told when it is applied)
+    match wowlua_host::read_to_string(&path) {
+        Ok(text) => profile::screen_of(&text, &path.display().to_string()),
+        Err(_) => Ok(None),
+    }
+}
+
 /// A VM loaded for `file` (or the addon alone), with `wowlua:test`'s
 /// registry when a test file loaded, and the variables the TOC saves.
 fn load_vm(
@@ -691,7 +713,8 @@ fn load_vm(
     };
     wowlua_engine::set_platform(&mut vm, platform);
     // The screen it draws on (decision T237): the file's `config({ screen
-    // = { width, height, dpiScale, uiScale } })`, else the manifest's.
+    // = { width, height, dpiScale, uiScale } })`, else the world profile's
+    // (T482), else the manifest's.
     let screen = match profile::config_numbers(&source, "screen") {
         Some(fields) => {
             let get = |k: &str| fields.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
@@ -705,7 +728,7 @@ fn load_vm(
                 ui_scale: get("uiScale"),
             }
         }
-        None => suite.screen,
+        None => profile_screen(suite, &source)?.unwrap_or(suite.screen),
     };
     wowlua_engine::set_screen(&mut vm, screen);
     if let Some(instrument) = suite.instrument {

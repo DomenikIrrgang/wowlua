@@ -2810,7 +2810,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_UI.GetTopRightNotchSafeRegion", four_zeros),
         ("C_UI.GetUIParent", get_ui_parent),
         ("C_UI.GetWorldFrame", get_world_frame),
-        ("C_VideoOptions.SetGameWindowSize", nothing),
         ("SetUIVisibility", nothing),
         ("Screenshot", nothing),
         // Portraits: nothing drawn.
