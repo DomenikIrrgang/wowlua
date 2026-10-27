@@ -10,6 +10,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua init --no-pkgmeta` adopts an addon from its TOC files only, leaving its `.pkgmeta` as it is.
 - **Editor colours, folds and hints**: the language server colours names by what they are (types, functions, parameters, fields, decorators, and `class`, `import` or `type` only where they are keywords), folds functions, blocks, tables, comments and imports, shows the types of locals declared without one, offers a warning's fixes as quick fixes (`Ctrl`/`Cmd` + `.`), and counts each function's references above it. VS Code shows all of them. Editors also learn when a check begins and ends (`wowlua/checking`).
 
+### Changed
+
+- Hovering a function with overloads, like `CreateFrame`, shows each overload on a line of its own instead of one long type joined by `&`.
+
 ## 0.13.1 (2026-10-27)
 
 ### New

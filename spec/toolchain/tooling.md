@@ -860,7 +860,8 @@ The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a
 open `.wowlua` and `.lua` files, each edit as the range it changed, and the
 `.wowlua`, `.lua`, `.xml`, `.toc`, `wowlua.json` and `wowlua.lock` files
 changed on disk; *Go to Definition* (F12) and Ctrl or Cmd + click use it,
-hovering a name shows its type, its completions list as you type (and
+hovering a name shows its type (a function's overloads one per line,
+decision T479), its completions list as you type (and
 after `.`, `:`, `@` and a quote), and in a call's parentheses its signature
 help shows the parameters; *Find All References* (Shift+F12) and *Rename
 Symbol* (F2, its refusals shown at the cursor) use it too, and its

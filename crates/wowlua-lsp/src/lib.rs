@@ -1500,10 +1500,15 @@ fn hover(server: &Server, uri: &str, position: &Json) -> Json {
             && (tail == 0 || offset >= start + tail);
         named.then_some(n)
     });
-    let mut value = match name {
-        Some(n) => format!("```wowlua\n{n}: {}\n```", found.ty),
-        None => format!("```wowlua\n{}\n```", found.ty),
-    };
+    // a function's overloads one per line (T479)
+    let lines: Vec<String> = overloads(&found.ty)
+        .into_iter()
+        .map(|ty| match name {
+            Some(n) => format!("{n}: {ty}"),
+            None => ty.to_owned(),
+        })
+        .collect();
+    let mut value = format!("```wowlua\n{}\n```", lines.join("\n"));
     // the doc comment of what it refers to, else of what it declares here
     let target = server
         .definitions
@@ -1899,10 +1904,62 @@ fn format(doc: &Doc) -> Option<Vec<Json>> {
     })])
 }
 
+/// A type's overloads: an intersection of functions (`(a) -> A & (b) ->
+/// B`) split where its `&`s are outside brackets and strings; any other
+/// type whole.
+fn overloads(ty: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0i32;
+    let mut quote: Option<char> = None;
+    let mut start = 0;
+    let mut prev = ' ';
+    for (i, c) in ty.char_indices() {
+        match (quote, c) {
+            (Some(q), c) if c == q && prev != '\\' => quote = None,
+            (Some(_), _) => {}
+            (None, '"' | '\'') => quote = Some(c),
+            (None, '(' | '[' | '{' | '<') => depth += 1,
+            // `->` is no closing bracket
+            (None, '>') if prev == '-' => {}
+            (None, ')' | ']' | '}' | '>') => depth -= 1,
+            (None, '&') if depth == 0 && ty[..i].ends_with(' ') && ty[i + 1..].starts_with(' ') => {
+                parts.push(ty[start..i - 1].trim());
+                start = i + 1;
+            }
+            _ => {}
+        }
+        prev = c;
+    }
+    parts.push(ty[start..].trim());
+    let functions = parts.len() > 1
+        && parts
+            .iter()
+            .all(|p| p.starts_with('(') || p.starts_with('<'));
+    if functions { parts } else { vec![ty] }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::generated;
+    use super::{generated, overloads};
     use std::path::Path;
+
+    #[test]
+    fn a_function_s_overloads_are_one_per_line() {
+        assert_eq!(
+            overloads(
+                r#"(frameType: "Button", name: string?) -> Button & (frameType: "Frame & more", parent: (A & B)?) -> Frame & <T>(x: T) -> T"#
+            ),
+            [
+                r#"(frameType: "Button", name: string?) -> Button"#,
+                r#"(frameType: "Frame & more", parent: (A & B)?) -> Frame"#,
+                "<T>(x: T) -> T",
+            ]
+        );
+        // not every part a function: the type whole
+        assert_eq!(overloads("Frame & Mixin"), ["Frame & Mixin"]);
+        assert_eq!(overloads("(a: number) -> A & B"), ["(a: number) -> A & B"]);
+        assert_eq!(overloads("number"), ["number"]);
+    }
 
     #[test]
     fn build_output_and_hidden_folders_of_a_package_are_generated() {
