@@ -566,6 +566,7 @@ See [Tooling §16.3](tooling.md#163-formatter-wowlua-fmt).
 |-----|---------|---------|
 | `pkgmeta` | `false` | Read dependencies and publishing settings from `.pkgmeta` ([CLI §12.6](cli.md#126-adopting-an-existing-addon)) |
 | `packager-keywords` | `false` | Apply BigWigs packager keyword substitution to passthrough files and embedded libraries, with LF line endings (decisions T120, T124) |
+| `localization` | none | The package's locale files for the packager's `@localization(…)@` keyword: a path from the package root, `{locale}` standing for the keyword's locale (`"locales/export/{locale}.lua"`). The keyword is replaced by its locale's file; a locale without one stays a comment (decision T491) |
 | `plain-copy` | `[]` | Files the packager copies unprocessed (`.pkgmeta` `plain-copy`): shell patterns relative to the source folder or the package root, `*` matching `/` too |
 | `license-output` | none | The license file (`.pkgmeta` `license-output`) a workspace root copies into each member's output that has none (decision T136) |
 | `toc-version` | none | The TOC `## Version` value of a converted project (a string, or `{flavor: value}`), keywords substituted; `""` writes no `Version` line (decision T153) |

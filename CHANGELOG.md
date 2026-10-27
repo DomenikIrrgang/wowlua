@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### New
+
+- An adopted addon's `@localization(…)@` lines can be filled from its own locale files: `"compat": { "localization": "locales/{locale}.lua" }` puts each locale's file in place of its keyword, and a locale without a file stays a comment. Before, the keyword was always W4030.
+
 ## 0.13.4 (2026-10-28)
 
 ### New

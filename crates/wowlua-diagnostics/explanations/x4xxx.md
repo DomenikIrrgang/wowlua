@@ -1579,11 +1579,13 @@ Related: E4002
 A Lua or XML file of a converted packager project (`compat.packager-keywords`)
 uses the BigWigs packager's `@localization(…)@` keyword, which the packager
 replaces with translations from CurseForge's localization tool. wowlua does
-not support it and leaves the line unchanged, so it stays a comment and the
+not fetch them and leaves the line unchanged, so it stays a comment and the
 translations are missing.
 
-Move the translations to `wowlua:locale`, whose locale files live in the
-package, or write the strings into the file.
+If the package has the translations as files, `compat.localization` names
+them, `{locale}` standing for the keyword's locale, and the build puts each
+locale's file in place of its keyword. Or move the translations to
+`wowlua:locale`, or write the strings into the file.
 
 ```json fails title=wowlua.json
 {
@@ -1625,6 +1627,33 @@ print(L)
 local L = {}
 L["Hello"] = "Hello"
 print(L)
+```
+
+With the translations in the package (`locales/enUS.lua`):
+
+```json compiles title=wowlua.json
+{
+    "package": {
+        "name": "playground",
+        "version": "0.1.0",
+        "wowlua": "^0.13"
+    },
+    "flavors": {
+        "camelot": {}
+    },
+    "compat": {
+        "packager-keywords": true,
+        "localization": "locales/{locale}.lua"
+    }
+}
+```
+```lua compiles title=src/main.lua
+local L = {}
+--@localization(locale="enUS", format="lua_additive_table")@
+print(L)
+```
+```lua compiles title=locales/enUS.lua
+L["Hello"] = "Hello"
 ```
 
 Related: W4031, E4335

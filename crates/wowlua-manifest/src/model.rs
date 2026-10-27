@@ -1148,6 +1148,10 @@ pub struct Compat {
     /// `*` also matching `/`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub plain_copy: Vec<String>,
+    /// Local files for the packager's `@localization(…)@` keyword: a path
+    /// from the package root, `{locale}` standing for the keyword's locale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub localization: Option<String>,
     /// The AddOn the packager's package folder becomes in a workspace
     /// without a root addon (`.pkgmeta` `package-as`).
     #[serde(default, skip_serializing_if = "Option::is_none")]

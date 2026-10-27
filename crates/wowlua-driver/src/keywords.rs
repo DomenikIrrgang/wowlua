@@ -702,14 +702,64 @@ pub fn library_file_keywords(
     substitute_file(text, &file)
 }
 
-/// `@localization(…)@` is not supported (W4030).
+/// `@localization(…)@`: without local files (`compat.localization`), W4030.
 pub fn uses_localization(text: &str) -> bool {
     text.contains("@localization(")
+}
+
+/// Fills `--@localization(…)@` lines from local files (decision T491): the
+/// keyword is replaced by `file_of(locale)`, the text before it kept, as the
+/// packager puts CurseForge's export there. A locale without a file, and a
+/// single-key line (`key=`), are left as written.
+pub fn localize(text: &str, file_of: impl Fn(&str) -> Option<String>) -> String {
+    let mut out = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let body = line.trim_end_matches('\n');
+        let content = body.find("--@localization(").and_then(|start| {
+            let params = &body[start + "--@localization(".len()..];
+            let params = &params[..params.find(")@")?];
+            if params.contains("key=") {
+                return None;
+            }
+            let locale = params.split("locale=\"").nth(1)?.split('"').next()?;
+            if locale.is_empty() || !locale.chars().all(|c| c.is_ascii_alphanumeric()) {
+                return None;
+            }
+            Some(format!(
+                "{}{}",
+                &body[..start],
+                file_of(locale)?.trim_end_matches('\n')
+            ))
+        });
+        match content {
+            Some(c) => {
+                out.push_str(&c);
+                out.push_str(&line[body.len()..]);
+            }
+            None => out.push_str(line),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn localization_reads_local_files() {
+        let lua = "local L = {}\n  --@localization(locale=\"deDE\", format=\"lua_additive_table\")@\n--@localization(locale=\"frFR\")@\nL.x = --@localization(locale=\"deDE\", key=\"x\")@\nT = --@localization(locale=\"deDE\", format=\"lua_table\")@\n";
+        let de =
+            |l: &str| (l == "deDE").then(|| "L[\"a\"] = \"b\"\nL[\"c\"] = \"d\"\n".to_string());
+        assert_eq!(
+            localize(lua, de),
+            "local L = {}\n  L[\"a\"] = \"b\"\nL[\"c\"] = \"d\"\n--@localization(locale=\"frFR\")@\nL.x = --@localization(locale=\"deDE\", key=\"x\")@\nT = L[\"a\"] = \"b\"\nL[\"c\"] = \"d\"\n"
+        );
+        assert_eq!(
+            localize("--@localization(locale=\"../x\")@", |_| Some("no".into())),
+            "--@localization(locale=\"../x\")@"
+        );
+    }
 
     #[test]
     fn blocks_follow_the_packager() {

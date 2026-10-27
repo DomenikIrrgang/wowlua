@@ -2256,3 +2256,52 @@ fn bundles_flatten_library_xml_and_keep_some_libraries_apart() {
     assert!(!out.join("libs/libxml").exists());
     assert!(out.join("libs/libkeep/LibKeep.lua").exists());
 }
+
+/// `compat.localization` fills `@localization(…)@` lines from the package's
+/// locale files; a locale without one stays a comment (decision T491).
+#[test]
+fn packager_localization_reads_the_packages_locale_files() {
+    let e = env();
+    let dir = &e.project;
+    write(
+        dir,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "loc", "version": "0.1.0", "wowlua": "^0.13" },
+  "addon": { "name": "Loc", "title": "Loc" }, "flavors": { "camelot": {} },
+  "build": { "load-order": ["src/deDE.lua", "src/frFR.lua"], "exclude": ["locales/**"] },
+  "compat": { "packager-keywords": true, "localization": "locales/{locale}.lua" } }"#,
+            ),
+            (
+                "src/deDE.lua",
+                "L = {}\n  --@localization(locale=\"deDE\", format=\"lua_additive_table\")@\n",
+            ),
+            (
+                "src/frFR.lua",
+                "--@localization(locale=\"frFR\", format=\"lua_additive_table\")@\n",
+            ),
+            ("locales/deDE.lua", "L[\"Hello\"] = \"Hallo\"\r\n"),
+        ],
+    );
+    wowlua(dir, &e.home)
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("W4030").not());
+    let out = read_lf(dir.join("dist/release/Loc/Loc.lua")).unwrap();
+    assert!(out.contains("L[\"Hello\"] = \"Hallo\""), "{out}");
+    assert!(!dir.join("dist/release/Loc/locales").exists());
+    // Without the setting, the keyword is W4030 and stays a comment.
+    let manifest = fs::read_to_string(dir.join("wowlua.json")).unwrap();
+    fs::write(
+        dir.join("wowlua.json"),
+        manifest.replace(r#", "localization": "locales/{locale}.lua""#, ""),
+    )
+    .unwrap();
+    wowlua(dir, &e.home)
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("W4030"));
+}
