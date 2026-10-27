@@ -7,6 +7,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### New
 
 - `wowlua new` takes `--check strict` (or `basic`, `nocheck`) for the check mode, `--world-profile` for a starter world profile in `tests/profiles/default.json` that every test starts in, and `--no-git` to skip the Git repository.
+- `wowlua init --no-pkgmeta` adopts an addon from its TOC files only, leaving its `.pkgmeta` as it is.
 
 ## 0.13.1 (2026-10-27)
 

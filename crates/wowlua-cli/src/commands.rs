@@ -2212,7 +2212,12 @@ fn kind_name(kind: PackageKind) -> &'static str {
     }
 }
 
-pub fn init(out: &Output, from_toc: Option<PathBuf>, from_pkgmeta: Option<String>) -> bool {
+pub fn init(
+    out: &Output,
+    from_toc: Option<PathBuf>,
+    from_pkgmeta: Option<String>,
+    no_pkgmeta: bool,
+) -> bool {
     let mut session = Session::new();
     let pkgmeta_file = from_pkgmeta
         .as_ref()
@@ -2223,6 +2228,7 @@ pub fn init(out: &Output, from_toc: Option<PathBuf>, from_pkgmeta: Option<String
         from_toc: from_toc.map(|t| cwd().join(t)),
         from_pkgmeta: from_pkgmeta.is_some(),
         pkgmeta_file,
+        no_pkgmeta,
         inherited: None,
         addon_name: None,
         neighbors: Vec::new(),

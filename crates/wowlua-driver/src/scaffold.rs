@@ -373,6 +373,9 @@ pub struct InitRequest {
     pub from_pkgmeta: bool,
     /// `--from-pkgmeta <file>`: the packager project file to convert.
     pub pkgmeta_file: Option<PathBuf>,
+    /// `--no-pkgmeta`: adopt from the TOC files only, leaving a `.pkgmeta`
+    /// as it is.
+    pub no_pkgmeta: bool,
     /// For a folder `move-folders` makes a workspace member: the parts of
     /// the parent's `.pkgmeta` inside it, relative to it.
     pub inherited: Option<crate::pkgmeta::PkgMeta>,
@@ -437,6 +440,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             // A repository of several addons.
             if request.inherited.is_none()
                 && request.from_toc.is_none()
+                && !request.no_pkgmeta
                 && let Some(meta) =
                     crate::pkgmeta::read_project(dir, request.pkgmeta_file.as_deref())?
             {
@@ -447,6 +451,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     };
     let mut pkgmeta = match &request.inherited {
         Some(m) => Some(m.clone()),
+        None if request.no_pkgmeta => None,
         None => crate::pkgmeta::read_project(dir, request.pkgmeta_file.as_deref())?,
     };
     let external_addons = match pkgmeta.as_mut() {
@@ -1685,6 +1690,7 @@ fn init_members(
             from_toc: None,
             from_pkgmeta: false,
             pkgmeta_file: None,
+            no_pkgmeta: false,
             inherited: Some(inherited),
             addon_name: Some(to.clone()),
             neighbors: package.iter().filter(|n| n.name != *to).cloned().collect(),

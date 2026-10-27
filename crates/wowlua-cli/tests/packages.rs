@@ -1722,6 +1722,41 @@ fn init_from_pkgmeta_converts_externals() {
     assert!(!voice_out.join("README.md").exists());
 }
 
+/// `wowlua init --no-pkgmeta` adopts from the TOC files only: the
+/// `.pkgmeta` stays as it is and its externals are not converted.
+#[test]
+fn init_no_pkgmeta_adopts_from_the_tocs_only() {
+    let e = env();
+    let addon = &e.project;
+    write(
+        addon,
+        &[
+            (
+                ".pkgmeta",
+                "package-as: MyAddon\nexternals:\n  Libs/LibStub: https://example.invalid/libstub\n",
+            ),
+            (
+                "MyAddon.toc",
+                "## Interface: 120100\n## Title: My Addon\nCore.lua\n",
+            ),
+            ("Core.lua", "print('hi')\n"),
+        ],
+    );
+    wowlua(addon, &e.home)
+        .args(["init", "--no-pkgmeta", "--from-pkgmeta"])
+        .assert()
+        .failure();
+    wowlua(addon, &e.home)
+        .args(["init", "--no-pkgmeta"])
+        .assert()
+        .success();
+    let manifest = fs::read_to_string(addon.join("wowlua.json")).unwrap();
+    assert!(!manifest.contains("dependencies"), "{manifest}");
+    assert!(!manifest.contains("libstub"), "{manifest}");
+    assert!(addon.join(".pkgmeta").exists());
+    assert!(addon.join("src/Core.lua").exists());
+}
+
 #[test]
 fn compat_pkgmeta_keeps_pkgmeta_as_the_source() {
     let e = env();

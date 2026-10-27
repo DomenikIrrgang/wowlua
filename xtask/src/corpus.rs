@@ -580,6 +580,7 @@ fn check_addon(rel: &str, work: &Path) -> Result<AddonReport> {
         from_toc: None,
         from_pkgmeta: false,
         pkgmeta_file: None,
+        no_pkgmeta: false,
         inherited: None,
         addon_name: None,
         neighbors: Vec::new(),
