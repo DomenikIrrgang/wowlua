@@ -7,10 +7,13 @@
 
 pub mod bench;
 mod blizzard;
+#[cfg(feature = "camera")]
+pub mod camera;
 pub mod coverage;
 mod natives;
 pub mod profile;
 pub mod reports;
+pub mod runs;
 mod saved;
 pub mod scenario;
 pub mod screenshots;
@@ -113,6 +116,9 @@ pub struct TestResult {
     pub name: String,
     pub outcome: Outcome,
     pub seconds: f64,
+    /// With `--coverage`: the addon's functions the test called, by
+    /// source and the line each is defined on (decision T481).
+    pub functions: Vec<(String, u32)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -129,6 +135,20 @@ pub enum Outcome {
 /// Runs the suite's test files whose path or tests' names contain
 /// any of `filters` (all without one), on `jobs` threads.
 pub fn run(suite: &Suite, filters: &[String], jobs: usize) -> Vec<FileResult> {
+    let never = std::sync::atomic::AtomicBool::new(false);
+    run_with(suite, filters, jobs, &never, &|_| {})
+}
+
+/// [`run`], telling `on_file` each file's result as it finishes, and
+/// running no more files once `stop` is set (those left are not in the
+/// results): an editor's progress and its stop button (wowlua studio).
+pub fn run_with(
+    suite: &Suite,
+    filters: &[String],
+    jobs: usize,
+    stop: &std::sync::atomic::AtomicBool,
+    on_file: &(dyn Fn(&FileResult) + Sync),
+) -> Vec<FileResult> {
     let files: Vec<&TestFile> = suite
         .build
         .tests
@@ -143,9 +163,13 @@ pub fn run(suite: &Suite, filters: &[String], jobs: usize) -> Vec<FileResult> {
             let builder = std::thread::Builder::new().stack_size(64 << 20);
             let _ = builder.spawn_scoped(scope, || {
                 loop {
+                    if stop.load(std::sync::atomic::Ordering::Relaxed) {
+                        break;
+                    }
                     let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let Some(file) = files.get(i) else { break };
                     let result = run_file(suite, file, filters);
+                    on_file(&result);
                     if let Ok(mut r) = results.lock() {
                         r.push((i, result));
                     }
@@ -434,6 +458,45 @@ pub fn run_file(suite: &Suite, file: &TestFile, filters: &[String]) -> FileResul
     result.printed = natives::take_printed();
     result.seconds = started.elapsed().as_secs_f64();
     result
+}
+
+/// How often each function of a VM's run was called so far (by its
+/// coverage's prototypes), to tell what a test called.
+fn entry_counts(vm: &Vm) -> Vec<u32> {
+    vm.coverage.as_ref().map_or_else(Vec::new, |cov| {
+        cov.protos
+            .iter()
+            .map(|c| c.hits.first().copied().unwrap_or(0))
+            .collect()
+    })
+}
+
+/// The addon's functions called since `before` (a test's): by source and
+/// the line each is defined on. A VM a test made anew (`mock.reloadUI`)
+/// counts from nothing.
+fn functions_ran(suite: &Suite, vm: &Vm, before: &[u32]) -> Vec<(String, u32)> {
+    let Some(cov) = vm.coverage.as_ref() else {
+        return Vec::new();
+    };
+    let prefix = chunk_prefix(suite.build);
+    let mut out: Vec<(String, u32)> = Vec::new();
+    for (i, counts) in cov.protos.iter().enumerate() {
+        let now = counts.hits.first().copied().unwrap_or(0);
+        if counts.main || now <= before.get(i).copied().unwrap_or(0) {
+            continue;
+        }
+        let chunk = String::from_utf8_lossy(&counts.proto.source);
+        let chunk = chunk.strip_prefix('@').unwrap_or(&chunk);
+        if !counted(&prefix, chunk) {
+            continue;
+        }
+        let entry = (source_of(suite, chunk), counts.proto.line_defined);
+        if !out.contains(&entry) {
+            out.push(entry);
+        }
+    }
+    out.sort();
+    out
 }
 
 /// The counts of a VM's run, by source file.
@@ -1181,6 +1244,7 @@ fn run_tests(
                     stack: String::new(),
                 },
                 seconds: 0.0,
+                functions: Vec::new(),
             });
         }
     };
@@ -1229,11 +1293,16 @@ fn run_tests(
                 name: p.name.clone(),
                 outcome: Outcome::Skip(reason.clone()),
                 seconds: 0.0,
+                functions: Vec::new(),
             });
             continue;
         }
         let started = wowlua_host::Stopwatch::start();
+        let before = suite.coverage.then(|| entry_counts(&state.vm));
         let mut outcome = run_one(suite, file, state, p);
+        let functions = before
+            .map(|b| functions_ran(suite, &state.vm, &b))
+            .unwrap_or_default();
         let vm = &mut state.vm;
         if let Some(f) = &suite.after_test {
             f(vm, &p.name);
@@ -1271,6 +1340,7 @@ fn run_tests(
             name: p.name.clone(),
             outcome,
             seconds: started.elapsed().as_secs_f64(),
+            functions,
         });
     }
     let vm = &mut state.vm;

@@ -537,6 +537,16 @@ run with filters (`wowlua test --coverage Units/Threat`) checks part of the
 suite while its totals still count every source file, so no minimum
 applies to it (decision T250).
 
+With coverage, each test also names the addon's functions it called (by
+source and the line each is defined on), for an editor to show which tests
+run a function. A run's steps are a library (`wowlua_test::runs`) that
+`wowlua test` and wowlua studio share: the test build of a package for its
+flavors with the test files that do not compile left out, the runner's
+suite, and the minimums; `run_with` tells each file's result as it finishes
+and runs no more files once asked to stop. The renderer's camera that
+draws screenshots is `wowlua_test::camera`, with the `camera` feature
+(decision T481).
+
 ### 16.1.7 Benchmarks (`wowlua bench`)
 
 ```

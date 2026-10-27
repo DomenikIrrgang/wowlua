@@ -1306,28 +1306,21 @@ fn test_once(
             // count every source line, so the thresholds are the whole
             // suite's alone)
             if let Some(s) = settings.as_ref().filter(|_| filters.is_empty()) {
-                let t = report.totals();
-                for (kind, min, got) in [
-                    ("lines", s.lines, t.lines),
-                    ("statements", s.statements, t.lines),
-                    ("branches", s.branches, t.branches),
-                    ("functions", s.functions, t.functions),
-                    ("conditions", s.conditions, t.conditions),
-                ] {
-                    let p = wowlua_test::coverage::percent(got);
-                    if let Some(min) = min
-                        && p < min
-                    {
-                        ok = false;
-                        out.colored(&[
-                            (Some(Color::Red), true, "error"),
-                            (
-                                None,
-                                false,
-                                &format!(": {kind} coverage {p:.1}% is below the minimum {min}%\n"),
-                            ),
-                        ]);
-                    }
+                for below in wowlua_test::runs::below_minimums(report, s) {
+                    let wowlua_test::runs::Below {
+                        kind,
+                        percent: p,
+                        minimum: min,
+                    } = below;
+                    ok = false;
+                    out.colored(&[
+                        (Some(Color::Red), true, "error"),
+                        (
+                            None,
+                            false,
+                            &format!(": {kind} coverage {p:.1}% is below the minimum {min}%\n"),
+                        ),
+                    ]);
                 }
             }
         }
@@ -1361,14 +1354,10 @@ fn test_once(
 }
 
 /// How a suite runs: `-u`, `--coverage`, `--game-data`.
-#[derive(Clone, Copy, Default)]
-struct SuiteSwitches {
-    update_snapshots: bool,
-    coverage: bool,
-    game_data: bool,
-}
+use wowlua_test::runs::Switches as SuiteSwitches;
 
-/// The test runner's suite for a test build of `project`.
+/// The test runner's suite for a test build of `project`, with the
+/// renderer's camera.
 fn make_suite<'a>(
     project: &Project,
     build: &'a BuildOutput,
@@ -1377,47 +1366,16 @@ fn make_suite<'a>(
     switches: SuiteSwitches,
     instrument: Option<&'a (dyn Fn(&mut wowlua_vm::Vm) + Sync)>,
 ) -> wowlua_test::Suite<'a> {
-    let SuiteSwitches {
-        update_snapshots,
-        coverage,
-        game_data,
-    } = switches;
-    let test_settings = &project.manifest.manifest.test;
-    wowlua_test::Suite {
+    let camera = crate::screenshot::camera(project, build, flavor);
+    wowlua_test::runs::suite(
+        project,
         build,
-        flavor: flavor.to_string(),
-        root: project.root().to_path_buf(),
-        src: project.manifest.manifest.build.src.clone(),
+        flavor,
         blizzard_ui,
-        profile: test_settings.profile.clone(),
-        profile_text: None,
-        platform: match test_settings.platform {
-            Some(wowlua_manifest::model::TestPlatform::Windows) => wowlua_test::Platform::Windows,
-            _ => wowlua_test::Platform::Mac,
-        },
-        screen: match test_settings.screen {
-            Some(s) => wowlua_test::Screen {
-                width: s.width,
-                height: s.height,
-                dpi_scale: s.dpi_scale.unwrap_or(1.0),
-                ui_scale: s.ui_scale,
-            },
-            None => wowlua_test::Screen::default(),
-        },
-        // Relative to the package root, or absolute.
-        addons: test_settings
-            .addons
-            .iter()
-            .map(|a| project.root().join(a))
-            .collect(),
-        update_snapshots,
-        coverage,
+        switches,
         instrument,
-        camera: crate::screenshot::camera(project, build, flavor),
-        game_data,
-        after_test: None,
-        after_file: None,
-    }
+        camera,
+    )
 }
 
 /// Builds the package's test build for `flavor` (its first flavor by
@@ -1522,105 +1480,34 @@ fn test_build_as(
     dir: &str,
     profile: &str,
 ) -> Option<(BuildOutput, Vec<String>)> {
-    let mut left_out: Vec<String> = Vec::new();
-    loop {
-        let request = BuildRequest {
-            profile: profile.into(),
-            flavors: Some(flavors.clone()),
-            out_dir: Some(wowlua_test::build_dir(
-                &project.manifest.out_dir(),
-                dir,
-                &project.addon_name(),
-            )),
-            write: true,
-            nolib: false,
-            minify: None,
-            bundle: None,
-            only: None,
-            jobs: global.jobs(),
-            keep_code: true,
-            tests: true,
-            left_out: left_out.clone(),
-            reproducible: false,
-        };
-        let build = wowlua_driver::build(session, project, &request);
-        apply_lints(session, project);
-        if let Some(broken) = broken_test_files(session)
-            && !broken.iter().all(|b| left_out.contains(b))
-        {
-            out.show(session);
-            left_out.extend(broken);
-            continue;
-        }
-        if !out.flush(session) {
-            return None;
-        }
-        return build.map(|b| (b, left_out));
+    let built = wowlua_test::runs::build(
+        session,
+        project,
+        flavors,
+        dir,
+        profile,
+        global.jobs(),
+        &mut |session| out.show(session),
+    );
+    if !out.flush(session) {
+        return None;
     }
+    built
 }
 
 /// The test files left out of a run because they do not compile: a failed
-/// file each when the run selects it (no filter, or one in its path), else
-/// a note (a filtered run is not held up by another's half-written file).
+/// file each the run selects, a note for each other.
 fn not_compiling(
     out: &Output,
     left_out: &[String],
     filters: &[String],
     flavor: &str,
 ) -> Vec<wowlua_test::FileResult> {
-    let mut results = Vec::new();
-    for file in left_out {
-        // (a source's examples are named by that source)
-        let shown = wowlua_driver::examples::source_of(file);
-        if filters.is_empty()
-            || filters
-                .iter()
-                .any(|f| file.contains(f.as_str()) || shown.contains(f.as_str()))
-        {
-            results.push(wowlua_test::FileResult {
-                file: shown.clone(),
-                flavor: flavor.to_string(),
-                tests: Vec::new(),
-                error: Some(
-                    "it does not compile (its errors are above); the other test files ran".into(),
-                ),
-                printed: String::new(),
-                seconds: 0.0,
-                snapshots: wowlua_test::SnapshotSummary::default(),
-                coverage: None,
-            });
-        } else {
-            out.status("Skipped", format!("{shown}, which does not compile"));
-        }
+    let (results, skipped) = wowlua_test::runs::not_compiling(left_out, filters, flavor);
+    for shown in skipped {
+        out.status("Skipped", format!("{shown}, which does not compile"));
     }
     results
-}
-
-/// The test files (`*.test.wowlua`, package-relative) the session's errors
-/// are in, when every error is in one; `None` without errors, or with one
-/// elsewhere (the addon, a mock or helper: nothing could run).
-fn broken_test_files(session: &Session) -> Option<Vec<String>> {
-    let mut files: Vec<String> = Vec::new();
-    for d in session.diagnostics.iter().filter(|d| d.is_error()) {
-        // (an error in a doc comment's example is its examples file's)
-        let path = d
-            .labels
-            .first()
-            .map(|l| match session.examples.get(&l.span.file) {
-                Some(examples) => std::path::PathBuf::from(examples),
-                None => session.db.get(l.span.file).path().to_path_buf(),
-            })
-            .or_else(|| d.path.clone())?;
-        let path = path.to_string_lossy().replace('\\', "/");
-        let path = path.strip_prefix("./").unwrap_or(&path).to_string();
-        if !path.ends_with(".test.wowlua") {
-            return None;
-        }
-        if !files.contains(&path) {
-            files.push(path);
-        }
-    }
-    (!files.is_empty()).then_some(files)
 }
 
 /// One test file's results, as the `pretty` reporter shows them.

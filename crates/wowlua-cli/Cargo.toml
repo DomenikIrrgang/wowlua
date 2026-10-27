@@ -19,7 +19,7 @@ wowlua-flavors.workspace = true
 wowlua-pkg = { workspace = true, features = ["net"] }
 wowlua-manifest.workspace = true
 wowlua-runtime.workspace = true
-wowlua-test = { workspace = true, features = ["native"] }
+wowlua-test = { workspace = true, features = ["native", "camera"] }
 wowlua-lsp = { workspace = true, features = ["native"] }
 wowlua-debug = { workspace = true, features = ["native"] }
 wowlua-vm.workspace = true

@@ -14,12 +14,15 @@ serde_json.workspace = true
 wowlua-api.workspace = true
 wowlua-driver.workspace = true
 wowlua-host.workspace = true
+wowlua-manifest.workspace = true
 wowlua-engine.workspace = true
 wowlua-flavors.workspace = true
 wowlua-span.workspace = true
 wowlua-syntax.workspace = true
 wowlua-toc.workspace = true
 wowlua-vm.workspace = true
+# The camera that draws screenshots (feature `camera`).
+wowlua-render = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true
@@ -29,6 +32,9 @@ default = ["native"]
 # The computer's: fetching Blizzard's UI with git, the C Lua (spec M14,
 # decision T396). Without it the runner runs in a page.
 native = ["wowlua-driver/native"]
+# Screenshots drawn by the renderer, with the installation's art: `wowlua
+# test`'s and wowlua studio's camera (`camera::camera`).
+camera = ["native", "dep:wowlua-render"]
 
 [lints]
 workspace = true
