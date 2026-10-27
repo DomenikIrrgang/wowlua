@@ -885,28 +885,26 @@ pub fn reference_lenses<'a>(
         }));
     };
     // (an exported statement comes again by itself after its `export`)
-    visit::walk_stmts(parsed.view().block(), &mut |s| {
-        match s.kind() {
-            StmtKind::Function { name, .. } => {
-                if let Some(n) = name.method().or_else(|| name.path().last()) {
-                    lens(n);
-                }
+    visit::walk_stmts(parsed.view().block(), &mut |s| match s.kind() {
+        StmtKind::Function { name, .. } => {
+            if let Some(n) = name.method().or_else(|| name.path().last()) {
+                lens(n);
             }
-            StmtKind::LocalFunction { name, .. } => lens(name),
-            StmtKind::Class(c) => {
-                for m in c.members() {
-                    if let ClassMemberKind::Method {
-                        name,
-                        has_body: true,
-                        ..
-                    } = m.kind()
-                    {
-                        lens(name);
-                    }
-                }
-            }
-            _ => {}
         }
+        StmtKind::LocalFunction { name, .. } => lens(name),
+        StmtKind::Class(c) => {
+            for m in c.members() {
+                if let ClassMemberKind::Method {
+                    name,
+                    has_body: true,
+                    ..
+                } = m.kind()
+                {
+                    lens(name);
+                }
+            }
+        }
+        _ => {}
     });
     out
 }
@@ -1062,7 +1060,10 @@ mod tests {
     fn exported_declarations_get_one_lens() {
         let text = "export function f()\nend\nexport class C\n    function m(self)\n    end\nend\n";
         let lenses = reference_lenses(text, "file:///a.wowlua", "file:///a.wowlua", [].iter());
-        let lines: Vec<&Json> = lenses.iter().map(|l| &l["range"]["start"]["line"]).collect();
+        let lines: Vec<&Json> = lenses
+            .iter()
+            .map(|l| &l["range"]["start"]["line"])
+            .collect();
         assert_eq!(lines, [&json!(0), &json!(3)], "{lenses:?}");
     }
 
