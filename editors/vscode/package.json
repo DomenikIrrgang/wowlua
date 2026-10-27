@@ -2,7 +2,7 @@
   "name": "wowlua",
   "displayName": "wowlua",
   "description": "Check, format and outline wowlua addons as you type; debug them and their tests in wowlua's emulated World of Warcraft client, and see their UI as the game draws it.",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "publisher": "wowlua",
   "icon": "icon.png",
   "galleryBanner": {
