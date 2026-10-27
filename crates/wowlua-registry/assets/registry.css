@@ -1,0 +1,207 @@
+/* The registry's own parts, from the "wowlua registry" design canvas: the
+   fonts (the website loads them through next/font), the registry bar and the
+   pages' layouts. tokens.css, design-system.css and chrome.css are the
+   website's, unchanged (tests/assets.rs compares them). */
+
+@font-face { font-family: "Martian Mono"; src: url("fonts/MartianMono-StdRg.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Martian Mono"; src: url("fonts/MartianMono-StdMd.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Martian Mono"; src: url("fonts/MartianMono-StdBd.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Martian Mono"; src: url("fonts/MartianMono-StdxBd.woff2") format("woff2"); font-weight: 800; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/IBMPlexMono-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/IBMPlexMono-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/IBMPlexMono-Medium.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/IBMPlexMono-SemiBold.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+:root { --font-martian: "Martian Mono"; --font-plex: "IBM Plex Mono"; }
+
+.rg-page { min-height: 100vh; display: flex; flex-direction: column; background: var(--bg-100); color: var(--ink); font-family: var(--font-mono); }
+.rg-page > main { flex: 1 0 auto; width: 100%; box-sizing: border-box; }
+a:not([class]):hover { color: var(--ink); }
+.rg-muted { color: var(--ink-muted); }
+.rg-hide { position: absolute; left: -9999px; }
+.wl-site-header__search { text-decoration: none; }
+
+/* The registry bar under the site header */
+.rg-bar { background: var(--bg-100); border-bottom: 1px solid var(--line); }
+.rg-bar__inner { max-width: 1200px; margin: 0 auto; padding: 0 24px; display: flex; align-items: stretch; gap: 16px; flex-wrap: wrap; }
+.rg-bar__site { display: flex; align-items: center; color: var(--ink-muted); padding-right: 8px; border-right: 1px solid var(--line); margin: 12px 0; }
+.rg-bar__nav { display: flex; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+.rg-bar__tab { display: flex; align-items: center; height: 48px; padding: 0 14px; border-bottom: 2px solid transparent; white-space: nowrap; color: var(--ink-muted); text-decoration: none; }
+.rg-bar__tab:hover { color: var(--ink); background: var(--bg-300); }
+.rg-bar__tab[aria-current="page"] { color: var(--amber-ink); border-bottom-color: var(--amber); }
+.rg-bar__end { display: flex; align-items: center; gap: 8px; }
+.rg-bar__user { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; border: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+.rg-bar__user:hover { background: var(--bg-300); }
+@media (max-width: 720px) {
+  .rg-bar__inner { padding: 0 16px; gap: 0 12px; }
+  .rg-bar__site { flex: 1 0 100%; border-right: 0; padding: 0; margin: 12px 0 0; }
+  .rg-bar__nav { margin-left: -14px; }
+}
+
+/* Page columns */
+.rg-main { max-width: 1200px; margin: 0 auto; padding: 40px 24px 96px; display: grid; gap: 40px; align-content: start; }
+.rg-main--home { padding-top: 48px; }
+.rg-main--narrow { max-width: 760px; padding-top: 96px; gap: 24px; }
+.rg-split { display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
+.rg-split__main { flex: 999 1 640px; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; }
+.rg-split__side { flex: 1 1 280px; min-width: 0; display: grid; gap: 24px; }
+.rg-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+.rg-section > h2, .rg-section > div > h2 { margin: 0; }
+.rg-section__head { display: grid; gap: 4px; }
+.rg-section__head p { margin: 0; }
+.rg-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; }
+.rg-row--start { justify-content: flex-start; }
+.rg-panel { display: grid; gap: 16px; padding: 20px; background: var(--bg-200); border: 1px solid var(--line); }
+.rg-card { display: grid; gap: 8px; padding: 16px; background: var(--bg-200); border: 1px solid var(--line); }
+.rg-card > h2 { margin: 0; color: var(--ink-muted); }
+.rg-card > p { margin: 0; }
+.rg-empty { margin: 0; display: grid; gap: 12px; padding: 16px; border: 1px dashed var(--line-strong); color: var(--ink-muted); }
+.rg-empty p { margin: 0; }
+.rg-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin: 0; }
+.rg-form .wl-field { flex: 1 1 320px; min-width: 0; }
+.rg-main .wl-table td { vertical-align: middle; }
+.rg-actions { text-align: right; white-space: nowrap; }
+.rg-actions form { display: inline; margin: 0; }
+@media (max-width: 720px) {
+  .rg-main { padding: 24px 16px 64px; gap: 32px; }
+  .rg-main--home { padding-top: 32px; }
+  .rg-main--narrow { padding-top: 48px; }
+}
+
+/* Packages: the search, the filters and the cards */
+.rg-hero { display: grid; gap: 24px; padding-bottom: 40px; border-bottom: 1px solid var(--line); }
+.rg-hero__text { display: grid; gap: 12px; }
+.rg-hero__text h1, .rg-hero__text p { margin: 0; }
+.rg-hero__text p { max-width: 60ch; }
+.rg-search { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; max-width: 720px; margin: 0; }
+.rg-search .wl-field { flex: 1 1 320px; min-width: 0; }
+.rg-search .wl-btn { margin-top: 24px; }
+.rg-hero .wl-copy-cmd { display: none; }
+.rg-filters { flex: 1 1 220px; max-width: 260px; display: grid; gap: 24px; }
+/* The fieldset is a grid: the help's own column would split the boxes into two. */
+.rg-filters .wl-check__help { grid-column: auto; padding-left: 30px; }
+.rg-results { flex: 999 1 640px; min-width: 0; display: grid; gap: 16px; align-content: start; }
+.rg-results .wl-pkgs { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+.rg-kind { display: none; }
+.wl-pkg { position: relative; }
+.wl-pkg__head .wl-pkg__version { margin-left: auto; }
+.rg-pkg__phone { display: none; }
+@media (max-width: 720px) {
+  .rg-hero { gap: 16px; padding-bottom: 32px; }
+  .rg-hero__text h1 { font-size: 28px; line-height: 36px; }
+  .rg-hero__text p { font-size: 15px; line-height: 26px; }
+  .rg-search { display: grid; }
+  .rg-search .wl-btn { margin-top: 0; justify-content: center; }
+  .rg-search .wl-field__help { display: none; }
+  .rg-hero .wl-copy-cmd { display: flex; }
+  .rg-filters { display: none; }
+  .rg-kind { display: block; width: 100%; }
+  .rg-results .rg-row { display: grid; gap: 4px; }
+  .rg-results .wl-pkgs { grid-template-columns: minmax(0, 1fr); }
+  .rg-pkg__desk { display: none; }
+  .rg-pkg__phone { display: inline; }
+}
+
+/* A package */
+.rg-facts-keywords { align-self: center; }
+/* The side column is 280 px: a long name's command wraps instead of hiding its end. */
+.wl-pkghead__install code { white-space: normal; }
+.rg-nowrap { white-space: nowrap; }
+/* README tables: long code in a cell wraps; GitHub's empty header row (| | |) is left out. */
+.rg-readme td .wl-icode { white-space: normal; overflow-wrap: anywhere; }
+.rg-main .rg-readme td { min-width: 12ch; vertical-align: top; }
+.rg-readme thead:not(:has(th:not(:empty))) { display: none; }
+.rg-readme { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+.rg-readme > * { margin: 0; max-width: 100%; }
+.rg-readme > p, .rg-readme > ul, .rg-readme > ol { max-width: 72ch; }
+.rg-readme h3, .rg-readme h4 { margin: 16px 0 0; }
+.rg-readme ul, .rg-readme ol { padding-left: 24px; }
+.rg-readme img { max-width: 100%; }
+.rg-readme .wl-code, .rg-readme .wl-term { margin: 0; }
+.rg-versions-phone { display: none; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.rg-versions-phone li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.rg-versions-phone code { justify-self: start; }
+@media (max-width: 720px) {
+  .rg-versions-desk { display: none; }
+  .rg-versions-phone { display: block; }
+  .rg-usage-manifest { display: none; }
+}
+
+/* Sign in */
+.rg-signin { display: flex; flex-wrap: wrap; gap: 48px; align-items: flex-start; padding-top: 80px; }
+.rg-signin__box { flex: 1 1 420px; max-width: 520px; display: grid; gap: 24px; padding: 32px; background: var(--bg-200); border: 1px solid var(--line); }
+.rg-signin__box h1, .rg-signin__box p { margin: 0; }
+.rg-signin__box .wl-btn { justify-self: start; gap: 10px; }
+.rg-signin__box dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.rg-signin__box dt { color: var(--ink-muted); }
+.rg-signin__box dd { margin: 0; }
+.rg-steps { flex: 999 1 480px; min-width: 0; display: grid; gap: 20px; }
+.rg-steps h2 { margin: 0; }
+.rg-steps ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 20px; }
+.rg-steps li { display: grid; gap: 8px; }
+.rg-steps li p { margin: 0; }
+.rg-step-no { color: var(--amber-ink); }
+@media (max-width: 720px) {
+  .rg-signin { padding-top: 32px; gap: 32px; }
+  .rg-signin__box { padding: 20px; }
+}
+
+/* Account */
+.rg-account-head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.rg-account-head > div { display: grid; gap: 8px; }
+.rg-account-head h1, .rg-account-head p, .rg-account-head form { margin: 0; }
+.rg-callout { max-width: none; }
+.rg-callout .wl-callout__body { display: grid; gap: 12px; }
+.rg-callout .wl-callout__body p { margin: 0; }
+.rg-publish { padding: 24px; }
+.rg-publish__head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; justify-content: space-between; }
+.rg-publish__head > div { display: grid; gap: 6px; flex: 1 1 480px; min-width: 0; }
+.rg-publish__head h2, .rg-publish__head p { margin: 0; }
+.rg-publish ol { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.rg-publish li { display: grid; gap: 8px; align-content: start; }
+.rg-owned__head { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between; }
+.rg-owned__head h3 { margin: 0; }
+.rg-owners { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; padding-top: 16px; border-top: 1px solid var(--line); }
+.rg-owners > div { display: grid; gap: 8px; }
+.rg-owners__list { display: flex; flex-wrap: wrap; gap: 8px; }
+.rg-owner { display: inline-flex; align-items: center; gap: 4px; padding-left: 10px; border: 1px solid var(--line-strong); background: var(--bg-000); }
+.rg-owner form { display: inline; margin: 0; }
+.rg-owner button { background: transparent; border: 0; color: var(--ink-muted); cursor: pointer; padding: 0 6px; height: 24px; font: inherit; }
+.rg-owner button:hover { color: var(--error); background: var(--error-soft); }
+.rg-owner .caption { color: var(--ink-muted); padding: 0 8px; }
+.rg-owners .wl-field { width: 260px; flex: none; }
+.rg-admin { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; padding: 20px; border: 1px dashed var(--line-strong); }
+.rg-admin > div { display: grid; gap: 4px; flex: 1 1 480px; min-width: 0; }
+.rg-admin h2, .rg-admin p { margin: 0; }
+.rg-badge-gap { margin-left: 6px; vertical-align: middle; }
+@media (max-width: 720px) {
+  .rg-account-head { display: grid; gap: 12px; padding-bottom: 20px; }
+  .rg-account-head h1 { font-size: 28px; line-height: 36px; }
+  .rg-account-head form { justify-self: start; }
+  .rg-publish { padding: 16px; }
+  .rg-publish ol { grid-template-columns: minmax(0, 1fr); }
+  .rg-owners .wl-field { width: 100%; flex: 1 1 auto; }
+  .rg-admin .wl-btn { width: 100%; justify-content: center; }
+}
+
+/* Reserved names */
+.rg-reserved-head { display: grid; gap: 8px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.rg-reserved-head p, .rg-reserved-head h1 { margin: 0; }
+.rg-reserved-head .body { max-width: 72ch; }
+.rg-filter-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; justify-content: space-between; }
+.rg-filter-row .wl-field { flex: 0 1 360px; }
+.rg-reserve form { display: grid; gap: 8px; margin: 0; }
+.rg-reserve .rg-form .wl-field:nth-child(1) { flex: 1 1 200px; }
+.rg-reserve .rg-form .wl-field:nth-child(2) { flex: 1 1 220px; }
+.rg-reserve .rg-form .wl-field:nth-child(3) { flex: 2 1 320px; }
+.rg-reserve p { margin: 0; }
+
+/* Errors */
+.rg-error-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.rg-error .wl-diag { margin: 0; white-space: pre-wrap; }
+
+/* The phone menu's docs search is a link to wowlua.dev here (a button there) */
+.m-menu__search a {
+  width: 100%; height: 48px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 14px;
+  background: var(--bg-000); border: 1px solid var(--line-strong); color: var(--ink-muted); font: 400 14px/20px var(--font-mono); text-decoration: none;
+}
+.m-menu__search a span { color: var(--amber-ink); }

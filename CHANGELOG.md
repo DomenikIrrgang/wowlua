@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### New
+
+- **The registry's new pages** (https://registry.wowlua.dev), in wowlua.dev's design: search with filters by kind and flavor, a page per package with its install command, a usage example, its README, versions, dependencies and the packages that depend on it, and the account and reserved-name pages. A reserved name's page links a form to claim it.
+
 ## 0.13.1 (2026-10-27)
 
 ### New

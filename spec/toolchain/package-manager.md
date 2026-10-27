@@ -552,7 +552,15 @@ connection's. Over a limit is 429 `rate-limited` with `Retry-After`.
   and its admins extend it and assign each name to GitHub logins
   (`GET {api}/v1/reserved`, and for admins `PUT` / `DELETE
   {api}/v1/reserved/<name>` with `{"users": [...], "note": "…"}`). Until
-  assigned, only admins may publish a reserved name (403).
+  assigned, only admins may publish a reserved name (403). An author claims
+  one with an issue form in wowlua's repository, which the name's page and
+  the 403 link.
+- **Pages.** `{registry}/` lists and searches the packages (by kind and
+  flavor too) and `{registry}/packages/<name>[/<version>]` shows one: its
+  manifest's fields, the install command, its README, versions,
+  dependencies and the registry's packages that depend on it. A README is
+  shown without raw HTML, with links to `http(s)`, `mailto` and anchors
+  only and images as links (T475).
 - **Accounts.** Users are GitHub logins: the registry's page
   (`{registry}/login`) signs in with GitHub and creates and revokes API
   tokens, which the server stores as their SHA-256 only. The publisher of a
