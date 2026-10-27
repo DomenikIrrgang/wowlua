@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- A status bar given `SetTimerDuration` fills (or drains) with its duration, in `GetValue` and in screenshots, so cast bars that run on a timer show their progress; before, the bar stayed where it was.
+
 ## 0.13.4 (2026-10-28)
 
 ### New

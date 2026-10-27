@@ -423,3 +423,31 @@ return fresh[1], fresh[2], fresh[3], zero, disabled, shown, formatted, fs:GetTex
         ]
     );
 }
+
+#[test]
+fn timer_bars_follow_their_durations() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local function bar(direction)
+    local b = CreateFrame('StatusBar')
+    b:SetMinMaxValues(0, 200)
+    local d = C_DurationUtil.CreateDuration()
+    d:SetTimeFromStart(GetTime(), 10)
+    b:SetTimerDuration(d, Enum.StatusBarInterpolation.Immediate, direction)
+    return b, d
+end
+local fill, d = bar()
+local drain = bar(Enum.StatusBarTimerDirection.RemainingTime)
+local start = { fill:GetValue(), drain:GetValue() }
+mock.advanceTime(2.5)
+local quarter = { fill:GetValue(), drain:GetValue() }
+drain:SetValue(30)
+mock.advanceTime(10)
+mock.nextFrame()
+return start[1], start[2], quarter[1], quarter[2], fill:GetValue(), drain:GetValue(),
+    tostring(fill:GetTimerDuration() == d)",
+    );
+    // A value set stops the timer.
+    assert_eq!(r, ["0", "200", "50", "150", "200", "30", "true"]);
+}

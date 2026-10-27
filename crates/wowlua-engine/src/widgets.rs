@@ -135,6 +135,9 @@ pub struct World {
     /// The duration text bindings made (`C_DurationUtil.
     /// CreateDurationTextBinding`): each frame looks at them.
     pub text_bindings: Vec<WidgetId>,
+    /// The status bars following a duration (`SetTimerDuration`): each
+    /// frame moves their values.
+    pub timer_bars: Vec<WidgetId>,
     classes: HashMap<String, TableRef>,
     /// Templates and frame types tests (or stand-ins for Blizzard's UI
     /// code) define: name → (base class, function applied to the frame),

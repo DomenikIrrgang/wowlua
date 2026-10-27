@@ -247,6 +247,14 @@ as secrets, and `HasSecretAspect(Enum.SecretAspect.BarValue)` is true,
 until a plain value (or range) is set again (unverified: the scripts'
 values, and what the client keeps).
 
+A status bar given a duration (`SetTimerDuration(duration, interpolation,
+direction)`) follows it: its value is the part of the duration passed
+across its range (`Enum.StatusBarTimerDirection.ElapsedTime`, the
+default), or the part left (`RemainingTime`), read at each `GetValue` and
+moved each frame for drawing; secret while the duration is. A value set
+stops it (decision T487; unverified: whether the client's `GetValue`
+reads it, and runs `OnValueChanged`, which the engine doesn't).
+
 A protected frame anchored to a region (a texture, a font string, a line,
 a mask texture) is refused with the client's error, out of combat too:
 "Action[SetPoint] failed because[Cannot anchor protected frames to

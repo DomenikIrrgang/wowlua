@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,150 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,151 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -371,7 +371,7 @@ The modules that answer, by how many functions and methods:
 | Module | Kind | Functions and methods |
 |--------|------|----------------------:|
 | `extras` | fill-in | 1,489 |
-| `widgets` | model | 636 |
+| `widgets` | model | 635 |
 | `globalsinfo` | fill-in | 545 |
 | `content` | fill-in | 520 |
 | `leftovers2` | fill-in | 388 |
@@ -414,9 +414,9 @@ The modules that answer, by how many functions and methods:
 | `maps` | model | 28 |
 | `measures` | model | 28 |
 | `actions` | model | 27 |
+| `bars` | model | 26 |
 | `healcalc` | model | 26 |
 | `merchant` | model | 26 |
-| `bars` | model | 25 |
 | `actions2` | fill-in | 24 |
 | `widgetops` | model | 24 |
 | `trainer` | model | 22 |
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,150 rules unverified: each rests on Blizzard's
+The engine's code marks 1,151 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -952,10 +952,11 @@ page changes only when a rule is added, removed or reworded.
 - [bank.rs](../crates/wowlua-engine/src/bank.rs): The second tab costs 1000 (SuuUI probe bankSlots: one bought), the third 10000 (the bank scenario: two bought); the o...
 - [bank.rs](../crates/wowlua-engine/src/bank.rs): `C_Bank.IsItemAllowedInBankType(bankType, itemLocation)`: any item in the character's bank; none in another (the acco...
 
-### bars (3)
+### bars (4)
 
 - [bars.rs](../crates/wowlua-engine/src/bars.rs): Whether the range or the value was set from a secret: read back secret (unverified: the documented secret aspects; a...
 - [bars.rs](../crates/wowlua-engine/src/bars.rs): Gives the bar value `v` as kept; `OnValueChanged` runs if it changed, with the value as `GetValue` reads it (and `OnM...
+- [bars.rs](../crates/wowlua-engine/src/bars.rs): `StatusBar:SetTimerDuration(duration [, interpolation [, direction]])`: the bar's value follows the duration from now...
 - [bars.rs](../crates/wowlua-engine/src/bars.rs): A slider's thumb, placed by the slider as the client does when it has no points of its own: (the slider, how far alon...
 
 ### batch (3)
