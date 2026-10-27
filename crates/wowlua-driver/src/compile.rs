@@ -116,6 +116,8 @@ pub struct CheckConfig {
     pub hover: Option<std::collections::HashSet<std::path::PathBuf>>,
     /// `Session::complete`: a completion check, of the word typed.
     pub complete: Option<String>,
+    /// `check.secret-widget-results` (decision T474).
+    pub secret_widget_results: bool,
 }
 
 /// A declaration file of one flavor (the wow-api types), parsed.
@@ -1566,6 +1568,7 @@ pub fn compile_flavor(
                 only: focused.as_ref(),
                 hover: hovered.as_ref(),
                 complete: check.complete.as_deref(),
+                secret_widget_results: check.secret_widget_results,
             },
         );
         diagnostics.extend(checked.diagnostics);

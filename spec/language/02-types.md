@@ -291,6 +291,7 @@ print(v:upper())                              -- v: string (Secret excluded)
 | `EventArgs<E>` | Type pack of the payload of event or message `E`. Used by `wowlua:events`, and usable in any function: in a call where `E` is a declared name, `(name: E, EventArgs<E>...) -> ()` takes the payload's parameters and `...: EventArgs<E>...` its values; elsewhere (`E` still a parameter, or a union of names) it is any values (decision L44). |
 | `Thread<A..., Y..., R...>` | A typed coroutine: started with arguments `A`, yields `Y`, returns `R` (§2.4.8). |
 | `Secret<T>` | A Midnight-era *secret value* of underlying type `T` (§2.11). |
+| `AspectSecret<T, S>` | A widget result that is secret only after a setter got a secret: `T`, or `S` (`T \| Secret<T>`) when the package sets `check.secret-widget-results` (§2.11, decision T474). The generated declarations use it. |
 | `AddonNamespace` | The type of the addon table received through `...` (§2.4.7). |
 
 ### 2.2.10 Type packs
@@ -456,8 +457,10 @@ A test narrows it as it narrows an annotated local (§2.5): after
 
 A table assigned to an unannotated local after its declaration fills in what
 an empty table leaves out: where the value fits the local's type (its declared
-type, or for a local without a value its type so far), each field holding `{}`
-(with no fields and no indexer) takes that type's field type. In
+type, or for a local without a value its type so far) once filled, each field
+holding `{}` (with no fields and no indexer) takes that type's field type,
+also in the records of an array (`cards = { { lines = {} } }` for a
+`{ lines: string[] }[]`). In
 `local p = byKey[key]; if not p then p = { seen = {} } end` with
 `byKey: { [string]: { seen: { [number]: boolean } } }`, `p.seen` is the map,
 not an empty table read as `any`. The value's other fields stay as they are
@@ -475,13 +478,14 @@ A table literal's declared type is the table as declared: `local t = {}` is
 a numeric `a`. While the table is open (§2.4.2) the fields it gains extend its
 narrowed type, not its declared type.
 
-Inside a closure, a local declared with a value that a closure assigns, or
-that is assigned after its declaration, reads as its declared type, as an
-annotated local does (§2.5). A local without a value that a closure assigns,
-or that is captured and assigned later, may hold any value it is given before
-the closure runs: it reads as the union of its narrowed types where functions
-are made in its scope and the values assigned to it after one is made or from
-inside a function (decision L47). A local declared without a value or with
+Inside a closure, an unannotated local that a closure assigns, or that is
+captured and assigned later, may hold any value it is given before the closure
+runs: it reads as the union of its narrowed types where functions are made in
+its scope and the values assigned to it after one is made or from inside a
+function (decision L47), within its declared type when it was declared with a
+value (`local f = self.frame` … `if not f then f = make() end` … `later(function()
+f:Show() end)` reads as the frame, decision L102). An annotated local reads as its
+declared type (§2.5). A local declared without a value or with
 `nil` adds no `nil` for a function made before it is first assigned, so a
 forward declaration (`local f` … `f = function() … end`) reads as the
 function. The union depends on what is read in closures, so a file with such
@@ -738,8 +742,8 @@ fits (a literal stays a literal where the declared type is a literal union; a
 record or interface stays as declared), except a declared `any`. A closure sees
 the narrowing of the locals that are never assigned after their declaration (it
 cannot change), except open tables, which are sealed for closures (§2.4.2);
-other locals are their declared type inside closures (an unannotated one
-without a value, the union of §2.4.1). A local
+other locals are their declared type inside closures (an unannotated one, the
+union of §2.4.1). A local
 narrowed to `nil` that a closure assigns is its declared type again after any
 call, which may run that closure.
 
@@ -1061,7 +1065,7 @@ wowlua models this with the type `Secret<T>`:
 | Errors | Arithmetic, comparison, `#`, indexing, calling, use as a table key, or a boolean test on `Secret<boolean>`: error E2040 in strict mode and warning W2040 in basic mode and in pure Lua files |
 | Narrowing | `issecretvalue(v)` is declared as the predicate `v is Secret<unknown>`, and the global `canaccessvalue(v)` narrows as its complement (declared returning `boolean`; a local of that name does not narrow). The false branch of `issecretvalue` and the true branch of `canaccessvalue` remove all `Secret<…>` members (§2.2.8); the true branch of `issecretvalue` and the false branch of `canaccessvalue` keep only them. |
 | Widget setters | Declared to accept `T \| Secret<T>` where Blizzard documents secret support, so values can be displayed without being read |
-| Widget getters | Declared to return `T \| Secret<T>` where Blizzard documents their results as possibly secret (`SecretReturns`, or `SecretReturnsForAspect`: a widget's aspect a setter was given a secret for reads back secret, `FontString:GetText()` after a secret `SetText`, `StatusBar:GetValue()` after a secret `SetValue`), in every flavor's declarations of the widget classes |
+| Widget getters | Where Blizzard documents their results as possibly secret (`SecretReturns`, or `SecretReturnsForAspect`: a widget's aspect a setter was given a secret for reads back secret, `FontString:GetText()` after a secret `SetText`), declared to return `AspectSecret<T, T \| Secret<T>>`: `T`, or `T \| Secret<T>` with the manifest's `check.secret-widget-results` (§9.8). (`StatusBar:GetValue()` after a secret `SetValue` among them). The checker can't follow which widget got a secret; the emulated client returns one where the game does (decision T474) |
 | Assignability | `Secret<T>` is not assignable to `T`. `T` is assignable to `T \| Secret<T>`. |
 | Erasure | Purely static. No runtime cost. |
 

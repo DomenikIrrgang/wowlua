@@ -1045,6 +1045,10 @@
           "additionalProperties": {
             "$ref": "#/$defs/LintSetting"
           }
+        },
+        "secret-widget-results": {
+          "description": "Widget results Blizzard documents as possibly secret are typed\n`T | Secret<T>` (decision T474); off, they are `T`.",
+          "type": "boolean"
         }
       },
       "additionalProperties": false

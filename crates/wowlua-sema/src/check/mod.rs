@@ -110,6 +110,8 @@ pub struct Extras<'a> {
     /// A completion check: the word typed at the cursor, where a source
     /// has `complete::PLACEHOLDER` (`CheckOutput::completions`).
     pub complete: Option<&'a str>,
+    /// `check.secret-widget-results` (decision T474).
+    pub secret_widget_results: bool,
 }
 
 /// Like [`check_package`], with the type information lowering uses. With
@@ -218,7 +220,12 @@ pub fn check_package_full(
             globals: Default::default(),
         });
     }
-    let mut env = env::Env::build_for(&sources, indexed, extras.complete);
+    let mut env = env::Env::build_for(
+        &sources,
+        indexed,
+        extras.complete,
+        extras.secret_widget_results,
+    );
     let mut diagnostics = std::mem::take(&mut env.diagnostics);
     let registry = files
         .iter()
@@ -3602,6 +3609,20 @@ print(a, b, c, d, e, name, realm, more)
         ok("local x\nx = 1\nx = \"s\"\nprint(x:upper())\n");
         err("local x\nx = \"s\"\nx = 1\nprint(x:upper())\n", "E2003");
         err("local x = 1\nx = \"s\"\nprint(x)\n", "E2001");
+        // A closure made after it was set sees the value it holds there,
+        // and what is assigned later.
+        strict_ok(
+            "local store: { s?: string } = {}\nlocal function later(fn: () -> ()) fn() end\nlocal s = store.s\nif not s then\n s = \"x\"\nend\nlater(function() print(s:upper()) end)\n",
+        );
+        strict_err(
+            "local store: { s?: string } = {}\nlocal function later(fn: () -> ()) fn() end\nlocal s = store.s\nif not s then\n s = \"x\"\nend\nlater(function() print(s:upper()) end)\ns = nil\n",
+            "E2005",
+        );
+        // A value assigned to it is checked against that type as against
+        // an annotation: its empty tables take the element types.
+        strict_ok(
+            "type S = { title: string, lines: string[] }\nlocal function make(): S[] return {} end\nlocal b = make()\nb = { { title = \"x\", lines = {} } }\nprint(b)\n",
+        );
         // A local keeps a declared union of literals (a call's result);
         // fresh literals still widen, and the local takes other strings.
         ok(

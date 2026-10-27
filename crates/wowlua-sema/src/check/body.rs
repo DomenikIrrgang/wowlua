@@ -58,6 +58,14 @@ impl Var {
     pub fn is_union(&self) -> bool {
         self.declared.is_none() && self.fixed.is_none()
     }
+
+    /// Unannotated, with or without a value that fixed its type: closures
+    /// that read it after it was assigned again see what it held where
+    /// they were made and what was assigned later (spec §2.4.1), within
+    /// the fixed type.
+    pub fn closures_follow(&self) -> bool {
+        self.declared.is_none() && self.reassigned_in_closure
+    }
 }
 
 /// The function being checked.
@@ -808,17 +816,21 @@ impl<'e, 'p> Checker<'e, 'p> {
     /// first pass what was assigned so far (spec §2.4.1).
     pub fn var_type_in(&self, v: VarId, flow: &Flow) -> TypeId {
         let var = &self.vars[v.0 as usize];
-        if var.depth < self.depth && var.is_union() && var.reassigned_in_closure {
+        if var.depth < self.depth && var.closures_follow() {
             // What this function assigned or narrowed it to (a function
             // starts without the outer narrowing of these).
             if let Some(&t) = flow.get(&v) {
                 return t;
             }
             self.closure_hit.set(true);
-            return var
+            let seen = var
                 .decl
                 .and_then(|d| self.closure_seeds.get(&d).copied())
                 .unwrap_or(var.assigned);
+            return match var.fixed {
+                Some(fixed) if seen == Types::NEVER => fixed,
+                _ => seen,
+            };
         }
         flow.get(&v).copied().unwrap_or(var.base)
     }
@@ -832,10 +844,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             .stacks
             .iter()
             .filter_map(|s| s.last().copied())
-            .filter(|v| {
-                let var = &self.vars[v.0 as usize];
-                var.is_union() && var.reassigned_in_closure
-            })
+            .filter(|v| self.vars[v.0 as usize].closures_follow())
             .collect();
         for v in visible {
             // Where it is declared, a call may have dropped its narrowing to
@@ -871,8 +880,7 @@ impl<'e, 'p> Checker<'e, 'p> {
     pub(crate) fn closure_finals(&mut self) -> FxHashMap<u32, TypeId> {
         let mut out: FxHashMap<u32, TypeId> = FxHashMap::default();
         for var in &self.vars {
-            let (Some(d), true, true) = (var.decl, var.is_union(), var.reassigned_in_closure)
-            else {
+            let (Some(d), true) = (var.decl, var.closures_follow()) else {
                 continue;
             };
             let t = match out.get(&d) {
@@ -918,6 +926,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             }
             None if var.fixed.is_some() => {
                 let fixed = var.fixed.expect("fixed");
+                let value = self.fill_empty_fields(value, fixed);
                 if !self.env.assignable(value, fixed, self.mode) {
                     self.mismatch(span, value, fixed);
                     let help = format!(
@@ -935,8 +944,6 @@ impl<'e, 'p> Checker<'e, 'p> {
                 }
                 // Narrowed to the value, its empty fields filled in and its
                 // literals widened (L59, L61), within the declared type.
-                // Closures see the declared type, so nothing is collected
-                // for them.
                 let value = self.fill_empty_fields(value, var.base);
                 let widened = self.widen_assigned(value, var.base);
                 let narrowed = if self.env.assignable(widened, fixed, self.mode) {
@@ -945,6 +952,11 @@ impl<'e, 'p> Checker<'e, 'p> {
                     self.narrow_to_assigned(fixed, value)
                 };
                 self.flow.insert(v, narrowed);
+                // Closures made before see this value too.
+                if var.captured && var.reassigned_in_closure {
+                    let assigned = self.env.types.union(&[var.assigned, narrowed]);
+                    self.set_base(v, var.base, assigned);
+                }
             }
             None => {
                 let value = self.fill_empty_fields(value, var.base);
@@ -1113,19 +1125,43 @@ impl<'e, 'p> Checker<'e, 'p> {
     /// A table assigned to a local without an annotation: where it fits the
     /// local's type so far, its empty `{}` fields take that type's field
     /// types (`p = { seen = {} }` for a `{ seen: { [number]: boolean } }`),
-    /// decision L59. Its other fields stay as they are.
+    /// decision L59, also in the records of an array (`cards = { { lines =
+    /// {} } }` for a `{ lines: string[] }[]`). Its other fields stay as
+    /// they are.
     fn fill_empty_fields(&mut self, value: TypeId, base: TypeId) -> TypeId {
-        if !matches!(self.env.types.get(value), Ty::Record(_)) {
+        if !matches!(self.env.types.get(value), Ty::Record(_) | Ty::Array(_)) {
             return value;
         }
         let target = self.env.types.non_nil(base);
-        if target == Types::ANY
-            || target == Types::NEVER
-            || !self.env.assignable(value, target, self.mode)
-        {
+        if target == Types::ANY || target == Types::NEVER {
             return value;
         }
-        self.fill_fields(value, target, 0)
+        let filled = self.fill_toward(value, target, 0);
+        if self.env.assignable(filled, target, self.mode) {
+            filled
+        } else {
+            value
+        }
+    }
+
+    /// `value` with its empty `{}` fields taking `target`'s field types,
+    /// through records and arrays.
+    fn fill_toward(&mut self, value: TypeId, target: TypeId, depth: u32) -> TypeId {
+        match (
+            self.env.types.get(value).clone(),
+            self.env.types.get(target).clone(),
+        ) {
+            (Ty::Record(_), _) => self.fill_fields(value, target, depth),
+            (Ty::Array(element), Ty::Array(want)) if depth < 8 => {
+                let filled = self.fill_toward(element, want, depth + 1);
+                if filled == element {
+                    value
+                } else {
+                    self.env.types.array(filled)
+                }
+            }
+            _ => value,
+        }
     }
 
     fn fill_fields(&mut self, value: TypeId, target: TypeId, depth: u32) -> TypeId {
@@ -1141,10 +1177,12 @@ impl<'e, 'p> Checker<'e, 'p> {
             let ft = self.env.types.non_nil(ft);
             let filled = match self.env.types.get(f.ty) {
                 Ty::Record(inner) if inner.fields.is_empty() && inner.indexer.is_none() => {
-                    (ft != Types::ANY && self.env.assignable(f.ty, ft, self.mode)).then_some(ft)
+                    let table = matches!(self.env.types.get(ft), Ty::Array(_) | Ty::Map(..));
+                    (ft != Types::ANY && (table || self.env.assignable(f.ty, ft, self.mode)))
+                        .then_some(ft)
                 }
-                Ty::Record(_) if depth < 8 => {
-                    let t = self.fill_fields(f.ty, ft, depth + 1);
+                Ty::Record(_) | Ty::Array(_) if depth < 8 => {
+                    let t = self.fill_toward(f.ty, ft, depth + 1);
                     (t != f.ty).then_some(t)
                 }
                 _ => None,

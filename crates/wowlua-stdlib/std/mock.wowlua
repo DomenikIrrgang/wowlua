@@ -1651,8 +1651,9 @@ export function tooltipLines(tip: GameTooltip?, right: boolean?): string[]
 end
 
 --- The text a font string, button or edit box shows: `""` when it has
---- none (a fresh font string's `GetText()` is nil); a secret one as it is.
-export function textOf(region: FontString | Button | EditBox | nil): string | Secret<string>
+--- none (a fresh font string's `GetText()` is nil); a secret one as it is
+--- (typed so with `check.secret-widget-results`).
+export function textOf(region: FontString | Button | EditBox | nil): AspectSecret<string, string | Secret<string>>
     if region == nil then
         error("mock.textOf: no region (nil)", 2)
     end
@@ -1790,11 +1791,18 @@ export function module<M>(target: M, replacement: table)
     end
 end
 
+-- What marks a `mock.partial` fake for the runtime checks
+-- (`__wl.check.partial`).
+const PARTIAL = { __wowluaPartial = true }
+
 --- A fake of a record the game gives, with only the fields a test needs,
 --- typed as where it goes (`local info: BNetAccountInfo = mock.partial({
 --- bnetAccountID = 1 })`), so a stub can return it. The fields are not
---- checked against the type.
+--- checked against the type, also not by runtime checks.
 export function partial<T>(fields: { [string]: unknown }): T
+    if getmetatable(fields) == nil then
+        setmetatable(fields, PARTIAL)
+    end
     return fields :: unknown :: T
 end
 

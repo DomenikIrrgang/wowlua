@@ -4,9 +4,21 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### New
+
+- `"check": { "secret-widget-results": true }` types every widget getter Blizzard documents as possibly secret (`GetText`, `GetWidth`, `IsShown`, `GetPoint`, …) as `T | Secret<T>`, as 0.13.0 did for everyone.
+
+### Changed
+
+- Widget getters are typed plainly again (`GetWidth()` is a `number`): in 0.13.0 every one Blizzard documents as possibly secret was `T | Secret<T>`, which turned whole addons red although only widgets a setter gave a secret return one. `wowlua test` still returns secrets where the game does.
+
 ### Fixed
 
 - The install scripts find the latest release without GitHub's API, which refuses requests without a token after 60 an hour (`curl: (56) … error: 403`, then a download of `wowlua--<target>`). Without a version found they stop and ask for `WOWLUA_VERSION`.
+- `mock.partial` fakes pass runtime checks: a library's tests no longer fail with `bad argument … expected, got table` when a fake reaches one of its exported functions.
+- `wowlua fmt` reports `Finished 11 of 12 files changed` instead of `11 of 12 12 files changed`.
+- A closure sees what a local holds where the closure is made again: after `local f = self.frame` and `if not f then f = make() end`, `f:Show()` in a callback is no longer E2005.
+- Empty tables in a value assigned to a local take the local's element types: `cards = { { title = "…", lines = {} } }` for a `{ title: string, lines: string[] }[]` is no longer E2001.
 
 ## 0.13.0 (2026-10-27)
 

@@ -636,6 +636,7 @@ const BUILTIN: &[&str] = &[
     "false",
     "Self",
     "Secret",
+    "AspectSecret",
     "ClassOf",
     "EventName",
     "MessageName",
