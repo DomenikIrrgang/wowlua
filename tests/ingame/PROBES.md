@@ -72,6 +72,18 @@ engine cannot get otherwise.
    `GetRaidRosterInfo(i)` at once and after `GROUP_ROSTER_UPDATE` (with
    `GetTime()` at each). Why: SuuUI's probe saw the update 0.4-0.7 s
    later; the engine moves them and fires it at once.
+12. **The game's settings while the UI runs** (decision T482: the
+    events' order, whether a window size that changes UIParent's scale
+    tells both, the CVars). In windowed mode, out of combat:
+    1. `/run W={} F=CreateFrame("Frame") for _,e in ipairs({"UI_SCALE_CHANGED","DISPLAY_SIZE_CHANGED","CVAR_UPDATE"}) do F:RegisterEvent(e) end F:SetScript("OnEvent",function(_,e,a,b) W[#W+1]=e..(a and (":"..tostring(a)..":"..tostring(b)) or "") end)`
+    2. Esc → Options → Graphics: tick "Use UI Scale", Apply.
+    3. `/run print(table.concat(W," | ")) print(UIParent:GetScale(), GetCVar("useUiScale"), GetCVar("uiScale")) W={}`
+    4. Move the UI Scale slider to its middle, Apply.
+    5. `/run print(table.concat(W," | ")) print(UIParent:GetScale(), GetCVar("uiScale")) W={}`
+    6. Pick another Window Size, Apply.
+    7. `/run print(table.concat(W," | ")) local s=C_VideoOptions.GetCurrentGameWindowSize(0,false) print(s.x, s.y, GetCVar("gxWindowedResolution"), UIParent:GetScale(), GetScreenWidth(), GetScreenHeight()) W={}`
+    8. `/run C_VideoOptions.SetGameWindowSize(1000, 700)`, then step 7 again (a size the monitor does not list).
+    9. Untick "Use UI Scale", set the Window Size back, Apply.
 
 - **`GetBindingText(key, 1)` with modifiers** (the action bars' hotkeys):
   `SHIFT-1`, `CTRL-ALT-2`, `META-E`, `SHIFT-MOUSEWHEELUP`, `SHIFT-NUMPAD1`.

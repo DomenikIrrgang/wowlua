@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,111 of the 5,111 documented camelot functions have
-  behaviour (100.0%): 1,055 modelled, 356 answered from recordings, 3,700 by a
+  behaviour (100.0%): 1,057 modelled, 355 answered from recordings, 3,699 by a
   documentation-based fill-in. Of all 7,175 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
@@ -28,17 +28,17 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,147 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,150 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| standard | 4,871 | 4,505 (92.5%) | 0 | 1,438 | 1,430 (99.4%) | none |
-| camelot | 5,111 | 5,111 (100.0%) | 356 | 1,477 | 1,477 (100.0%) | all |
-| mists | 3,221 | 2,887 (89.6%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| cata | 1,927 | 1,668 (86.6%) | 0 | 1,008 | 995 (98.7%) | none |
-| wrath | 3,227 | 2,894 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| tbc | 3,220 | 2,890 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| vanilla | 3,220 | 2,890 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| standard | 4,871 | 4,506 (92.5%) | 0 | 1,438 | 1,430 (99.4%) | none |
+| camelot | 5,111 | 5,111 (100.0%) | 355 | 1,477 | 1,477 (100.0%) | all |
+| mists | 3,221 | 2,888 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| cata | 1,927 | 1,669 (86.6%) | 0 | 1,008 | 995 (98.7%) | none |
+| wrath | 3,227 | 2,895 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| tbc | 3,220 | 2,891 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| vanilla | 3,220 | 2,891 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
 
 ## API behaviour
 
@@ -326,7 +326,7 @@ ones together):
 | `C_UIWidgetManager` | 42 | 0 | 6 | 36 | 0 |
 | `C_UnitAuras` | 39 | 9 | 1 | 29 | 0 |
 | `C_UserFeedback` | 2 | 0 | 0 | 2 | 0 |
-| `C_VideoOptions` | 11 | 0 | 10 | 1 | 0 |
+| `C_VideoOptions` | 11 | 2 | 9 | 0 | 0 |
 | `C_VignetteInfo` | 6 | 1 | 0 | 5 | 0 |
 | `C_VoiceChat` | 82 | 1 | 9 | 72 | 0 |
 | `C_WarbandScene` | 7 | 0 | 0 | 7 | 0 |
@@ -348,13 +348,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,175 | 1,646 | 439 | 5,090 | 0 |
+| **All** | 7,175 | 1,648 | 438 | 5,089 | 0 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,111 | 1,055 | 356 | 3,700 | 0 |
+| Blizzard's API documentation | 5,111 | 1,057 | 355 | 3,699 | 0 |
 | the client's other C functions (`/stdtest inventory`) | 2,064 | 591 | 83 | 1,390 | 0 |
 | the engine's own, in neither list | 15 | 14 | 0 | 1 | 0 |
 
@@ -377,9 +377,9 @@ The modules that answer, by how many functions and methods:
 | `leftovers2` | fill-in | 388 |
 | `collections` | fill-in | 377 |
 | `social` | fill-in | 373 |
-| `recorded` | recorded | 322 |
+| `recorded` | recorded | 321 |
 | `questinfo` | fill-in | 316 |
-| `systeminfo` | fill-in | 309 |
+| `systeminfo` | fill-in | 308 |
 | `iteminfo` | fill-in | 228 |
 | `methods3` | fill-in | 215 |
 | `vm` | model | 198 |
@@ -398,7 +398,7 @@ The modules that answer, by how many functions and methods:
 | `facts` | recorded | 70 |
 | `formatters` | model | 62 |
 | `queries` | model | 62 |
-| `facts` | model | 56 |
+| `facts` | model | 58 |
 | `auction` | model | 52 |
 | `protection` | model | 51 |
 | `traits` | recorded | 47 |
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,147 rules unverified: each rests on Blizzard's
+The engine's code marks 1,150 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1258,7 +1258,7 @@ page changes only when a rule is added, removed or reworded.
 - [extras.rs](../crates/wowlua-engine/src/extras.rs): `C_EncounterTimeline.GetCurrentTime()`: the client's clock, as `GetTime` (the full probe: 206454.927 within the run's...
 - [extras.rs](../crates/wowlua-engine/src/extras.rs): Artifact power a trait's ranks cost, from rank 0, whatever the tier (the full probe: rank 0 100, rank 1 300, tiers 0...
 
-### facts (13)
+### facts (14)
 
 - [facts.rs](../crates/wowlua-engine/src/facts.rs): Unverified: the neutral answers' exact shape (`GetRestState` when not rested, `GetInstanceInfo` outside any map, `Get...
 - [facts.rs](../crates/wowlua-engine/src/facts.rs): The free slots of the backpack and the four bags (the full probe, 1.60.1: 2, the backpack's two, its other bag full;...
@@ -1267,6 +1267,7 @@ page changes only when a rule is added, removed or reworded.
 - [facts.rs](../crates/wowlua-engine/src/facts.rs): `SetPortraitTexture(texture, unit [, disableMasking])`, `C_NamePlate.SetNamePlateSize(width, height)`: what the clien...
 - [facts.rs](../crates/wowlua-engine/src/facts.rs): `SetPortraitTexture(texture, unit [, disableMasking])`: the client draws the unit's head into the texture (a 3D rende...
 - [facts.rs](../crates/wowlua-engine/src/facts.rs): An enumeration's value: a non-number reads as 0, `None`, which is the type while no interaction is open (the full pro...
+- [facts.rs](../crates/wowlua-engine/src/facts.rs): `C_VideoOptions.SetGameWindowSize(x, y)`: the window takes that size, as the Graphics settings' window size does (dec...
 - [facts.rs](../crates/wowlua-engine/src/facts.rs): What `GetSpecializationRole(specIndex [, isInspect, isPet])` asks about: nothing for an index past the class's specia...
 - [facts.rs](../crates/wowlua-engine/src/facts.rs): `GetSpecializationRole(specIndex [, isInspect, isPet])`: the role `C_SpecializationInfo.GetSpecializationInfo(specInd...
 - [facts.rs](../crates/wowlua-engine/src/facts.rs): `C_ColorOverrides.GetColorForQuality(quality)`: a `ColorMixin` color (camelot's; an unknown quality gives nothing, un...
@@ -1292,13 +1293,14 @@ page changes only when a rule is added, removed or reworded.
 - [formatters.rs](../crates/wowlua-engine/src/formatters.rs): Hyperlinks stripped to their text: `|H…|h` and `|h` removed, the brackets of a link's text too unless kept (unverifie...
 - [formatters.rs](../crates/wowlua-engine/src/formatters.rs): `StripTextureMarkupForLooseFiles(text)`: textures by a file path removed, those by a file ID kept (unverified: what "...
 
-### framescript (8)
+### framescript (9)
 
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): Unverified (the documentation's signatures, behaviour inferred from Blizzard's callers): event callbacks run after th...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): The global's action name is unverified.
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `SetCVar(name, value)`: a secure CVar is refused to addons in combat (`ADDON_ACTION_FORBIDDEN`, recorded for `SoftTar...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): No value sets "0" (the full probe, 1.60.1: ten switches read "0" after `SetCVar(name)`; unverified: a CVar whose rang...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): The camera's zoom factor keeps a value below 1 or no number, the set answered as done (the full probe, 1.60.1: "0", "...
+- [framescript.rs](../crates/wowlua-engine/src/framescript.rs): The UI scale's CVars scale UIParent (decision T482; unverified: whether `CVAR_UPDATE` comes before `UI_SCALE_CHANGED`).
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `C_AddOns.LoadAddOn(name)`: a Blizzard addon of the loaded UI code loads (true); without it, or for another addon, (f...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `C_LFGList.GetPremadeGroupFinderStyle()`: camelot's group finder is the vanilla style (the client loads Blizzard_Grou...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `C_LFGInfo.IsGroupFinderEnabled()`: on camelot, yes (the client loads its group finder at login, `/stdtest engine`);...
@@ -1640,8 +1642,9 @@ page changes only when a rule is added, removed or reworded.
 - [lfg.rs](../crates/wowlua-engine/src/lfg.rs): `C_LFGList.GetSearchResultMemberCounts(searchResultID)`: the members by role (`NOROLE` without one) and by class, eac...
 - [lfg.rs](../crates/wowlua-engine/src/lfg.rs): A member as `LfgSearchResultPlayerInfo` (documented; no spec on Forever, unverified).
 
-### lib (8)
+### lib (9)
 
+- [lib.rs](../crates/wowlua-engine/src/lib.rs): The screen changed while the client runs, as the game's settings change it (decision T482: the window's size, `C_Vide...
 - [lib.rs](../crates/wowlua-engine/src/lib.rs): Functions with behaviour the documentation lacks (`IsInGroup`): the client has them (camelot's inventory; other flavo...
 - [lib.rs](../crates/wowlua-engine/src/lib.rs): The client's project ID, and the project constants (WoW Forever has these, `/stdtest engine`; other flavors unverified).
 - [lib.rs](../crates/wowlua-engine/src/lib.rs): A function's documented results as empty values: nil where nilable, false, 0, "", an empty table, none of a list (unv...

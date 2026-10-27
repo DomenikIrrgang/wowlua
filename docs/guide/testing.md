@@ -367,6 +367,10 @@ local function invites()
 end
 ```
 
+A profile can also set the screen: `"screen": { "width": 2560, "height":
+1440, "uiScale": 0.8 }` draws at 2560 by 1440 with "Use UI Scale" at 80%,
+over `test.screen` in `wowlua.json`.
+
 The profile is applied before your addon loads, so the addon finds the
 target already there, as after a login. A unit with `"player": true` is
 another player, online and accepting your invitations: an invite brings them
