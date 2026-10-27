@@ -2202,7 +2202,7 @@ fn context_sort_key(vm: &mut Vm, _id: WidgetId, c: NativeCall) -> Ret {
 const HEAL_CALCULATOR: &str = "UnitHealPredictionCalculator";
 
 /// `UnitHealPredictionValues`' fields, and where the calculator keeps
-/// each: health and maximum where `healcalc` reads them.
+/// each, where `healcalc` reads them.
 const PREDICTED: [(&str, &str); 6] = [
     ("health", "\u{0}health"),
     ("healthMax", "\u{0}healthMax"),
@@ -2246,8 +2246,7 @@ fn clear_prop(vm: &mut Vm, id: WidgetId, key: &str) {
 
 /// `GetPredictedValues()`: "the raw total figures used for data
 /// calculations" (the documentation): what the unit or `SetPredictedValues`
-/// set, 0 for the rest (the engine's units have no incoming heals or
-/// absorbs), secret as the calculator's amounts are.
+/// set, 0 for the rest, secret as the calculator's amounts are.
 fn get_predicted_values(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let secret = heal_filled(vm, id);
     let t = vm.new_table();
@@ -2262,8 +2261,7 @@ fn get_predicted_values(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// `SetPredictedValues(predictedValues)`: "sets the healing values used for
 /// all calculations" (missing fields 0, their documented default); a
 /// secret among them makes the calculator's values secret (unverified).
-/// `healcalc`'s health getters read the health and maximum set here; its
-/// incoming heal and absorb getters stay 0 (the engine models none).
+/// `healcalc`'s getters work out their amounts from the values set here.
 fn set_predicted_values(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let Value::Table(t) = vm.hidden(c.arg(2)) else {
         return Err(vm.error("Usage: self:SetPredictedValues(predictedValues)"));

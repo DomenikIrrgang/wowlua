@@ -170,6 +170,8 @@ The controls you reach for most:
 
 - Units: `mock.spawnUnit`, `unit:damage`, `unit:heal`, `unit:kill`,
   `unit:applyAura`, `unit:castSpell`, `mock.group:add`
+- Shields and heal prediction: `unit:setAbsorb`, `unit:setHealAbsorb`,
+  `unit:setIncomingHeal`; damage uses up a shield before health
 - The character: `mock.setPlayer`, `mock.player:setMoney`,
   `mock.player:equip`, `mock.setBag`, `mock.moveTo`
 - Combat: `mock.player:enterCombat`, `mock.player:leaveCombat`,

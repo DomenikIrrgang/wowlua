@@ -341,6 +341,7 @@ TREASURE_PICKER_CACHE_FLUSH	levels
 UI_ERROR_MESSAGE	casting,controls,inventory,merchant,quests,tradeskill
 UI_INFO_MESSAGE	mail,party,quests
 UI_SCALE_CHANGED	lib,login
+UNIT_ABSORB_AMOUNT_CHANGED	units
 UNIT_AREA_CHANGED	login
 UNIT_ATTACK	levels,login,trainer,units
 UNIT_ATTACK_POWER	inventory,levels,stats
@@ -356,6 +357,8 @@ UNIT_FACTION	death,party
 UNIT_FLAGS	auras,death,login,loot,taxi,units
 UNIT_HAPPINESS	login,pets
 UNIT_HEALTH	death,inventory,levels,login,units
+UNIT_HEAL_ABSORB_AMOUNT_CHANGED	units
+UNIT_HEAL_PREDICTION	units
 UNIT_INVENTORY_CHANGED	auction,character,cursor,inventory,login,loot,mail,merchant,quests,tradeskill
 UNIT_LEVEL	levels,login,units
 UNIT_LOOT	loot,units
