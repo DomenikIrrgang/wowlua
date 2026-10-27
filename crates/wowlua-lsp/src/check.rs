@@ -969,6 +969,32 @@ fn convert(
     if let Some(code) = d.code {
         item["code"] = json!(code);
     }
+    // Its fixes, for the editor's quick fixes (`textDocument/codeAction`
+    // sends the diagnostic back).
+    let fixes: Vec<Json> = d
+        .fixes
+        .iter()
+        .filter_map(|fix| {
+            let edits = fix
+                .edits
+                .iter()
+                .map(|e| {
+                    let file = session.db.get(e.span.file);
+                    let path = absolute(roots, file.path())?;
+                    let r = e.span.range();
+                    Some(json!({
+                        "uri": text::uri_of(&path),
+                        "range": text::range(file.text(), r.start, r.end),
+                        "newText": e.replacement,
+                    }))
+                })
+                .collect::<Option<Vec<Json>>>()?;
+            Some(json!({ "title": fix.message, "edits": edits }))
+        })
+        .collect();
+    if !fixes.is_empty() {
+        item["data"] = json!({ "fixes": fixes });
+    }
     Some((path, item))
 }
 

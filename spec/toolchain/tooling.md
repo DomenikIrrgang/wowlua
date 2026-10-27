@@ -860,7 +860,8 @@ The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a
 open `.wowlua` and `.lua` files, each edit as the range it changed, and the
 `.wowlua`, `.lua`, `.xml`, `.toc`, `wowlua.json` and `wowlua.lock` files
 changed on disk; *Go to Definition* (F12) and Ctrl or Cmd + click use it,
-hovering a name shows its type, its completions list as you type (and
+hovering a name shows its type (a function's overloads one per line,
+decision T479), its completions list as you type (and
 after `.`, `:`, `@` and a quote), and in a call's parentheses its signature
 help shows the parameters; *Find All References* (Shift+F12) and *Rename
 Symbol* (F2, its refusals shown at the cursor) use it too, and its
@@ -880,6 +881,56 @@ itself the formatter of `.wowlua` files. `wowlua.languageServer` (on by
 default) turns it off; *wowlua: Restart Language Server* restarts it; the
 **wowlua Language Server** output shows what it logs. Its client is
 hand-written, as the rest of the extension, so it needs no build step.
+
+### 16.2.9 What the editor draws
+
+Five requests come from a file's syntax and its package's last check
+(decision T478):
+
+- **Semantic tokens** (`textDocument/semanticTokens/full`, the legend
+  `keyword`, `type`, `class`, `function`, `method`, `parameter`,
+  `property`, `decorator`, `enumMember`, `namespace`, no modifiers) give
+  each name what the syntax tree makes it: a declared class, interface or
+  enum `class`, a type in an annotation, a type parameter or alias `type`,
+  the namespaces of a qualified type `namespace`, a declared or called
+  function `function`, a method `method`, a parameter `parameter`, a field
+  (`a.b`, a table constructor's or a member's name) `property`, a
+  decorator's name `decorator`, an enum item `enumMember`. A name the tree
+  uses as none of these is a variable and gets no token. A contextual
+  keyword (§1.2.5) is a `keyword` where the parser read it as one: where
+  the tree has no name at its place.
+- **Folding ranges** (`textDocument/foldingRange`): statements with a body,
+  functions, classes, interfaces, enums, `declare` blocks and table
+  constructors over several lines, each up to the line before its last
+  (the `end` or `}` stays in sight); a block comment or two line comments
+  or more in a row (`comment`); top-level imports in a row (`imports`).
+- **Inlay hints** (`textDocument/inlayHint`, in the range asked for): after
+  the name of a `local` or a `for … in` variable declared without a type,
+  `: T`, the type the last check gave it (from the hovers it records, so in
+  files the editor has open). None for a local whose value is a literal or
+  a function, nor for `any` or a type longer than 60 characters.
+- **Quick fixes** (`textDocument/codeAction`, kind `quickfix`): a
+  diagnostic's machine-applicable fixes (those `wowlua fix` applies) travel
+  in its `data` (`{ "fixes": [{ "title", "edits": [{ "uri", "range",
+  "newText" }] }] }`); the editor sends the diagnostics at the cursor back
+  and gets one action per fix, the first preferred.
+- **Code lenses** (`textDocument/codeLens`): over each function the file
+  declares (`function A.b`, `A:c`, local functions, class methods with a
+  body), how many names refer to it, counted in the last check's
+  definitions of every checked file; its command, `wowlua.showReferences`
+  with the file's URI and the name's position, shows them (the extension's
+  references peek). The lenses for tests and profiling (the table above)
+  are not built yet.
+
+A sixth thing is a notification: `wowlua/checking` tells the editor when
+a check of a package begins (`{ "state": "begin", "manifest": uri,
+"first": true }` for the first pass of an edit, `false` for a full check)
+and ends (`{ "state": "end", "manifest": uri }`, with `"failed": true`
+when it failed); completion checks are not told. Editors show it as a
+background job (wowlua studio's jobs).
+
+The VS Code extension asks for all five; it asks again for hints and
+lenses when a check publishes its diagnostics.
 
 ## 16.3 Formatter (`wowlua fmt`)
 
