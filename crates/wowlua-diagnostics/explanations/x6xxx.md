@@ -10,7 +10,7 @@ level on a preset with `extends` (`strip`, `compact`, `rename`, `max`).
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "minify-levels": { "readable": { "passes": ["strip-comment"] } }
 }
@@ -18,7 +18,7 @@ level on a preset with `extends` (`strip`, `compact`, `rename`, `max`).
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "minify-levels": { "readable": { "passes": ["strip-comments"] } }
 }
@@ -43,7 +43,7 @@ turn bundling on for the dev profile, so that `wowlua check` sees it.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "profiles": { "dev": { "bundle": true } }
 }
@@ -55,7 +55,7 @@ print(file)
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "profiles": { "dev": { "bundle": true } }
 }
@@ -79,7 +79,7 @@ dead-code removal on for the dev profile, so that `wowlua check` sees it.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "profiles": { "dev": { "optimize": { "dead-code": true } } }
 }
@@ -93,7 +93,7 @@ print("hello")
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "profiles": { "dev": { "optimize": { "dead-code": true } } }
 }

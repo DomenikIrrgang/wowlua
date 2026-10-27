@@ -11,7 +11,7 @@ const MAIN: &str = "local function show(value)\n    print(value)\nend\nshow(1)\n
 fn manifest(lints: &str) -> String {
     format!(
         r#"{{
-    "package": {{ "name": "playground", "version": "0.1.0", "wowlua": "^0.12" }},
+    "package": {{ "name": "playground", "version": "0.1.0", "wowlua": "^0.13" }},
     "flavors": {{ "camelot": {{}} }},
     "check": {{ "lints": {{ {lints} }} }}
 }}

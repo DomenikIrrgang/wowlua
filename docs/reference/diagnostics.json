@@ -1344,7 +1344,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"load-order\": [\"src/main.wowlua\", \"src/util.wowlua\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"load-order\": [\"src/main.wowlua\", \"src/util.wowlua\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -1365,7 +1365,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"load-order\": [\"src/util.wowlua\", \"src/main.wowlua\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"load-order\": [\"src/util.wowlua\", \"src/main.wowlua\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -1396,7 +1396,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"load-order\": [\"src/main.lua\", \"src/util.lua\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"load-order\": [\"src/main.lua\", \"src/util.lua\"] }\n}\n"
             },
             {
               "path": "src/main.lua",
@@ -1417,7 +1417,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"load-order\": [\"src/util.lua\", \"src/main.lua\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"load-order\": [\"src/util.lua\", \"src/main.lua\"] }\n}\n"
             },
             {
               "path": "src/main.lua",
@@ -1448,7 +1448,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {}, \"standard\": {} },\n    \"build\": {\n        \"toc-layout\": \"single\",\n        \"flavor-load-order\": {\n            \"camelot\": [\"src/a.lua\", \"src/b.lua\"],\n            \"standard\": [\"src/b.lua\", \"src/a.lua\"]\n        }\n    }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {}, \"standard\": {} },\n    \"build\": {\n        \"toc-layout\": \"single\",\n        \"flavor-load-order\": {\n            \"camelot\": [\"src/a.lua\", \"src/b.lua\"],\n            \"standard\": [\"src/b.lua\", \"src/a.lua\"]\n        }\n    }\n}\n"
             },
             {
               "path": "src/a.lua",
@@ -1469,7 +1469,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {}, \"standard\": {} },\n    \"build\": {\n        \"toc-layout\": \"auto\",\n        \"flavor-load-order\": {\n            \"camelot\": [\"src/a.lua\", \"src/b.lua\"],\n            \"standard\": [\"src/b.lua\", \"src/a.lua\"]\n        }\n    }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {}, \"standard\": {} },\n    \"build\": {\n        \"toc-layout\": \"auto\",\n        \"flavor-load-order\": {\n            \"camelot\": [\"src/a.lua\", \"src/b.lua\"],\n            \"standard\": [\"src/b.lua\", \"src/a.lua\"]\n        }\n    }\n}\n"
             },
             {
               "path": "src/a.lua",
@@ -1583,7 +1583,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"assets\": [\"media/**\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"assets\": [\"media/**\"] }\n}\n"
             },
             {
               "path": "media/icon.tga",
@@ -1613,7 +1613,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {}, \"standard\": {} },\n    \"build\": { \"flavor-mode\": \"shared\" }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {}, \"standard\": {} },\n    \"build\": { \"flavor-mode\": \"shared\" }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -1629,7 +1629,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {}, \"standard\": {} },\n    \"build\": { \"flavor-mode\": \"shared\" }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {}, \"standard\": {} },\n    \"build\": { \"flavor-mode\": \"shared\" }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -2203,7 +2203,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"standard\": {}, \"vanilla\": {} },\n    \"build\": { \"flavor-mode\": \"shared\" }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"standard\": {}, \"vanilla\": {} },\n    \"build\": { \"flavor-mode\": \"shared\" }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -2219,7 +2219,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"standard\": {}, \"vanilla\": {} },\n    \"build\": { \"flavor-mode\": \"shared\" }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"standard\": {}, \"vanilla\": {} },\n    \"build\": { \"flavor-mode\": \"shared\" }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -2724,7 +2724,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"check\": { \"lints\": { \"W2063\": \"warn\" } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"check\": { \"lints\": { \"W2063\": \"warn\" } }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -2740,7 +2740,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"check\": { \"lints\": { \"W2063\": \"warn\" } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"check\": { \"lints\": { \"W2063\": \"warn\" } }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -3585,7 +3585,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\",\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\",\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": "error[E4001]: invalid JSON: trailing comma\n  ┌─ wowlua.json:6:5\n  │\n6 │     },\n  │     ^ here\n  │\n  = note: wowlua.json is strict JSON: no comments and no trailing commas"
@@ -3596,7 +3596,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": null
@@ -3616,7 +3616,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"toc-extra\": { \"Website\": \"https://example.com\" }\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"addon\": {\n        \"toc-extra\": { \"Website\": \"https://example.com\" }\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": "warning[W4001]: unknown TOC directive `Website` in `addon.toc-extra`\n  ┌─ wowlua.json:8:24\n  │\n8 │         \"toc-extra\": { \"Website\": \"https://example.com\" }\n  │                        ^^^^^^^^^ unknown directive\n  │\n  = help: custom metadata fields should start with `X-`"
@@ -3627,7 +3627,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"toc-extra\": { \"X-Website\": \"https://example.com\" }\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"addon\": {\n        \"toc-extra\": { \"X-Website\": \"https://example.com\" }\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": null
@@ -3647,7 +3647,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"titel\": \"Playground\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"addon\": {\n        \"titel\": \"Playground\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": "error[E4002]: unknown key `titel` in `addon`\n  ┌─ wowlua.json:8:9\n  │\n8 │         \"titel\": \"Playground\"\n  │         ^^^^^^^ unknown key\n  │\n  = help: did you mean `title`?"
@@ -3658,7 +3658,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"title\": \"Playground\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"addon\": {\n        \"title\": \"Playground\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": null
@@ -3679,7 +3679,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"Playground\",\n        \"version\": \"0.1\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"Playground\",\n        \"version\": \"0.1\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": "error[E4003]: invalid package name `Playground`\n  ┌─ wowlua.json:3:9\n  │\n3 │         \"name\": \"Playground\",\n  │         ^^^^^^ invalid name\n  │\n  = help: use 2–64 lowercase letters, digits and `-`"
@@ -3690,7 +3690,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": null
@@ -3708,7 +3708,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"classic\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"classic\": {}\n    }\n}\n"
             }
           ],
           "output": "error[E4004]: unknown flavor `classic`\n  ┌─ wowlua.json:8:9\n  │\n8 │         \"classic\": {}\n  │         ^^^^^^^^^ unknown flavor\n  │\n  = note: known flavors: standard, camelot, mists, cata, wrath, tbc, vanilla"
@@ -3719,7 +3719,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"vanilla\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"vanilla\": {}\n    }\n}\n"
             }
           ],
           "output": null
@@ -3742,7 +3742,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"build\": {\n        \"exclude\": [\"notes/**\"]\n    },\n    \"compat\": {\n        \"pkgmeta\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"build\": {\n        \"exclude\": [\"notes/**\"]\n    },\n    \"compat\": {\n        \"pkgmeta\": true\n    }\n}\n"
             }
           ],
           "output": "error[E4005]: `build.exclude` (`ignore`) is set by both `.pkgmeta` and wowlua.json\n = in wowlua.json\n = help: with `compat.pkgmeta`, keep it in `.pkgmeta` and remove it from wowlua.json"
@@ -3758,7 +3758,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"pkgmeta\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"pkgmeta\": true\n    }\n}\n"
             }
           ],
           "output": null
@@ -3778,7 +3778,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"release\": { \"minify\": \"tiny\" }\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"release\": { \"minify\": \"tiny\" }\n    }\n}\n"
             }
           ],
           "output": "error[E4006]: unknown minification level `tiny`\n   ┌─ wowlua.json:11:22\n   │\n11 │         \"release\": { \"minify\": \"tiny\" }\n   │                      ^^^^^^^^ unknown level"
@@ -3789,7 +3789,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"release\": { \"minify\": \"compact\" }\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"release\": { \"minify\": \"compact\" }\n    }\n}\n"
             }
           ],
           "output": null
@@ -3811,7 +3811,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"beta\": { \"inherits\": \"staging\" },\n        \"staging\": { \"inherits\": \"beta\" }\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"beta\": { \"inherits\": \"staging\" },\n        \"staging\": { \"inherits\": \"beta\" }\n    }\n}\n"
             }
           ],
           "output": "error[E4007]: profile inheritance cycle: beta → staging → beta\n   ┌─ wowlua.json:11:19\n   │\n11 │         \"beta\": { \"inherits\": \"staging\" },\n   │                   ^^^^^^^^^^ cycle"
@@ -3822,7 +3822,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"beta\": { \"inherits\": \"staging\" },\n        \"staging\": { \"inherits\": \"release\" }\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"beta\": { \"inherits\": \"staging\" },\n        \"staging\": { \"inherits\": \"release\" }\n    }\n}\n"
             }
           ],
           "output": null
@@ -3843,7 +3843,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"config\": {\n        \"maxHistory\": 50\n    },\n    \"profiles\": {\n        \"dev\": { \"config\": { \"maxHistory\": \"500\" } }\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"config\": {\n        \"maxHistory\": 50\n    },\n    \"profiles\": {\n        \"dev\": { \"config\": { \"maxHistory\": \"500\" } }\n    }\n}\n"
             }
           ],
           "output": "error[E4012]: profile `dev`: config key `maxHistory` is a string but the top-level `config` defines a number\n   ┌─ wowlua.json:14:30\n   │\n14 │         \"dev\": { \"config\": { \"maxHistory\": \"500\" } }\n   │                              ^^^^^^^^^^^^ invalid config key"
@@ -3854,7 +3854,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"config\": {\n        \"maxHistory\": 50\n    },\n    \"profiles\": {\n        \"dev\": { \"config\": { \"maxHistory\": 500 } }\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"config\": {\n        \"maxHistory\": 50\n    },\n    \"profiles\": {\n        \"dev\": { \"config\": { \"maxHistory\": 500 } }\n    }\n}\n"
             }
           ],
           "output": null
@@ -3872,7 +3872,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
             },
             {
               "path": "src/main.lua",
@@ -3888,7 +3888,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
             },
             {
               "path": "src/main.lua",
@@ -3914,7 +3914,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
             },
             {
               "path": "src/main.lua",
@@ -3930,7 +3930,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
             },
             {
               "path": "src/main.lua",
@@ -4005,7 +4005,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"saved-variables\": [\"PlaygroundDB\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"addon\": {\n        \"saved-variables\": [\"PlaygroundDB\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
             },
             {
               "path": "options/wowlua.json",
@@ -4021,7 +4021,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"saved-variables\": [\"PlaygroundDB\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"addon\": {\n        \"saved-variables\": [\"PlaygroundDB\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
             },
             {
               "path": "options/wowlua.json",
@@ -4099,7 +4099,7 @@
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^9.0\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
-          "output": "error[E4300]: this package requires wowlua ^9.0, but this is wowlua 0.12.0\n  ┌─ wowlua.json:5:9\n  │\n5 │         \"wowlua\": \"^9.0\"\n  │         ^^^^^^^^ required compiler version\n  │\n  = help: install a matching wowlua version"
+          "output": "error[E4300]: this package requires wowlua ^9.0, but this is wowlua 0.13.0\n  ┌─ wowlua.json:5:9\n  │\n5 │         \"wowlua\": \"^9.0\"\n  │         ^^^^^^^^ required compiler version\n  │\n  = help: install a matching wowlua version"
         },
         {
           "compiles": true,
@@ -4107,7 +4107,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": null
@@ -4127,7 +4127,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"standard\": {},\n        \"camelot\": {}\n    },\n    \"addon-dependencies\": {\n        \"optional\": [{ \"name\": \"Details\", \"flavors\": [\"camelot\"] }]\n    },\n    \"build\": {\n        \"toc-layout\": \"single\"\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"standard\": {},\n        \"camelot\": {}\n    },\n    \"addon-dependencies\": {\n        \"optional\": [{ \"name\": \"Details\", \"flavors\": [\"camelot\"] }]\n    },\n    \"build\": {\n        \"toc-layout\": \"single\"\n    }\n}\n"
             }
           ],
           "output": "error[E4301]: `build.toc-layout` is `single`, but the client retail-beta 12.0.1 does not support inline load directives on `##` lines\n = in wowlua.json\n = help: use `\"toc-layout\": \"auto\"` or drop the flavor"
@@ -4138,7 +4138,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"standard\": {},\n        \"camelot\": {}\n    },\n    \"addon-dependencies\": {\n        \"optional\": [{ \"name\": \"Details\", \"flavors\": [\"camelot\"] }]\n    },\n    \"build\": {\n        \"toc-layout\": \"auto\"\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"standard\": {},\n        \"camelot\": {}\n    },\n    \"addon-dependencies\": {\n        \"optional\": [{ \"name\": \"Details\", \"flavors\": [\"camelot\"] }]\n    },\n    \"build\": {\n        \"toc-layout\": \"auto\"\n    }\n}\n"
             }
           ],
           "output": null
@@ -4173,7 +4173,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    }\n}\n"
             },
             {
               "path": "src/a.wowlua",
@@ -4194,7 +4194,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"build\": {\n        \"toc-layout\": \"per-flavor\"\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"build\": {\n        \"toc-layout\": \"per-flavor\"\n    }\n}\n"
             },
             {
               "path": "src/a.wowlua",
@@ -4330,7 +4330,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"build\": {\n        \"assets\": [\"LICENSES.txt\"]\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"build\": {\n        \"assets\": [\"LICENSES.txt\"]\n    }\n}\n"
             },
             {
               "path": "LICENSES.txt",
@@ -4346,7 +4346,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"build\": {\n        \"assets\": [\"LICENSE.txt\"]\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"build\": {\n        \"assets\": [\"LICENSE.txt\"]\n    }\n}\n"
             },
             {
               "path": "LICENSE.txt",
@@ -4371,7 +4371,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"load-on-demand\": false\n    },\n    \"addon-dependencies\": {\n        \"load-with\": [\"Blizzard_Collections\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"addon\": {\n        \"load-on-demand\": false\n    },\n    \"addon-dependencies\": {\n        \"load-with\": [\"Blizzard_Collections\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": "error[E4312]: `addon.load-on-demand` is false, but `addon-dependencies.load-with` makes the addon load on demand\n   ┌─ wowlua.json:8:9\n   │\n 8 │         \"load-on-demand\": false\n   │         ^^^^^^^^^^^^^^^^ set to false here\n   ·\n11 │         \"load-with\": [\"Blizzard_Collections\"]\n   │         ----------- implies load on demand"
@@ -4382,7 +4382,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon-dependencies\": {\n        \"load-with\": [\"Blizzard_Collections\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"addon-dependencies\": {\n        \"load-with\": [\"Blizzard_Collections\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": null
@@ -4408,7 +4408,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"features\": {\n        \"default\": [\"minimap\"],\n        \"minimap\": [\"icons\"]\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"features\": {\n        \"default\": [\"minimap\"],\n        \"minimap\": [\"icons\"]\n    }\n}\n"
             }
           ],
           "output": "error[E4314]: feature `minimap` refers to unknown feature `icons`\n   ┌─ wowlua.json:12:21\n   │\n12 │         \"minimap\": [\"icons\"]\n   │                     ^^^^^^^ unknown feature"
@@ -4419,7 +4419,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"features\": {\n        \"default\": [\"minimap\"],\n        \"minimap\": [\"icons\"],\n        \"icons\": []\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"features\": {\n        \"default\": [\"minimap\"],\n        \"minimap\": [\"icons\"],\n        \"icons\": []\n    }\n}\n"
             }
           ],
           "output": null
@@ -4437,7 +4437,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"beta\": { \"log-level\": \"info\" }\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"beta\": { \"log-level\": \"info\" }\n    }\n}\n"
             }
           ],
           "output": "error[E4315]: custom profile `beta` must name the profile it builds on\n   ┌─ wowlua.json:11:9\n   │\n11 │         \"beta\": { \"log-level\": \"info\" }\n   │         ^^^^^^ missing `inherits`\n   │\n   = help: add `\"inherits\": \"dev\"` or `\"inherits\": \"release\"`"
@@ -4448,7 +4448,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"beta\": { \"inherits\": \"release\", \"log-level\": \"info\" }\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"profiles\": {\n        \"beta\": { \"inherits\": \"release\", \"log-level\": \"info\" }\n    }\n}\n"
             }
           ],
           "output": null
@@ -4469,7 +4469,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
             },
             {
               "path": "options/wowlua.json",
@@ -4485,7 +4485,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"build\": {\n        \"out\": \"build\"\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"build\": {\n        \"out\": \"build\"\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
             },
             {
               "path": "options/wowlua.json",
@@ -4508,7 +4508,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"kind\": \"library\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon\": {\n        \"title\": \"Playground\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"kind\": \"library\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"addon\": {\n        \"title\": \"Playground\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": "error[E4317]: the `addon` section is only valid for packages of kind `addon`\n  ┌─ wowlua.json:8:5\n  │\n8 │     \"addon\": {\n  │     ^^^^^^^ not allowed here"
@@ -4519,7 +4519,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"kind\": \"library\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"kind\": \"library\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
           "output": null
@@ -4537,7 +4537,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": { \"interface\": [] }\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": { \"interface\": [] }\n    }\n}\n"
             }
           ],
           "output": "error[E4318]: flavor `camelot` has no interface number\n = in wowlua.json"
@@ -4548,7 +4548,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": { \"interface\": [16001] }\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": { \"interface\": [16001] }\n    }\n}\n"
             }
           ],
           "output": null
@@ -4602,7 +4602,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon-dependencies\": {\n        \"required\": [\"PlaygroundOptions\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"addon-dependencies\": {\n        \"required\": [\"PlaygroundOptions\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
             },
             {
               "path": "options/wowlua.json",
@@ -4618,7 +4618,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"addon-dependencies\": {\n        \"optional\": [\"PlaygroundOptions\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"addon-dependencies\": {\n        \"optional\": [\"PlaygroundOptions\"]\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
             },
             {
               "path": "options/wowlua.json",
@@ -4641,7 +4641,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
             },
             {
               "path": "options/wowlua.json",
@@ -4657,7 +4657,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"workspace\": {\n        \"members\": [\"options\"],\n        \"default-members\": [\".\"]\n    }\n}\n"
             },
             {
               "path": "options/wowlua.json",
@@ -4742,7 +4742,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"pkgmeta\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"pkgmeta\": true\n    }\n}\n"
             }
           ],
           "output": "warning[W4333]: external `libs/LibOld` is a Mercurial repository (`https://repos.wowace.com/wow/libold`), which wowlua cannot fetch; not converted\n = help: replace it with a git mirror or a release archive"
@@ -4758,7 +4758,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"pkgmeta\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"pkgmeta\": true\n    }\n}\n"
             }
           ],
           "output": null
@@ -4813,7 +4813,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
             },
             {
               "path": "src/main.lua",
@@ -4829,7 +4829,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
             },
             {
               "path": "src/main.lua",
@@ -4925,7 +4925,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"test\": {\n        \"profile\": \"rich\"\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"test\": {\n        \"profile\": \"rich\"\n    }\n}\n"
             }
           ],
           "output": "error[E4402]: no world profile `rich` (`tests/profiles/rich.json`)\n   ┌─ wowlua.json:11:20\n   │\n11 │         \"profile\": \"rich\"\n   │                    ^^^^^^ names no profile\n   │\n   = help: add `tests/profiles/rich.json`"
@@ -4936,7 +4936,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.12\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"test\": {\n        \"profile\": \"rich\"\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"test\": {\n        \"profile\": \"rich\"\n    }\n}\n"
             },
             {
               "path": "tests/profiles/rich.json",
@@ -5028,7 +5028,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"compat\": { \"packager-keywords\": true }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"compat\": { \"packager-keywords\": true }\n}\n"
             },
             {
               "path": "src/ui.xml",
@@ -5044,7 +5044,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"compat\": { \"packager-keywords\": true }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"compat\": { \"packager-keywords\": true }\n}\n"
             },
             {
               "path": "src/ui.xml",
@@ -5074,7 +5074,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"flavor-files\": { \"src/Vanilla.lua\": [\"vanilla\"] } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"flavor-files\": { \"src/Vanilla.lua\": [\"vanilla\"] } }\n}\n"
             },
             {
               "path": "src/ui.xml",
@@ -5095,7 +5095,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"flavor-files\": { \"src/Vanilla.lua\": [\"vanilla\"] } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"build\": { \"flavor-files\": { \"src/Vanilla.lua\": [\"vanilla\"] } }\n}\n"
             },
             {
               "path": "src/Vanilla.lua",
@@ -5120,7 +5120,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"bundle\": true } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"bundle\": true } }\n}\n"
             },
             {
               "path": "src/main.lua",
@@ -5136,7 +5136,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"bundle\": true } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"bundle\": true } }\n}\n"
             },
             {
               "path": "src/main.lua",
@@ -5159,7 +5159,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"optimize\": { \"dead-code\": true } } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"optimize\": { \"dead-code\": true } } }\n}\n"
             },
             {
               "path": "src/colors.wowlua",
@@ -5180,7 +5180,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"optimize\": { \"dead-code\": true } } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"optimize\": { \"dead-code\": true } } }\n}\n"
             },
             {
               "path": "src/colors.wowlua",
@@ -5210,7 +5210,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"minify-levels\": { \"readable\": { \"passes\": [\"strip-comment\"] } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"minify-levels\": { \"readable\": { \"passes\": [\"strip-comment\"] } }\n}\n"
             }
           ],
           "output": "error[E6003]: unknown minification pass `strip-comment`\n  ┌─ wowlua.json:4:49\n  │\n4 │     \"minify-levels\": { \"readable\": { \"passes\": [\"strip-comment\"] } }\n  │                                                 ^^^^^^^^^^^^^^^ unknown pass\n  │\n  = help: did you mean `strip-comments`?"
@@ -5221,7 +5221,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"minify-levels\": { \"readable\": { \"passes\": [\"strip-comments\"] } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"minify-levels\": { \"readable\": { \"passes\": [\"strip-comments\"] } }\n}\n"
             }
           ],
           "output": null
@@ -5278,7 +5278,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"debug\": false } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"debug\": false } }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -5294,7 +5294,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"debug\": false } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"debug\": false } }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -5317,7 +5317,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"reflection\": \"none\" } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"reflection\": \"none\" } }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -5333,7 +5333,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"reflection\": \"decorated\" } }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"profiles\": { \"dev\": { \"reflection\": \"decorated\" } }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -5558,7 +5558,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -5584,7 +5584,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -5600,7 +5600,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": {\n        \"saved-variables\": [\"MyAddonDB\"],\n        \"saved-variables-per-character\": [\"MyAddonDBPerChar\"]\n    }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": {\n        \"saved-variables\": [\"MyAddonDB\"],\n        \"saved-variables-per-character\": [\"MyAddonDBPerChar\"]\n    }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -5911,7 +5911,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -5927,7 +5927,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6016,7 +6016,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"standard\": {}, \"vanilla\": {} },\n    \"build\": { \"flavor-mode\": \"shared\" }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"standard\": {}, \"vanilla\": {} },\n    \"build\": { \"flavor-mode\": \"shared\" }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6032,7 +6032,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"standard\": {}, \"vanilla\": {} },\n    \"build\": { \"flavor-mode\": \"shared\" }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"standard\": {}, \"vanilla\": {} },\n    \"build\": { \"flavor-mode\": \"shared\" }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6057,7 +6057,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6073,7 +6073,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6130,7 +6130,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6146,7 +6146,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
             },
             {
               "path": "src/db.wowlua",
@@ -6177,7 +6177,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6193,7 +6193,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"MyAddonDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6313,7 +6313,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6329,7 +6329,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6415,7 +6415,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6431,7 +6431,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6457,7 +6457,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6473,7 +6473,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables\": [\"PlaygroundDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6539,7 +6539,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables-per-character\": [\"MyAddonCharDB\"] }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": { \"saved-variables-per-character\": [\"MyAddonCharDB\"] }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6555,7 +6555,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": {\n        \"saved-variables\": [\"MyAddonDB\"],\n        \"saved-variables-per-character\": [\"MyAddonDBPerChar\"]\n    }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {} },\n    \"addon\": {\n        \"saved-variables\": [\"MyAddonDB\"],\n        \"saved-variables-per-character\": [\"MyAddonDBPerChar\"]\n    }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6786,7 +6786,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {}, \"vanilla\": {} }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {}, \"vanilla\": {} }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6802,7 +6802,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {}, \"vanilla\": {} }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {}, \"vanilla\": {} }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6827,7 +6827,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {}, \"vanilla\": {} }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {}, \"vanilla\": {} }\n}\n"
             },
             {
               "path": "src/main.wowlua",
@@ -6843,7 +6843,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.12\" },\n    \"flavors\": { \"camelot\": {}, \"vanilla\": {} }\n}\n"
+              "text": "{\n    \"package\": { \"name\": \"playground\", \"version\": \"0.1.0\", \"wowlua\": \"^0.13\" },\n    \"flavors\": { \"camelot\": {}, \"vanilla\": {} }\n}\n"
             },
             {
               "path": "src/main.wowlua",

@@ -15,7 +15,7 @@ shows these mistakes as you type.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12",
+        "wowlua": "^0.13",
     },
     "flavors": {
         "camelot": {}
@@ -28,7 +28,7 @@ shows these mistakes as you type.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -56,7 +56,7 @@ wowlua, check `package.wowlua` and your compiler's version (E4300).
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "addon": {
         "titel": "Playground"
@@ -72,7 +72,7 @@ wowlua, check `package.wowlua` and your compiler's version (E4300).
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "addon": {
         "title": "Playground"
@@ -101,7 +101,7 @@ capitals.
     "package": {
         "name": "Playground",
         "version": "0.1",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -114,7 +114,7 @@ capitals.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -139,7 +139,7 @@ for Classic Era, `mists` for Mists of Pandaria Classic, and so on).
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "classic": {}
@@ -152,7 +152,7 @@ for Classic Era, `mists` for Mists of Pandaria Classic, and so on).
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "vanilla": {}
@@ -185,7 +185,7 @@ ignore:
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -210,7 +210,7 @@ ignore:
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -242,7 +242,7 @@ Fix the name, or define the profile, level or target.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -258,7 +258,7 @@ Fix the name, or define the profile, level or target.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -287,7 +287,7 @@ extend a built-in level.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -304,7 +304,7 @@ extend a built-in level.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -333,7 +333,7 @@ value the same type (below, a number instead of a string).
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -352,7 +352,7 @@ value the same type (below, a number instead of a string).
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -462,7 +462,7 @@ name.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "addon": {
         "saved-variables": ["PlaygroundDB"]
@@ -496,7 +496,7 @@ name.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "addon": {
         "saved-variables": ["PlaygroundDB"]
@@ -622,7 +622,7 @@ works with your version, change the requirement.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -653,7 +653,7 @@ dependency needs.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "standard": {},
@@ -673,7 +673,7 @@ dependency needs.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "standard": {},
@@ -781,7 +781,7 @@ name such as `LICENSE.txt`.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -800,7 +800,7 @@ MIT License
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -831,7 +831,7 @@ by itself. If it should load at login instead, remove `load-with`.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "addon": {
         "load-on-demand": false
@@ -850,7 +850,7 @@ by itself. If it should load at login instead, remove `load-with`.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "addon-dependencies": {
         "load-with": ["Blizzard_Collections"]
@@ -878,7 +878,7 @@ Define the missing feature, fix the name, or mark the dependency optional.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -895,7 +895,7 @@ Define the missing feature, fix the name, or mark the dependency optional.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -922,7 +922,7 @@ profile of yours).
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -938,7 +938,7 @@ profile of yours).
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -965,7 +965,7 @@ want another folder.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -996,7 +996,7 @@ want another folder.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -1038,7 +1038,7 @@ to be one.
         "name": "playground",
         "version": "0.1.0",
         "kind": "library",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "addon": {
         "title": "Playground"
@@ -1055,7 +1055,7 @@ to be one.
         "name": "playground",
         "version": "0.1.0",
         "kind": "library",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -1083,7 +1083,7 @@ Remove the requirement, or widen it to accept the shipped version.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": { "interface": [] }
@@ -1096,7 +1096,7 @@ Remove the requirement, or widen it to accept the shipped version.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": { "interface": [16001] }
@@ -1165,7 +1165,7 @@ Make one of the dependencies optional (`addon-dependencies.optional`).
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "addon-dependencies": {
         "required": ["PlaygroundOptions"]
@@ -1199,7 +1199,7 @@ Make one of the dependencies optional (`addon-dependencies.optional`).
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "addon-dependencies": {
         "optional": ["PlaygroundOptions"]
@@ -1242,7 +1242,7 @@ Give each addon its own `addon.name`.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -1273,7 +1273,7 @@ Give each addon its own `addon.name`.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -1393,7 +1393,7 @@ flavor.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {},
@@ -1415,7 +1415,7 @@ print("Mists only")
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {},
@@ -1497,7 +1497,7 @@ that exist.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -1513,7 +1513,7 @@ that exist.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -1545,7 +1545,7 @@ set them through their manifest keys.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "addon": {
         "toc-extra": { "Website": "https://example.com" }
@@ -1561,7 +1561,7 @@ set them through their manifest keys.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "addon": {
         "toc-extra": { "X-Website": "https://example.com" }
@@ -1590,7 +1590,7 @@ package, or write the strings into the file.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -1611,7 +1611,7 @@ print(L)
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -1645,7 +1645,7 @@ game at a time can set `compat.per-game`, which applies the blocks per flavor.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {},
@@ -1667,7 +1667,7 @@ print("Retail only")
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {},
@@ -1714,7 +1714,7 @@ TOC per flavor without the warning, set `"toc-layout": "per-flavor"`.
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {},
@@ -1742,7 +1742,7 @@ print(b, flavor)
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {},
@@ -1926,7 +1926,7 @@ externals:
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}
@@ -1945,7 +1945,7 @@ package-as: Playground
     "package": {
         "name": "playground",
         "version": "0.1.0",
-        "wowlua": "^0.12"
+        "wowlua": "^0.13"
     },
     "flavors": {
         "camelot": {}

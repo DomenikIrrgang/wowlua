@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "description": "wowlua's benchmark suite for the optimizations of milestone M11 (`wowlua bench`)",
     "license": "MIT",
-    "wowlua": "^0.12"
+    "wowlua": "^0.13"
   },
   "addon": {
     "title": "Shaping Bench"

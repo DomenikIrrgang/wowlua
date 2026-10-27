@@ -429,7 +429,7 @@ In a plain Lua file it is the warning W2030.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "standard": {}, "vanilla": {} },
     "build": { "flavor-mode": "shared" }
 }
@@ -442,7 +442,7 @@ C_Garrison.GetGarrisonInfo(1)
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "standard": {}, "vanilla": {} },
     "build": { "flavor-mode": "shared" }
 }
@@ -856,7 +856,7 @@ exempt.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "check": { "lints": { "W2063": "warn" } }
 }
@@ -871,7 +871,7 @@ show(1)
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "check": { "lints": { "W2063": "warn" } }
 }

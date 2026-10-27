@@ -166,7 +166,7 @@ The specification lives in [`spec/`](spec/README.md); implementation follows the
 | M8 | Standard library | done · 2026-10-15 |
 | M9 | Test runner, language server, formatter | done · 2026-10-25 (0.10.0) |
 | M10 | Registry | done · 2026-10-26 (0.13.0) |
-| M11 | Performance optimization | planned |
+| M11 | Performance optimization | in progress · built in 0.13.0, the in-game check pending |
 | M12 | Debugger, profiler, screenshots, 3D models, MCP for AI agents | done · 2026-10-25 (0.10.0) |
 | M13 | Game data and rendering | done · 2026-10-25 (0.11.0) |
 | M14 | Browser | done · 2026-10-26 (0.12.0) |

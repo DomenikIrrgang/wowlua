@@ -14,7 +14,7 @@ fn a_failed_check_is_reported_and_the_server_goes_on() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("wowlua.json"),
-        r#"{ "package": { "name": "lsp-fail", "version": "0.1.0", "wowlua": "^0.12" }, "flavors": { "camelot": {} } }"#,
+        r#"{ "package": { "name": "lsp-fail", "version": "0.1.0", "wowlua": "^0.13" }, "flavors": { "camelot": {} } }"#,
     )
     .unwrap();
     std::fs::create_dir_all(dir.path().join("src")).unwrap();

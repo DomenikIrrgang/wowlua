@@ -34,7 +34,7 @@ leaves a folder out, and three publish targets:
     "description": "Tracks things.",
     "authors": ["Jane Doe <jane@example.com>"],
     "license": "MIT",
-    "wowlua": "^0.12"
+    "wowlua": "^0.13"
   },
   "addon": {
     "title": "|cff33ff99My|r Addon",
@@ -120,7 +120,7 @@ section is only allowed in an `addon` package (E4317). See
 | `license` | string | none | An SPDX expression, such as `"MIT"` |
 | `repository`, `homepage` | string | none | URLs |
 | `keywords` | string[] | `[]` | For registry search |
-| `wowlua` | version requirement | none | The compiler version the package needs, such as `"^0.12"`. It is read before anything else: an older compiler stops with E4300, which names both versions, instead of reporting newer keys as unknown |
+| `wowlua` | version requirement | none | The compiler version the package needs, such as `"^0.13"`. It is read before anything else: an older compiler stops with E4300, which names both versions, instead of reporting newer keys as unknown |
 | `main` | path | `src/init.wowlua` | A library's main module |
 
 ### `lua-library` and `types`

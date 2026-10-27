@@ -77,7 +77,7 @@ generates the TOC from it.
   "package": {
     "name": "my-addon",
     "version": "0.1.0",
-    "wowlua": "^0.12"
+    "wowlua": "^0.13"
   },
   "addon": {
     "title": "MyAddon",

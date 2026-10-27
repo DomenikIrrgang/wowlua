@@ -2,10 +2,19 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
-## Unreleased
+## 0.13.0 (2026-10-27)
 
 ### New
 
+- **wowlua registry**: depend on libraries by version (`"lib-tooltip": "^1.2"`, or `wowlua add lib-tooltip@^1.2`), from https://registry.wowlua.dev or another registry. Versions are locked with their checksums, `wowlua update` and `wowlua outdated` know them, and a yanked version your lockfile has keeps working with W4322.
+- `wowlua publish` publishes `library`, `lua-library` and `types` packages to the registry, and `wowlua package --registry` writes the archive without uploading it. Sign in with GitHub at https://registry.wowlua.dev/login for a token, then save it with `wowlua login registry` or set `WOWLUA_REGISTRY_TOKEN`.
+- `wowlua search <words>` finds registry packages by name, description and keywords.
+- `wowlua yank <name>@<version>` yanks a version you published (`--undo` takes it back), and `wowlua owner list|add|remove` manages a package's owners.
+- **Faster release builds**: release builds reshape the Lua they write for WoW's Lua 5.1. Fields such as `self.config.scale` are read once before a loop that can't change them, and once for repeated reads; `ipairs` over arrays becomes a numeric loop and `table.insert(t, v)` becomes `t[#t + 1] = v`; outer locals read in loops are copied into locals; closures made in a loop that need nothing from it are made once; locals holding a constant become the constant. The type-based ones apply in strict-mode files only, plain `.lua` stays as it is, and each has a switch under `optimize`.
+- **`wowlua bench`**: `@bench` functions in test files are benchmarks. `wowlua bench` runs them optimized and unoptimized and shows both times and the speed-up (`--profile`, `--samples`, `--batch-ms`, `--json`).
+- **Performance report**: `wowlua prof report` turns the recordings you marked for export in the dev window into one HTML page: hints, functions, time by event, call tree and flame graph, the frame timeline against the frame budget, slow calls with their stacks mapped to your source, and garbage. It finds them in your WoW installation's SavedVariables, asks which account or client when several have some (`--account`, `--client`), and opens the page in your browser (`--no-open`, `--out`, `--recording`).
+- **Performance tab**: recordings of every combat and boss pull, `/wl record`, eight views (functions, tree, flame, by event, timeline, slow, garbage, bench) and comparing recordings per minute.
+- **Hints**: P7101, P7102, P7201 and P7301 in the dev window and in `/wl hints`, explained by `wowlua explain P7301`.
 - `wowlua explain` explains every error and warning: what triggers it, how to fix it, an example that reports it and one that compiles, and related codes. The same explanations are on each code's page on wowlua.dev.
 - Every WoW event and many more API functions now have a description, which the editor shows on hover and wowlua.dev's new WoW API reference shows on each entry's page with how far `wowlua test` emulates it.
 - W8301 warns when a standard-library function does less on a flavor you build for: Item, Spell and Unit tooltip hooks on the classic flavors, `launcher.register` without the Addon Compartment.
@@ -26,20 +35,11 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua data pull` reads your WoW installation's game data into wowlua's cache, so `wowlua test --game-data` works without the installation.
 - `wowlua build --watch` builds again after every change.
 - `wowlua build --reproducible` takes `build.time` from `SOURCE_DATE_EPOCH` or the commit time instead of the clock.
-- **Performance tab**: recordings of every combat and boss pull, `/wl record`, eight views (functions, tree, flame, by event, timeline, slow, garbage, bench) and comparing recordings per minute.
-- **Hints**: P7101, P7102, P7201 and P7301 in the dev window and in `/wl hints`, explained by `wowlua explain P7301`.
 - The HUD (`/wl hud`), the error toast, `/wl bench`, and exporting recordings for `wowlua prof report`.
 - The dev window shows the addon's own garbage rate next to all addons'.
 - Profile settings `profile-call-paths`, `profile-garbage`, `frame-budget` and `slow-call`.
 - The monitor also times slash commands.
-- **Performance report**: `wowlua prof report` turns the recordings you marked for export in the dev window into one HTML page: hints, functions, time by event, call tree and flame graph, the frame timeline against the frame budget, slow calls with their stacks mapped to your source, and garbage. It finds them in your WoW installation's SavedVariables, asks which account or client when several have some (`--account`, `--client`), and opens the page in your browser (`--no-open`, `--out`, `--recording`).
-- **Faster release builds**: release builds reshape the Lua they write for WoW's Lua 5.1. Fields such as `self.config.scale` are read once before a loop that can't change them, and once for repeated reads; `ipairs` over arrays becomes a numeric loop and `table.insert(t, v)` becomes `t[#t + 1] = v`; outer locals read in loops are copied into locals; closures made in a loop that need nothing from it are made once; locals holding a constant become the constant. The type-based ones apply in strict-mode files only, plain `.lua` stays as it is, and each has a switch under `optimize`.
 - `optimize.inline` also inlines functions and `@inline` private methods whose body is statements, where they're called as a statement.
-- **`wowlua bench`**: `@bench` functions in test files are benchmarks. `wowlua bench` runs them optimized and unoptimized and shows both times and the speed-up (`--profile`, `--samples`, `--batch-ms`, `--json`).
-- **wowlua registry**: depend on libraries by version (`"lib-tooltip": "^1.2"`, or `wowlua add lib-tooltip@^1.2`), from https://registry.wowlua.dev or another registry. Versions are locked with their checksums, `wowlua update` and `wowlua outdated` know them, and a yanked version your lockfile has keeps working with W4322.
-- `wowlua publish` publishes `library`, `lua-library` and `types` packages to the registry, and `wowlua package --registry` writes the archive without uploading it. Sign in with GitHub at https://registry.wowlua.dev/login for a token, then save it with `wowlua login registry` or set `WOWLUA_REGISTRY_TOKEN`.
-- `wowlua search <words>` finds registry packages by name, description and keywords.
-- `wowlua yank <name>@<version>` yanks a version you published (`--undo` takes it back), and `wowlua owner list|add|remove` manages a package's owners.
 - E4231: a package for the registry depends on a `git`, `svn`, `path` or `archive` source.
 
 ### Changed

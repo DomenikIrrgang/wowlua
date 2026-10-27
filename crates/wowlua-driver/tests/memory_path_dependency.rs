@@ -15,7 +15,7 @@ fn a_path_dependency_in_memory_builds_into_the_addon() {
     ));
     memory.insert(
         "/play/wowlua.json",
-        &br#"{ "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" }, "flavors": { "camelot": {} },
+        &br#"{ "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" }, "flavors": { "camelot": {} },
   "dependencies": { "greeter": { "path": "../greeter" } } }"#[..],
     );
     memory.insert(

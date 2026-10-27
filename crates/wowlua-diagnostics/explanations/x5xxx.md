@@ -82,7 +82,7 @@ build should load it, or ignore the warning if another addon provides it.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "compat": { "packager-keywords": true }
 }
@@ -97,7 +97,7 @@ build should load it, or ignore the warning if another addon provides it.
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "compat": { "packager-keywords": true }
 }
@@ -131,7 +131,7 @@ all is E5002.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "build": { "flavor-files": { "src/Vanilla.lua": ["vanilla"] } }
 }
@@ -147,7 +147,7 @@ print("vanilla only")
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "build": { "flavor-files": { "src/Vanilla.lua": ["vanilla"] } }
 }

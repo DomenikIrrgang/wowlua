@@ -58,7 +58,7 @@ There is no TOC file to edit: wowlua generates one for every flavor from
     "authors": [
       "Your Name"
     ],
-    "wowlua": "^0.12"
+    "wowlua": "^0.13"
   },
   "addon": {
     "title": "MyAddon"

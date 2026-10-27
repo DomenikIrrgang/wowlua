@@ -15,7 +15,7 @@ wowlua writes the TOC from it.
   "package": {
     "name": "my-addon",
     "version": "0.1.0",
-    "wowlua": "^0.12"
+    "wowlua": "^0.13"
   },
   "addon": {
     "title": "MyAddon",
@@ -274,7 +274,7 @@ per-character SavedVariable is an error (E8117).
   "package": {
     "name": "my-addon",
     "version": "0.1.0",
-    "wowlua": "^0.12"
+    "wowlua": "^0.13"
   },
   "addon": {
     "title": "MyAddon",

@@ -560,6 +560,11 @@ In-game performance tools, to measure what the optimizations change
 - The compact HUD (T177) and the error toast (T180).
 - Export through SavedVariables and `wowlua prof report` (T175, T179).
 
+**Status: in progress**, built in 0.13.0. The optimizations and `wowlua
+bench` were built 2026-10-26: on `tests/bench` the release build runs its
+eleven benchmarks 1.04x to 2.37x as fast as the unoptimized one, 1.49x in
+the geometric mean (embedded Lua 5.1, 2026-10-27).
+
 The in-game tools above were built 2026-10-26, ahead of the optimizations:
 the dev window in the design system with its fonts, recordings, frame time,
 slow calls, call paths, roots (slash commands and the standard library's

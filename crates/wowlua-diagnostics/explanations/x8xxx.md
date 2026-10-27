@@ -134,7 +134,7 @@ print(db)
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["MyAddonDB"] }
 }
@@ -159,7 +159,7 @@ Add `<name>PerChar` to `addon.saved-variables-per-character` in `wowlua.json`.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["MyAddonDB"] }
 }
@@ -173,7 +173,7 @@ print(db)
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": {
         "saved-variables": ["MyAddonDB"],
@@ -342,7 +342,7 @@ field's default value to the type the control needs.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["PlaygroundDB"] }
 }
@@ -362,7 +362,7 @@ settings.register({
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["PlaygroundDB"] }
 }
@@ -446,7 +446,7 @@ Write the name directly in the call.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["MyAddonDB"] }
 }
@@ -461,7 +461,7 @@ print(db)
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["MyAddonDB"] }
 }
@@ -486,7 +486,7 @@ need it.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["MyAddonDB"] }
 }
@@ -501,7 +501,7 @@ print(db, again)
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["MyAddonDB"] }
 }
@@ -530,7 +530,7 @@ Store a plain value type instead, and keep secret values in memory only.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["MyAddonDB"] }
 }
@@ -549,7 +549,7 @@ print(db)
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["MyAddonDB"] }
 }
@@ -635,7 +635,7 @@ includes the value.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["PlaygroundDB"] }
 }
@@ -664,7 +664,7 @@ settings.register({
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["PlaygroundDB"] }
 }
@@ -759,7 +759,7 @@ field to the defaults.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["PlaygroundDB"] }
 }
@@ -779,7 +779,7 @@ settings.register({
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["PlaygroundDB"] }
 }
@@ -807,7 +807,7 @@ category in the game's Settings panel. Put the other pages in
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["PlaygroundDB"] }
 }
@@ -828,7 +828,7 @@ settings.register({ title = "Playground: Advanced", store = db, controls = {
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables": ["PlaygroundDB"] }
 }
@@ -884,7 +884,7 @@ add its `<name>PerChar` to `addon.saved-variables-per-character`.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": { "saved-variables-per-character": ["MyAddonCharDB"] }
 }
@@ -898,7 +898,7 @@ print(db)
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "addon": {
         "saved-variables": ["MyAddonDB"],
@@ -1136,7 +1136,7 @@ container.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {}, "vanilla": {} }
 }
 ```
@@ -1151,7 +1151,7 @@ end
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {}, "vanilla": {} }
 }
 ```
@@ -1591,7 +1591,7 @@ separately (`split` mode).
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "standard": {}, "vanilla": {} },
     "build": { "flavor-mode": "shared" }
 }
@@ -1604,7 +1604,7 @@ on("ACTIVE_COMBAT_CONFIG_CHANGED", function() print("changed") end)
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "standard": {}, "vanilla": {} },
     "build": { "flavor-mode": "shared" }
 }
@@ -1666,7 +1666,7 @@ offer at all is E8300.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {}, "vanilla": {} }
 }
 ```
@@ -1678,7 +1678,7 @@ launcher.register({ icon = "Interface\\Icons\\INV_Misc_Book_09", label = "Playgr
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {}, "vanilla": {} }
 }
 ```

@@ -17,7 +17,7 @@ on this page share this one:
   "package": {
     "name": "my-addon",
     "version": "0.1.0",
-    "wowlua": "^0.12"
+    "wowlua": "^0.13"
   },
   "addon": {
     "title": "MyAddon",

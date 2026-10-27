@@ -33,7 +33,7 @@ Write the missing code before releasing.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "profiles": { "dev": { "debug": false } }
 }
@@ -49,7 +49,7 @@ print(exportData())
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "profiles": { "dev": { "debug": false } }
 }
@@ -76,7 +76,7 @@ reflection call.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "profiles": { "dev": { "reflection": "none" } }
 }
@@ -94,7 +94,7 @@ print(#reflect.fields(Settings))
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "profiles": { "dev": { "reflection": "decorated" } }
 }

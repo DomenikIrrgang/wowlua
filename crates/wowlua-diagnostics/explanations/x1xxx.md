@@ -574,7 +574,7 @@ warning W1035.)
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "build": { "load-order": ["src/main.wowlua", "src/util.wowlua"] }
 }
@@ -593,7 +593,7 @@ end
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "build": { "load-order": ["src/util.wowlua", "src/main.wowlua"] }
 }
@@ -623,7 +623,7 @@ silenced in `check.lints`.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "build": { "load-order": ["src/main.lua", "src/util.lua"] }
 }
@@ -639,7 +639,7 @@ MyAddonGreeting = "hi"
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "build": { "load-order": ["src/util.lua", "src/main.lua"] }
 }
@@ -665,7 +665,7 @@ this case. Use `"auto"`, or make the orders agree.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {}, "standard": {} },
     "build": {
         "toc-layout": "single",
@@ -687,7 +687,7 @@ print("b")
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {}, "standard": {} },
     "build": {
         "toc-layout": "auto",
@@ -795,7 +795,7 @@ print(icon)
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {} },
     "build": { "assets": ["media/**"] }
 }
@@ -824,7 +824,7 @@ In declaration files `@if(flavor …)` keeps its meaning.
 
 ```json fails title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {}, "standard": {} },
     "build": { "flavor-mode": "shared" }
 }
@@ -843,7 +843,7 @@ setupEditMode()
 
 ```json compiles title=wowlua.json
 {
-    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.12" },
+    "package": { "name": "playground", "version": "0.1.0", "wowlua": "^0.13" },
     "flavors": { "camelot": {}, "standard": {} },
     "build": { "flavor-mode": "shared" }
 }
