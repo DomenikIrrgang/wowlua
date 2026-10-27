@@ -639,6 +639,24 @@ impl Vm {
         }
     }
 
+    /// The chunk name and line of the Lua function `level` calls up from a
+    /// native (1: the native's caller) where it is now.
+    pub fn caller_place(&self, level: usize) -> Option<(Rc<[u8]>, u32)> {
+        match self.stack_entries().get(level) {
+            Some(StackEntry::Lua(fi)) => {
+                let f = &self.cur.frames[*fi];
+                let line = f
+                    .proto
+                    .lines
+                    .get(f.pc.saturating_sub(1))
+                    .copied()
+                    .unwrap_or(0);
+                Some((f.proto.source.clone(), line))
+            }
+            _ => None,
+        }
+    }
+
     /// Sets the environment of the Lua function `level` calls up from a
     /// native (1: the native's caller); false if that is no Lua function.
     pub fn set_caller_env(&mut self, level: usize, env: TableRef) -> bool {

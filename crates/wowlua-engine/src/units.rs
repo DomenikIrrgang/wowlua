@@ -2305,6 +2305,12 @@ fn soft_friend_usable(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// The player's target now `new`: `PLAYER_TARGET_CHANGED`, the server's
 /// echo (`UNIT_TARGET("player")`) a round trip later.
+/// The player targets `new` (none: clears it), told as the client tells a
+/// click on a unit (a host's units list, decision T484).
+pub fn target(vm: &mut Vm, new: Option<UnitId>) {
+    set_player_target(vm, new);
+}
+
 pub(crate) fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
     // The same target again: told to the UI, not to the server (no flags,
     // no echo: recorded, `auradeath` 10.030, the cat targeted again).

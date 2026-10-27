@@ -41,6 +41,7 @@ pub mod death;
 pub mod editmode;
 pub mod encounters;
 pub mod equipsets;
+pub mod eventlog;
 pub mod extras;
 pub mod facts;
 pub mod formatters;
@@ -312,6 +313,27 @@ pub fn change_screen(vm: &mut Vm, screen: Screen) {
     if before.ui_parent_scale() != screen.ui_parent_scale() {
         widgets::fire_event(vm, "UI_SCALE_CHANGED", &[]);
     }
+}
+
+/// A host changes the game's settings as the Graphics settings do
+/// (decision T482, Studio's toolbar): the window's size, then "Use UI
+/// Scale" and its slider (none: off), set untainted as the client's own.
+pub fn apply_settings(vm: &mut Vm, width: f64, height: f64, ui_scale: Option<f64>) {
+    let mut screen = engine(vm).screen;
+    (screen.width, screen.height) = (width.floor(), height.floor());
+    change_screen(vm, screen);
+    let saved = *vm.taint();
+    {
+        let t = vm.taint_mut();
+        t.stack = wowlua_vm::Taint::SECURE;
+        t.fixed = wowlua_vm::Taint::SECURE;
+    }
+    if let Some(ui) = ui_scale {
+        let _ = framescript::set_cvar_text(vm, "uiScale", format!("{ui}"), true);
+    }
+    let on = if ui_scale.is_some() { "1" } else { "0" };
+    let _ = framescript::set_cvar_text(vm, "useUiScale", on.into(), true);
+    *vm.taint_mut() = saved;
 }
 
 /// The screen with the UI scale its CVars set: `uiScale` when `useUiScale`

@@ -107,6 +107,9 @@ pub struct Widget {
     /// The scroll frame this is the scroll child of (`SetScrollChild`): it
     /// places the child.
     pub scroll_parent: Option<WidgetId>,
+    /// The Lua line that made it: chunk name and line (an inspector's
+    /// "created at", decision T484); none from the client's own loading.
+    pub created: Option<(std::rc::Rc<[u8]>, u32)>,
 }
 
 /// The widgets, and each class's method table and metatable.
@@ -251,6 +254,8 @@ pub struct World {
     pub cvar_defaults: Vec<(String, String)>,
     /// Whether `PLAYER_LOGIN` fired.
     pub logged_in: bool,
+    /// The events told, while a host keeps a log of them (`eventlog`).
+    pub event_log: Option<crate::eventlog::EventLog>,
     /// Addons `ADDON_LOADED` fired for, lower-case.
     pub loaded_addons: std::collections::HashSet<String>,
     /// Spells and items the test defined.
@@ -607,6 +612,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         resize_bounds: None,
         frame: false,
         scroll_parent: None,
+        created: vm.caller_place(1),
     };
     let mut w = w;
     // Secure code's widgets are forbidden; their names are the addons'
@@ -1667,6 +1673,7 @@ pub fn fire_now(vm: &mut Vm, event: &str, args: &[Value]) {
     let name = vm.str(event);
     let mut call = vec![name];
     call.extend_from_slice(args);
+    let logged = crate::eventlog::begin(vm, event, args, &targets);
     let d = vm.dispatch_enter(DispatchKind::Event, || event.to_string());
     for id in targets {
         // A handler may unregister others meanwhile.
@@ -1677,6 +1684,7 @@ pub fn fire_now(vm: &mut Vm, event: &str, args: &[Value]) {
     }
     crate::framescript::run_callbacks(vm, event, args);
     vm.dispatch_exit(d);
+    crate::eventlog::end(vm, logged);
 }
 
 // --------------------------------------------------------- visibility
@@ -3691,6 +3699,11 @@ const STRATAS: [&str; 9] = [
     "TOOLTIP",
     "BLIZZARD",
 ];
+
+/// A frame's strata by name (`GetFrameStrata`, as `strata_rank` finds it).
+pub fn strata_name(vm: &mut Vm, id: WidgetId) -> &'static str {
+    STRATAS[strata_rank(vm, id).min(STRATAS.len() - 1)]
+}
 
 /// A frame's strata as a rank (`STRATAS`): its own, else its parent's
 /// (`PARENT`, or none set), `MEDIUM` at the top.
