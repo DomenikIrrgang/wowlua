@@ -1957,3 +1957,54 @@ package-as: Playground
 ```
 
 Related: E4005, W4332
+
+## W4337
+
+An entry of `build.load-order` (or of a flavor's `build.flavor-load-order`)
+names no file of the build, so the build leaves it out of the TOC. Entries
+are paths from the package root: a source is `src/…` (`build.src`), a
+library's file is its output path (`libs/LibStub/LibStub.lua`), and a glob
+must match at least one of them. A typo, a file that moved, or a file
+outside `build.src` (an addon's `libs/` folder kept next to `src/`) all
+end up here, and the AddOn then loads without that file.
+
+Fix the path, move the file under `build.src`, or make the libraries
+dependencies.
+
+```json fails title=wowlua.json
+{
+    "package": {
+        "name": "playground",
+        "version": "0.1.0",
+        "wowlua": "^0.13"
+    },
+    "flavors": {
+        "camelot": {}
+    },
+    "build": {
+        "load-order": ["src/Libs/libs.xml", "src/main.lua"]
+    }
+}
+```
+```lua fails title=src/main.lua
+print("loaded")
+```
+
+```json compiles title=wowlua.json
+{
+    "package": {
+        "name": "playground",
+        "version": "0.1.0",
+        "wowlua": "^0.13"
+    },
+    "flavors": {
+        "camelot": {}
+    },
+    "build": {
+        "load-order": ["src/main.lua"]
+    }
+}
+```
+```lua compiles title=src/main.lua
+print("loaded")
+```

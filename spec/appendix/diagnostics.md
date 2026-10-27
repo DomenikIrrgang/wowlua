@@ -210,6 +210,7 @@ is reported as the warning with the same number (`E2001` → `W2001`, `E2030` �
 | E4402 | `test.profile` or a test file's `config({ profile })` names no world profile of the package |
 | E4335 | Packager `@version-…@` blocks in a multi-version build |
 | W4333 | `.pkgmeta` hg external cannot be converted |
+| W4337 | `build.load-order` entry that names no file of the build |
 | W6001 | Code reads a Lua file name from `debugstack` or `debuglocals`, which shows the bundle's when bundled |
 | W6002 | Side-effect-free, unused module removed by dead-code elimination |
 | W6010 | An addon-site target (CurseForge, Wago, WoWInterface) publishes minified code (Blizzard AddOn policy: code must not be hidden or obfuscated) |
