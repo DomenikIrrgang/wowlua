@@ -884,11 +884,8 @@ pub fn reference_lenses<'a>(
             },
         }));
     };
+    // (an exported statement comes again by itself after its `export`)
     visit::walk_stmts(parsed.view().block(), &mut |s| {
-        let s = match s.kind() {
-            StmtKind::Export(inner) => inner,
-            _ => s,
-        };
         match s.kind() {
             StmtKind::Function { name, .. } => {
                 if let Some(n) = name.method().or_else(|| name.path().last()) {
@@ -1059,6 +1056,14 @@ mod tests {
         let defs = [target(0, 15), target(0, 15)];
         let lenses = reference_lenses(text, uri, uri, defs.iter());
         assert_eq!(lenses[0]["command"]["title"], "2 references");
+    }
+
+    #[test]
+    fn exported_declarations_get_one_lens() {
+        let text = "export function f()\nend\nexport class C\n    function m(self)\n    end\nend\n";
+        let lenses = reference_lenses(text, "file:///a.wowlua", "file:///a.wowlua", [].iter());
+        let lines: Vec<&Json> = lenses.iter().map(|l| &l["range"]["start"]["line"]).collect();
+        assert_eq!(lines, [&json!(0), &json!(3)], "{lenses:?}");
     }
 
     /// Every example of the repository: tokens inside the text, in order,
