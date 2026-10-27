@@ -127,6 +127,15 @@ pub enum Input {
         from: String,
         to: String,
     },
+    /// The mouse pressed at a point (screen pixels, top left origin) and
+    /// moved by an offset: the frame there dragged as a user drags it
+    /// (decision T484).
+    DragAt {
+        x: f64,
+        y: f64,
+        dx: f64,
+        dy: f64,
+    },
     Type {
         text: String,
     },
@@ -225,6 +234,39 @@ pub enum Request {
     ProfileStop,
     /// What was printed and raised since the last time asked.
     Output,
+    /// One frame's or region's details for an inspector, by its `id` in
+    /// the frame tree (decision T484).
+    Inspect {
+        frame: usize,
+    },
+    /// What draws topmost at a point (screen pixels from the top left),
+    /// taking the mouse or not: `{ frame, region }`.
+    Pick {
+        x: f64,
+        y: f64,
+    },
+    /// The world's units.
+    Units,
+    /// The player targets a unit by its `id` in `Units`' list (none: no
+    /// target), as a click on it in the world does.
+    Target {
+        #[serde(default)]
+        unit: Option<usize>,
+    },
+    /// Starts (again from empty) or stops the log of the events told.
+    LogEvents {
+        on: bool,
+    },
+    /// The events told since the last read.
+    Events,
+    /// The game's settings change (decision T482): the window's size, and
+    /// the UI scale ("Use UI Scale" with its slider; none: off).
+    SetScreen {
+        width: f64,
+        height: f64,
+        #[serde(default, rename = "uiScale")]
+        ui_scale: Option<f64>,
+    },
     Terminate,
 }
 

@@ -136,7 +136,7 @@ the file, naming the addon. Coverage counts only the addon's own files.
 | `@flavors("standard", …)` | Run only for these flavors |
 | `config({ lifecycle: "auto" \| "manual", timeout?, profile?, platform?, screen? })` | Per-file runner settings (`profile`: the world profile; `platform`: `"mac"` or `"windows"`, the machine the client runs on, decision T236; `screen`: `{ width, height, dpiScale?, uiScale? }`, the screen it draws on, decision T237; all read before anything loads) |
 | `describe(name, fn)` | Grouping for runtime-generated tests (`test(name)(fn)` inside `fn`) |
-| `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`, `toMatchSnapshot`, `toBeSecret`; for widgets `toBeShown`, `toBeVisible`, `toHaveText`, `toHaveSize`, `toBeAnchoredTo`, `toMatchScreenshot` ([Debugger §18.12.4](debugger.md#18124-in-tests)). Negation with `expect(v).never.toBe(x)`. Type-checked (below). Expected values may hold wildcards (decision T261): `anything` matches any value but `nil`, `ofType(kind)` any value whose `type()` is `kind`, in `toEqual` (at any depth) and `toHaveBeenCalledWith`; messages name them. |
+| `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`, `toMatchSnapshot`, `toBeSecret`; for widgets `toBeShown`, `toBeVisible`, `toHaveText`, `toHaveSize`, `toBeAnchoredTo`, `toMatchScreenshot` ([Debugger §18.12.5](debugger.md#18125-in-tests)). Negation with `expect(v).never.toBe(x)`. Type-checked (below). Expected values may hold wildcards (decision T261): `anything` matches any value but `nil`, `ofType(kind)` any value whose `type()` is `kind`, in `toEqual` (at any depth) and `toHaveBeenCalledWith`; messages name them. |
 | `@cases(list)` | Runs a test once per case, the case's values as its arguments (below) |
 | `@expectError(code, …)` | A compile-time test: the function must not compile, with these diagnostics (below) |
 | `matcher(name, fn)` | Defines a typed matcher (below) |
@@ -351,9 +351,14 @@ addon loads:
   "mounts": { "125": { "name": "Riding Turtle", "spellID": 30174, "icon": 132199, "favorite": true } },
   "toys": { "54452": { "favorite": true } },
   "appearances": { "collected": [21598], "favorites": [11257] },
-  "savedVariables": { "MyAddonDB": { "logins": 41 } }
+  "savedVariables": { "MyAddonDB": { "logins": 41 } },
+  "screen": { "width": 2560, "height": 1440, "uiScale": 0.8 }
 }
 ```
+
+`screen` is the screen the client draws on, as the manifest's `test.screen`
+gives it and over it; a file's `config({ screen })` is over both (decision
+T482). Its UI scale turns "Use UI Scale" on, as the client's CVars read.
 
 A `units` entry with `"player": true` and no `group` is another player of the
 world, online and accepting the player's invitations (`acceptsInvites`,

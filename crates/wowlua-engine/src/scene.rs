@@ -64,7 +64,7 @@ pub enum Blend {
 /// A mask on a texture: its image, rectangle, and its part of the image
 /// (left, right, top, bottom; an atlas's region), with the atlas's name
 /// for a renderer with the build's own atlases.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Mask {
     pub image: Image,
     pub rect: Rect,
@@ -72,7 +72,7 @@ pub struct Mask {
     pub atlas: Option<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Quad {
     pub widget: usize,
     pub rect: Rect,
@@ -106,7 +106,7 @@ pub struct Quad {
 }
 
 /// A run of characters of one color.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Run {
     pub text: String,
     pub color: [f32; 4],
@@ -114,7 +114,7 @@ pub struct Run {
     pub xs: Vec<f32>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TextLine {
     /// Where the line starts (its left edge and top).
     pub x: f32,
@@ -123,7 +123,7 @@ pub struct TextLine {
     pub runs: Vec<Run>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Text {
     pub widget: usize,
     /// The textures and atlases inline in it (`|T…|t`, `|A…|a`), drawn
@@ -226,7 +226,7 @@ pub struct Light {
 }
 
 /// A model frame or scene: what it draws into its rectangle.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Model {
     pub widget: usize,
     pub rect: Rect,
@@ -239,14 +239,14 @@ pub struct Model {
     pub time: f64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Item {
     Quad(Quad),
     Text(Text),
     Model(Model),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Scene {
     pub width: u32,
     pub height: u32,
@@ -2116,6 +2116,38 @@ pub fn hit_test(vm: &mut Vm, x: f64, y: f64) -> Option<WidgetId> {
         let clipped = clip_of(vm, f).is_some_and(|c| !c.contains(x as f32, y as f32));
         inside && !clipped
     })
+}
+
+/// The widget drawn topmost at a point of `scene` (screen pixels from the
+/// top left): a region or a frame, whatever draws there, taking the mouse
+/// or not (an inspector's pick, decision T484).
+pub fn drawn_at(scene: &Scene, x: f64, y: f64) -> Option<WidgetId> {
+    let (x, y) = (x as f32, y as f32);
+    scene.items.iter().rev().find_map(|item| {
+        let (widget, rect, clip) = match item {
+            Item::Quad(q) => (q.widget, q.rect, q.clip),
+            Item::Text(t) => (t.widget, t.rect, t.clip),
+            Item::Model(m) => (m.widget, m.rect, m.clip),
+        };
+        let inside = rect.contains(x, y) && clip.is_none_or(|c| c.contains(x, y));
+        inside.then_some(WidgetId(widget))
+    })
+}
+
+/// A widget's alpha with its parents' (as drawn).
+pub fn alpha_of(vm: &Vm, id: WidgetId) -> f64 {
+    f64::from(effective_alpha(vm, id))
+}
+
+/// A region's draw layer and sublevel (`GetDrawLayer`).
+pub fn draw_layer(vm: &Vm, id: WidgetId) -> (&'static str, i32) {
+    let (rank, sublevel) = layer_of(vm, id);
+    (LAYERS[rank.min(LAYERS.len() - 1)], sublevel)
+}
+
+/// Whether a frame takes the mouse (a click finds it).
+pub fn takes_mouse(vm: &Vm, id: WidgetId) -> bool {
+    mouse_enabled(vm, id)
 }
 
 /// The rectangle that holds a frame and everything drawn of it (a

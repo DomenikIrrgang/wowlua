@@ -262,6 +262,12 @@ fn configure(shared: &SharedRef) -> bool {
     }
 }
 
+/// What a host runs on the session's thread with the client's VM whenever
+/// the client may have changed, before the session waits (after each game
+/// frame, an `Advance`, requests served): Studio's game page builds the
+/// scene it draws (decision T484).
+pub type FrameHook = Box<dyn FnMut(&mut Vm)>;
+
 /// Runs a session on this thread until it ends; the suite's `instrument`
 /// must be [`instrument`]. Tells the front-end `Terminated` at the end.
 pub fn run(
@@ -270,6 +276,18 @@ pub fn run(
     link: Box<dyn Link>,
     interrupt: Arc<AtomicBool>,
     screenshot: Option<Screenshotter>,
+) {
+    run_hosted(suite, opts, link, interrupt, screenshot, None);
+}
+
+/// [`run`] with a host's [`FrameHook`] (an addon session's).
+pub fn run_hosted(
+    suite: &Suite,
+    opts: &Options,
+    link: Box<dyn Link>,
+    interrupt: Arc<AtomicBool>,
+    screenshot: Option<Screenshotter>,
+    mut on_frame: Option<FrameHook>,
 ) {
     let shared = Shared::new(link, wowlua_test::chunk_mapper(suite), host_clock());
     {
@@ -315,7 +333,7 @@ pub fn run(
     })));
     let (summary, failed) = match &opts.target {
         Target::Test { file, filters } => run_test(suite, file, filters),
-        Target::Addon => run_addon(suite, opts, &shared),
+        Target::Addon => run_addon(suite, opts, &shared, &mut on_frame),
     };
     wowlua_test::set_tee(None);
     SESSION.with(|s| *s.borrow_mut() = None);
@@ -357,7 +375,12 @@ fn run_test(suite: &Suite, file: &str, filters: &[String]) -> (Option<String>, b
 
 const FRAME_MS: f64 = 1000.0 / 60.0;
 
-fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<String>, bool) {
+fn run_addon(
+    suite: &Suite,
+    opts: &Options,
+    shared: &SharedRef,
+    on_frame: &mut Option<FrameHook>,
+) -> (Option<String>, bool) {
     let mut session = match wowlua_test::AddonSession::open(suite) {
         Ok(s) => s,
         Err(e) => return (Some(e), true),
@@ -409,6 +432,9 @@ fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<Strin
             ClockMode::Realtime => {
                 wowlua_engine::clock::advance_frames(vm, 1, FRAME_MS);
                 frames_run += 1;
+                if let Some(hook) = on_frame.as_mut() {
+                    hook(vm);
+                }
                 let deadline =
                     started + Duration::from_secs_f64(frames_run as f64 * FRAME_MS / 1000.0);
                 // Requests that come before the next frame wait for it.
@@ -433,6 +459,9 @@ fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<Strin
                 }
             }
             ClockMode::Manual => {
+                if let Some(hook) = on_frame.as_mut() {
+                    hook(vm);
+                }
                 // Nothing moves until asked.
                 let next = shared.borrow_mut().link.recv(None);
                 match next {

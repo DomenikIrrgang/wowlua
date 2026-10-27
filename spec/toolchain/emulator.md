@@ -340,8 +340,10 @@ The WoW API the VM's code calls, per flavor.
   (unverified beyond fresh widgets; `/stdtest engine` records
   `layoutSizes`).
 - **Screen and text.** The client draws on a screen (decision T237, a
-  test setting): UIParent's size and scale and the screen functions follow
-  it, every region's effective scale includes UIParent's (unless it ignores
+  test setting; a world profile's `screen` and the game's settings while
+  it runs, decision T482: the window's size, "Use UI Scale" and its slider,
+  told by `DISPLAY_SIZE_CHANGED` and `UI_SCALE_CHANGED`): UIParent's size
+  and scale and the screen functions follow it, every region's effective scale includes UIParent's (unless it ignores
   its parents' scale), and text is measured from the client's recorded
   glyphs at the pixel size the client renders at that scale, so string
   widths, wrapping and truncation are the client's. Lines break as the

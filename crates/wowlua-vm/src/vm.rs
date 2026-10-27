@@ -639,6 +639,28 @@ impl Vm {
         }
     }
 
+    /// The chunk name and line where the nearest Lua function, `level` or
+    /// more calls up from a native (1: the native's caller), is now (natives
+    /// between skipped: a template's, a wrapper's).
+    pub fn caller_place(&self, level: usize) -> Option<(Rc<[u8]>, u32)> {
+        self.stack_entries()
+            .iter()
+            .skip(level)
+            .find_map(|e| match e {
+                StackEntry::Lua(fi) => {
+                    let f = &self.cur.frames[*fi];
+                    let line = f
+                        .proto
+                        .lines
+                        .get(f.pc.saturating_sub(1))
+                        .copied()
+                        .unwrap_or(0);
+                    Some((f.proto.source.clone(), line))
+                }
+                _ => None,
+            })
+    }
+
     /// Sets the environment of the Lua function `level` calls up from a
     /// native (1: the native's caller); false if that is no Lua function.
     pub fn set_caller_env(&mut self, level: usize, env: TableRef) -> bool {

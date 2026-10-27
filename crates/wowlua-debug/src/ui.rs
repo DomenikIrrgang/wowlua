@@ -168,6 +168,12 @@ pub fn input(vm: &mut Vm, input: &Input) -> Result<(), String> {
             let b = target(vm, &Some(to.clone()), None, None)?;
             call_control(vm, "dragTo", wowlua_engine::controls::drag_to, &[a, b])
         }
+        Input::DragAt { x, y, dx, dy } => {
+            let id = wowlua_engine::scene::hit_test(vm, *x, *y)
+                .ok_or_else(|| format!("no mouse-enabled frame at {x}, {y}"))?;
+            inp::as_user(vm, |vm| widgets::drag(vm, id, *dx, *dy, 1));
+            Ok(())
+        }
         Input::Type { text } => {
             let focus = wowlua_engine::engine(vm).world.input.keyboard_focus;
             let Some(id) = focus else {
@@ -267,4 +273,272 @@ pub fn world(vm: &mut Vm, script: &str) -> Result<(), String> {
     });
     *vm.taint_mut() = saved;
     result
+}
+
+// ------------------------------------------------------------ inspector
+
+/// One frame's (or region's) details, for an inspector (decision T484):
+/// its strata and level, rectangle, alpha and scale as set and as drawn,
+/// anchors, scripts with where their functions are, registered events,
+/// regions with their layers, children, and where it was made; `source`
+/// names a chunk's source file (the package's).
+pub fn inspect(
+    vm: &mut Vm,
+    id: usize,
+    source: &dyn Fn(&[u8]) -> Option<String>,
+) -> Result<Json, String> {
+    let count = wowlua_engine::engine(vm).world.widgets.len();
+    if id >= count {
+        return Err(format!("no frame {id}"));
+    }
+    let wid = WidgetId(id);
+    let label = |vm: &Vm, w: WidgetId| widgets::widget_label(wowlua_engine::engine(vm), w);
+    let place = |chunk: &[u8], line: u32| -> Json {
+        let file = source(chunk).unwrap_or_else(|| {
+            String::from_utf8_lossy(chunk.strip_prefix(b"@").unwrap_or(chunk)).into_owned()
+        });
+        json!({ "file": file, "line": line })
+    };
+    let (class, name, parent, shown, width, height, scale, alpha, created, children, points) = {
+        let e = wowlua_engine::engine(vm);
+        let w = &e.world.widgets[id];
+        (
+            w.class.clone(),
+            w.name.clone(),
+            w.parent,
+            w.shown,
+            w.width,
+            w.height,
+            w.scale,
+            w.alpha,
+            w.created.clone(),
+            w.children.clone(),
+            w.points.clone(),
+        )
+    };
+    let visible = widgets::visible(wowlua_engine::engine(vm), wid);
+    let mut out = json!({
+        "id": id,
+        "type": class,
+        "label": label(vm, wid),
+        "shown": shown,
+        "visible": visible,
+        "size": { "width": width, "height": height },
+        "scale": scale,
+        "effectiveScale": widgets::effective_scale(wowlua_engine::engine(vm), wid),
+        "alpha": alpha,
+        "effectiveAlpha": wowlua_engine::scene::alpha_of(vm, wid),
+        "mouse": wowlua_engine::scene::takes_mouse(vm, wid),
+    });
+    if let Some(n) = name {
+        out["name"] = json!(n);
+    }
+    if let Some(p) = parent {
+        out["parent"] = json!({ "id": p.0, "label": label(vm, p) });
+    }
+    let frame = wowlua_engine::engine(vm).world.widgets[id].frame;
+    if frame {
+        out["strata"] = json!(widgets::strata_name(vm, wid));
+        out["level"] = json!(widgets::frame_level(vm, wid));
+    } else {
+        let (layer, sublevel) = wowlua_engine::scene::draw_layer(vm, wid);
+        out["layer"] = json!(layer);
+        out["sublevel"] = json!(sublevel);
+    }
+    if let Some(r) = wowlua_engine::scene::rect_of(vm, wid) {
+        out["rect"] = json!({ "x": r.x, "y": r.y, "width": r.w, "height": r.h });
+    }
+    out["points"] = Json::Array(
+        points
+            .iter()
+            .map(|p| {
+                let relative = match p.relative {
+                    Some(Value::Table(_)) | Some(Value::Userdata(_)) => {
+                        widgets::widget_of(vm, p.relative.unwrap_or(Value::Nil))
+                            .map(|r| label(vm, r))
+                    }
+                    Some(Value::Str(s)) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into()),
+                    _ => None,
+                };
+                json!({
+                    "point": p.point,
+                    "relativeTo": relative,
+                    "relativePoint": p.relative_point,
+                    "x": p.x,
+                    "y": p.y,
+                })
+            })
+            .collect(),
+    );
+    out["scripts"] = Json::Array(scripts_of(vm, wid, &place));
+    let mut events: Vec<String> = wowlua_engine::engine(vm).world.widgets[id]
+        .events
+        .keys()
+        .cloned()
+        .collect();
+    events.sort();
+    out["events"] = json!(events);
+    let mut regions = Vec::new();
+    let mut frames = Vec::new();
+    for c in children {
+        let is_frame = wowlua_engine::engine(vm).world.widgets[c.0].frame;
+        if is_frame {
+            frames.push(json!({ "id": c.0, "label": label(vm, c) }));
+        } else {
+            regions.push(region(vm, c));
+        }
+    }
+    out["regions"] = Json::Array(regions);
+    out["children"] = Json::Array(frames);
+    if let Some((chunk, line)) = created {
+        out["created"] = place(&chunk, line);
+    }
+    Ok(out)
+}
+
+/// A frame's scripts and hooks: each handler and where its function is.
+fn scripts_of(vm: &mut Vm, id: WidgetId, place: &dyn Fn(&[u8], u32) -> Json) -> Vec<Json> {
+    let (scripts, hooks) = {
+        let w = &wowlua_engine::engine(vm).world.widgets[id.0];
+        (w.scripts, w.hooks)
+    };
+    let mut out = Vec::new();
+    for (table, hook) in [(scripts, false), (hooks, true)] {
+        let entries: Vec<(Value, Value)> = vm.heap.table(table).entries().collect();
+        for (k, v) in entries {
+            let Value::Str(k) = k else { continue };
+            let name = String::from_utf8_lossy(vm.str_bytes(k)).into_owned();
+            let funcs: Vec<Value> = match v {
+                Value::Table(list) => vm.heap.table(list).entries().map(|(_, f)| f).collect(),
+                f => vec![f],
+            };
+            for f in funcs {
+                let Value::Func(f) = f else { continue };
+                let at = vm
+                    .func_proto(f)
+                    .map(|p| place(&p.source, p.line_defined))
+                    .unwrap_or(Json::Null);
+                out.push(json!({ "name": name, "hook": hook, "at": at }));
+            }
+        }
+    }
+    out.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+    out
+}
+
+/// A region: its kind, layer, and what it shows (a texture's file or
+/// atlas, a font string's text).
+fn region(vm: &mut Vm, id: WidgetId) -> Json {
+    let (layer, sublevel) = wowlua_engine::scene::draw_layer(vm, id);
+    let (class, name, props, text, shown) = {
+        let w = &wowlua_engine::engine(vm).world.widgets[id.0];
+        (w.class.clone(), w.name.clone(), w.props, w.text, w.shown)
+    };
+    let mut r = json!({
+        "id": id.0,
+        "type": class,
+        "layer": layer,
+        "sublevel": sublevel,
+        "shown": shown,
+    });
+    if let Some(n) = name {
+        r["name"] = json!(n);
+    }
+    let first = |vm: &mut Vm, stem: &str| {
+        widgets::stored_args(vm, props, stem).and_then(|v| v.first().copied())
+    };
+    if let Some(Value::Str(s)) = first(vm, "Atlas") {
+        r["atlas"] = json!(String::from_utf8_lossy(vm.str_bytes(s)));
+    } else {
+        match first(vm, "Texture") {
+            Some(Value::Str(s)) => r["texture"] = json!(String::from_utf8_lossy(vm.str_bytes(s))),
+            Some(Value::Num(n)) => r["texture"] = json!(n),
+            _ => {}
+        }
+    }
+    if let Some(Value::Str(s)) = text {
+        r["text"] = json!(String::from_utf8_lossy(vm.str_bytes(s)));
+    }
+    r
+}
+
+/// What draws topmost at a point (screen pixels from the top left), mouse
+/// or not: the frame, and the region when a region draws there.
+pub fn pick(vm: &mut Vm, x: f64, y: f64) -> Json {
+    let scene = wowlua_engine::scene::build(vm);
+    let Some(hit) = wowlua_engine::scene::drawn_at(&scene, x, y) else {
+        return Json::Null;
+    };
+    let e = wowlua_engine::engine(vm);
+    let w = &e.world.widgets[hit.0];
+    if w.frame {
+        json!({ "frame": hit.0 })
+    } else {
+        json!({ "frame": w.parent.map(|p| p.0), "region": hit.0 })
+    }
+}
+
+// ---------------------------------------------------------------- units
+
+/// The world's units: each one's index, name, tokens, level, class,
+/// reaction, health, and where it is (decision T484).
+pub fn units(vm: &mut Vm) -> Json {
+    let e = wowlua_engine::engine(vm);
+    let u = &e.units;
+    let list = u
+        .list
+        .iter()
+        .enumerate()
+        .map(|(i, unit)| {
+            let id = wowlua_engine::units::UnitId(i);
+            json!({
+                "id": i,
+                "guid": unit.guid,
+                "name": unit.name,
+                "tokens": wowlua_engine::units::tokens_of(u, id),
+                "level": unit.level,
+                "class": unit.class,
+                "player": unit.player,
+                "reaction": format!("{:?}", unit.reaction).to_lowercase(),
+                "health": unit.health,
+                "healthMax": unit.health_max,
+                "dead": unit.dead,
+                "distance": unit.distance,
+                "position": unit.world.map(|(y, x)| json!({ "x": x, "y": y })),
+                "target": u.target == Some(id),
+            })
+        })
+        .collect();
+    Json::Array(list)
+}
+
+/// The player targets a unit by its index (none: clears the target).
+pub fn target_unit(vm: &mut Vm, unit: Option<usize>) -> Result<(), String> {
+    let count = wowlua_engine::engine(vm).units.list.len();
+    if let Some(i) = unit
+        && i >= count
+    {
+        return Err(format!("no unit {i}"));
+    }
+    wowlua_engine::units::target(vm, unit.map(wowlua_engine::units::UnitId));
+    Ok(())
+}
+
+// --------------------------------------------------------------- events
+
+/// The events told since the last read (the log must be on).
+pub fn events(vm: &mut Vm) -> Json {
+    let list = wowlua_engine::eventlog::take(vm)
+        .into_iter()
+        .map(|e| {
+            json!({
+                "seq": e.seq,
+                "event": e.name,
+                "args": e.args,
+                "frames": e.frames,
+                "ms": e.nanos.map(|n| n as f64 / 1e6),
+            })
+        })
+        .collect();
+    Json::Array(list)
 }

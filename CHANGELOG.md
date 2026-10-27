@@ -2,6 +2,16 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### New
+
+- A world profile can set the screen the client draws on: `"screen": { "width": 2560, "height": 1440, "uiScale": 0.8 }` in `tests/profiles/<name>.json`, over `test.screen` in `wowlua.json`.
+
+### Changed
+
+- The game's settings change the screen while it runs, as in game: the window size (`C_VideoOptions.SetGameWindowSize`) and "Use UI Scale" with its slider (the `useUiScale` and `uiScale` CVars) resize UIParent, and your addon gets `DISPLAY_SIZE_CHANGED` and `UI_SCALE_CHANGED`.
+
 ## 0.13.3 (2026-10-28)
 
 ### Fixed

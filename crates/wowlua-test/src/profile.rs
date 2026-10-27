@@ -107,6 +107,24 @@ pub fn default_for(flavor: &str) -> Option<&'static str> {
     }
 }
 
+/// The screen a profile's `screen` part sets (decision T482), when it has
+/// one (the part applies before the addon loads, not with the rest).
+pub fn screen_of(text: &str, label: &str) -> Result<Option<wowlua_engine::Screen>, String> {
+    let json: serde_json::Value =
+        serde_json::from_str(text).map_err(|e| format!("the world profile {label}: {e}"))?;
+    let Some(part) = json.get("screen") else {
+        return Ok(None);
+    };
+    let s: wowlua_manifest::model::TestScreen = serde_json::from_value(part.clone())
+        .map_err(|e| format!("the world profile {label}: screen: {e}"))?;
+    Ok(Some(wowlua_engine::Screen {
+        width: s.width,
+        height: s.height,
+        dpi_scale: s.dpi_scale.unwrap_or(1.0),
+        ui_scale: s.ui_scale,
+    }))
+}
+
 /// Applies the profile in `path` with the engine's `controls`.
 pub fn apply(vm: &mut Vm, controls: TableRef, path: &Path) -> Result<(), String> {
     let text = wowlua_host::read_to_string(path)

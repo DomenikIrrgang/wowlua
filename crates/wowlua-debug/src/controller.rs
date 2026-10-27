@@ -520,7 +520,14 @@ impl Controller {
                 | Request::Screenshot { .. }
                 | Request::FrameTree { .. }
                 | Request::FindFrames { .. }
-                | Request::Evaluate { .. })
+                | Request::Evaluate { .. }
+                | Request::Inspect { .. }
+                | Request::Pick { .. }
+                | Request::Units
+                | Request::Target { .. }
+                | Request::LogEvents { .. }
+                | Request::Events
+                | Request::SetScreen { .. })
                     if !between_frames && self.shared.borrow().drives_time =>
                 {
                     self.shared().deferred.push((id, req));
@@ -639,6 +646,41 @@ impl Controller {
             Request::FindFrames { query } => Ok(Response::Data {
                 data: crate::ui::find_frames(vm, &query),
             }),
+            Request::Inspect { frame } => {
+                let shared = self.shared.clone();
+                let source = move |chunk: &[u8]| {
+                    let chunk = String::from_utf8_lossy(chunk);
+                    (shared.borrow().mapper)(&chunk)
+                };
+                crate::ui::inspect(vm, frame, &source).map(|data| Response::Data { data })
+            }
+            Request::Pick { x, y } => Ok(Response::Data {
+                data: crate::ui::pick(vm, x, y),
+            }),
+            Request::Units => Ok(Response::Data {
+                data: crate::ui::units(vm),
+            }),
+            Request::Target { unit } => crate::ui::target_unit(vm, unit).map(|()| Response::Ok),
+            Request::LogEvents { on } => {
+                if on {
+                    let clock = self.shared.borrow().clock.clone();
+                    wowlua_engine::eventlog::start(vm, Some(clock));
+                } else {
+                    wowlua_engine::eventlog::stop(vm);
+                }
+                Ok(Response::Ok)
+            }
+            Request::Events => Ok(Response::Data {
+                data: crate::ui::events(vm),
+            }),
+            Request::SetScreen {
+                width,
+                height,
+                ui_scale,
+            } => {
+                wowlua_engine::apply_settings(vm, width, height, ui_scale);
+                Ok(Response::Ok)
+            }
             Request::Input { input } => crate::ui::input(vm, &input).map(|()| Response::Ok),
             Request::FireEvent { event, args } => {
                 crate::ui::fire_event(vm, &event, &args).map(|()| Response::Ok)

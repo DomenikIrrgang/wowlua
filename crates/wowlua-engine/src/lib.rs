@@ -41,6 +41,7 @@ pub mod death;
 pub mod editmode;
 pub mod encounters;
 pub mod equipsets;
+pub mod eventlog;
 pub mod extras;
 pub mod facts;
 pub mod formatters;
@@ -284,8 +285,73 @@ impl Screen {
 }
 
 /// Sets the screen the client draws on (after `install`): UIParent's size
-/// follows.
+/// follows, and with a UI scale "Use UI Scale" and its slider's CVars
+/// (`useUiScale`, `uiScale`) read as it (decision T482).
 pub fn set_screen(vm: &mut Vm, screen: Screen) {
+    place_screen(vm, screen);
+    if let Some(ui) = screen.ui_scale {
+        framescript::cvar_set(vm, "useUiScale", "1".into());
+        framescript::cvar_set(vm, "uiScale", format!("{ui:.6}"));
+    }
+}
+
+/// The screen changed while the client runs, as the game's settings change
+/// it (decision T482: the window's size, `C_VideoOptions.SetGameWindowSize`;
+/// the UI scale, the `useUiScale` and `uiScale` CVars): UIParent follows,
+/// then `DISPLAY_SIZE_CHANGED` when the size changed and `UI_SCALE_CHANGED`
+/// when UIParent's scale did (unverified: their order, and whether a size
+/// that changes UIParent's scale tells both).
+pub fn change_screen(vm: &mut Vm, screen: Screen) {
+    let before = engine(vm).screen;
+    if before == screen {
+        return;
+    }
+    place_screen(vm, screen);
+    if (before.width, before.height) != (screen.width, screen.height) {
+        widgets::fire_event(vm, "DISPLAY_SIZE_CHANGED", &[]);
+    }
+    if before.ui_parent_scale() != screen.ui_parent_scale() {
+        widgets::fire_event(vm, "UI_SCALE_CHANGED", &[]);
+    }
+}
+
+/// A host changes the game's settings as the Graphics settings do
+/// (decision T482, Studio's toolbar): the window's size, then "Use UI
+/// Scale" and its slider (none: off), set untainted as the client's own.
+pub fn apply_settings(vm: &mut Vm, width: f64, height: f64, ui_scale: Option<f64>) {
+    let mut screen = engine(vm).screen;
+    (screen.width, screen.height) = (width.floor(), height.floor());
+    change_screen(vm, screen);
+    let saved = *vm.taint();
+    {
+        let t = vm.taint_mut();
+        t.stack = wowlua_vm::Taint::SECURE;
+        t.fixed = wowlua_vm::Taint::SECURE;
+    }
+    if let Some(ui) = ui_scale {
+        let _ = framescript::set_cvar_text(vm, "uiScale", format!("{ui}"), true);
+    }
+    let on = if ui_scale.is_some() { "1" } else { "0" };
+    let _ = framescript::set_cvar_text(vm, "useUiScale", on.into(), true);
+    *vm.taint_mut() = saved;
+}
+
+/// The screen with the UI scale its CVars set: `uiScale` when `useUiScale`
+/// is on, else none.
+pub(crate) fn screen_from_cvars(vm: &mut Vm) -> Screen {
+    let mut screen = engine(vm).screen;
+    let on = framescript::cvar_get(vm, "useUiScale").is_some_and(|v| v.trim() == "1");
+    // (a flavor without the client's CVars: the slider's default, 1)
+    let scale =
+        framescript::cvar_get(vm, "uiScale").map_or(Some(1.0), |v| v.trim().parse::<f64>().ok());
+    screen.ui_scale = match (on, scale) {
+        (true, Some(s)) if s > 0.0 => Some(s),
+        _ => None,
+    };
+    screen
+}
+
+fn place_screen(vm: &mut Vm, screen: Screen) {
     engine_mut(vm).screen = screen;
     let ui = vm.get_global("UIParent");
     if let Some(id) = widgets::widget_of(vm, ui) {

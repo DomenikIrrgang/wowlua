@@ -728,7 +728,35 @@ state (where it stopped) and what it printed meanwhile. Profiles count game
 frames as one node (`game frame`), each frame's cost in the report's
 timeline.
 
-### 18.12.3 `wowlua screenshot`
+### 18.12.3 In process: wowlua studio
+
+wowlua studio links the debugger and runs a session on a thread of its own
+(decision T484): `session::run_hosted` takes a frame hook that runs there
+with the client's VM whenever the client may have changed (after each game
+frame, an `advance`, requests served), in which Studio builds the scene
+(§18.9) and hands it to its UI thread, which draws it with the renderer
+(§18.11) on Studio's own GPU device: no screenshots, no polling. Besides the
+requests above it has:
+
+- `inspect(frame)`: a frame's or region's details by its frame tree `id`:
+  strata and level (a region: layer and sublevel), rectangle, alpha and
+  scale as set and as drawn, anchors, scripts and hooks with where their
+  functions are, registered events, regions (layer, texture or atlas,
+  text), child frames, and the Lua line that made it (`created`).
+- `pick(x, y)`: what draws topmost at a point of the screen, taking the
+  mouse or not: the frame, and the region when a region draws there.
+- `units` (the world's units: index, GUID, tokens, name, level, class,
+  reaction, health, distance, position, whether targeted) and
+  `target(unit)` (the player targets it as a click in the world does).
+- `logEvents(on)` and `events`: the events told since the last read, with
+  their arguments, the frames they reached and their handlers' time
+  (decision T483).
+- `setScreen(width, height, uiScale?)`: the game's settings (decision
+  T482), as the Graphics settings change them.
+- Input `dragAt(x, y, dx, dy)`: the frame at a point dragged by an offset,
+  as the mouse drags it.
+
+### 18.12.4 `wowlua screenshot`
 
 `wowlua screenshot <test file> [--test <name>] [--frame <name>] [--flavor <f>]
 [--scale <s>] -o <file.png>` runs the test file (its tests whose names contain
@@ -736,7 +764,7 @@ timeline.
 test leaves it: the first test's image at `-o`, the others' beside it
 (`<file>-<test>.png`).
 
-### 18.12.4 In tests
+### 18.12.5 In tests
 
 `expect(frame).toMatchScreenshot(name?, { threshold?, maxDiffRatio? })` (or
 `expect(mock.screen)` for the whole screen) compares the image with
