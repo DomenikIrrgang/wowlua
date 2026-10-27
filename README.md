@@ -170,7 +170,7 @@ The specification lives in [`spec/`](spec/README.md); implementation follows the
 | M12 | Debugger, profiler, screenshots, 3D models, MCP for AI agents | done · 2026-10-25 (0.10.0) |
 | M13 | Game data and rendering | done · 2026-10-25 (0.11.0) |
 | M14 | Browser | done · 2026-10-26 (0.12.0) |
-| M15 | Studio (IDE) | planned |
+| M15 | Studio (IDE) | in progress · [wowlua-studio](https://github.com/DomenikIrrgang/wowlua-studio) |
 
 What works today:
 
