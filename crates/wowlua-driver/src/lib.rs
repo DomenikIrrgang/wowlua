@@ -70,6 +70,21 @@ pub fn cache_root() -> Option<std::path::PathBuf> {
 /// Version of this compiler.
 pub const COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// wowlua's changelog (`CHANGELOG.md`), for programs that show what a
+/// version brought, such as wowlua studio's start page.
+pub const CHANGELOG: &str = include_str!("../../../CHANGELOG.md");
+
+/// The changelog's section of `version` (`## <version> (<date>)`), without
+/// its heading; `None` when it has none (a build between releases).
+pub fn release_notes(version: &str) -> Option<&'static str> {
+    let heading = format!("## {version} (");
+    let start = CHANGELOG.find(&heading)?;
+    let body = &CHANGELOG[start..];
+    let body = &body[body.find('\n').map_or(body.len(), |i| i + 1)..];
+    let end = body.find("\n## ").map_or(body.len(), |i| i + 1);
+    Some(body[..end].trim())
+}
+
 pub fn compiler_version() -> semver::Version {
     semver::Version::parse(COMPILER_VERSION).expect("the crate version is valid semver")
 }
@@ -126,5 +141,16 @@ impl Session {
     /// Takes the diagnostics collected so far (for incremental rendering).
     pub fn take_diagnostics(&mut self) -> Diagnostics {
         std::mem::take(&mut self.diagnostics)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn release_notes_are_one_versions_section() {
+        let notes = super::release_notes("0.13.0").expect("0.13.0 is released");
+        assert!(notes.starts_with("### New"), "{notes}");
+        assert!(!notes.contains("## 0.12"), "only its own section: {notes}");
+        assert_eq!(super::release_notes("0.0.0-never"), None);
     }
 }
