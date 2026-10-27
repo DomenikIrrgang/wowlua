@@ -587,7 +587,7 @@ a boss pull, taken in game with the dev window, is exported and opened with
 A debugger attaches to the emulated client (decision T209): the VM pauses and
 steps where the real client cannot be observed
 ([Debugger](toolchain/debugger.md), decisions T300 to T315). Built as
-libraries for wowlua Studio, natively and in the browser (T300, T301).
+libraries for wowlua studio, natively and in the browser (T300, T301).
 
 - The VM's debug hooks: line, call, return, error, load and the engine's
   dispatches, at no cost when off (T302, T303).
@@ -799,7 +799,7 @@ other than camelot (the engine runs camelot's), the timing of
 
 ## M15: Studio
 
-wowlua Studio, wowlua's own IDE, in its own repository
+wowlua studio, wowlua's own IDE, in its own repository
 ([wowlua-studio](https://github.com/DomenikIrrgang/wowlua-studio), with its
 roadmap and decisions in its `spec/`): a native Rust application for
 Windows, macOS and Linux, drawn on `wgpu` with egui, with no HTML or
