@@ -21,7 +21,14 @@ esac
 target="$arch-$os"
 
 if [ "$version" = "latest" ]; then
-  version="$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')"
+  # The release page redirects to the latest tag; unlike GitHub's API it has
+  # no rate limit for requests without a token.
+  latest="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$repo/releases/latest")" || latest=""
+  version="${latest##*/tag/}"
+  case "$version" in
+    v*) ;;
+    *) echo "could not find the latest wowlua release; set WOWLUA_VERSION (for example v0.13.0)" >&2; exit 1 ;;
+  esac
 fi
 name="wowlua-$version-$target"
 url="https://github.com/$repo/releases/download/$version/$name.tar.gz"

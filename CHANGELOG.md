@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- The install scripts find the latest release without GitHub's API, which refuses requests without a token after 60 an hour (`curl: (56) … error: 403`, then a download of `wowlua--<target>`). Without a version found they stop and ask for `WOWLUA_VERSION`.
+
 ## 0.13.0 (2026-10-27)
 
 ### New

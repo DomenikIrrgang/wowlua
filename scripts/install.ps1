@@ -10,7 +10,12 @@ $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "aarch64" } else { "x86_6
 $target = "$arch-pc-windows-msvc"
 
 if ($version -eq "latest") {
-    $version = (Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest").tag_name
+    # The release page redirects to the latest tag; unlike GitHub's API it has
+    # no rate limit for requests without a token.
+    $response = Invoke-WebRequest "https://github.com/$repo/releases/latest" -Method Head -UseBasicParsing
+    $final = if ($response.BaseResponse.ResponseUri) { $response.BaseResponse.ResponseUri.AbsoluteUri } else { $response.BaseResponse.RequestMessage.RequestUri.AbsoluteUri }
+    $version = ($final -split "/tag/")[-1]
+    if ($version -notlike "v*") { throw "could not find the latest wowlua release; set WOWLUA_VERSION (for example v0.13.0)" }
 }
 $name = "wowlua-$version-$target"
 $url = "https://github.com/$repo/releases/download/$version/$name.zip"
