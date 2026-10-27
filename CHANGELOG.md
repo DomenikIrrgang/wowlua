@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- E5001 for a file whose main chunk is over Lua's 200 locals only because of the locals the build adds (`__wl` in a plain Lua file's dev and test builds) names them, and says which profile settings leave them out; before, it told you to split your own code.
+
 ## 0.13.4 (2026-10-28)
 
 ### New
