@@ -20,6 +20,7 @@ wowlua-span.workspace = true
 axum = { version = "0.8", default-features = false, features = ["form", "http1", "multipart", "query", "tokio"] }
 tokio = { version = "1.54", features = ["macros", "net", "rt-multi-thread", "signal"] }
 getrandom = "0.4"
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true

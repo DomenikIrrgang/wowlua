@@ -9,9 +9,13 @@
 //! `registry` module and `wowlua-manifest`'s validation).
 
 pub mod api;
+pub mod assets;
 pub mod auth;
+pub mod highlight;
+pub mod html;
 pub mod limits;
 pub mod pages;
+pub mod readme;
 pub mod store;
 #[doc(hidden)]
 pub mod testing;
@@ -64,6 +68,9 @@ pub fn router(app: Shared) -> axum::Router {
     axum::Router::new()
         .route("/", get(pages::home))
         .route("/health", get(|| async { "ok" }))
+        .route("/assets/{*path}", get(assets::serve))
+        .route("/packages/{name}", get(pages::package))
+        .route("/packages/{name}/{version}", get(pages::package_version))
         .route("/config.json", get(api::config))
         .route("/index/{name}", get(api::index))
         .route("/dl/{name}/{file}", get(api::download))
@@ -95,8 +102,11 @@ pub fn router(app: Shared) -> axum::Router {
         .route("/account/tokens/revoke", post(pages::token_revoke))
         .route("/account/yank", post(pages::yank))
         .route("/account/owners", post(pages::owners))
-        .route("/account/reserved", post(pages::reserved))
-        .fallback(api::not_found)
+        .route(
+            "/account/reserved",
+            get(pages::reserved_page).post(pages::reserved),
+        )
+        .fallback(pages::not_found)
         .layer(axum::middleware::from_fn_with_state(
             app.clone(),
             limits::limit,

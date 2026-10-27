@@ -356,17 +356,19 @@ fn publish_blocking(
                 StatusCode::FORBIDDEN,
                 "reserved",
                 format!(
-                    "`{name}` is reserved for the authors of {}; ask the registry's admins if you are one of them",
+                    "`{name}` is reserved for the authors of {}; if you are one of them, claim it: {}",
                     if reserved.note.is_empty() {
                         name
                     } else {
                         &reserved.note
-                    }
+                    },
+                    crate::pages::claim_url(name)
                 ),
             ));
         }
     }
     let meta = checked.meta;
+    let version_meta = crate::store::VersionMeta::from_files(&files, crate::auth::now());
     let entry = IndexEntry {
         name: name.to_string(),
         vers: version.to_string(),
@@ -376,7 +378,10 @@ fn publish_blocking(
         yanked: false,
         wowlua: checked.wowlua,
     };
-    match app.store.publish(&entry, archive, login, admin, &meta) {
+    match app
+        .store
+        .publish(&entry, archive, login, admin, &meta, &version_meta)
+    {
         Ok(()) => Ok(entry),
         Err(PublishError::Exists) => Err(ApiError::new(
             StatusCode::CONFLICT,
@@ -835,7 +840,18 @@ pub async fn reserved_release(
 
 /// How well a package matches one word of a search: 0 is no match.
 fn word_score(word: &str, name: &str, meta: &crate::store::Meta) -> u32 {
-    let mut score = if name == word {
+    word_match(word, name, &meta.keywords, &meta.description).0
+}
+
+/// What of a package one search word matches, the search's way: the
+/// score (0: no match), and whether the name, a keyword, the description.
+pub fn word_match(
+    word: &str,
+    name: &str,
+    keywords: &[String],
+    description: &str,
+) -> (u32, [bool; 3]) {
+    let named = if name == word {
         100
     } else if name.starts_with(word) {
         60
@@ -844,9 +860,8 @@ fn word_score(word: &str, name: &str, meta: &crate::store::Meta) -> u32 {
     } else {
         0
     };
-    let keywords = meta.keywords.iter().map(|k| k.to_lowercase());
     let mut keyword = 0;
-    for k in keywords {
+    for k in keywords.iter().map(|k| k.to_lowercase()) {
         keyword = keyword.max(if k == word {
             30
         } else if k.contains(word) {
@@ -855,11 +870,15 @@ fn word_score(word: &str, name: &str, meta: &crate::store::Meta) -> u32 {
             0
         });
     }
-    score += keyword;
-    if meta.description.to_lowercase().contains(word) {
-        score += 10;
-    }
-    score
+    let described = if description.to_lowercase().contains(word) {
+        10
+    } else {
+        0
+    };
+    (
+        named + keyword + described,
+        [named > 0, keyword > 0, described > 0],
+    )
 }
 
 /// A page of search results (spec §10.10.2).

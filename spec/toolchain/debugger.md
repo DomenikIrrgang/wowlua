@@ -8,7 +8,7 @@ script costs, and the engine's UI is drawn as an image of the state it holds
 
 ## 18.1 Layers
 
-Everything is a library first; the command-line front-ends and wowlua Studio
+Everything is a library first; the command-line front-ends and wowlua studio
 (the planned native IDE) use the same pieces.
 
 | Layer | Crate | Role |

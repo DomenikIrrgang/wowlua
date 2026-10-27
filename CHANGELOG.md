@@ -6,6 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- **The registry's new pages** (https://registry.wowlua.dev), in wowlua.dev's design: search with filters by kind and flavor, a page per package with its install command, a usage example, its README, versions, dependencies and the packages that depend on it, and the account and reserved-name pages. A reserved name's page links a form to claim it.
 - `wowlua new` takes `--check strict` (or `basic`, `nocheck`) for the check mode, `--world-profile` for a starter world profile in `tests/profiles/default.json` that every test starts in, and `--no-git` to skip the Git repository.
 - `wowlua init --no-pkgmeta` adopts an addon from its TOC files only, leaving its `.pkgmeta` as it is.
 

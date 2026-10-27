@@ -272,8 +272,10 @@ What the registry checks:
 - **Names** are lowercase letters, digits and `-`, 2 to 64 characters, and
   first come, first served. The names of well-known WoW libraries (`libstub`,
   `ace3`, `libsharedmedia-3-0`, …) are reserved for their authors: if you
-  maintain one, ask the registry's admins to assign it to your GitHub
-  account.
+  maintain one, claim it with the
+  [claim form](https://github.com/DomenikIrrgang/wowlua/issues/new?template=reserved-name.yml)
+  (the name's page on the registry links it too), and an admin assigns it
+  to your GitHub account.
 - **Versions** never change. Publishing a version that exists fails (HTTP
   409); publish a new one. A version with a serious bug can be **yanked**,
   with `wowlua yank lib-tooltip@1.2.3` or on your account page: lockfiles
