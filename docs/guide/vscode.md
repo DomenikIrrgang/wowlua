@@ -100,6 +100,22 @@ descriptions, searchable.
 - **The outline and breadcrumbs** list a file's functions, classes with their
   methods, locals, enums and types.
 
+## See what your code is
+
+- **Colours by meaning**: types, functions, parameters, fields and
+  decorators each get their colour from the language server, and words
+  like `class`, `import` or `type` are colored as keywords only where they
+  are keywords (`local type = 1` stays a name).
+- **Folding** folds functions, blocks, classes, tables over several lines,
+  runs of comments and of imports.
+- **Inlay hints** show the type of a `local` you declared without one, as
+  the checker sees it: `local doubled = helper(2)` shows `: number` after
+  `doubled`.
+- **Quick fixes** (`Ctrl`/`Cmd` + `.`, or the light bulb) apply the fixes a
+  warning comes with, such as removing an unused local.
+- **References above functions**: each function shows how many places use
+  it; click to list them.
+
 ## Tests in the Testing view
 
 Your `*.test.wowlua` files and their `@test`s show in VS Code's Testing view.

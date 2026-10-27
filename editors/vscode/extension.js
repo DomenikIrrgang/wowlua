@@ -114,6 +114,7 @@ function activate(context) {
         }),
         vscode.commands.registerCommand("wowlua.showUI", () => ui.show(false)),
         vscode.commands.registerCommand("wowlua.restartLanguageServer", () => lsp.restart()),
+        vscode.commands.registerCommand("wowlua.showReferences", (uri, position) => lsp.showReferences(uri, position)),
         vscode.commands.registerCommand("wowlua.showCoverageReport", (uri) => coverage.show(uri)),
         vscode.commands.registerCommand("wowlua.refreshFrames", () => frames.refresh()),
         vscode.commands.registerCommand("wowlua.outlineFrame", (node) => {

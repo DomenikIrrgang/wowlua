@@ -12,6 +12,7 @@
 
 pub mod check;
 pub mod complete;
+pub mod editor;
 pub mod embedded;
 pub mod refs;
 pub mod symbols;
@@ -967,6 +968,11 @@ fn initialized(out: &mut impl std::io::Write, id: &Json) -> std::io::Result<()> 
                 "hoverProvider": true,
                 "completionProvider": { "triggerCharacters": [".", ":", "\"", "'", "@"], "resolveProvider": true },
                 "signatureHelpProvider": { "triggerCharacters": ["(", ","], "retriggerCharacters": [","] },
+                "foldingRangeProvider": editor::capabilities()["foldingRangeProvider"],
+                "semanticTokensProvider": editor::capabilities()["semanticTokensProvider"],
+                "inlayHintProvider": editor::capabilities()["inlayHintProvider"],
+                "codeActionProvider": editor::capabilities()["codeActionProvider"],
+                "codeLensProvider": editor::capabilities()["codeLensProvider"],
             },
             "serverInfo": { "name": "wowlua", "version": env!("CARGO_PKG_VERSION") },
         }),
@@ -1236,6 +1242,63 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                 .map(|d| symbols::symbols(&d.text))
                 .unwrap_or_default();
             reply(out, id, Json::Array(symbols))?;
+        }
+        "textDocument/foldingRange" => {
+            let ranges = server
+                .docs
+                .get(&uri)
+                .map(|d| editor::folding_ranges(&d.text))
+                .unwrap_or_default();
+            reply(out, id, Json::Array(ranges))?;
+        }
+        "textDocument/semanticTokens/full" => {
+            let data = server
+                .docs
+                .get(&uri)
+                .map(|d| editor::semantic_tokens(&d.text))
+                .unwrap_or_default();
+            reply(out, id, json!({ "data": data }))?;
+        }
+        "textDocument/inlayHint" => {
+            let line = |p: &Json| p["line"].as_u64().map(|l| l as usize);
+            let first = line(&params["range"]["start"]).unwrap_or(0);
+            let last = line(&params["range"]["end"]).unwrap_or(usize::MAX);
+            let hints = server
+                .docs
+                .get(&uri)
+                .map(|d| {
+                    let hovers = server
+                        .hovers
+                        .get(&d.canonical)
+                        .map_or(&[][..], Vec::as_slice);
+                    editor::inlay_hints(&d.text, hovers, first, last)
+                })
+                .unwrap_or_default();
+            reply(out, id, Json::Array(hints))?;
+        }
+        "textDocument/codeAction" => {
+            let diagnostics = params["context"]["diagnostics"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+            reply(out, id, Json::Array(editor::code_actions(&diagnostics)))?;
+        }
+        "textDocument/codeLens" => {
+            let lenses = server
+                .docs
+                .get(&uri)
+                .map(|d| {
+                    // Definitions name files by their canonical URI.
+                    let target = text::uri_of(&d.canonical);
+                    editor::reference_lenses(
+                        &d.text,
+                        &uri,
+                        &target,
+                        server.definitions.values().flatten(),
+                    )
+                })
+                .unwrap_or_default();
+            reply(out, id, Json::Array(lenses))?;
         }
         _ => {
             // an unknown request still gets an answer
