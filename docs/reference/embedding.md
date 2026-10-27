@@ -12,7 +12,7 @@ Each wowlua release has the package attached:
 `wowlua-web-<version>.tgz` (with its SHA-256). Install it from there:
 
 ```sh
-npm install https://github.com/DomenikIrrgang/wowlua/releases/download/v0.13.3/wowlua-web-0.13.3.tgz
+npm install https://github.com/DomenikIrrgang/wowlua/releases/download/v0.13.4/wowlua-web-0.13.4.tgz
 ```
 
 The module is about 74 MB, 13 MB with gzip and less with Brotli (the
