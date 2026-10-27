@@ -248,12 +248,15 @@ until a plain value (or range) is set again (unverified: the scripts'
 values, and what the client keeps).
 
 A status bar given a duration (`SetTimerDuration(duration, interpolation,
-direction)`) follows it: its value is the part of the duration passed
-across its range (`Enum.StatusBarTimerDirection.ElapsedTime`, the
-default), or the part left (`RemainingTime`), read at each `GetValue` and
-moved each frame for drawing; secret while the duration is. A value set
-stops it (decision T487; unverified: whether the client's `GetValue`
-reads it, and runs `OnValueChanged`, which the engine doesn't).
+direction)`) follows it: its range becomes 0 to the duration's length in
+seconds, and its value the seconds passed
+(`Enum.StatusBarTimerDirection.ElapsedTime`, the default) or left
+(`RemainingTime`), read at each `GetValue` and moved each frame for
+drawing; secret while the duration is. A value or a range set stops it
+(Blizzard's encounter timeline sets no range for its timer bars, and
+releases a timer with `SetMinMaxValues(0, 0)`; decision T487;
+unverified: the range and value the client reports, and whether it runs
+`OnValueChanged` or `OnMinMaxChanged`, which the engine doesn't).
 
 A protected frame anchored to a region (a texture, a font string, a line,
 a mask texture) is refused with the client's error, out of combat too:

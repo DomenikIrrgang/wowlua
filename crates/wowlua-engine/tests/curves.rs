@@ -439,15 +439,17 @@ fn timer_bars_follow_their_durations() {
 end
 local fill, d = bar()
 local drain = bar(Enum.StatusBarTimerDirection.RemainingTime)
-local start = { fill:GetValue(), drain:GetValue() }
+local cleared = bar()
+local start = { fill:GetValue(), drain:GetValue(), select(2, fill:GetMinMaxValues()) }
 mock.advanceTime(2.5)
 local quarter = { fill:GetValue(), drain:GetValue() }
-drain:SetValue(30)
+drain:SetValue(3)
+cleared:SetMinMaxValues(0, 0)
 mock.advanceTime(10)
 mock.nextFrame()
-return start[1], start[2], quarter[1], quarter[2], fill:GetValue(), drain:GetValue(),
-    tostring(fill:GetTimerDuration() == d)",
+return start[1], start[2], start[3], quarter[1], quarter[2], fill:GetValue(), drain:GetValue(),
+    cleared:GetValue(), tostring(fill:GetTimerDuration() == d)",
     );
-    // A value set stops the timer.
-    assert_eq!(r, ["0", "200", "50", "150", "200", "30", "true"]);
+    // The duration is the range; a value or a range set stops the timer.
+    assert_eq!(r, ["0", "10", "10", "2.5", "7.5", "10", "3", "0", "true"]);
 }

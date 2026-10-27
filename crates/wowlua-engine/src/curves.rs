@@ -645,13 +645,13 @@ fn measures(vm: &mut Vm, s: Span, modifier: Value) -> (f64, f64, f64) {
     (total * k, elapsed * k, (total - elapsed) * k)
 }
 
-/// How much of a duration has passed now, 0 to 1 (0 for an empty one),
-/// and whether it is secret.
-pub(crate) fn elapsed_fraction(vm: &mut Vm, id: WidgetId) -> (f64, bool) {
+/// A duration's length and how much of it has passed now, 0 to 1 (0 for
+/// an empty one), and whether it is secret.
+pub(crate) fn elapsed_fraction(vm: &mut Vm, id: WidgetId) -> (f64, f64, bool) {
     let s = span(vm, id);
     let (total, elapsed, _) = measures(vm, s, Value::Nil);
     let f = if total > 0.0 { elapsed / total } else { 0.0 };
-    (f, s.secret)
+    (total, f, s.secret)
 }
 
 pub(crate) fn duration_get(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {

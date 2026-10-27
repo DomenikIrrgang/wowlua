@@ -6,7 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
-- A status bar given `SetTimerDuration` fills (or drains) with its duration, in `GetValue` and in screenshots, so cast bars that run on a timer show their progress; before, the bar stayed where it was.
+- A status bar given `SetTimerDuration` fills (or drains) with its duration, in `GetValue` and in screenshots, so cast bars that run on a timer show their progress, with or without a range set first; before, the bar stayed where it was.
 
 ## 0.13.4 (2026-10-28)
 

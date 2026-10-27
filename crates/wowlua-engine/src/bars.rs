@@ -202,6 +202,7 @@ fn set_min_max_values(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         let v = vm.str(&msg);
         return Err(vm.raise(v));
     }
+    stop_timer(vm, id);
     let mut b = bar(vm, id);
     let secret = is_secret(c.arg(2)) || is_secret(c.arg(3));
     if b.secret_range != secret {
@@ -285,10 +286,13 @@ fn follow_timer(vm: &mut Vm, id: WidgetId) {
         .is_some_and(|&d| vm.tonumber(vm.hidden(d)) == Some(1.0));
     // ponytail: the engine's clock; a duration on a manual clock
     // (`SetClock`) reads it at the engine's time here.
-    let (elapsed, secret) = crate::curves::elapsed_fraction(vm, duration);
+    let (total, elapsed, secret) = crate::curves::elapsed_fraction(vm, duration);
     let f = if draining { 1.0 - elapsed } else { elapsed };
+    // The duration is the bar's range (Blizzard's code sets none for a
+    // timer, and clears one with `SetMinMaxValues(0, 0)`).
     let mut b = bar(vm, id);
-    b.value = kept_value(&b, b.min + (b.max - b.min) * f);
+    (b.min, b.max, b.ranged, b.secret_range) = (0.0, total, true, secret);
+    b.value = total * f;
     b.secret_value = secret;
     engine_mut(vm).world.bars.insert(id.0, b);
 }
