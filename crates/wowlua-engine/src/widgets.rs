@@ -2198,7 +2198,7 @@ fn get_color_alpha(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 // ------------------------------------------------------- message frames
 
 /// Calls `object:method(args…)` as Lua would.
-fn call_method(vm: &mut Vm, object: Value, method: &str, args: &[Value]) -> Ret {
+pub(crate) fn call_method(vm: &mut Vm, object: Value, method: &str, args: &[Value]) -> Ret {
     let key = vm.str(method);
     let f = vm.index_slot(object, key, None)?.v;
     let mut all = vec![object];

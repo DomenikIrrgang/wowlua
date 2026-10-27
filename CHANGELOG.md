@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- Nameplates shown with `unit:showNameplate()` have a size and a place on the screen, so what nameplate addons build on them shows in screenshots; before, nothing on them was drawn.
+
 ## 0.13.4 (2026-10-28)
 
 ### New
