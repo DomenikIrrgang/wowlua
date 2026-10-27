@@ -378,7 +378,7 @@ pub fn serve_with(
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
-        start_due(&mut server);
+        start_due(&mut server, out);
     }
 }
 
@@ -469,6 +469,9 @@ fn on_checked(
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
     let mut ran = server.running.take();
+    if ran.as_ref().is_some_and(|r| r.completion.is_none()) {
+        checking(out, manifest, "end", None, result.is_err())?;
+    }
     let finding = ran.as_mut().and_then(|r| r.finding.take());
     // a completion check: its answer, nothing published
     if let Some(Running {
@@ -517,10 +520,39 @@ fn on_checked(
     answer_waiting(server, manifest, out)
 }
 
+/// A check of a package began or ended (spec §16.2.9): the editor's
+/// background jobs show it.
+fn checking(
+    out: &mut impl std::io::Write,
+    manifest: &Path,
+    state: &str,
+    first: Option<bool>,
+    failed: bool,
+) -> std::io::Result<()> {
+    let mut params = json!({ "state": state, "manifest": text::uri_of(manifest) });
+    if let Some(first) = first {
+        params["first"] = json!(first);
+    }
+    if failed {
+        params["failed"] = json!(true);
+    }
+    notify(out, "wowlua/checking", params)
+}
+
+/// Starts the check that is due (see [`start_now`]), and tells the editor
+/// when one began.
+fn start_due(server: &mut Server, out: &mut impl std::io::Write) {
+    let idle = server.running.is_none();
+    start_now(server);
+    if idle && let Some(r) = server.running.as_ref().filter(|r| r.completion.is_none()) {
+        let _ = checking(out, &r.manifest.clone(), "begin", Some(r.focused), false);
+    }
+}
+
 /// Starts the check of the package whose edits settled first, else, when
 /// nothing was edited for `QUIET`, a saved package's workspace; unless a
 /// check runs.
-fn start_due(server: &mut Server) {
+fn start_now(server: &mut Server) {
     if server.running.is_some() {
         return;
     }

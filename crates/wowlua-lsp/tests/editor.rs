@@ -101,4 +101,17 @@ fn the_editor_gets_tokens_folds_hints_fixes_and_lenses() {
         lenses["result"][0]["command"]["title"], "2 references",
         "{lenses:#?}"
     );
+
+    // The checks were told: a first pass began and ended.
+    let manifest = wowlua_lsp::text::uri_of(&wowlua_lsp::text::canonical(
+        &dir.path().join("wowlua.json"),
+    ));
+    let begin = c.wait("a check's beginning", |m| {
+        m["method"] == "wowlua/checking" && m["params"]["state"] == "begin"
+    });
+    assert_eq!(begin["params"]["manifest"], manifest, "{begin:#?}");
+    assert!(begin["params"]["first"].is_boolean(), "{begin:#?}");
+    c.wait("a check's end", |m| {
+        m["method"] == "wowlua/checking" && m["params"]["state"] == "end"
+    });
 }

@@ -79,7 +79,7 @@ impl Embedded {
         if let Ok(true) = on_message(&mut self.server, message, &mut out) {
             self.exited = true;
         }
-        start_due(&mut self.server);
+        start_due(&mut self.server, &mut out);
         messages(&out)
     }
 
@@ -129,7 +129,7 @@ impl Embedded {
     pub fn run_due(&mut self) -> Vec<Json> {
         let mut out = Vec::new();
         loop {
-            start_due(&mut self.server);
+            start_due(&mut self.server, &mut out);
             let Some(job) = self.jobs.borrow_mut().pop_front() else {
                 break;
             };

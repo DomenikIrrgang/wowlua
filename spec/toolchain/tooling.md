@@ -921,6 +921,13 @@ Five requests come from a file's syntax and its package's last check
   references peek). The lenses for tests and profiling (the table above)
   are not built yet.
 
+A sixth thing is a notification: `wowlua/checking` tells the editor when
+a check of a package begins (`{ "state": "begin", "manifest": uri,
+"first": true }` for the first pass of an edit, `false` for a full check)
+and ends (`{ "state": "end", "manifest": uri }`, with `"failed": true`
+when it failed); completion checks are not told. Editors show it as a
+background job (wowlua studio's jobs).
+
 The VS Code extension asks for all five; it asks again for hints and
 lenses when a check publishes its diagnostics.
 
