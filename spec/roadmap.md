@@ -547,7 +547,7 @@ as they are, and secure-code paths keep their call structure (taint).
 In-game performance tools, to measure what the optimizations change
 ([Debugging §7.7](language/07-debugging.md#77-dev-console), decision T181):
 
-- The dev window in the wowlua design system with its fonts (T170, T171).
+- The dev window in the wowlua design system with its fonts (T171, T473).
 - Recordings: live, per combat, per boss pull and manual; comparison per
   minute (T172, T173).
 - Frame time, slow calls, call paths, event attribution and garbage per

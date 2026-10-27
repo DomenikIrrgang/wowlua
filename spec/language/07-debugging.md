@@ -349,7 +349,7 @@ total, self, max, avg).
 ### 7.7.1 Dev window
 
 `/wl` opens a movable, resizable window (880 × 640 by default) with an addon
-selector and these tabs (decision T170):
+selector and these tabs (decision T473):
 
 | Tab | Contents |
 |-----|----------|
