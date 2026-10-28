@@ -274,6 +274,11 @@ pub enum Request {
     SetClock {
         manual: bool,
     },
+    /// Whether stepping goes into Blizzard's UI code and stops there, from
+    /// now on (the launch's `debugBlizzardUI`; decision T496).
+    SetDebugBlizzardUi {
+        on: bool,
+    },
     /// The running world as a world profile's JSON (decision T494).
     SaveWorld,
     /// One frame's or region's details for an inspector, by its `id` in

@@ -164,6 +164,9 @@ impl Default for Clock {
     }
 }
 
+/// A call's check: why the VM refuses to call a function, or nothing.
+pub type CallGuard = dyn Fn(&Vm, FuncRef) -> Option<String>;
+
 pub struct Vm {
     /// The client's changes to Lua's rules.
     pub rules: Rules,
@@ -229,6 +232,9 @@ pub struct Vm {
     pub(crate) hooks_on: bool,
     /// Calls and returns are reported (profiling, function breakpoints).
     pub(crate) call_hooks: bool,
+    /// Asked before every call: a reason refuses it (a debugger's watch
+    /// that only reads).
+    pub(crate) call_guard: Option<Box<CallGuard>>,
     /// Instructions run while hooks were on.
     pub(crate) instructions: u64,
     /// `pcall`s, `xpcall`s and `coroutine.resume`s running: an error
@@ -350,6 +356,7 @@ impl Vm {
             hook_base: 0,
             hooks_on: false,
             call_hooks: false,
+            call_guard: None,
             instructions: 0,
             protected: 0,
             aborted: false,
@@ -850,6 +857,11 @@ impl Vm {
                 f
             }
         };
+        if let Some(guard) = &self.call_guard
+            && let Some(why) = guard(self, f)
+        {
+            return Err(self.error(&why));
+        }
         self.enter_ci()?;
         // Calls clear the fixed taint (`luaD_precall`); entering a Lua
         // frame sets it again.
@@ -2215,6 +2227,12 @@ impl Vm {
         text.extend_from_slice(msg.as_bytes());
         let v = self.bytes(&text);
         self.raise(v)
+    }
+
+    /// Asks `guard` before every call from now on (none: no more): a reason
+    /// it gives refuses the call with that error.
+    pub fn set_call_guard(&mut self, guard: Option<Box<CallGuard>>) {
+        self.call_guard = guard;
     }
 
     /// An error from native code with the position of its caller

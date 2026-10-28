@@ -837,6 +837,10 @@ impl Controller {
                 self.shared().manual = Some(manual);
                 Ok(Response::Ok)
             }
+            Request::SetDebugBlizzardUi { on } => {
+                self.shared().debug_blizzard_ui = on;
+                Ok(Response::Ok)
+            }
             Request::SaveWorld => Ok(Response::Data {
                 data: crate::ui::world_profile(vm),
             }),
@@ -1167,7 +1171,7 @@ impl Controller {
         let mut hit = Vec::new();
         for (id, spec) in candidates {
             if let Some(c) = &spec.condition {
-                match crate::eval::evaluate(vm, None, None, c, EvalContext::Watch) {
+                match crate::eval::evaluate(vm, None, None, c, EvalContext::Repl) {
                     Ok(v) if v.value != "nil" && v.value != "false" => {}
                     Ok(_) => continue,
                     Err(e) => {
@@ -1226,7 +1230,7 @@ impl Controller {
             .collect();
         conds.iter().any(|c| match c {
             None => true,
-            Some(c) => crate::eval::evaluate(vm, None, None, c, EvalContext::Watch)
+            Some(c) => crate::eval::evaluate(vm, None, None, c, EvalContext::Repl)
                 .is_ok_and(|v| v.value != "nil" && v.value != "false"),
         })
     }

@@ -169,6 +169,56 @@ b:SetScript('OnEvent', function(self, event, bag)
 end)
 ";
 
+/// Stepping into Blizzard's UI code switches while the session runs.
+#[test]
+fn debugging_blizzards_ui_switches_while_running() {
+    let mut s = session();
+    s.set_line("src/b.lua", 1, |_| {});
+    s.script(vec![
+        Request::SetDebugBlizzardUi { on: true },
+        Request::Continue,
+    ]);
+    s.run("b.lua", "local x = 1\n");
+    assert!(s.shared.borrow().debug_blizzard_ui);
+}
+
+/// A watch only reads (decision T496): pure library functions and the
+/// game's queries run; assigning, calling a Lua function or another API
+/// function is refused; the console still runs them.
+#[test]
+fn a_watch_only_reads() {
+    let mut s = session();
+    s.set_line("src/w.lua", 4, |_| {});
+    let watch = |e: &str| Request::Evaluate {
+        expression: e.into(),
+        frame: Some(1),
+        context: EvalContext::Watch,
+    };
+    s.script(vec![
+        watch("string.format('%d', n * 2)"),
+        watch("UnitName('player') ~= nil and #list"),
+        watch("Bump()"),
+        watch("CreateFrame('Frame')"),
+        watch("n = 5"),
+        watch("table.sort(list)"),
+        eval("Bump()"),
+        eval("Count"),
+        Request::Continue,
+    ]);
+    s.run(
+        "w.lua",
+        "function Bump() Count = (Count or 0) + 1 end\nlocal n = 21\nlocal list = { 3, 1 }\nlocal x = n\n",
+    );
+    let v = s.values();
+    assert_eq!(&v[..2], ["\"42\"", "2"], "{v:?}");
+    assert!(v[2].contains("does not call the function at"), "{}", v[2]);
+    assert!(v[3].contains("does not call CreateFrame()"), "{}", v[3]);
+    assert!(v[4].contains("cannot set n"), "{}", v[4]);
+    assert!(v[5].contains("does not call sort()"), "{}", v[5]);
+    // The console ran it; the watch had not.
+    assert_eq!(v[7], "1", "{v:?}");
+}
+
 /// A function breakpoint naming where a function is defined (as a profile
 /// names it) stops on entry to each of its closures, local ones too
 /// (decision T495).
