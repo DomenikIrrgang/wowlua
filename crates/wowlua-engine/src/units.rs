@@ -1615,6 +1615,8 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("token", control_tokens),
         ("setName", control_set_name),
         ("update", control_update),
+        ("learn", crate::trainer::control_learn),
+        ("unlearn", crate::trainer::control_unlearn),
         ("applyAura", crate::auras::control_apply),
         ("removeAura", crate::auras::control_remove),
         ("castSpell", crate::casting::control_cast),

@@ -1,5 +1,5 @@
 -- A world profile (spec Tooling §16.1.4, decision T213), applied before the
--- addon loads: the character, game data, money, stats, gear, bags, action
+-- addon loads: the character, game data, trained spells, money, stats, gear, bags, action
 -- bars, chat channels, macros, collections, place, auras, the units
 -- around, CVars, bindings and saved variables.
 local mock, profile = ...
@@ -21,6 +21,13 @@ end)
 each(profile.spells, function(id, data)
     mock.defineSpell(tonumber(id), data)
 end)
+if type(profile.trained) == "table" then
+    local ids = {}
+    each(profile.trained, function(_, id)
+        ids[#ids + 1] = tonumber(id)
+    end)
+    player:learn(ids, { quiet = true })
+end
 if profile.money then
     player:setMoney(profile.money)
 end

@@ -778,7 +778,9 @@ bars and a target.
    5. On the desktop, in `tests/ingame`: `wowlua profile snapshot probe-world --client _forever_`
 
    Send `tests/ingame/tests/profiles/probe-world.json` and the command's
-   output. The file must not name your character or realm.
+   output. The file must not name your character or realm, and its
+   `trained` must list your spellbook's spells (decision T500): Attack
+   (6603) among them.
 2. **`/stdtest snapshot` through the runtime's**:
    1. `/stdtest snapshot`
    2. Wait for `snapshot: recorded`, then `/reload`

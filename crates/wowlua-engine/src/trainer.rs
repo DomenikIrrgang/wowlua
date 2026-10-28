@@ -945,6 +945,76 @@ fn buy_trainer_service(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// The spell IDs a control was given: one, or a list.
+fn spell_ids(vm: &mut Vm, v: Value) -> Vec<i64> {
+    match v {
+        Value::Num(n) => vec![n as i64],
+        Value::Table(t) => {
+            let mut out = Vec::new();
+            let mut i = 1.0;
+            while let Value::Num(n) = vm.heap.table(t).get(Value::Num(i)) {
+                out.push(n as i64);
+                i += 1.0;
+            }
+            out
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// `player:learn(spells, { quiet? })`: spells (an ID or a list) the player
+/// has trained, known from then on (`IsSpellKnown`, `IsPlayerSpell`; a
+/// world profile's `trained`, decision T500). Unless `quiet`, each is told
+/// as a trainer's: `LEARNED_SPELL_IN_SKILL_LINE(spell, 0, false)`, then
+/// `SPELLS_CHANGED` (unverified: the skill line's index).
+pub fn control_learn(vm: &mut Vm, c: NativeCall) -> Ret {
+    if crate::units::this(vm, &c)? != crate::units::PLAYER {
+        return Err(vm.error("learn: the player's"));
+    }
+    let spells = spell_ids(vm, c.arg(2));
+    let quiet = match c.arg(3) {
+        Value::Table(o) => {
+            let k = vm.str("quiet");
+            vm.heap.table(o).get(k).truthy()
+        }
+        _ => false,
+    };
+    let mut new = Vec::new();
+    for s in spells {
+        if engine_mut(vm).world.trainers.learned.insert(s) {
+            new.push(s);
+        }
+    }
+    if !quiet && !new.is_empty() {
+        for s in &new {
+            fire(
+                vm,
+                "LEARNED_SPELL_IN_SKILL_LINE",
+                &[Value::Num(*s as f64), Value::Num(0.0), Value::Bool(false)],
+            );
+        }
+        fire(vm, "SPELLS_CHANGED", &[]);
+    }
+    Ok(vec![])
+}
+
+/// `player:unlearn(spells)`: spells (an ID or a list) the player no longer
+/// knows (`SPELLS_CHANGED`; unverified).
+pub fn control_unlearn(vm: &mut Vm, c: NativeCall) -> Ret {
+    if crate::units::this(vm, &c)? != crate::units::PLAYER {
+        return Err(vm.error("unlearn: the player's"));
+    }
+    let spells = spell_ids(vm, c.arg(2));
+    let mut changed = false;
+    for s in spells {
+        changed |= engine_mut(vm).world.trainers.learned.remove(&s);
+    }
+    if changed {
+        fire(vm, "SPELLS_CHANGED", &[]);
+    }
+    Ok(vec![])
+}
+
 /// Whether the player learned the spell from a trainer in this test.
 pub(crate) fn learned(vm: &Vm, spell: f64) -> bool {
     engine(vm).world.trainers.learned.contains(&(spell as i64))

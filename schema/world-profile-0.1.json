@@ -44,10 +44,21 @@
       ]
     },
     "spells": {
-      "description": "Spell data by spell ID (`mock.defineSpell`).",
+      "description": "Spell data by spell ID (`mock.defineSpell`): to override what the\nclient's tables answer.",
       "anyOf": [
         {
           "$ref": "#/$defs/List2"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "trained": {
+      "description": "The spells the character has trained, by spell ID\n(`mock.player:learn`; decision T500).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/List3"
         },
         {
           "type": "null"
@@ -74,7 +85,7 @@
       "description": "What is worn, by slot ID or the client's slot name\n(`MainHandSlot`): an item ID or an item.",
       "anyOf": [
         {
-          "$ref": "#/$defs/List3"
+          "$ref": "#/$defs/List4"
         },
         {
           "type": "null"
@@ -85,7 +96,7 @@
       "description": "The bags by bag ID (0 the backpack).",
       "anyOf": [
         {
-          "$ref": "#/$defs/List4"
+          "$ref": "#/$defs/List5"
         },
         {
           "type": "null"
@@ -96,7 +107,7 @@
       "description": "The action bars' actions by slot (`mock.setAction`).",
       "anyOf": [
         {
-          "$ref": "#/$defs/List5"
+          "$ref": "#/$defs/List6"
         },
         {
           "type": "null"
@@ -118,7 +129,7 @@
       "description": "The mount journal by mount ID (`mock.setMounts`).",
       "anyOf": [
         {
-          "$ref": "#/$defs/List7"
+          "$ref": "#/$defs/List8"
         },
         {
           "type": "null"
@@ -129,7 +140,7 @@
       "description": "The toy box by item ID (`mock.setToys`).",
       "anyOf": [
         {
-          "$ref": "#/$defs/List8"
+          "$ref": "#/$defs/List9"
         },
         {
           "type": "null"
@@ -631,14 +642,8 @@
             "null"
           ]
         },
-        "known": {
-          "description": "The player knows it.",
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
         "petKnown": {
+          "description": "The player's pet knows it.",
           "type": [
             "boolean",
             "null"
@@ -677,6 +682,25 @@
       "additionalProperties": true
     },
     "List3": {
+      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      ]
+    },
+    "List4": {
       "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
       "anyOf": [
         {
@@ -746,7 +770,7 @@
       ],
       "additionalProperties": true
     },
-    "List4": {
+    "List5": {
       "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
       "anyOf": [
         {
@@ -777,7 +801,7 @@
         "items": {
           "anyOf": [
             {
-              "$ref": "#/$defs/List3"
+              "$ref": "#/$defs/List4"
             },
             {
               "type": "null"
@@ -787,7 +811,7 @@
       },
       "additionalProperties": true
     },
-    "List5": {
+    "List6": {
       "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
       "anyOf": [
         {
@@ -870,7 +894,7 @@
         "account": {
           "anyOf": [
             {
-              "$ref": "#/$defs/List6"
+              "$ref": "#/$defs/List7"
             },
             {
               "type": "null"
@@ -880,7 +904,7 @@
         "character": {
           "anyOf": [
             {
-              "$ref": "#/$defs/List6"
+              "$ref": "#/$defs/List7"
             },
             {
               "type": "null"
@@ -889,7 +913,7 @@
         }
       }
     },
-    "List6": {
+    "List7": {
       "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
       "anyOf": [
         {
@@ -934,7 +958,7 @@
       },
       "additionalProperties": true
     },
-    "List7": {
+    "List8": {
       "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
       "anyOf": [
         {
@@ -998,7 +1022,7 @@
       },
       "additionalProperties": true
     },
-    "List8": {
+    "List9": {
       "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
       "anyOf": [
         {
@@ -1052,7 +1076,7 @@
           "description": "Collected source IDs.",
           "anyOf": [
             {
-              "$ref": "#/$defs/List9"
+              "$ref": "#/$defs/List3"
             },
             {
               "type": "null"
@@ -1063,7 +1087,7 @@
           "description": "Favourite appearance IDs.",
           "anyOf": [
             {
-              "$ref": "#/$defs/List9"
+              "$ref": "#/$defs/List3"
             },
             {
               "type": "null"
@@ -1071,25 +1095,6 @@
           ]
         }
       }
-    },
-    "List9": {
-      "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
-      "anyOf": [
-        {
-          "type": "array",
-          "items": {
-            "type": "number",
-            "format": "double"
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": {
-            "type": "number",
-            "format": "double"
-          }
-        }
-      ]
     },
     "Channels": {
       "type": "object",

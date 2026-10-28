@@ -208,6 +208,12 @@ export interface MockUnit
     function wear(slot: number?)
     --- The player's money, in copper (`PLAYER_MONEY`).
     function setMoney(copper: number)
+    --- Spells the player has trained (an ID or a list), known from then on
+    --- (`IsSpellKnown`, `IsPlayerSpell`); unless `quiet`, each told as a
+    --- trainer's (`LEARNED_SPELL_IN_SKILL_LINE`, then `SPELLS_CHANGED`).
+    function learn(spells: number | number[], opts: { quiet?: boolean }?)
+    --- Spells the player no longer knows (`SPELLS_CHANGED`).
+    function unlearn(spells: number | number[])
     --- The player's stats given (the others stay), each change told by its
     --- event (`UNIT_STATS`, `PLAYER_XP_UPDATE`, …):
     --- `setStats({ xp = 0, stat = { [1] = { 67, 67, 22, 0 } } })`. The

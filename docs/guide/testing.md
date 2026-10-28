@@ -337,6 +337,7 @@ and bags, where it stands, the units around it and saved variables. Put it in
   "character": { "name": "Thrall", "class": "SHAMAN", "race": "Orc", "level": 60 },
   "money": 123456,
   "items": { "159": { "name": "Refreshing Spring Water" } },
+  "trained": [403, 529],
   "bags": { "0": { "slots": 16, "items": { "1": { "id": 159, "count": 5 } } } },
   "position": { "mapID": 1453, "zone": "Stormwind City", "x": 0.5, "y": 0.6 },
   "units": [

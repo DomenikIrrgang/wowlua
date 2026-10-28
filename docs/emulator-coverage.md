@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,155 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,157 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,155 rules unverified: each rests on Blizzard's
+The engine's code marks 1,157 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2092,13 +2092,15 @@ page changes only when a rule is added, removed or reworded.
 - [tradeskill.rs](../crates/wowlua-engine/src/tradeskill.rs): Unverified: what follows the last cast, one held.
 - [tradeskill.rs](../crates/wowlua-engine/src/tradeskill.rs): A new slot's bag told at once (recorded: the first copper and bronze bars; unverified: the wheel's in the backpack, t...
 
-### trainer (6)
+### trainer (8)
 
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): Unverified: a profession trainer, the filters' list kept until the window reopens, a spell bought without room on the...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): A rank no data gives a level (its service reads 0, no learn level recorded, not in SuuUI's data): estimated between t...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): The class's spellbook tabs after General, by skill line (Classic's; unverified: Forever's beyond the warrior's Fury 3).
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): Whether the character knows a recorded service's spell (`has`: the spells it has): it, or a higher rank of it (unveri...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): `SetTrainerServiceTypeFilter(type, on)`: the list again, its update (unverified).
+- [trainer.rs](../crates/wowlua-engine/src/trainer.rs): `player:learn(spells, { quiet? })`: spells (an ID or a list) the player has trained, known from then on (`IsSpellKnow...
+- [trainer.rs](../crates/wowlua-engine/src/trainer.rs): `player:unlearn(spells)`: spells (an ID or a list) the player no longer knows (`SPELLS_CHANGED`; unverified).
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): A class trainer's: a recorded one's as its data has them; an explicit one's (unverified) no skill or ability required...
 
 ### traits (12)
