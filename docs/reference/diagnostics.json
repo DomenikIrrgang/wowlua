@@ -4120,7 +4120,7 @@
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^9.0\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    }\n}\n"
             }
           ],
-          "output": "error[E4300]: this package requires wowlua ^9.0, but this is wowlua 0.13.5\n  ┌─ wowlua.json:5:9\n  │\n5 │         \"wowlua\": \"^9.0\"\n  │         ^^^^^^^^ required compiler version\n  │\n  = help: install a matching wowlua version"
+          "output": "error[E4300]: this package requires wowlua ^9.0, but this is wowlua 0.13.6\n  ┌─ wowlua.json:5:9\n  │\n5 │         \"wowlua\": \"^9.0\"\n  │         ^^^^^^^^ required compiler version\n  │\n  = help: install a matching wowlua version"
         },
         {
           "compiles": true,
