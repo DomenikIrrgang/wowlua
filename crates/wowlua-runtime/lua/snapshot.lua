@@ -741,6 +741,30 @@ end
 
 -- The target, with how far it is (the smallest of CheckInteractDistance's
 -- ranges it is in).
+--- The spells in the player's spellbook (not those to learn later).
+local function trained()
+	local out = {}
+	local book = C_SpellBook
+	local E = Enum
+	if type(book) ~= "table" or not book.GetNumSpellBookSkillLines then
+		return out
+	end
+	local bank = E.SpellBookSpellBank and E.SpellBookSpellBank.Player or 0
+	local spellType = E.SpellBookItemType and E.SpellBookItemType.Spell or 1
+	for line = 1, book.GetNumSpellBookSkillLines() do
+		local info = book.GetSpellBookSkillLineInfo(line)
+		if info then
+			for slot = info.itemIndexOffset + 1, info.itemIndexOffset + info.numSpellBookItems do
+				local item = book.GetSpellBookItemInfo(slot, bank)
+				if item and item.spellID and item.itemType == spellType then
+					out[#out + 1] = item.spellID
+				end
+			end
+		end
+	end
+	return out
+end
+
 local function units()
 	if not UnitExists("target") then
 		return {}
@@ -808,6 +832,7 @@ local function takeSnapshot()
 	position = position,
 	auras = auras,
 	units = units,
+	trained = trained,
 	cvars = cvars,
 	bindings = bindings,
 	actions = actions,

@@ -153,6 +153,9 @@ pub struct Units {
     /// The NPC the player talks to (`npc`: a vendor).
     pub npc: Option<UnitId>,
     pub nameplates: Vec<Option<UnitId>>,
+    /// Nameplates shown before the player logged in (a world profile's):
+    /// they appear once the player enters the world.
+    pub waiting_plates: Vec<UnitId>,
     /// Each nameplate slot's frame, made the first time the slot is used.
     pub nameplate_frames: Vec<widgets::WidgetId>,
     /// The group without the player, in order; a raid when `raid`.
@@ -1615,6 +1618,8 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("token", control_tokens),
         ("setName", control_set_name),
         ("update", control_update),
+        ("learn", crate::trainer::control_learn),
+        ("unlearn", crate::trainer::control_unlearn),
         ("applyAura", crate::auras::control_apply),
         ("removeAura", crate::auras::control_remove),
         ("castSpell", crate::casting::control_cast),
@@ -4042,10 +4047,41 @@ pub(crate) fn player_out_of_combat(vm: &mut Vm) {
 
 fn control_show_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
+    // `{ entering = true }` (a world profile's units): before the login,
+    // Blizzard's nameplate driver has no options yet, so the nameplate
+    // waits for the player to enter the world.
+    let entering = match c.arg(2) {
+        Value::Table(o) => {
+            let k = vm.str("entering");
+            vm.heap.table(o).get(k).truthy()
+        }
+        _ => false,
+    };
+    if entering && !engine(vm).world.logged_in {
+        let waiting = &mut engine_mut(vm).units.waiting_plates;
+        if !waiting.contains(&me) {
+            waiting.push(me);
+        }
+        return Ok(vec![]);
+    }
+    let slot = show_nameplate(vm, me)?;
+    Ok(vec![Value::Num(slot as f64 + 1.0)])
+}
+
+/// The nameplates that waited for the player to enter the world, shown
+/// (after `PLAYER_ENTERING_WORLD`; unverified: the client's order).
+pub(crate) fn show_waiting_nameplates(vm: &mut Vm) {
+    for me in std::mem::take(&mut engine_mut(vm).units.waiting_plates) {
+        let _ = show_nameplate(vm, me);
+    }
+}
+
+/// Shows `me`'s nameplate: its slot (from 0).
+fn show_nameplate(vm: &mut Vm, me: UnitId) -> Result<usize, wowlua_vm::LuaError> {
     let slot = {
         let u = &mut engine_mut(vm).units;
         if let Some(i) = u.nameplates.iter().position(|n| *n == Some(me)) {
-            return Ok(vec![Value::Num(i as f64 + 1.0)]);
+            return Ok(i);
         }
         match u.nameplates.iter().position(Option::is_none) {
             Some(i) => {
@@ -4083,7 +4119,7 @@ fn control_show_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {
     place_nameplate(vm, frame, me)?;
     let token = vm.str(&format!("nameplate{}", slot + 1));
     fire(vm, "NAME_PLATE_UNIT_ADDED", &[token]);
-    Ok(vec![Value::Num(slot as f64 + 1.0)])
+    Ok(slot)
 }
 
 /// A nameplate shown sits where its unit would be: the client's size
@@ -4159,6 +4195,7 @@ fn get_name_plates(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 fn control_hide_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
+    engine_mut(vm).units.waiting_plates.retain(|u| *u != me);
     let slot = engine(vm)
         .units
         .nameplates

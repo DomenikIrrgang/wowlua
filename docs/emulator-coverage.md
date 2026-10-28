@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,155 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,158 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,155 rules unverified: each rests on Blizzard's
+The engine's code marks 1,158 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2092,13 +2092,15 @@ page changes only when a rule is added, removed or reworded.
 - [tradeskill.rs](../crates/wowlua-engine/src/tradeskill.rs): Unverified: what follows the last cast, one held.
 - [tradeskill.rs](../crates/wowlua-engine/src/tradeskill.rs): A new slot's bag told at once (recorded: the first copper and bronze bars; unverified: the wheel's in the backpack, t...
 
-### trainer (6)
+### trainer (8)
 
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): Unverified: a profession trainer, the filters' list kept until the window reopens, a spell bought without room on the...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): A rank no data gives a level (its service reads 0, no learn level recorded, not in SuuUI's data): estimated between t...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): The class's spellbook tabs after General, by skill line (Classic's; unverified: Forever's beyond the warrior's Fury 3).
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): Whether the character knows a recorded service's spell (`has`: the spells it has): it, or a higher rank of it (unveri...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): `SetTrainerServiceTypeFilter(type, on)`: the list again, its update (unverified).
+- [trainer.rs](../crates/wowlua-engine/src/trainer.rs): `player:learn(spells, { quiet? })`: spells (an ID or a list) the player has trained, known from then on (`IsSpellKnow...
+- [trainer.rs](../crates/wowlua-engine/src/trainer.rs): `player:unlearn(spells)`: spells (an ID or a list) the player no longer knows (`SPELLS_CHANGED`; unverified).
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): A class trainer's: a recorded one's as its data has them; an explicit one's (unverified) no skill or ability required...
 
 ### traits (12)
@@ -2171,7 +2173,7 @@ page changes only when a rule is added, removed or reworded.
 - [unitinfo.rs](../crates/wowlua-engine/src/unitinfo.rs): Recorded: slots 8 and 10 true (the others unverified).
 - [unitinfo.rs](../crates/wowlua-engine/src/unitinfo.rs): As the client answered (the full probe; facts of Forever's account and systems, unverified for another account).
 
-### units (48)
+### units (49)
 
 - [units.rs](../crates/wowlua-engine/src/units.rs): Unverified until probed: the player's defaults; GUID formats; the order of the events a change fires (a unit event fi...
 - [units.rs](../crates/wowlua-engine/src/units.rs): Each class's ID, file and name (enUS; the client's for Paladin, `UnitClass`; the others unverified).
@@ -2213,6 +2215,7 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine/src/units.rs): The combat text's delay after a hit lands (`/stdtest engine scenario combat`: `UNIT_COMBAT` 0.33 to 0.53 s after the...
 - [units.rs](../crates/wowlua-engine/src/units.rs): Sets a restriction's state, firing `ADDON_RESTRICTION_STATE_CHANGED` with `Activating` before it becomes active (unve...
 - [units.rs](../crates/wowlua-engine/src/units.rs): The corpses still on the player drop it too, before the player's flags (no targettarget: recorded, `quest`'s 4 of 4 c...
+- [units.rs](../crates/wowlua-engine/src/units.rs): The nameplates that waited for the player to enter the world, shown (after `PLAYER_ENTERING_WORLD`; unverified: the c...
 - [units.rs](../crates/wowlua-engine/src/units.rs): A slot's first use makes its frame: `NAME_PLATE_CREATED(frame)` in the same frame as, and before, its `NAME_PLATE_UNI...
 - [units.rs](../crates/wowlua-engine/src/units.rs): `mock.addToGroup(unit, raid? | { raid, subgroup })`: the unit joins the player's group (a raid with `raid`; in a raid...
 - [units.rs](../crates/wowlua-engine/src/units.rs): `mock.removeFromGroup(unit [, { quiet }])`: the unit leaves the player's group (`GROUP_ROSTER_UPDATE`; `quiet`: nothi...

@@ -51,8 +51,12 @@ pub struct WorldProfile {
     pub character: Option<UnitData>,
     /// Item data by item ID (`mock.defineItem`).
     pub items: Option<List<Item>>,
-    /// Spell data by spell ID (`mock.defineSpell`).
+    /// Spell data by spell ID (`mock.defineSpell`): to override what the
+    /// client's tables answer.
     pub spells: Option<List<Spell>>,
+    /// The spells the character has trained, by spell ID
+    /// (`mock.player:learn`; decision T500).
+    pub trained: Option<List<f64>>,
     /// The character's money, in copper.
     pub money: Option<f64>,
     /// The character's stats by key (`mock.player:setStats`).
@@ -217,8 +221,7 @@ pub struct Spell {
     #[serde(rename = "iconID")]
     pub icon_id: Option<f64>,
     pub description: Option<String>,
-    /// The player knows it.
-    pub known: Option<bool>,
+    /// The player's pet knows it.
     pub pet_known: Option<bool>,
     pub cooldown: Option<Value>,
     pub charges: Option<Value>,
@@ -469,7 +472,8 @@ mod tests {
   "character": { "name": "Thrall", "realm": "Realm", "class": "SHAMAN", "race": "Orc", "level": 60 },
   "money": 123456,
   "items": { "19019": { "name": "Thunderfury, Blessed Blade of the Windseeker", "quality": 5 } },
-  "spells": { "403": { "name": "Lightning Bolt", "known": true } },
+  "spells": { "403": { "name": "Lightning Bolt" } },
+  "trained": [403],
   "equipment": { "MainHandSlot": 19019 },
   "bags": { "0": { "slots": 16, "items": { "1": { "id": 159, "count": 5 } } } },
   "position": { "mapID": 1453, "zone": "Stormwind City", "subZone": "Trade District", "x": 0.5, "y": 0.6 },

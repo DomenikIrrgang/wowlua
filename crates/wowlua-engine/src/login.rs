@@ -317,6 +317,8 @@ pub fn login(vm: &mut Vm, addon: &str, has_bindings: bool, reload: bool) {
             }
             "PLAYER_ENTERING_WORLD" => {
                 fire(vm, event, &[Value::Bool(!reload), Value::Bool(reload)]);
+                // A world profile's nameplates appear in the world.
+                crate::units::show_waiting_nameplates(vm);
                 continue;
             }
             // Edit Mode then reads the account's settings, not recorded yet:

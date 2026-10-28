@@ -7,6 +7,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### New
 
 - **World profiles from the game**: `/wl snapshot` records your character's world in a dev build (gear, bags, action bars, auras, target, settings), and `wowlua profile snapshot <name>` writes it as `tests/profiles/<name>.json`, without your character's name and realm.
+- A world profile's `trained` lists the spells your character has trained, by ID: they are known in the test (`IsSpellKnown`, `IsPlayerSpell`), and `/wl snapshot` records your spellbook into it. `mock.player:learn` and `mock.player:unlearn` change them in a test. A profile's `spells` is only for changing a spell's data now.
 - `unit:update(data)` changes a unit's data in place, any field `mock.spawnUnit` takes: its level, name, reaction, class, health, distance and so on. The unit stays the same unit, and each change fires the event the game fires for it (`UNIT_LEVEL`, `UNIT_FACTION`, `UNIT_NAME_UPDATE`, …).
 - A function breakpoint can name where a function is defined: `src/Threat.wowlua:560` stops in every call of the function defined on that line, local functions too.
 
@@ -17,6 +18,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A world profile's unit with `"nameplate": true` no longer stops Blizzard's nameplates with an error (`bad argument #2 to 'SetSize'`): its nameplate appears once your character enters the world, as in the game.
 - camelot's client is found in `_forever_`, where WoW Forever installs it: `wowlua install`, `wowlua dev`, the game's art in screenshots and the game data read from the client work with it again (`_classic_beta_` still works for a beta client).
 
 ## 0.13.6 (2026-10-28)

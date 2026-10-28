@@ -740,8 +740,9 @@ fn world_profiles() {
   "equipment": { "MainHandSlot": 19019 },
   "bags": { "0": { "slots": 16, "items": { "1": { "id": 159, "count": 5 } } } },
   "position": { "mapID": 1453, "zone": "Stormwind City", "subZone": "Trade District", "x": 0.5, "y": 0.6 },
-  "units": [ { "name": "Hogger", "level": 11, "reaction": "hostile", "distance": 12, "target": true } ],
+  "units": [ { "name": "Hogger", "level": 11, "reaction": "hostile", "distance": 12, "target": true, "nameplate": true } ],
   "cvars": { "nameplateShowEnemies": "1" },
+  "trained": [403, 529],
   "savedVariables": { "DemoDB": { "logins": 41 } }
 }"#;
     let dir = project(
@@ -778,6 +779,29 @@ local function world()
     expect(CheckInteractDistance("target", 2)).toBe(false)
     expect(CheckInteractDistance("target", 1)).toBe(true)
     expect(C_CVar.GetCVar("nameplateShowEnemies")).toBe("1")
+    -- Its nameplate came with the world, after the login.
+    expect(UnitName("nameplate1")).toBe("Hogger")
+    -- Trained: known; others not.
+    expect(C_SpellBook.IsSpellKnown(403)).toBe(true)
+    expect(IsPlayerSpell(529)).toBe(true)
+    expect(C_SpellBook.IsSpellKnown(8042)).toBe(false)
+end
+
+@test("spells learned and forgotten")
+local function learned()
+    local seen: string[] = {}
+    local f = CreateFrame("Frame")
+    for _, e in ipairs({ "LEARNED_SPELL_IN_SKILL_LINE", "SPELLS_CHANGED" }) do
+        f:RegisterEvent(e)
+    end
+    f:SetScript("OnEvent", function(_: Frame, e: string) seen[#seen + 1] = e end)
+    mock.player:learn(8042)
+    -- Known already: nothing told.
+    mock.player:learn({ 8042, 403 })
+    expect(C_SpellBook.IsSpellKnown(8042)).toBe(true)
+    mock.player:unlearn(403)
+    expect(C_SpellBook.IsSpellKnown(403)).toBe(false)
+    expect(seen).toEqual({ "LEARNED_SPELL_IN_SKILL_LINE", "SPELLS_CHANGED", "SPELLS_CHANGED" })
 end
 
 @test("changes fire events")
@@ -803,7 +827,7 @@ end
     );
     let (ok, out) = test(dir.path(), &[]);
     assert!(ok, "{out}");
-    assert!(out.contains("2 passed, 0 failed"), "{out}");
+    assert!(out.contains("3 passed, 0 failed"), "{out}");
 }
 
 /// Widget matchers (decision T217) and custom matchers (T220), typed.
