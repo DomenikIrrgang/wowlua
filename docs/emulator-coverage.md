@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,150 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,151 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,150 rules unverified: each rests on Blizzard's
+The engine's code marks 1,151 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1008,7 +1008,7 @@ page changes only when a rule is added, removed or reworded.
 
 - [channels.rs](../crates/wowlua-engine/src/channels.rs): Unverified: what `GetNumGroupChannels` counts (recorded 1 without a group); collapsed headers; joining and leaving; a...
 
-### character (15)
+### character (16)
 
 - [character.rs](../crates/wowlua-engine/src/character.rs): Unverified (inferred from Blizzard's documentation and UI code): `BAG_CONTAINER_UPDATE` for a bag put in, other flavo...
 - [character.rs](../crates/wowlua-engine/src/character.rs): `GetInventoryItemCount(unit, slot)`: the worn item's count, 1 where none is (the full probe: `("player")` and `("x")`...
@@ -1022,6 +1022,7 @@ page changes only when a rule is added, removed or reworded.
 - [character.rs](../crates/wowlua-engine/src/character.rs): The player's place in the world as `UnitPosition` gives it: the north (`y`) and west (`x`) coordinates, the height an...
 - [character.rs](../crates/wowlua-engine/src/character.rs): A unit that does not exist (or a GUID): three nils and instance 0 (the full probe); another unit's nothing (unverified).
 - [character.rs](../crates/wowlua-engine/src/character.rs): Another unit: where the test put it (`world`), in the player's instance; else nothing (unverified).
+- [character.rs](../crates/wowlua-engine/src/character.rs): `UNIT_IN_RANGE_UPDATE(unit, isInRange)` for each of a group member's group tokens; `isInRange` secret, as `UnitInRang...
 - [character.rs](../crates/wowlua-engine/src/character.rs): The backpack, the keyring, the bank's tabs (the character's and the account's): their general names (the full probe,...
 - [character.rs](../crates/wowlua-engine/src/character.rs): `GetInventoryAlertStatus(slot)`: no durability warning (recorded for whole gear; unverified for damaged).
 - [character.rs](../crates/wowlua-engine/src/character.rs): `GetInventoryItemBroken(unit, slot)`, `GetInventoryItemEquippedUnusable( unit, slot)`: whole and usable (recorded; un...

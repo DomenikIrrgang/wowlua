@@ -357,6 +357,7 @@ UNIT_FLAGS	auras,death,login,loot,taxi,units
 UNIT_HAPPINESS	login,pets
 UNIT_HEALTH	death,inventory,levels,login,units
 UNIT_INVENTORY_CHANGED	auction,character,cursor,inventory,login,loot,mail,merchant,quests,tradeskill
+UNIT_IN_RANGE_UPDATE	character
 UNIT_LEVEL	levels,login,units
 UNIT_LOOT	loot,units
 UNIT_MAXHEALTH	inventory,levels,login,quests,units
