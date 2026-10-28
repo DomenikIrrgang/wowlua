@@ -1316,7 +1316,11 @@ fn unit_is_visible(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `GROUP_ROSTER_UPDATE`.
 fn control_set_online(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
-    let online = c.arg(2).truthy();
+    set_online(vm, me, c.arg(2).truthy());
+    Ok(vec![])
+}
+
+fn set_online(vm: &mut Vm, me: UnitId, online: bool) {
     let changed = engine(vm).units.list[me.0].online != online;
     engine_mut(vm).units.list[me.0].online = online;
     if changed && ours(&engine(vm).units, me) {
@@ -1325,7 +1329,6 @@ fn control_set_online(vm: &mut Vm, c: NativeCall) -> Ret {
     if crate::party::grouped(vm) {
         fire(vm, "GROUP_ROSTER_UPDATE", &[]);
     }
-    Ok(vec![])
 }
 
 /// `unit:setRole(role?)`: the group role it chose (`TANK`, `HEALER`,
@@ -1336,11 +1339,15 @@ fn control_set_role(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
         _ => None,
     };
+    set_role(vm, me, role);
+    Ok(vec![])
+}
+
+fn set_role(vm: &mut Vm, me: UnitId, role: Option<String>) {
     engine_mut(vm).units.list[me.0].role = role;
     if crate::party::grouped(vm) {
         fire(vm, "GROUP_ROSTER_UPDATE", &[]);
     }
-    Ok(vec![])
 }
 
 fn in_combat_lockdown(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1607,6 +1614,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("despawn", control_despawn),
         ("token", control_tokens),
         ("setName", control_set_name),
+        ("update", control_update),
         ("applyAura", crate::auras::control_apply),
         ("removeAura", crate::auras::control_remove),
         ("castSpell", crate::casting::control_cast),
@@ -2539,6 +2547,264 @@ fn control_set_name(vm: &mut Vm, c: NativeCall) -> Ret {
     u.last_name = last;
     if changed && !quiet {
         fire_unit(vm, "UNIT_NAME_UPDATE", me, &[]);
+    }
+    Ok(vec![])
+}
+
+/// `unit:update(data)`: the fields of a unit's data (`spawnUnit`'s, a world
+/// profile's unit or character) that `data` names, changed in place, its
+/// GUID kept (decision T497); each change told as the client tells it:
+/// the level (`UNIT_LEVEL`; the player's as `setPlayer(…, { events })`
+/// does), the name, realm or last name (`UNIT_NAME_UPDATE`), the health,
+/// power and their maximums (`UNIT_HEALTH`, `UNIT_MAXHEALTH`,
+/// `UNIT_POWER_UPDATE`, `UNIT_MAXPOWER`), the power's type
+/// (`UNIT_DISPLAYPOWER`), the reaction, faction or PvP flag
+/// (`UNIT_FACTION`), the classification (`UNIT_CLASSIFICATION_CHANGED`),
+/// the class, race or sex (`UNIT_PORTRAIT_UPDATE`, `UNIT_MODEL_CHANGED`);
+/// the distance, role and being online as `setDistance`, `setRole` and
+/// `setOnline` tell them; `dead` as a death without a killer, or alive
+/// again (`UNIT_HEALTH`, `UNIT_FLAGS`; the player dies with `die`).
+/// Unverified: the client changes most of these on no unit; the events
+/// are the ones it tells for each.
+fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = this(vm, &c)?;
+    let Value::Table(t) = c.arg(2) else {
+        return Err(vm.error("update: a table of the unit's data expected"));
+    };
+    let field = |vm: &mut Vm, k: &str| {
+        let key = vm.heap.intern(k.as_bytes());
+        vm.heap.table(t).get_str(key)
+    };
+    if !field(vm, "guid").is_nil() {
+        return Err(vm.error("update: a unit keeps its GUID"));
+    }
+    let dead = match field(vm, "dead") {
+        Value::Nil => None,
+        v => Some(v.truthy()),
+    };
+    if me == PLAYER && dead.is_some_and(|d| d != engine(vm).units.list[me.0].dead) {
+        return Err(vm.error("update: the player dies with player:die()"));
+    }
+    const KEYS: &[&str] = &[
+        "name",
+        "lastName",
+        "realm",
+        "level",
+        "class",
+        "classID",
+        "race",
+        "faction",
+        "factionGroup",
+        "sex",
+        "reaction",
+        "playerReaction",
+        "player",
+        "healthMax",
+        "maxHealth",
+        "health",
+        "powerMax",
+        "maxPower",
+        "power",
+        "powerType",
+        "pvp",
+        "classification",
+        "creatureType",
+        "creatureFamily",
+        "zone",
+        "world",
+        "acceptsInvites",
+    ];
+    let named: Vec<&str> = KEYS
+        .iter()
+        .copied()
+        .filter(|k| !field(vm, k).is_nil())
+        .collect();
+    let has = |k: &str| named.contains(&k);
+    // The data read as `spawnUnit` reads it; GUIDs to come stay as they were.
+    let next_guid = engine(vm).units.next_guid;
+    let new = unit_from(vm, Some(t), Some(String::new()));
+    engine_mut(vm).units.next_guid = next_guid;
+
+    let old = &engine(vm).units.list[me.0];
+    let before = (
+        old.name.clone(),
+        old.level,
+        old.health,
+        old.health_max,
+        old.power,
+        old.power_max,
+    );
+    let named_before = (old.realm.clone(), old.last_name.clone());
+    let faction_before = (
+        old.reaction,
+        old.player_reaction,
+        old.faction_group.clone(),
+        old.pvp,
+    );
+    let looks_before = (old.class.clone(), old.race.clone(), old.sex);
+    let (classification, power_type) = (old.classification.clone(), old.power_type);
+
+    let u = &mut engine_mut(vm).units.list[me.0];
+    if has("name") {
+        u.name = new.name;
+    }
+    if has("lastName") {
+        u.last_name = new.last_name;
+    }
+    if has("realm") {
+        u.realm = new.realm;
+    }
+    if has("level") {
+        u.level = new.level;
+    }
+    if has("class") {
+        u.class = new.class;
+        u.class_name = new.class_name;
+        u.class_id = new.class_id;
+    } else if has("classID") {
+        u.class_id = new.class_id;
+    }
+    if has("race") {
+        u.race = new.race;
+    }
+    if has("faction") || has("factionGroup") {
+        u.faction_group = new.faction_group;
+    }
+    if has("sex") {
+        u.sex = new.sex;
+    }
+    if has("reaction") {
+        u.reaction = new.reaction;
+    }
+    if has("playerReaction") {
+        u.player_reaction = new.player_reaction;
+    }
+    if has("player") {
+        u.player = new.player;
+    }
+    if has("healthMax") || has("maxHealth") {
+        u.health_max = new.health_max;
+        u.health = u.health.min(u.health_max);
+    }
+    if has("health") {
+        u.health = new.health;
+    }
+    if has("powerMax") || has("maxPower") {
+        u.power_max = new.power_max;
+        u.power = u.power.min(u.power_max);
+    }
+    if has("power") {
+        u.power = new.power;
+    }
+    if has("powerType") {
+        u.power_type = new.power_type;
+    }
+    if has("pvp") {
+        u.pvp = new.pvp;
+    }
+    if has("classification") {
+        u.classification = new.classification;
+    }
+    if has("creatureType") {
+        u.creature_type = new.creature_type;
+    }
+    if has("creatureFamily") {
+        u.creature_family = new.creature_family;
+    }
+    if has("zone") {
+        u.zone = new.zone;
+    }
+    if has("world") {
+        u.world = new.world;
+    }
+    if has("acceptsInvites") {
+        u.accepts_invites = new.accepts_invites;
+    }
+
+    if me == PLAYER {
+        tell_player_changes(vm, before);
+    } else {
+        let now = &engine(vm).units.list[me.0];
+        let (name, level, health, health_max, power, power_max) = before;
+        let named_now = (now.realm.clone(), now.last_name.clone());
+        let level_changed = now.level != level;
+        let name_changed = now.name != name || named_now != named_before;
+        let (max_changed, health_changed) = (now.health_max != health_max, now.health != health);
+        let (power_max_changed, power_changed) = (now.power_max != power_max, now.power != power);
+        let token = power_token(now.power_type).unwrap_or("MANA");
+        if level_changed {
+            fire_unit(vm, "UNIT_LEVEL", me, &[]);
+        }
+        if name_changed {
+            fire_unit(vm, "UNIT_NAME_UPDATE", me, &[]);
+        }
+        if max_changed {
+            fire_unit(vm, "UNIT_MAXHEALTH", me, &[]);
+        }
+        if health_changed {
+            fire_unit(vm, "UNIT_HEALTH", me, &[]);
+        }
+        let token = vm.str(token);
+        if power_max_changed {
+            fire_unit(vm, "UNIT_MAXPOWER", me, &[token]);
+        }
+        if power_changed {
+            fire_unit(vm, "UNIT_POWER_UPDATE", me, &[token]);
+        }
+    }
+    let now = &engine(vm).units.list[me.0];
+    let faction_now = (
+        now.reaction,
+        now.player_reaction,
+        now.faction_group.clone(),
+        now.pvp,
+    );
+    let looks_now = (now.class.clone(), now.race.clone(), now.sex);
+    let power_type_changed = now.power_type != power_type;
+    let faction_changed = faction_now != faction_before;
+    let classification_changed = now.classification != classification;
+    let looks_changed = looks_now != looks_before;
+    if power_type_changed {
+        fire_unit(vm, "UNIT_DISPLAYPOWER", me, &[]);
+    }
+    if faction_changed {
+        fire_unit(vm, "UNIT_FACTION", me, &[]);
+    }
+    if classification_changed {
+        fire_unit(vm, "UNIT_CLASSIFICATION_CHANGED", me, &[]);
+    }
+    if looks_changed {
+        fire_unit(vm, "UNIT_PORTRAIT_UPDATE", me, &[]);
+        fire_unit(vm, "UNIT_MODEL_CHANGED", me, &[]);
+    }
+
+    if let Value::Num(d) = field(vm, "distance") {
+        crate::character::set_distance(vm, me, Some(d));
+    }
+    if let Value::Str(s) = field(vm, "role") {
+        let role = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+        set_role(vm, me, Some(role));
+    }
+    if let Value::Bool(online) = field(vm, "online") {
+        set_online(vm, me, online);
+    }
+    if let Some(dead) = dead
+        && dead != engine(vm).units.list[me.0].dead
+    {
+        if dead {
+            let u = &mut engine_mut(vm).units.list[me.0];
+            u.dead = true;
+            u.health = 0.0;
+            died(vm, me, false);
+        } else {
+            let u = &mut engine_mut(vm).units.list[me.0];
+            u.dead = false;
+            if u.health <= 0.0 {
+                u.health = u.health_max;
+            }
+            fire_unit(vm, "UNIT_HEALTH", me, &[]);
+            fire_unit(vm, "UNIT_FLAGS", me, &[]);
+        }
     }
     Ok(vec![])
 }

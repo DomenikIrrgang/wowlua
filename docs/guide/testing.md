@@ -169,7 +169,8 @@ what a secret hides.
 The controls you reach for most:
 
 - Units: `mock.spawnUnit`, `unit:damage`, `unit:heal`, `unit:kill`,
-  `unit:applyAura`, `unit:castSpell`, `mock.group:add`
+  `unit:applyAura`, `unit:castSpell`, `mock.group:add`, and `unit:update`
+  to change a unit's level, name, reaction or any other field of its data
 - Shields and heal prediction: `unit:setAbsorb`, `unit:setHealAbsorb`,
   `unit:setIncomingHeal`; damage uses up a shield before health
 - The character: `mock.setPlayer`, `mock.player:setMoney`,
