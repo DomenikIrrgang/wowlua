@@ -120,7 +120,8 @@ error details.
 
 `wowlua dev`, `install` and `uninstall` need the WoW install directory. It is
 determined from, in order: the `--wow` option, the `WOWLUA_WOW_PATH`
-environment variable, the global config, and auto-detection of default install
+environment variable, the global config (`wow.path`, which an app such as
+wowlua Studio saves when the user picks the installation), and auto-detection of default install
 locations (Battle.net default paths on Windows and macOS; on Linux, the
 `drive_c/Program Files (x86)/World of Warcraft` of a Wine prefix: Lutris's
 `~/Games/battlenet` or `~/Games/battle-net`, then `~/.wine`).
@@ -144,6 +145,11 @@ folder is reported with a note.
 carries an `X-Wowlua-Build` field (i.e. was installed by wowlua). Any other
 existing folder, such as the same addon installed by an addon manager, is
 left untouched and reported as error E4331, unless `--force` is given.
+A copied folder keeps the record of what was copied (each file's size and
+BLAKE3 hash) in its `.wowlua-install` marker, which the client ignores, so
+what changed in the folder since (a file edited, added or removed by
+something else) can be listed before the next install replaces it
+(decision T502). A linked folder is the build folder and has no record.
 `wowlua uninstall` removes folders (or links) of this addon that carry
 `X-Wowlua-Build`, in the selected clients.
 
@@ -393,7 +399,8 @@ this file ([Package manager §10.11](package-manager.md#1011-security)).
 
 `WOWLUA_NO_KEYRING=1` makes `login`, `logout` and `publish` skip the OS
 credential store and use `config.json` only (headless machines, tests).
-`publish` without a terminal skips it too ([Publishing §11.1.3](publishing.md#1113-tokens)).
+`publish` without a terminal skips it too, unless an app someone is in front
+of allows its dialogs ([Publishing §11.1.3](publishing.md#1113-tokens)).
 
 Environment variables override config values: `WOWLUA_HOME`,
 `WOWLUA_WOW_PATH`, `WOWLUA_JOBS` and `WOWLUA_JOBS_MEMORY` (MiB),

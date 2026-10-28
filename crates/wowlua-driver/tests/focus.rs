@@ -23,6 +23,7 @@ fn request() -> BuildRequest {
         tests: false,
         left_out: Vec::new(),
         reproducible: false,
+        progress: None,
     }
 }
 

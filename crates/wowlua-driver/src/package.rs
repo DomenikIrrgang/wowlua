@@ -643,6 +643,7 @@ fn package_native(
                         tests: false,
                         left_out: Vec::new(),
                         reproducible: false,
+                        progress: None,
                     };
                     let build = crate::build(session, project, &build_request)?;
                     // The package's own license files ship next to the AddOn.
@@ -834,6 +835,7 @@ fn package_like_the_packager(
                     tests: false,
                     left_out: Vec::new(),
                     reproducible: false,
+                    progress: None,
                 };
                 builds.push(crate::build(session, project, &build_request)?);
             }

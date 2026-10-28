@@ -7,6 +7,7 @@
 use crate::build::BuildOutput;
 use crate::project::Project;
 use crate::{Session, fsutil};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use wowlua_diagnostics::Diagnostic;
 
@@ -40,9 +41,21 @@ pub fn wowlua_home() -> Option<PathBuf> {
 }
 
 fn config_wow_path() -> Option<PathBuf> {
-    let text = std::fs::read_to_string(wowlua_home()?.join("config.json")).ok()?;
-    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
-    value.pointer("/wow/path")?.as_str().map(PathBuf::from)
+    crate::config::read()
+        .pointer("/wow/path")?
+        .as_str()
+        .map(PathBuf::from)
+}
+
+/// Keeps `path` as the WoW installation (`wow.path` in the global config),
+/// for every command and app that looks for one.
+pub fn set_wow_path(path: &Path) -> Result<(), String> {
+    let mut config = crate::config::read();
+    crate::config::object(&mut config, "wow").insert(
+        "path".into(),
+        serde_json::Value::String(path.to_string_lossy().into_owned()),
+    );
+    crate::config::write(&config)
 }
 
 fn default_install_paths() -> Vec<PathBuf> {
@@ -160,6 +173,35 @@ fn targets(
     out
 }
 
+/// The AddOn folders of this addon in the selected clients, installed or
+/// not, as `(client folder, path)`.
+pub fn folders(
+    session: &mut Session,
+    project: &Project,
+    addon: &str,
+    request: &InstallRequest,
+) -> Vec<(String, PathBuf)> {
+    let wow = match find_wow(request.wow.as_deref()) {
+        Ok(wow) => wow,
+        Err(diagnostic) => {
+            session.push(diagnostic);
+            return Vec::new();
+        }
+    };
+    let flavors = request
+        .flavors
+        .clone()
+        .unwrap_or_else(|| project.manifest.flavors.clone());
+    targets(
+        session,
+        project,
+        addon,
+        &wow,
+        &flavors,
+        request.clients.as_deref(),
+    )
+}
+
 /// Whether an existing AddOn folder was installed by wowlua: a link, or a
 /// folder whose TOC carries `X-Wowlua-Build`.
 pub fn is_wowlua_install(path: &Path) -> bool {
@@ -251,13 +293,109 @@ pub fn install(
     installed
 }
 
-/// Left in AddOn folders `install` copies (the client ignores it).
+/// Left in AddOn folders `install` copies (the client ignores it), with
+/// the record of the files copied.
 pub const INSTALL_MARKER: &str = ".wowlua-install";
+
+/// A file of an install's record.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct RecordedFile {
+    pub size: u64,
+    pub blake3: String,
+}
+
+/// How a copied AddOn folder differs from what wowlua copied into it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Change {
+    /// A file wowlua copied, now different.
+    Changed { path: String, was: u64, now: u64 },
+    /// A file wowlua did not copy.
+    Added { path: String, size: u64 },
+    /// A file wowlua copied, now gone.
+    Removed { path: String },
+}
+
+impl Change {
+    /// The file's path in the AddOn folder, with `/`.
+    pub fn path(&self) -> &str {
+        match self {
+            Change::Changed { path, .. }
+            | Change::Added { path, .. }
+            | Change::Removed { path } => path,
+        }
+    }
+}
+
+/// The files of a folder (but the marker) by their path with `/`.
+fn record(dir: &Path) -> std::io::Result<BTreeMap<String, RecordedFile>> {
+    let mut files = BTreeMap::new();
+    for entry in walkdir::WalkDir::new(dir).min_depth(1) {
+        let entry = entry.map_err(std::io::Error::other)?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let relative = entry
+            .path()
+            .strip_prefix(dir)
+            .expect("walkdir yields children");
+        if relative == Path::new(INSTALL_MARKER) {
+            continue;
+        }
+        let bytes = std::fs::read(entry.path())?;
+        files.insert(
+            relative.to_string_lossy().replace('\\', "/"),
+            RecordedFile {
+                size: bytes.len() as u64,
+                blake3: blake3::hash(&bytes).to_hex().to_string(),
+            },
+        );
+    }
+    Ok(files)
+}
+
+/// What changed in an AddOn folder since wowlua copied it, by path. `None`
+/// for a link (the build folder itself), a folder without a record (not
+/// copied by wowlua, or by an older wowlua) and one that cannot be
+/// read.
+pub fn changes(path: &Path) -> Option<Vec<Change>> {
+    if fsutil::is_link(path) {
+        return None;
+    }
+    let marker: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path.join(INSTALL_MARKER)).ok()?).ok()?;
+    let was: BTreeMap<String, RecordedFile> =
+        serde_json::from_value(marker.get("files")?.clone()).ok()?;
+    let now = record(path).ok()?;
+    let mut changes: Vec<Change> = Vec::new();
+    for (file, recorded) in &was {
+        match now.get(file) {
+            None => changes.push(Change::Removed { path: file.clone() }),
+            Some(found) if found != recorded => changes.push(Change::Changed {
+                path: file.clone(),
+                was: recorded.size,
+                now: found.size,
+            }),
+            Some(_) => {}
+        }
+    }
+    for (file, found) in &now {
+        if !was.contains_key(file) {
+            changes.push(Change::Added {
+                path: file.clone(),
+                size: found.size,
+            });
+        }
+    }
+    changes.sort_by(|a, b| a.path().cmp(b.path()));
+    Some(changes)
+}
 
 fn copy(build_dir: &Path, target: &Path) -> std::io::Result<bool> {
     let staged = fsutil::temp_sibling(target)?;
     fsutil::copy_dir(build_dir, &staged)?;
-    std::fs::write(staged.join(INSTALL_MARKER), b"installed by wowlua\n")?;
+    let marker = serde_json::json!({ "installed-by": "wowlua", "files": record(&staged)? });
+    let text = serde_json::to_string_pretty(&marker).map_err(std::io::Error::other)? + "\n";
+    std::fs::write(staged.join(INSTALL_MARKER), text)?;
     fsutil::replace_dir(&staged, target)?;
     Ok(false)
 }
@@ -284,26 +422,8 @@ pub fn uninstall(
     addon: &str,
     request: &InstallRequest,
 ) -> Vec<PathBuf> {
-    let wow = match find_wow(request.wow.as_deref()) {
-        Ok(wow) => wow,
-        Err(diagnostic) => {
-            session.push(diagnostic);
-            return Vec::new();
-        }
-    };
-    let flavors = request
-        .flavors
-        .clone()
-        .unwrap_or_else(|| project.manifest.flavors.clone());
     let mut removed = Vec::new();
-    for (_, path) in targets(
-        session,
-        project,
-        addon,
-        &wow,
-        &flavors,
-        request.clients.as_deref(),
-    ) {
+    for (_, path) in folders(session, project, addon, request) {
         if !(path.exists() || fsutil::is_link(&path)) {
             continue;
         }
@@ -342,6 +462,49 @@ mod tests {
         )
         .unwrap();
         assert!(is_wowlua_install(&addon));
+    }
+
+    /// A copy records its files in the marker; what changes afterwards is
+    /// listed by path. A folder without a record has none.
+    #[test]
+    fn copies_record_their_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let build = dir.path().join("build");
+        std::fs::create_dir_all(build.join("Media")).unwrap();
+        std::fs::write(build.join("MyAddon.lua"), "print(1)\n").unwrap();
+        std::fs::write(build.join("Media/arrow.tga"), [0u8; 16]).unwrap();
+        let addon = dir.path().join("AddOns/MyAddon");
+        assert_eq!(changes(&addon), None);
+        copy(&build, &addon).unwrap();
+        assert_eq!(changes(&addon), Some(Vec::new()));
+
+        std::fs::write(addon.join("MyAddon.lua"), "print(2) -- edited\n").unwrap();
+        std::fs::write(addon.join("Config.lua"), "x = 1\n").unwrap();
+        std::fs::remove_file(addon.join("Media/arrow.tga")).unwrap();
+        assert_eq!(
+            changes(&addon),
+            Some(vec![
+                Change::Added {
+                    path: "Config.lua".into(),
+                    size: 6
+                },
+                Change::Removed {
+                    path: "Media/arrow.tga".into()
+                },
+                Change::Changed {
+                    path: "MyAddon.lua".into(),
+                    was: 9,
+                    now: 19
+                },
+            ])
+        );
+        // Installing again replaces the folder and its record.
+        copy(&build, &addon).unwrap();
+        assert_eq!(changes(&addon), Some(Vec::new()));
+
+        // A marker from before records.
+        std::fs::write(addon.join(INSTALL_MARKER), "installed by wowlua\n").unwrap();
+        assert_eq!(changes(&addon), None);
     }
 
     #[test]
