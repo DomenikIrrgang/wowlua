@@ -1707,8 +1707,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
 /// `GetNumTotemSlots()`: 8 (recorded for a paladin, a class without
 /// totems: the client's slot count, not the class's; Blizzard's cooldown
 /// viewer loops over them).
+pub(crate) const TOTEM_SLOTS: f64 = 8.0;
+
 fn get_num_totem_slots(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(8.0)])
+    Ok(vec![Value::Num(TOTEM_SLOTS)])
 }
 
 /// The global twin of `C_Flyout.GetNumFlyouts()`: its answer, else none

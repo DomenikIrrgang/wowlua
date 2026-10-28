@@ -69,6 +69,27 @@ return cd, gcd, GetSpellQueueWindow(), GetTotemTimeLeft(1), C_Spell.IsSpellHarmf
     assert_eq!(r, ["0", "1500", "400", "0", "false"]);
 }
 
+/// Every slot `GetNumTotemSlots` counts answers an empty totem, as the
+/// recorded first four do; slot 0 answers nothing (the full probe).
+#[test]
+fn every_totem_slot_answers_an_empty_totem() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local n = GetNumTotemSlots()
+local empty = 0
+for slot = 1, n do
+    local have, name, start, duration, icon, modRate, spellID = GetTotemInfo(slot)
+    if have == false and name == '' and start == 0 and duration == 0 and icon == nil
+        and modRate == 0 and spellID == 0 then
+        empty = empty + 1
+    end
+end
+return n, empty, select('#', GetTotemInfo(0)), select('#', GetTotemInfo(n + 1))",
+    );
+    assert_eq!(r, ["8", "8", "0", "0"]);
+}
+
 #[test]
 fn the_cooldown_viewer_keeps_its_layout() {
     let mut vm = vm();

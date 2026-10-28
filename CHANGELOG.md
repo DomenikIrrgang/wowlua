@@ -7,6 +7,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### Fixed
 
 - A secure group header (`SecureGroupHeaderTemplate`) runs its `initialConfigFunction` for buttons made from your own template that has an `<OnLoad>`, as the game does; before, the header skipped it.
+- `GetTotemInfo` answers an empty slot for every slot `GetNumTotemSlots()` counts (8 on WoW Forever), not just the first four; slots 5 to 8 answered nothing.
 
 ## 0.13.4 (2026-10-28)
 
