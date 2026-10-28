@@ -65,6 +65,37 @@ pub fn find(
     account: Option<&str>,
 ) -> (Vec<Found>, Vec<String>) {
     let mut out = Vec::new();
+    let warnings = each_saved(wow, db, client, account, |client, account, path, value| {
+        let exports: Vec<Value> = value
+            .get("exports")
+            .map(list)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|e| e.get("format").and_then(Value::as_f64) == Some(1.0))
+            .collect();
+        if !exports.is_empty() {
+            out.push(Found {
+                client,
+                account,
+                path,
+                exports,
+            });
+        }
+    });
+    (out, warnings)
+}
+
+/// Calls `f` with the client folder, account, file and value of every
+/// SavedVariables file of the installation that has the variable `db`
+/// (the `client` and `account` given only); a warning for each file that
+/// can't be read.
+pub fn each_saved(
+    wow: &Path,
+    db: &str,
+    client: Option<&str>,
+    account: Option<&str>,
+    mut f: impl FnMut(String, String, PathBuf, Value),
+) -> Vec<String> {
     let mut warnings = Vec::new();
     for folder in sorted_dirs(wow) {
         let client_name = file_name(&folder);
@@ -82,32 +113,17 @@ pub fn find(
             let Ok(bytes) = crate::host::read(&path) else {
                 continue;
             };
-            let value = match parse_saved(&bytes) {
-                Ok(vars) => vars.into_iter().find(|(n, _)| n == db).map(|(_, v)| v),
-                Err(e) => {
-                    warnings.push(format!("cannot read `{}`: {e}", path.display()));
-                    continue;
+            match parse_saved(&bytes) {
+                Ok(vars) => {
+                    if let Some((_, v)) = vars.into_iter().find(|(n, _)| n == db) {
+                        f(client_name.clone(), account_name, path, v);
+                    }
                 }
-            };
-            let exports: Vec<Value> = value
-                .as_ref()
-                .and_then(|v| v.get("exports"))
-                .map(list)
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|e| e.get("format").and_then(Value::as_f64) == Some(1.0))
-                .collect();
-            if !exports.is_empty() {
-                out.push(Found {
-                    client: client_name.clone(),
-                    account: account_name,
-                    path,
-                    exports,
-                });
+                Err(e) => warnings.push(format!("cannot read `{}`: {e}", path.display())),
             }
         }
     }
-    (out, warnings)
+    warnings
 }
 
 /// The items of a Lua array (an array, or an object of numbered keys).

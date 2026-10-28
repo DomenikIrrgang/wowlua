@@ -248,6 +248,17 @@ fn today() -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
+/// A Unix time as `YYYY-MM-DD HH:MM UTC`.
+pub(crate) fn date_time(secs: i64) -> String {
+    let (y, m, d) = civil(secs.div_euclid(86_400));
+    let in_day = secs.rem_euclid(86_400);
+    format!(
+        "{y:04}-{m:02}-{d:02} {:02}:{:02} UTC",
+        in_day / 3600,
+        in_day / 60 % 60
+    )
+}
+
 /// Days since 1970-01-01 → (year, month, day).
 fn civil(days: i64) -> (i64, u32, u32) {
     let z = days + 719_468;

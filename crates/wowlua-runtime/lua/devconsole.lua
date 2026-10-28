@@ -3235,6 +3235,31 @@ local function install()
 		end
 	end
 
+	-- `/wl snapshot [addon]`: the world now, as a world profile's data, kept
+	-- in the addon's dev data (`snapshot`: when and the profile) until the
+	-- next one (spec §7.7.10); written to the disk at the next /reload.
+	function commands.snapshot(args)
+		local d = console.find(args[1])
+		if not d then
+			return say("which addon? /wl snapshot <addon>")
+		end
+		local s = d.runtime.snapshot
+		if not s then
+			return say(tostring(d.name) .. ": this build takes no snapshots")
+		end
+		-- The toy box lists its toys a frame after its checks change.
+		local putBack = s.prepare()
+		say(tostring(d.name) .. ": snapshot: a moment...")
+		C_Timer.After(0.5, function()
+			local profile = s.take()
+			putBack()
+			local __wl_t115 = profile.errors if __wl_t115 == nil then __wl_t115 = {} end local failed = __wl_t115
+			profile.errors = nil
+			devDB(d.name).snapshot = {at = time(), profile = profile, failed = failed}
+			say(tostring(d.name) .. ": snapshot taken" .. (#failed > 0 and " (" .. #failed .. " parts failed)" or "") .. "; /reload, then wowlua profile snapshot <name>")
+		end)
+	end
+
 	function commands.hud() local console = console
 		if not console.hud and type(CreateFrame) == "function" then
 			buildHud(console, reg)
@@ -3261,7 +3286,7 @@ local function install()
 		if f then
 			return f(args)
 		end
-		say("/wl [list | prof | mon | errors | log | meta | inspect | watch | record | bench | hints | hud | reload]")
+		say("/wl [list | prof | mon | errors | log | meta | inspect | watch | record | bench | hints | snapshot | hud | reload]")
 	end
 
 	if type(SlashCmdList) == "table" then

@@ -369,10 +369,12 @@ lists them, `/ignore` and whispers know them. `mock.spawnUnit` takes
 `acceptsInvites` too (false by default, so a test drives `unit:joinGroup()`
 itself).
 
-`/stdtest snapshot` records the character's world in the client (StdTest,
-then `/reload`), and `cargo xtask profile <SavedVariables/StdTest.lua>
-<out.json>` writes it as a profile with the character's name and realm, a
-player target's name and identifying CVars scrubbed. `character` is
+`/wl snapshot` records the character's world in the client with a dev
+build ([Debugging §7.7.10](../language/07-debugging.md#7710-snapshot), then
+`/reload`), and `wowlua profile snapshot <name>` writes it as
+`tests/profiles/<name>.json` with the character's name and realm, other
+players' names and identifying CVars scrubbed (decision T498; StdTest's
+`/stdtest snapshot` and `cargo xtask profile` take the same snapshot). `character` is
 `mock.setPlayer`'s data; `items` and `spells` are
 `defineItem` and `defineSpell` data (items cached unless `cached` is
 `false`); equipment slots are IDs or the client's slot names

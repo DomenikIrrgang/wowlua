@@ -760,6 +760,32 @@ so. "wowlua:" is what the engine answers now.
    right edge; step 3 a plain number. If step 2 prints `false` first, the
    health isn't secret there: try again in a boss fight.
 
+## Owed from the world profiles (next beta, about 2026-11-07)
+
+The snapshot moved from StdTest into the dev runtime (decision T498):
+`/wl snapshot` takes it in any dev build and `wowlua profile snapshot`
+writes the profile. Its calls are StdTest's, probed before; these check the
+move. Install StdTest (`wowlua install --client _classic_beta_` in
+`tests/ingame`) and log in with a character that has gear, bags, action
+bars and a target.
+
+1. **`/wl snapshot`**:
+   1. `/reload`
+   2. `/wl snapshot StdTest`
+   3. Wait for the line `StdTest: snapshot taken; /reload, then wowlua profile snapshot <name>`
+      and note whether it says that parts failed.
+   4. `/reload`
+   5. On the desktop, in `tests/ingame`: `wowlua profile snapshot probe-world --client _classic_beta_`
+
+   Send `tests/ingame/tests/profiles/probe-world.json` and the command's
+   output. The file must not name your character or realm.
+2. **`/stdtest snapshot` through the runtime's**:
+   1. `/stdtest snapshot`
+   2. Wait for `snapshot: recorded`, then `/reload`
+   3. On the desktop: `cargo xtask profile "<WoW>/_classic_beta_/WTF/Account/<account>/SavedVariables/StdTest.lua" stdtest-world.json`
+
+   Send `stdtest-world.json`.
+
 ## Answered on the beta's last day (2026-10-24)
 
 - PvP ranks (major faction 2800): `GetMajorFactionProgressionInfo` gives

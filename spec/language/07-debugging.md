@@ -340,6 +340,7 @@ window; older addons still answer through the registry's versioned interface
 | `/wl record <addon> [name]` / `/wl record <addon> stop` | Start or stop a manual recording (§7.7.4) |
 | `/wl bench <addon> <expression> [n]` | Benchmark an expression (§7.7.6) |
 | `/wl hints <addon>` | Print the current performance hints (§7.7.7) |
+| `/wl snapshot <addon>` | Take a snapshot of the world (§7.7.10) |
 | `/wl hud` | Toggle the compact HUD (§7.7.8) |
 | `/wl reload` | `ReloadUI()` |
 
@@ -524,6 +525,29 @@ recording (the same while it is shown in the window):
 | `hints` | The hints of the recording: `{ code, subject, evidence, fix, recording, metric }` |
 
 Times are milliseconds unless named otherwise.
+
+### 7.7.10 Snapshot
+
+`/wl snapshot <addon>` records the world the character is in as a world
+profile's data ([Tooling §16.1.4](../toolchain/tooling.md#1614-wowluamock),
+decision T498): the character, money, stats, gear and bags with their items'
+data, the action bars, the place, the auras, the target, CVars that differ
+from their defaults, the key bindings, the chat channels, macros and the
+collections, through read-only calls only. It waits half a second (the toy
+box lists its toys a frame after its filters change), then keeps the result
+in `WowluaDevDB_<Addon>.snapshot`, replacing the last one, until WoW writes
+the SavedVariables at the next `/reload` or logout:
+
+| Field | Contents |
+|-------|----------|
+| `at` | When it was taken, as `time()` |
+| `profile` | The parts, as a world profile has them (`client`: the build) |
+| `failed` | The parts the client refused, as `part: error` |
+
+The snapshot is a runtime slice of its own, in every build with the dev
+console. On the desktop, `wowlua profile snapshot <name>` writes it as
+`tests/profiles/<name>.json` with the character's and other players' names
+and realm scrubbed, and wowlua studio imports it.
 
 ## 7.8 Reflection
 

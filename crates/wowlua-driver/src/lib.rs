@@ -42,6 +42,7 @@ pub mod project;
 pub mod publish;
 pub mod recordings;
 pub mod scaffold;
+pub mod snapshots;
 mod sources;
 pub mod trace;
 #[cfg(feature = "native")]

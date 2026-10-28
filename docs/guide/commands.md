@@ -73,6 +73,7 @@ $ wowlua test --profile-out prof                            # a speedscope profi
 $ wowlua prof report                                        # an HTML page of the recordings you exported in the game
 $ wowlua prof report --account MYACCOUNT --client _retail_  # when several accounts or clients have some
 $ wowlua prof report --recording "pull 1" --no-open         # only this recording; write the page, don't open it
+$ wowlua profile snapshot raid                              # your /wl snapshot as tests/profiles/raid.json
 ```
 
 More: [Debugging](debugging.md).

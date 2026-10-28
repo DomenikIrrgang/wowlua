@@ -370,6 +370,16 @@ local function invites()
 end
 ```
 
+You don't have to write a profile by hand: take your character's world in
+the game and turn it into one.
+
+1. **Take a snapshot** With a dev build loaded, the dev window records your
+   character, gear, bags, action bars, auras, target and settings, then a
+   reload saves it. `/wl snapshot`
+2. **Write the profile** In your addon's folder: it finds the snapshot in your
+   WoW installation, leaves out your character's name and realm and writes
+   `tests/profiles/raid.json`. `wowlua profile snapshot raid`
+
 A profile can also set the screen: `"screen": { "width": 2560, "height":
 1440, "uiScale": 0.8 }` draws at 2560 by 1440 with "Use UI Scale" at 80%,
 over `test.screen` in `wowlua.json`.
