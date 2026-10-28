@@ -90,7 +90,7 @@ bundling work as in `wowlua build`.
 | `wowlua fetch` | Download all dependencies into the cache |
 | `wowlua tree [--flavor <f>] [--invert <name>]` | Show the dependency graph |
 | `wowlua outdated` | List dependencies with newer registry versions, newer tags (by SemVer), newer commits on their branch, or newer SVN revisions, and what to change |
-| `wowlua cache clean [--all]` | Remove cache entries not used by any fetch or build for 30 days; `--all` empties the cache (decision T109) |
+| `wowlua cache clean [--all]` | Remove cache entries not used by any fetch or build for 30 days; `--all` empties the cache (decision T109). A program can measure and empty one part of it (`check`, `compile`, `git`, …), and forget a fetched Blizzard UI source so the next test run fetches it again (decision T505) |
 | `wowlua types sync [--flavor <f>…]` | Refresh the flavor table, the pinned interface numbers and the locked `wow-api-<flavor>` types packages after a game patch ([Package manager §10.9](package-manager.md#109-types-packages)) |
 | `wowlua types convert <path> [--out <dir>]` | Convert LuaLS `---@` annotations into `.d.wowlua` declarations |
 

@@ -93,6 +93,26 @@ pub fn cached_ui_source(flavor: &str) -> Option<UiSource> {
     })
 }
 
+/// Forgets the flavor's fetched UI code, so the next [`ui_source`] fetches
+/// it again (T505); none fetched is no error.
+#[allow(clippy::disallowed_methods)] // (the cache is the computer's)
+pub fn forget_ui_source(flavor: &str) -> Result<(), String> {
+    let (commit, _) = commits(flavor).ok_or_else(|| {
+        format!("the `{flavor}` declarations do not name their wow-ui-source commit")
+    })?;
+    let Some(cache) = wowlua_driver::cache_root() else {
+        return Ok(());
+    };
+    let dir = cache
+        .join("blizzard-ui")
+        .join(format!("{flavor}-{}", &commit[..12]));
+    match std::fs::remove_dir_all(&dir) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("cannot remove `{}`: {e}", dir.display())),
+    }
+}
+
 pub fn ui_source(flavor: &str, status: &dyn Fn(&str)) -> Result<UiSource, String> {
     let (commit, strings_commit) = commits(flavor).ok_or_else(|| {
         format!("the `{flavor}` declarations do not name their wow-ui-source commit")

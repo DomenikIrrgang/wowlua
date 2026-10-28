@@ -31,8 +31,12 @@ use std::time::{Duration, Instant};
 /// ([`embedded`]), as the browser has no clock `std` can read.
 type Moment = Duration;
 
-/// How long after the last edit a package is checked again.
+/// How long after the last edit a package is checked again (the editor's
+/// `check` setting changes it, T504).
 const SETTLE: Duration = Duration::from_millis(100);
+
+/// `check: "pause"`: how long the typing pauses before a check.
+const PAUSE: Duration = Duration::from_millis(600);
 
 /// How long without edits before a save's packages that depend on the
 /// saved one are checked.
@@ -102,6 +106,14 @@ struct Server {
     finds: std::collections::VecDeque<Finding>,
     /// The load failure each package's last check told the editor of.
     told: HashMap<PathBuf, String>,
+    /// How long after the last edit a package is checked (`SETTLE`, or
+    /// `PAUSE`), and how long without edits before a saved package's
+    /// dependents are (T504).
+    settle: Duration,
+    quiet: Duration,
+    /// `check: "save"`: an edit is checked when it is saved.
+    on_save: bool,
+    settings: check::Settings,
 }
 
 /// A references or rename request: its id, what it wants, its package and
@@ -203,8 +215,8 @@ impl Server {
         text::uri_of(path)
     }
 
-    /// Marks a package edited: its check is due `SETTLE - early` from now
-    /// (`early` = `SETTLE`: at once). A check of it running now is of an
+    /// Marks a package edited: its check is due `settle - early` from now
+    /// (`early` = `settle`: at once). A check of it running now is of an
     /// older text: its results are replaced by the next one's.
     fn touch(&mut self, manifest: &Path, early: Duration) {
         let now = (self.clock)();
@@ -220,7 +232,7 @@ impl Server {
 
     /// Marks a package saved: checked at once, its workspace once quiet.
     fn saved(&mut self, manifest: &Path) {
-        self.touch(manifest, SETTLE);
+        self.touch(manifest, self.settle);
         if let Some(entry) = self.later.get_mut(manifest) {
             entry.1 = true;
         }
@@ -408,7 +420,36 @@ impl Server {
             completed: Vec::new(),
             finds: std::collections::VecDeque::new(),
             told: HashMap::new(),
+            settle: SETTLE,
+            quiet: QUIET,
+            on_save: false,
+            settings: check::Settings::default(),
         }
+    }
+
+    /// Takes the editor's settings (`initializationOptions`, or
+    /// `workspace/didChangeConfiguration`'s `wowlua`, T504): `check`
+    /// (`typing`, `pause` or `save`), `profile`, `threads`. Whether what
+    /// a check finds can change.
+    fn configure(&mut self, json: &Json) -> bool {
+        match json["check"].as_str() {
+            Some("typing") => {
+                self.settle = SETTLE;
+                self.on_save = false;
+            }
+            Some("pause") => {
+                self.settle = PAUSE;
+                self.on_save = false;
+            }
+            Some("save") => {
+                self.settle = SETTLE;
+                self.on_save = true;
+            }
+            _ => {}
+        }
+        let before = self.settings.clone();
+        self.settings.read(json);
+        self.settings != before
     }
 
     /// How long until the next check is due: when its edits have settled,
@@ -419,13 +460,13 @@ impl Server {
         let none = Duration::from_secs(3600);
         match (&self.running, self.dirty.values().min()) {
             (Some(_), _) => none,
-            (None, Some(at)) => (*at + SETTLE).saturating_sub(now),
+            (None, Some(at)) => (*at + self.settle).saturating_sub(now),
             (None, None) => self
                 .later
                 .values()
                 .map(|l| l.0)
                 .min()
-                .map_or(none, |at| (at + QUIET).saturating_sub(now)),
+                .map_or(none, |at| (at + self.quiet).saturating_sub(now)),
         }
     }
 }
@@ -484,7 +525,7 @@ fn on_checked(
             let answer = match want {
                 Want::Completion => {
                     let found = checked.as_ref().and_then(|c| c.completions.clone());
-                    completion_list(server, found, &prefix)
+                    completion_list(server, found, &prefix, &uri)
                 }
                 Want::Signature(site) => signature_help(server, checked.as_ref(), &site, &uri),
             };
@@ -580,6 +621,7 @@ fn start_now(server: &mut Server) {
                 rescan: false,
                 complete: Some(c.asked.prefix.clone()),
                 find: None,
+                settings: server.settings.clone(),
             };
             if (server.jobs)(job) {
                 server.running = Some(Running {
@@ -607,6 +649,7 @@ fn start_now(server: &mut Server) {
             rescan: std::mem::take(&mut server.rescan),
             complete: None,
             find: Some(f.find.clone()),
+            settings: server.settings.clone(),
         };
         if (server.jobs)(job) {
             server.running = Some(Running {
@@ -622,7 +665,7 @@ fn start_now(server: &mut Server) {
     let edited = server
         .dirty
         .iter()
-        .filter(|(_, at)| now.saturating_sub(**at) >= SETTLE)
+        .filter(|(_, at)| now.saturating_sub(**at) >= server.settle)
         .min_by_key(|(_, at)| **at)
         .map(|(m, _)| m.clone());
     // an edit: its open files (and what they import) first; quiet: the
@@ -667,6 +710,7 @@ fn start_now(server: &mut Server) {
             rescan: std::mem::take(&mut server.rescan),
             complete: None,
             find: None,
+            settings: server.settings.clone(),
         };
         if (server.jobs)(job) {
             server.running = Some(Running {
@@ -727,6 +771,8 @@ struct Job {
     complete: Option<String>,
     /// A references or rename check (`check::find`).
     find: Option<refs::Find>,
+    /// The editor's settings (T504).
+    settings: check::Settings,
 }
 
 /// Runs a check where `checker` says. A check that panics, crashes or
@@ -761,13 +807,14 @@ fn check_in_process(
     }
     let open = job.docs.iter().map(|(p, _)| canonical(p)).collect();
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match &job.find {
-        Some(f) => check::find(&job.manifest, &open, f, warm, drop),
-        None => check::check_warm(
+        Some(f) => check::find(&job.manifest, &open, f, &job.settings, warm, drop),
+        None => check::check_with(
             &job.manifest,
             job.whole,
             &open,
             job.focus.as_ref(),
             job.complete.as_deref(),
+            &job.settings,
             warm,
         ),
     }))
@@ -881,6 +928,7 @@ fn check_in_worker(
     if let Some(f) = &job.find {
         request["find"] = f.to_json();
     }
+    request["settings"] = job.settings.to_json();
     let mut line = serde_json::to_vec(&request).unwrap_or_default();
     line.push(b'\n');
     if worker
@@ -1036,6 +1084,7 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                     }
                 }
             }
+            server.configure(&params["initializationOptions"]);
             initialized(out, id)?;
         }
         "shutdown" => {
@@ -1078,7 +1127,11 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                     Some(d) => d.manifest.clone(),
                     None => manifest_of(&path),
                 };
-                if let Some(m) = &manifest {
+                // (`check: "save"`: an edit waits for its save)
+                let edit = method == "textDocument/didChange";
+                if let Some(m) = &manifest
+                    && !(edit && server.on_save)
+                {
                     server.touch(m, Duration::ZERO);
                 }
                 server.docs.insert(
@@ -1090,6 +1143,20 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                         text,
                     },
                 );
+            }
+        }
+        // the editor's settings changed: checks follow them, the open
+        // documents' packages are checked again
+        "workspace/didChangeConfiguration" => {
+            if server.configure(&params["settings"]["wowlua"]) {
+                let open: BTreeSet<PathBuf> = server
+                    .docs
+                    .values()
+                    .filter_map(|d| d.manifest.clone())
+                    .collect();
+                for m in open {
+                    server.saved(&m);
+                }
             }
         }
         "textDocument/didSave" => {
@@ -1146,7 +1213,8 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                 // which starts now
                 Some(m) if server.pending(&m) => {
                     if server.dirty.contains_key(&m) {
-                        server.touch(&m, SETTLE);
+                        let settle = server.settle;
+                        server.touch(&m, settle);
                     }
                     server
                         .waiting
@@ -1201,7 +1269,7 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                 Some((d.manifest.clone()?, complete::prepare(&d.text, offset)?))
             });
             match asked {
-                None => reply(out, id, completion_list(server, None, ""))?,
+                None => reply(out, id, completion_list(server, None, "", ""))?,
                 Some((manifest, asked)) => wait_for_completion_check(
                     server,
                     out,
@@ -1565,14 +1633,54 @@ const KEYWORDS: &[&str] = &[
     "while",
 ];
 
+/// The edit that imports `name` from `from` (auto-import, T506): added to
+/// the file's import of that module (not a `type` or `* as` one), else a
+/// line after its first imports, else the file's first line.
+fn import_edit(text: &str, name: &str, from: &str) -> Json {
+    let quoted = format!(" from \"{from}\"");
+    let mut after_imports = None;
+    for (n, line) in text.lines().enumerate() {
+        let t = line.trim_start();
+        if let Some(rest) = t.strip_prefix("import ") {
+            if let Some(at) = line.find(&quoted)
+                && !rest.starts_with("type ")
+                && !rest.starts_with("internal ")
+                && !rest.contains("* as")
+            {
+                let character = line[..at].encode_utf16().count();
+                let place = json!({ "line": n, "character": character });
+                return json!({ "range": { "start": place, "end": place }, "newText": format!(", {name}") });
+            }
+            after_imports = Some(n + 1);
+        } else if !(t.is_empty() || t.starts_with("--")) {
+            break;
+        }
+    }
+    let place = json!({ "line": after_imports.unwrap_or(0), "character": 0 });
+    json!({
+        "range": { "start": place, "end": place },
+        "newText": format!("import {name} from \"{from}\"\n"),
+    })
+}
+
 /// A completion check's answer as the protocol's `CompletionList` (an
 /// empty one without), keywords added where a name is. The items are kept
 /// for `completionItem/resolve`: the game's (thousands, for a short
 /// prefix) get their type there, every item its doc comment.
-fn completion_list(server: &mut Server, found: Option<check::Completions>, prefix: &str) -> Json {
+fn completion_list(
+    server: &mut Server,
+    found: Option<check::Completions>,
+    prefix: &str,
+    uri: &str,
+) -> Json {
     let Some(found) = found else {
         return json!({ "isIncomplete": false, "items": [] });
     };
+    let text = server
+        .docs
+        .get(uri)
+        .map(|d| d.text.clone())
+        .unwrap_or_default();
     let mut items: Vec<Json> = found
         .items
         .iter()
@@ -1587,6 +1695,9 @@ fn completion_list(server: &mut Server, found: Option<check::Completions>, prefi
             }
             if let Some(doc) = &c.doc {
                 item["documentation"] = json!({ "kind": "markdown", "value": doc });
+            }
+            if let Some(from) = &c.import {
+                item["additionalTextEdits"] = json!([import_edit(&text, &c.label, from)]);
             }
             item
         })
@@ -1942,6 +2053,116 @@ fn overloads(ty: &str) -> Vec<&str> {
 mod tests {
     use super::{generated, overloads};
     use std::path::Path;
+
+    /// Auto-import's edit (T506): added to the module's import, else after
+    /// the first imports, else on the first line.
+    #[test]
+    fn auto_import_adds_to_the_imports() {
+        use super::import_edit;
+        let text = "-- the meter\nimport a from \"/Core/A\"\nimport type T from \"/Core/B\"\n\nlocal x = 1\nimport late from \"/X\"\n";
+        let add = import_edit(text, "a2", "/Core/A");
+        assert_eq!(
+            add["range"]["start"],
+            serde_json::json!({ "line": 1, "character": 8 })
+        );
+        assert_eq!(add["newText"], ", a2");
+        // (an `import type` takes no value)
+        let new = import_edit(text, "B", "/Core/B");
+        assert_eq!(
+            new["range"]["start"],
+            serde_json::json!({ "line": 3, "character": 0 })
+        );
+        assert_eq!(new["newText"], "import B from \"/Core/B\"\n");
+        let first = import_edit("print(1)\n", "after", "wowlua:timer");
+        assert_eq!(
+            first["range"]["start"],
+            serde_json::json!({ "line": 0, "character": 0 })
+        );
+        assert_eq!(first["newText"], "import after from \"wowlua:timer\"\n");
+    }
+
+    /// The editor's settings (T504): `check: "save"` leaves an edit for its
+    /// save, a check's job carries the profile and threads, and changed
+    /// settings check the open packages again.
+    #[test]
+    #[allow(clippy::disallowed_methods)] // (a package on the disk)
+    fn the_editor_s_settings_steer_checks() {
+        use serde_json::json;
+        use std::cell::{Cell, RefCell};
+        use std::rc::Rc;
+        use std::time::Duration;
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("wowlua.json"),
+            r#"{ "package": { "name": "settings-test", "version": "0.1.0" } }"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(dir.path().join("src")).unwrap();
+        let file = dir.path().join("src/main.wowlua");
+        std::fs::write(&file, "print(1)\n").unwrap();
+        let uri = super::text::uri_of(&file);
+        let jobs: Rc<RefCell<Vec<super::Job>>> = Rc::default();
+        let now: Rc<Cell<Duration>> = Rc::default();
+        let (queue, clock) = (jobs.clone(), now.clone());
+        let mut server = super::Server::new(
+            true,
+            Box::new(move |job| {
+                queue.borrow_mut().push(job);
+                true
+            }),
+            Box::new(move || clock.get()),
+        );
+        let mut out = Vec::new();
+        let mut send = |server: &mut super::Server, method: &str, params: serde_json::Value| {
+            let m = json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
+            super::on_message(server, &m, &mut out).unwrap();
+        };
+        send(
+            &mut server,
+            "initialize",
+            json!({ "initializationOptions": { "check": "save", "profile": "release", "threads": 2 } }),
+        );
+        assert!(server.on_save);
+        assert_eq!(server.settings.profile, "release");
+        assert_eq!(server.settings.threads, Some(2));
+        let doc = json!({ "uri": uri, "languageId": "wowlua", "version": 1, "text": "print(1)\n" });
+        send(
+            &mut server,
+            "textDocument/didOpen",
+            json!({ "textDocument": doc }),
+        );
+        assert_eq!(server.dirty.len(), 1, "an opened file is checked");
+        server.dirty.clear();
+        send(
+            &mut server,
+            "textDocument/didChange",
+            json!({ "textDocument": { "uri": uri, "version": 2 }, "contentChanges": [{ "text": "print(2)\n" }] }),
+        );
+        assert!(server.dirty.is_empty(), "an edit waits for its save");
+        send(
+            &mut server,
+            "textDocument/didSave",
+            json!({ "textDocument": { "uri": uri } }),
+        );
+        assert_eq!(server.dirty.len(), 1, "a save is checked");
+        now.set(Duration::from_secs(1));
+        super::start_now(&mut server);
+        let job = jobs.borrow_mut().pop().expect("a check");
+        assert_eq!(job.settings.profile, "release");
+        assert_eq!(job.settings.threads, Some(2));
+        // While typing again, a changed profile checks the open file anew.
+        server.running = None;
+        server.dirty.clear();
+        let mut out = Vec::new();
+        let m = json!({ "jsonrpc": "2.0", "method": "workspace/didChangeConfiguration",
+            "params": { "settings": { "wowlua": { "check": "pause", "profile": "test" } } } });
+        super::on_message(&mut server, &m, &mut out).unwrap();
+        assert!(!server.on_save);
+        assert_eq!(server.settle, super::PAUSE);
+        assert_eq!(server.dirty.len(), 1, "checked with the new profile");
+        assert_eq!(server.settings.profile, "test");
+        assert_eq!(server.settings.threads, Some(2), "kept");
+    }
 
     #[test]
     fn a_function_s_overloads_are_one_per_line() {
