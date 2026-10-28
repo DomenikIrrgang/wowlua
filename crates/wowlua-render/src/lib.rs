@@ -242,7 +242,6 @@ pub struct Renderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipelines: Vec<wgpu::RenderPipeline>,
-    screen_layout: wgpu::BindGroupLayout,
     tex_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     textures: Vec<Tex>,
@@ -261,6 +260,13 @@ pub struct Renderer {
     model_slot_next: usize,
     /// The adapter's name, for reports.
     pub adapter: String,
+    /// The screen's size (the vertex shader's uniform) and its bind group,
+    /// rewritten each draw.
+    screen: wgpu::Buffer,
+    screen_group: wgpu::BindGroup,
+    /// The quads' vertices and the buffer's size, rewritten each draw and
+    /// made again only when a scene needs more.
+    quads: Option<(wgpu::Buffer, u64)>,
 }
 
 /// The color format the renderer draws in.
@@ -454,11 +460,27 @@ impl Renderer {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
+        let screen = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("screen"),
+            size: 16,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let screen_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &screen_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: screen.as_entire_binding(),
+            }],
+        });
         let mut r = Renderer {
             device,
             queue,
             pipelines,
-            screen_layout,
+            screen,
+            screen_group,
+            quads: None,
             tex_layout,
             sampler,
             textures: Vec::new(),
@@ -1043,29 +1065,35 @@ impl Renderer {
         for b in &batches {
             self.bind_group(b.tex, b.mask);
         }
-        let screen = buffer_with(
-            &self.device,
-            &self.queue,
-            "screen",
+        self.queue.write_buffer(
+            &self.screen,
+            0,
             bytemuck::cast_slice(&[width as f32, height as f32, 0.0, 0.0]),
-            wgpu::BufferUsages::UNIFORM,
         );
-        let screen_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &self.screen_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: screen.as_entire_binding(),
-            }],
-        });
+        let screen_group = &self.screen_group;
         let vbuf = (!verts.is_empty()).then(|| {
-            buffer_with(
-                &self.device,
-                &self.queue,
-                "quads",
-                bytemuck::cast_slice(&verts),
-                wgpu::BufferUsages::VERTEX,
-            )
+            let bytes: &[u8] = bytemuck::cast_slice(&verts);
+            let len = (bytes.len() as u64).next_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT);
+            if self.quads.as_ref().is_none_or(|(_, size)| *size < len) {
+                // Room to grow: a larger scene makes it again, seldom.
+                let size = len.next_power_of_two().max(64 * 1024);
+                let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("quads"),
+                    size,
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                self.quads = Some((buffer, size));
+            }
+            let (buffer, _) = self.quads.as_ref().expect("the quads' buffer");
+            if bytes.len() as u64 == len {
+                self.queue.write_buffer(buffer, 0, bytes);
+            } else {
+                let mut padded = bytes.to_vec();
+                padded.resize(len as usize, 0);
+                self.queue.write_buffer(buffer, 0, &padded);
+            }
+            buffer.slice(..len)
         });
         let mut encoder = self
             .device
@@ -1087,9 +1115,9 @@ impl Renderer {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            if let Some(vbuf) = &vbuf {
-                pass.set_vertex_buffer(0, vbuf.slice(..));
-                pass.set_bind_group(0, &screen_group, &[]);
+            if let Some(vbuf) = vbuf {
+                pass.set_vertex_buffer(0, vbuf);
+                pass.set_bind_group(0, screen_group, &[]);
                 for b in &batches {
                     let (x, y, w, h) = match b.clip {
                         Some(c) => {
