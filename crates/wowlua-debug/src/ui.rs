@@ -15,6 +15,18 @@ pub fn widget_named(vm: &mut Vm, name: &str) -> Option<WidgetId> {
     widgets::widget_of(vm, v)
 }
 
+/// Whether the chunk a frame was made in is the client's (none: the
+/// engine made it) or Blizzard's UI code.
+fn blizzards(chunk: Option<&[u8]>) -> bool {
+    let Some(chunk) = chunk else {
+        return true;
+    };
+    let name = String::from_utf8_lossy(chunk).to_ascii_lowercase();
+    ["blizzard_", "framexml", "sharedxml"]
+        .iter()
+        .any(|p| name.contains(p))
+}
+
 fn node(vm: &Vm, id: WidgetId, hidden: bool, depth: usize) -> Option<Json> {
     let e = wowlua_engine::engine(vm);
     let w = &e.world.widgets[id.0];
@@ -30,6 +42,10 @@ fn node(vm: &Vm, id: WidgetId, hidden: bool, depth: usize) -> Option<Json> {
     });
     if let Some(name) = &w.name {
         n["name"] = json!(name);
+    }
+    // Made by the client or by Blizzard's UI code (decision T496).
+    if blizzards(w.created.as_ref().map(|(chunk, _)| &chunk[..])) {
+        n["blizzard"] = json!(true);
     }
     // Screen pixels from the top left, as screenshots are.
     if let Some(r) = wowlua_engine::scene::rect_of(vm, id) {

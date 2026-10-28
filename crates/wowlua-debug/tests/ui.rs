@@ -31,4 +31,8 @@ fn the_default_tree_holds_uiparents_frames() {
         children.iter().any(|n| n["name"] == "TreeDemo"),
         "{ui_parent:#}"
     );
+    // The client's frames are marked Blizzard's, the addon's not (T496).
+    assert_eq!(ui_parent["blizzard"], true);
+    let demo = children.iter().find(|n| n["name"] == "TreeDemo").unwrap();
+    assert!(demo.get("blizzard").is_none(), "{demo:#}");
 }
