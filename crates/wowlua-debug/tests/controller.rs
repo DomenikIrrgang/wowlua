@@ -169,6 +169,32 @@ b:SetScript('OnEvent', function(self, event, bag)
 end)
 ";
 
+/// A function breakpoint naming where a function is defined (as a profile
+/// names it) stops on entry to each of its closures, local ones too
+/// (decision T495).
+#[test]
+fn a_function_breakpoint_by_definition_stops_its_calls() {
+    let mut s = session();
+    s.set_functions(&["src/defs.lua:1"]);
+    s.script(vec![
+        Request::StackTrace,
+        Request::Continue,
+        Request::StackTrace,
+        Request::Continue,
+    ]);
+    s.run(
+        "defs.lua",
+        "local function sq(x)\n    return x * x\nend\nfunction Twice() return sq(2) + sq(3) end\nTwice()\n",
+    );
+    let stops = s.stops();
+    assert_eq!(stops.len(), 2, "{stops:?}");
+    assert!(stops.iter().all(|s| s.0 == StopReason::FunctionBreakpoint));
+    let stacks = s.stacks();
+    assert_eq!(stacks[0][0].line, 2);
+    assert_eq!(stacks[0][0].source.as_deref(), Some("src/defs.lua"));
+    assert_eq!(stacks[1][0].line, 2);
+}
+
 #[test]
 fn an_event_breakpoint_stops_before_its_first_handler() {
     let mut s = session();
@@ -453,4 +479,81 @@ fn a_profile_report_has_functions_and_a_speedscope_file() {
     let ss = &r["speedscope"];
     assert_eq!(ss["profiles"].as_array().unwrap().len(), 3);
     assert_eq!(ss["profiles"][0]["unit"], "none");
+}
+
+/// The speedscope file keeps the whole profile (decision T495): read back,
+/// it has the calls, the dispatches' kinds and each frame's tree; another
+/// tool's file reads as a tree of its samples.
+#[test]
+fn a_saved_profile_reads_back_with_its_frames() {
+    use wowlua_debug::profile::Saved;
+    use wowlua_vm::debug::DispatchKind;
+    let mut s = session();
+    s.run(
+        "frames.lua",
+        "function Tick(n) local x = 0 for i = 1, n do x = x + i end end\n",
+    );
+    let n = std::cell::Cell::new(0u64);
+    s.vm.start_profiling(Box::new(move || {
+        n.set(n.get() + 1);
+        n.get()
+    }));
+    let tick = s.vm.get_global("Tick");
+    for size in [5.0, 500.0] {
+        let frame = s.vm.dispatch_enter(DispatchKind::Frame, || "frame".into());
+        let update =
+            s.vm.dispatch_enter(DispatchKind::Script, || "MyFrame:OnUpdate".into());
+        s.vm.call(tick, &[wowlua_vm::Value::Num(size)])
+            .expect("runs");
+        s.vm.dispatch_exit(update);
+        s.vm.dispatch_exit(frame);
+    }
+    let p = s.vm.stop_profiling().expect("profiled");
+    let map = |c: &[u8]| {
+        String::from_utf8_lossy(c)
+            .strip_prefix("@")
+            .map(str::to_string)
+    };
+    let saved = Saved::of(&p, &map, "two frames");
+    let file = saved.to_speedscope();
+    let back = Saved::from_speedscope(&file).expect("reads back");
+    assert_eq!(back, saved);
+    assert_eq!(back.frames.len(), 2);
+    for f in 0..2 {
+        let ours: Vec<_> = back
+            .frame_tree(f)
+            .iter()
+            .map(|(n, t)| (n.node, n.calls, t.instructions))
+            .collect();
+        let vm: Vec<_> = p
+            .frame_tree(f)
+            .iter()
+            .map(|(n, t)| (n.node, n.calls, t.instructions))
+            .collect();
+        assert_eq!(ours, vm);
+    }
+    let kinds: Vec<_> = back.keys.iter().filter_map(|k| k.kind.clone()).collect();
+    assert!(kinds.contains(&"script".to_string()), "{kinds:?}");
+    let tick = back
+        .nodes
+        .iter()
+        .find(|n| back.keys[n.key as usize].name == "function src/frames.lua:1")
+        .expect("Tick");
+    assert_eq!(tick.calls, 2);
+    // Without wowlua's part: the samples' tree, no calls or frames.
+    let mut plain = file.clone();
+    plain.as_object_mut().unwrap().remove("wowlua");
+    let other = Saved::from_speedscope(&plain).expect("reads");
+    assert!(other.frames.is_empty());
+    let total = |s: &Saved| {
+        s.nodes
+            .iter()
+            .map(|n| n.self_cost.instructions)
+            .sum::<u64>()
+    };
+    assert_eq!(
+        total(&other),
+        total(&saved) - saved.nodes[0].self_cost.instructions
+    );
+    assert!(Saved::from_speedscope(&serde_json::json!({ "x": 1 })).is_none());
 }

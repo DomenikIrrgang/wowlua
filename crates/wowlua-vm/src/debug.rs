@@ -137,6 +137,8 @@ pub struct DebugState {
     pub(crate) line_protos: FxHashSet<usize>,
     /// Functions whose calls stop (functions, API calls).
     pub(crate) func_breaks: FxHashSet<FuncRef>,
+    /// Lua functions whose calls stop, by prototype: every closure of it.
+    pub(crate) proto_breaks: FxHashSet<usize>,
     pub(crate) step: Option<Step>,
     /// A function breakpoint was entered: its first line stops.
     pub(crate) entry_break: bool,
@@ -156,6 +158,7 @@ impl Vm {
             self.dbg = Some(Box::new(DebugState {
                 line_protos: FxHashSet::default(),
                 func_breaks: FxHashSet::default(),
+                proto_breaks: FxHashSet::default(),
                 step: None,
                 entry_break: false,
                 interrupt: Arc::new(AtomicBool::new(false)),
@@ -258,6 +261,15 @@ impl Vm {
         self.update_call_hooks();
     }
 
+    /// Stops on entry to every closure of these prototypes (the caller
+    /// keeps them alive).
+    pub fn set_proto_breakpoints<'a>(&mut self, protos: impl IntoIterator<Item = &'a Rc<Proto>>) {
+        if let Some(d) = self.dbg.as_mut() {
+            d.proto_breaks = protos.into_iter().map(|p| Rc::as_ptr(p) as usize).collect();
+        }
+        self.update_call_hooks();
+    }
+
     /// Starts a step (`None` ends it).
     pub fn set_step(&mut self, step: Option<Step>) {
         if let Some(d) = self.dbg.as_mut() {
@@ -324,8 +336,11 @@ impl Vm {
     }
 
     pub(crate) fn update_call_hooks(&mut self) {
-        self.call_hooks =
-            self.profiler.is_some() || self.dbg.as_ref().is_some_and(|d| !d.func_breaks.is_empty());
+        self.call_hooks = self.profiler.is_some()
+            || self
+                .dbg
+                .as_ref()
+                .is_some_and(|d| !d.func_breaks.is_empty() || !d.proto_breaks.is_empty());
     }
 
     /// The hook bits for a frame of `proto` starting or resuming (and the
@@ -462,8 +477,22 @@ impl Vm {
                 self.heap.allocated(),
             );
         }
+        // A breakpoint by definition: the callee's prototype.
+        let by_proto = self
+            .dbg
+            .as_ref()
+            .is_some_and(|d| !d.proto_breaks.is_empty())
+            && match self.heap.func(f) {
+                Function::Lua(l) => {
+                    let p = Rc::as_ptr(&l.proto) as usize;
+                    self.dbg
+                        .as_ref()
+                        .is_some_and(|d| d.proto_breaks.contains(&p))
+                }
+                Function::Native(_) => false,
+            };
         if let Some(d) = self.dbg.as_mut()
-            && d.func_breaks.contains(&f)
+            && (by_proto || d.func_breaks.contains(&f))
         {
             if native {
                 self.with_debugger(|d, vm| d.api_call(vm, f));

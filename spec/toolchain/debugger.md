@@ -87,6 +87,7 @@ the pause, layout included.
 |------|-----------|-------|
 | Line | a source line, with an optional condition, hit count and log message | before the line runs |
 | Function | `Name`, `Table.name`, `Table:method` | when that Lua function is entered |
+| Function by definition | `src/Threat.wowlua:560` (a source and the line a function is defined on, as a profile names it) | when any closure of that function is entered, local ones too (decision T495) |
 | API call | `C_Timer.After`, `CreateFrame` | when Lua calls that native function |
 | Event | `event:PLAYER_LOGIN`, `event:*` | before the event's first handler runs |
 | Script | `script:OnClick`, `script:MyFrame:OnUpdate` | before a widget's script runs (of any widget, or the named one) |
@@ -167,12 +168,18 @@ The VM counts, per function and per dispatch (decision T307):
 Functions are keyed by their definition (source, line defined; natives by
 name), dispatches by kind and name (`event PLAYER_LOGIN`, `MyFrame:OnEvent`,
 `OnUpdate MyFrame`, `timer`), and game frames by number. The call tree keeps
-every path (callers and callees) up to depth 256. A profile is started and
+every path (callers and callees) up to depth 256, and each of the newest 600
+game frames keeps its own: the nodes that ran in it, with their calls and
+costs in that frame (decision T495). A profile is started and
 stopped in a session (or covers a whole test file with
 `wowlua test --profile-out <dir>`), and is given as a table (functions sorted by a
 measure), a call tree, a per-frame timeline, or a file:
 [speedscope](https://www.speedscope.app) JSON with one profile per measure,
-which Studio and speedscope open (decision T308).
+which Studio and speedscope open (decision T308). The file keeps the whole
+profile under `wowlua` for wowlua's readers, which speedscope leaves alone:
+the dispatches' kinds, the tree with each node's calls and own cost, and the
+kept frames with their trees; read back, it is the profile again, and
+another tool's speedscope file reads as the tree of its samples (decision T495).
 
 ## 18.9 Scene
 

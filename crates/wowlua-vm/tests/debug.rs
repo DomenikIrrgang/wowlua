@@ -333,6 +333,71 @@ fn dispatches_are_nodes_of_their_own() {
     assert_eq!(p.nodes[ev_node].children.len(), 1);
 }
 
+/// Each game frame keeps its own call tree: what ran in it, its calls and
+/// costs there, totals summed over the frame's nodes (decision T495).
+#[test]
+fn each_game_frame_keeps_its_call_tree() {
+    use wowlua_vm::debug::DispatchKind;
+    let mut vm = Vm::new();
+    vm.start_profiling(clock());
+    let chunk = load(
+        &mut vm,
+        "function tick() local x = 0 for i = 1, 5 do x = x + i end end\n\
+         function spike() local x = 0 for i = 1, 500 do x = x + i end end\n",
+    );
+    vm.call(chunk, &[]).expect("defines");
+    let (tick, spike) = (vm.get_global("tick"), vm.get_global("spike"));
+    for n in 0..3 {
+        let frame = vm.dispatch_enter(DispatchKind::Frame, || "frame".into());
+        let update = vm.dispatch_enter(DispatchKind::Script, || "MyFrame:OnUpdate".into());
+        vm.call(tick, &[]).expect("runs");
+        if n == 1 {
+            vm.call(spike, &[]).expect("runs");
+            vm.call(tick, &[]).expect("runs");
+        }
+        vm.dispatch_exit(update);
+        vm.dispatch_exit(frame);
+    }
+    let p = vm.stop_profiling().expect("profiling");
+    assert_eq!(p.frames.len(), 3);
+    let named = |frame: usize| -> Vec<(String, u64, u64)> {
+        p.frame_tree(frame)
+            .iter()
+            .map(|(n, total)| {
+                let key = p.nodes[n.node as usize].key;
+                (p.key_name(key), n.calls, total.instructions)
+            })
+            .collect()
+    };
+    let calm = named(0);
+    let busy = named(1);
+    let names = |t: &[(String, u64, u64)]| t.iter().map(|e| e.0.clone()).collect::<Vec<_>>();
+    assert_eq!(
+        names(&calm),
+        [
+            "frame game frame",
+            "script MyFrame:OnUpdate",
+            "function (t:1)"
+        ]
+    );
+    assert_eq!(
+        names(&busy),
+        [
+            "frame game frame",
+            "script MyFrame:OnUpdate",
+            "function (t:1)",
+            "function (t:2)"
+        ]
+    );
+    // tick ran twice in the busy frame, once in the calm one.
+    assert_eq!((calm[2].1, busy[2].1), (1, 2));
+    // The frame's total is its cost; the spike is most of the busy one.
+    assert_eq!(busy[0].2, p.frames[1].cost.instructions);
+    assert!(busy[3].2 * 2 > busy[0].2, "{busy:?}");
+    assert_eq!(calm[0].2, p.frames[0].cost.instructions);
+    assert_eq!(calm, named(2));
+}
+
 #[test]
 fn an_error_unwinds_the_profilers_stack() {
     let mut vm = Vm::new();

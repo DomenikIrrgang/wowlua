@@ -78,6 +78,17 @@ pub struct Node {
 pub struct FrameSample {
     pub name: Rc<str>,
     pub cost: Cost,
+    /// The nodes that ran in the frame, by index (a parent before its
+    /// children); empty for a frame older than the newest [`FRAME_TREES`].
+    pub nodes: Vec<FrameNode>,
+}
+
+/// A node's part in one game frame: its calls and its own cost there.
+#[derive(Clone, Copy, Debug)]
+pub struct FrameNode {
+    pub node: u32,
+    pub calls: u64,
+    pub self_cost: Cost,
 }
 
 #[derive(Clone, Copy)]
@@ -96,6 +107,9 @@ pub const MAX_DEPTH: usize = 256;
 /// Most game frames kept (the newest).
 const MAX_FRAMES: usize = 100_000;
 
+/// Game frames whose call trees are kept (the newest; decision T495).
+pub const FRAME_TREES: usize = 600;
+
 /// The profiler's state, and the profile it collects.
 pub struct Profiler {
     pub keys: Vec<Key>,
@@ -107,6 +121,8 @@ pub struct Profiler {
     clock: Box<dyn Fn() -> u64>,
     pub frames: Vec<FrameSample>,
     frame_count: u64,
+    /// While a game frame runs: each node's calls and cost in it.
+    frame_nodes: Option<FxHashMap<u32, (u64, Cost)>>,
 }
 
 impl Profiler {
@@ -128,6 +144,7 @@ impl Profiler {
             clock,
             frames: Vec::new(),
             frame_count: 0,
+            frame_nodes: None,
         }
     }
 
@@ -150,6 +167,9 @@ impl Profiler {
             .and_then(|s| s.last())
             .map_or(0, |e| e.node);
         self.nodes[node as usize].self_cost.add(spent);
+        if let Some(frame) = &mut self.frame_nodes {
+            frame.entry(node).or_default().1.add(spent);
+        }
         self.last_thread = Some(thread);
     }
 
@@ -212,6 +232,9 @@ impl Profiler {
             self.child(parent, key)
         };
         self.nodes[node as usize].calls += 1;
+        if let Some(frame) = &mut self.frame_nodes {
+            frame.entry(node).or_default().0 += 1;
+        }
         self.stacks.entry(thread).or_default().push(Entry {
             node,
             depth,
@@ -266,6 +289,9 @@ impl Profiler {
         let k = self.key(KeyId::Dispatch(kind, name.clone()), || {
             Key::Dispatch(kind, name)
         });
+        if kind == DispatchKind::Frame {
+            self.frame_nodes = Some(FxHashMap::default());
+        }
         self.push(k, depth, thread, resumers, true, now);
     }
 
@@ -279,10 +305,20 @@ impl Profiler {
     ) {
         let now = self.now(instructions, bytes);
         self.charge(now, thread);
+        let mut frame_left = false;
         if let Some(s) = self.stacks.get_mut(&thread) {
-            while s.last().is_some_and(|e| e.depth > depth) {
+            while let Some(e) = s.last().copied().filter(|e| e.depth > depth) {
                 s.pop();
+                frame_left |= e.dispatch
+                    && matches!(
+                        self.keys[self.nodes[e.node as usize].key as usize],
+                        Key::Dispatch(DispatchKind::Frame, _)
+                    );
             }
+        }
+        // A frame an error left is not one of the frames.
+        if frame_left {
+            self.frame_nodes = None;
         }
     }
 
@@ -312,10 +348,27 @@ impl Profiler {
                         self.frames.remove(0);
                     }
                     self.frame_count += 1;
+                    let mut nodes: Vec<FrameNode> = self
+                        .frame_nodes
+                        .take()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|(node, (calls, self_cost))| FrameNode {
+                            node,
+                            calls,
+                            self_cost,
+                        })
+                        .collect();
+                    nodes.sort_unstable_by_key(|n| n.node);
                     self.frames.push(FrameSample {
                         name: format!("frame {}", self.frame_count).into(),
                         cost: now - e.start,
+                        nodes,
                     });
+                    // Older frames keep their cost, not their tree.
+                    if let Some(old) = self.frames.len().checked_sub(FRAME_TREES + 1) {
+                        self.frames[old].nodes = Vec::new();
+                    }
                 }
                 break;
             }
@@ -337,6 +390,29 @@ impl Profiler {
             totals[p].add(t);
         }
         totals
+    }
+
+    /// A kept frame's call tree (`frames[frame]`): each node that ran in it
+    /// with its part, and its total there (itself and its children in the
+    /// frame), a parent before its children; empty for an older frame.
+    pub fn frame_tree(&self, frame: usize) -> Vec<(FrameNode, Cost)> {
+        let Some(sample) = self.frames.get(frame) else {
+            return Vec::new();
+        };
+        let mut tree: Vec<(FrameNode, Cost)> =
+            sample.nodes.iter().map(|n| (*n, n.self_cost)).collect();
+        // Children always come after their parent.
+        for i in (0..tree.len()).rev() {
+            let parent = self.nodes[tree[i].0.node as usize].parent;
+            if tree[i].0.node == parent {
+                continue;
+            }
+            if let Ok(p) = tree.binary_search_by_key(&parent, |(n, _)| n.node) {
+                let t = tree[i].1;
+                tree[p].1.add(t);
+            }
+        }
+        tree
     }
 
     /// Per key: calls, self and total cost (a recursive call's total is
