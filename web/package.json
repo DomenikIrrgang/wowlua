@@ -1,6 +1,6 @@
 {
   "name": "@wowlua/web",
-  "version": "0.13.4",
+  "version": "0.13.5",
   "description": "wowlua in a web page: the compiler, checker, formatter and language server for World of Warcraft addons, as WebAssembly",
   "license": "MIT",
   "repository": {
