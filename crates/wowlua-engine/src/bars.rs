@@ -170,6 +170,7 @@ fn is_dragging_thumb(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// `SetValue(value [, treatAsMouseEvent])` (a bar's second argument is
 /// its interpolation).
 fn set_value(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    stop_timer(vm, id);
     let v = number(vm, c.arg(2));
     let mut b = bar(vm, id);
     b.valued = true;
@@ -181,6 +182,9 @@ fn set_value(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 }
 
 fn get_value(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    if engine(vm).world.timer_bars.contains(&id) {
+        follow_timer(vm, id);
+    }
     let b = bar(vm, id);
     Ok(vec![read(vm, b.value, b.secret_value)])
 }
@@ -198,6 +202,7 @@ fn set_min_max_values(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         let v = vm.str(&msg);
         return Err(vm.raise(v));
     }
+    stop_timer(vm, id);
     let mut b = bar(vm, id);
     let secret = is_secret(c.arg(2)) || is_secret(c.arg(3));
     if b.secret_range != secret {
@@ -245,6 +250,58 @@ fn set_value_step(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 
 fn get_value_step(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(bar(vm, id).step.unwrap_or(0.0))])
+}
+
+/// `StatusBar:SetTimerDuration(duration [, interpolation [, direction]])`:
+/// the bar's value follows the duration from now on, each frame, across
+/// its range: `Enum.StatusBarTimerDirection.ElapsedTime` (0, the default)
+/// fills it, `RemainingTime` (1) drains it, secret while the duration is
+/// (unverified: what the client's `GetValue` reads, whether
+/// `OnValueChanged` runs; it doesn't here). A value set stops it
+/// (unverified). The interpolation is how the client eases a change, which
+/// the engine doesn't draw.
+fn set_timer_duration(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    widgets::store(vm, id, "TimerDuration", &[c.arg(2), c.arg(3), c.arg(4)]);
+    let timers = &mut engine_mut(vm).world.timer_bars;
+    if !timers.contains(&id) {
+        timers.push(id);
+    }
+    follow_timer(vm, id);
+    Ok(vec![])
+}
+
+fn stop_timer(vm: &mut Vm, id: WidgetId) {
+    engine_mut(vm).world.timer_bars.retain(|&t| t != id);
+}
+
+/// A timer bar's value now, from its duration and direction.
+fn follow_timer(vm: &mut Vm, id: WidgetId) {
+    let props = engine(vm).world.widgets[id.0].props;
+    let args = widgets::stored_args(vm, props, "TimerDuration").unwrap_or_default();
+    let Some(duration) = args.first().and_then(|&d| widgets::widget_of(vm, d)) else {
+        return;
+    };
+    let draining = args
+        .get(2)
+        .is_some_and(|&d| vm.tonumber(vm.hidden(d)) == Some(1.0));
+    // ponytail: the engine's clock; a duration on a manual clock
+    // (`SetClock`) reads it at the engine's time here.
+    let (total, elapsed, secret) = crate::curves::elapsed_fraction(vm, duration);
+    let f = if draining { 1.0 - elapsed } else { elapsed };
+    // The duration is the bar's range (Blizzard's code sets none for a
+    // timer, and clears one with `SetMinMaxValues(0, 0)`).
+    let mut b = bar(vm, id);
+    (b.min, b.max, b.ranged, b.secret_range) = (0.0, total, true, secret);
+    b.value = total * f;
+    b.secret_value = secret;
+    engine_mut(vm).world.bars.insert(id.0, b);
+}
+
+/// Each frame: the timer bars' values follow their durations.
+pub fn update_timers(vm: &mut Vm) {
+    for id in engine(vm).world.timer_bars.clone() {
+        follow_timer(vm, id);
+    }
 }
 
 /// What setter `stem` stored, else `default`.
@@ -429,6 +486,7 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("StatusBar:GetFillStyle", get_fill_style),
         ("StatusBar:GetReverseFill", get_reverse_fill),
         ("StatusBar:GetRotatesTexture", get_rotates_texture),
+        ("StatusBar:SetTimerDuration", set_timer_duration),
         ("StatusBar:SetStatusBarTexture", set_status_bar_texture),
         ("StatusBar:GetStatusBarTexture", get_status_bar_texture),
         ("StatusBar:SetStatusBarColor", set_status_bar_color),

@@ -14,6 +14,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `GetTotemInfo` answers an empty slot for every slot `GetNumTotemSlots()` counts (8 on WoW Forever), not just the first four; slots 5 to 8 answered nothing.
 - An aura button's `SetDurationText(fontString, {})` keeps its default text: options you leave out, such as `textColor`, stay out, as in the game; before, Blizzard's code errored with "a color curve expected".
 - A group member moved in or out of range with `unit:setDistance` fires `UNIT_IN_RANGE_UPDATE`, so unit frames that fade out-of-range members (Blizzard's raid frames among them) react in tests; before, only `UnitInRange` changed.
+- A status bar given `SetTimerDuration` fills (or drains) with its duration, in `GetValue` and in screenshots, so cast bars that run on a timer show their progress, with or without a range set first; before, the bar stayed where it was.
 
 ## 0.13.4 (2026-10-28)
 
