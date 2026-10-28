@@ -3793,9 +3793,40 @@ fn control_show_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {
         engine_mut(vm).units.nameplate_frames.push(id);
         fire(vm, "NAME_PLATE_CREATED", &[frame]);
     }
+    let frame = engine(vm).units.nameplate_frames[slot];
+    place_nameplate(vm, frame, me)?;
     let token = vm.str(&format!("nameplate{}", slot + 1));
     fire(vm, "NAME_PLATE_UNIT_ADDED", &[token]);
     Ok(vec![Value::Num(slot as f64 + 1.0)])
+}
+
+/// A nameplate shown sits where its unit would be: the client's size
+/// (`C_NamePlate.GetNamePlateSize`), at a spot of the screen's middle
+/// picked from the unit, the same each run (there is no world to place
+/// it over; plates may overlap, as in the game).
+fn place_nameplate(
+    vm: &mut Vm,
+    frame: widgets::WidgetId,
+    unit: UnitId,
+) -> Result<(), wowlua_vm::LuaError> {
+    let h = (unit.0 as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    let part = |shift: u32| ((h >> shift) & 0xFFFF) as f64 / 65535.0;
+    let (x, y) = (-350.0 + 700.0 * part(40), -50.0 + 250.0 * part(16));
+    let plate = Value::Table(engine(vm).world.widgets[frame.0].table);
+    widgets::call_method(vm, plate, "ClearAllPoints", &[])?;
+    // The screen's center: the engine's world frame has no size.
+    let screen = engine(vm).world.ui_parent.map_or(Value::Nil, |ui| {
+        Value::Table(engine(vm).world.widgets[ui.0].table)
+    });
+    let (p, rp) = (vm.str("CENTER"), vm.str("CENTER"));
+    widgets::call_method(
+        vm,
+        plate,
+        "SetPoint",
+        &[p, screen, rp, Value::Num(x), Value::Num(y)],
+    )?;
+    widgets::call_method(vm, plate, "SetSize", &[Value::Num(237.5), Value::Num(85.0)])?;
+    Ok(())
 }
 
 /// `C_NamePlate.GetNamePlateForUnit(unit)`: the frame of the nameplate the

@@ -238,6 +238,33 @@ return table.concat(added, ','), UnitName('nameplate2'), UnitName('targettarget'
     );
 }
 
+#[test]
+fn nameplates_are_placed_over_the_world() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local a = mock.spawnUnit({ name = 'A' })
+local b = mock.spawnUnit({ name = 'B' })
+a:showNameplate()
+b:showNameplate()
+local pa, pb = C_NamePlate.GetNamePlateForUnit('nameplate1'), C_NamePlate.GetNamePlateForUnit('nameplate2')
+local point, rel, _, xa, ya = pa:GetPoint(1)
+local _, _, _, xb, yb = pb:GetPoint(1)
+local w, h = pa:GetSize()
+a:hideNameplate()
+a:showNameplate()
+local _, _, _, again = pa:GetPoint(1)
+return point, rel == UIParent, pa:GetParent() == WorldFrame, w, h, tostring(xa ~= xb or ya ~= yb), tostring(again == xa),
+    tostring(math.abs(xa) <= 350 and ya >= -50 and ya <= 200)",
+    );
+    assert_eq!(
+        r,
+        [
+            "CENTER", "true", "true", "237.5", "85", "true", "true", "true"
+        ]
+    );
+}
+
 /// The player's casts as the client recorded them (`/stdtest engine record
 /// cast`, Forever 70425): GUIDs and cast bar ids by first appearance.
 #[test]
