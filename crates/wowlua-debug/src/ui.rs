@@ -485,13 +485,23 @@ pub fn pick(vm: &mut Vm, x: f64, y: f64) -> Json {
 pub fn units(vm: &mut Vm) -> Json {
     let e = wowlua_engine::engine(vm);
     let u = &e.units;
+    let mob = u.target;
     let list = u
         .list
         .iter()
         .enumerate()
         .map(|(i, unit)| {
             let id = wowlua_engine::units::UnitId(i);
+            // Its threat on the player's target (decision T485).
+            let threat = mob
+                .filter(|m| *m != id)
+                .and_then(|m| wowlua_engine::units::threat(vm, id, m))
+                .map(|(tanking, status, scaled, raw, value)| {
+                    json!({ "tanking": tanking, "status": status, "percent": scaled,
+                            "raw": raw, "value": value })
+                });
             json!({
+                "threat": threat,
                 "id": i,
                 "guid": unit.guid,
                 "name": unit.name,
@@ -541,4 +551,97 @@ pub fn events(vm: &mut Vm) -> Json {
         })
         .collect();
     Json::Array(list)
+}
+
+// ------------------------------------------------------------ the world
+
+/// The running world as a world profile's JSON (decision T485): the
+/// character, its money and place, the other units (the target, focus and
+/// group among them), the CVars changed from their defaults. What a
+/// profile holds beyond (items, bags, spells, auras, saved variables) is
+/// not written.
+pub fn world_profile(vm: &mut Vm) -> Json {
+    let e = wowlua_engine::engine(vm);
+    let u = &e.units;
+    let player = &u.list[0];
+    let reaction = |r: wowlua_engine::units::Reaction| format!("{r:?}").to_lowercase();
+    let character = json!({
+        "name": player.name,
+        "class": player.class,
+        "race": player.race,
+        "level": player.level,
+        "sex": player.sex,
+        "health": player.health,
+        "healthMax": player.health_max,
+    });
+    let c = &e.world.character;
+    let pos = &c.position;
+    let mut position = json!({ "zone": pos.zone, "subZone": pos.sub_zone });
+    if let Some(m) = pos.map_id {
+        position["mapID"] = json!(m);
+    }
+    if let (Some(x), Some(y)) = (pos.x, pos.y) {
+        position["x"] = json!(x);
+        position["y"] = json!(y);
+    }
+    let units: Vec<Json> = u
+        .list
+        .iter()
+        .enumerate()
+        .skip(1)
+        .filter(|(_, unit)| !unit.name.is_empty())
+        .map(|(i, unit)| {
+            let id = wowlua_engine::units::UnitId(i);
+            let mut j = json!({
+                "name": unit.name,
+                "level": unit.level,
+                "class": unit.class,
+                "reaction": reaction(unit.reaction),
+                "health": unit.health,
+                "healthMax": unit.health_max,
+            });
+            if unit.player {
+                j["player"] = json!(true);
+                j["race"] = json!(unit.race);
+            }
+            if unit.dead {
+                j["dead"] = json!(true);
+            }
+            if let Some(d) = unit.distance {
+                j["distance"] = json!(d);
+            }
+            if u.target == Some(id) {
+                j["target"] = json!(true);
+            }
+            if u.focus == Some(id) {
+                j["focus"] = json!(true);
+            }
+            if u.group.contains(&id) {
+                j["group"] = json!(if u.raid { "raid" } else { "party" });
+            }
+            j
+        })
+        .collect();
+    let mut cvars = serde_json::Map::new();
+    for (k, v) in &e.world.cvars {
+        let default = e
+            .world
+            .cvar_defaults
+            .iter()
+            .find(|(d, _)| d.eq_ignore_ascii_case(k))
+            .map(|(_, d)| d);
+        if default != Some(v) {
+            cvars.insert(k.clone(), json!(v));
+        }
+    }
+    let mut out = json!({
+        "character": character,
+        "money": c.money,
+        "position": position,
+        "units": units,
+    });
+    if !cvars.is_empty() {
+        out["cvars"] = Json::Object(cvars);
+    }
+    out
 }

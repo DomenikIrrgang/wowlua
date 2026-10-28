@@ -67,6 +67,8 @@ pub(crate) struct FuncBp {
     pub id: u32,
     pub spec: FunctionBreakpoint,
     pub target: FuncTarget,
+    /// How often it stopped.
+    pub hits: u32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -129,6 +131,11 @@ pub struct Shared {
     pub configured: bool,
     /// The session is paused between frames (by the driver).
     pub idle_paused: bool,
+    /// The next stop's exception details.
+    pub detail: Option<StopDetail>,
+    /// The clock a front-end chose while running (`SetClock`): manual or
+    /// not, over the launch's.
+    pub manual: Option<bool>,
 }
 
 pub type SharedRef = Rc<RefCell<Shared>>;
@@ -156,6 +163,8 @@ impl Shared {
             terminate: false,
             configured: false,
             idle_paused: false,
+            detail: None,
+            manual: None,
         }))
     }
 
@@ -194,8 +203,15 @@ impl Shared {
                 verified: !matches!(target, FuncTarget::Path(_)),
                 line: None,
                 message: None,
+                hits: 0,
+                source: None,
             });
-            self.funcs.push(FuncBp { id, spec, target });
+            self.funcs.push(FuncBp {
+                id,
+                spec,
+                target,
+                hits: 0,
+            });
         }
         out
     }
@@ -386,6 +402,8 @@ impl Controller {
                     verified,
                     line: None,
                     message: (!verified).then(|| format!("{} is not defined yet", f.spec.name)),
+                    hits: f.hits,
+                    source: None,
                 }
             })
             .collect()
@@ -435,9 +453,21 @@ impl Controller {
         let mut paused = self.pause_state(vm);
         // The frames requests name (a stack trace builds them again).
         self.stack_trace(vm, &mut paused);
-        self.shared()
-            .link
-            .event(Event::Stopped { reason, text, hit });
+        let detail = {
+            let mut s = self.shared();
+            if reason == StopReason::FunctionBreakpoint {
+                for f in s.funcs.iter_mut().filter(|f| hit.contains(&f.id)) {
+                    f.hits += 1;
+                }
+            }
+            s.detail.take()
+        };
+        self.shared().link.event(Event::Stopped {
+            reason,
+            text,
+            hit,
+            detail,
+        });
         loop {
             let next = self.shared().link.recv(None);
             let Some((id, req)) = next else {
@@ -601,7 +631,14 @@ impl Controller {
                     Ok(Response::Ok)
                 }
             }
-            Request::Pause => Ok(Response::Ok),
+            // (between frames: the next line run stops, else the next
+            // time between frames)
+            Request::Pause => {
+                if paused.is_none() && !self.shared.borrow().idle_paused {
+                    self.begin_pause(vm);
+                }
+                Ok(Response::Ok)
+            }
             Request::StackTrace => match paused {
                 Some(p) => Ok(Response::StackTrace {
                     frames: self.stack_trace(vm, p),
@@ -708,6 +745,37 @@ impl Controller {
                 let lines = std::mem::take(&mut self.shared().output);
                 Ok(Response::Output { lines })
             }
+            Request::Breakpoints => {
+                let s = self.shared.borrow();
+                let mut list: Vec<BreakpointState> = Vec::new();
+                for (source, bps) in &s.lines {
+                    for b in bps {
+                        list.push(BreakpointState {
+                            source: Some(source.clone()),
+                            ..state_of(b)
+                        });
+                    }
+                }
+                for f in &s.funcs {
+                    list.push(BreakpointState {
+                        id: f.id,
+                        verified: self.resolved.iter().any(|(id, _)| *id == f.id)
+                            || !matches!(f.target, FuncTarget::Path(_)),
+                        line: None,
+                        message: None,
+                        hits: f.hits,
+                        source: None,
+                    });
+                }
+                Ok(Response::Breakpoints { breakpoints: list })
+            }
+            Request::SetClock { manual } => {
+                self.shared().manual = Some(manual);
+                Ok(Response::Ok)
+            }
+            Request::SaveWorld => Ok(Response::Data {
+                data: crate::ui::world_profile(vm),
+            }),
             Request::Terminate => {
                 let mut s = self.shared();
                 s.terminate = true;
@@ -716,7 +784,11 @@ impl Controller {
                 Ok(Response::Ok)
             }
         };
+        let resumed = matches!(flow, Flow::Resume) && !self.shared.borrow().terminate;
         self.shared().link.respond(id, r);
+        if resumed {
+            self.shared().link.event(Event::Continued);
+        }
         flow
     }
 
@@ -1178,6 +1250,17 @@ impl Debugger for Controller {
         let f = self.shared.borrow().filters;
         if f.all || (f.uncaught && !caught) {
             let msg = values::error_text(vm, error.value);
+            self.shared().detail = Some(StopDetail::Error {
+                message: msg.clone(),
+                // (the error's own traceback is written as it unwinds:
+                // here, the stack it was raised in)
+                stack: if error.traceback.is_empty() {
+                    vm.traceback(0)
+                } else {
+                    error.traceback.clone()
+                },
+                caught,
+            });
             self.stop(vm, StopReason::Exception, Some(msg), Vec::new());
         }
     }
@@ -1218,6 +1301,11 @@ impl Debugger for Controller {
 
     fn tainted(&mut self, vm: &mut Vm, by: &str) {
         if self.shared.borrow().filters.taint && self.steppable(vm) {
+            let report = vm.execution_report();
+            self.shared().detail = Some(StopDetail::Taint {
+                by: by.to_string(),
+                report,
+            });
             self.stop(
                 vm,
                 StopReason::Exception,
@@ -1230,6 +1318,11 @@ impl Debugger for Controller {
     fn blocked(&mut self, vm: &mut Vm, action: &str, addon: &str, report: &str) {
         if self.shared.borrow().filters.blocked {
             let text = format!("{addon} was blocked from {action}\n{report}");
+            self.shared().detail = Some(StopDetail::Blocked {
+                addon: addon.to_string(),
+                action: action.to_string(),
+                report: report.to_string(),
+            });
             self.stop(vm, StopReason::Exception, Some(text), Vec::new());
         }
     }
@@ -1246,6 +1339,7 @@ impl Debugger for Controller {
                 reason: StopReason::Pause,
                 text: Some("between frames".into()),
                 hit: Vec::new(),
+                detail: None,
             });
         }
         while self.shared.borrow().idle_paused && !self.shared.borrow().terminate {
@@ -1270,6 +1364,8 @@ fn state_of(b: &LineBp) -> BreakpointState {
             .actual
             .is_none()
             .then(|| "not loaded yet, or no code at or after this line".to_string()),
+        hits: b.hits,
+        source: None,
     }
 }
 

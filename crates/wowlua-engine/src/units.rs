@@ -1664,6 +1664,20 @@ pub fn control_unit_of(vm: &mut Vm, c: NativeCall) -> Ret {
     }])
 }
 
+/// `mock.unitAt(index)`: the unit at that place of the world's list (a
+/// front-end's units, decision T485; 0 the player), nil when none.
+pub fn control_unit_at(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Num(i) = c.arg(1) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let count = engine(vm).units.list.len();
+    Ok(vec![if i >= 0.0 && (i as usize) < count {
+        handle(vm, UnitId(i as usize))
+    } else {
+        Value::Nil
+    }])
+}
+
 /// `mock.spawnUnit({ name, level, class, race, sex, reaction, player,
 /// health, maxHealth, power, maxPower, powerType, guid, npcID, distance
 /// })`.
@@ -2149,6 +2163,12 @@ fn tell_changed(vm: &mut Vm, before: &[(UnitId, Option<f64>)], player: bool) {
 /// the holder, else 0, their raw % of the holder's threat, the scaled %
 /// of what pulls it (110% in melee, 130% beyond; the player's distance
 /// to the mob, the others' taken as melee).
+/// A unit's threat on a creature, as `UnitDetailedThreatSituation` gives
+/// it: tanking, status, scaled and raw percentage, value (none: none).
+pub fn threat(vm: &Vm, unit: UnitId, mob: UnitId) -> Option<(bool, f64, f64, f64, f64)> {
+    threat_of(vm, unit, mob)
+}
+
 fn threat_of(vm: &Vm, unit: UnitId, mob: UnitId) -> Option<(bool, f64, f64, f64, f64)> {
     let u = &engine(vm).units;
     let m = &u.list[mob.0];

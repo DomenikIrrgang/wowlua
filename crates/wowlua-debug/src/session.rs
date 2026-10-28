@@ -385,8 +385,9 @@ fn run_addon(
         Ok(s) => s,
         Err(e) => return (Some(e), true),
     };
-    let started = Instant::now();
+    let mut started = Instant::now();
     let mut frames_run: u64 = 0;
+    let mut last_clock = opts.clock;
     loop {
         // A `/reload` (`ReloadUI()`) ended the addon's session: the UI loads
         // again, its SavedVariables kept, the debugger on the new one.
@@ -395,6 +396,7 @@ fn run_addon(
             if let Err(e) = session.reload(suite) {
                 return (Some(format!("reloading the UI: {e}")), true);
             }
+            shared.borrow_mut().link.event(Event::Reloaded);
         }
         let vm = &mut session.vm;
         vm.with_debugger(|d, vm| d.idle(vm));
@@ -428,7 +430,19 @@ fn run_addon(
             shared.borrow_mut().link.respond(id, Ok(Response::Ok));
             continue;
         }
-        match opts.clock {
+        // The clock a front-end chose meanwhile over the launch's; going
+        // realtime again counts frames from now.
+        let clock = match shared.borrow().manual {
+            Some(true) => ClockMode::Manual,
+            Some(false) => ClockMode::Realtime,
+            None => opts.clock,
+        };
+        if clock != last_clock {
+            last_clock = clock;
+            started = Instant::now();
+            frames_run = 0;
+        }
+        match clock {
             ClockMode::Realtime => {
                 wowlua_engine::clock::advance_frames(vm, 1, FRAME_MS);
                 frames_run += 1;

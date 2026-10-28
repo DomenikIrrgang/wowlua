@@ -42,6 +42,39 @@ pub struct BreakpointState {
     pub line: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    /// How often it was hit (its condition held), this session.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub hits: u32,
+    /// Its source (in `breakpoints`' list; a function breakpoint has none).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
+/// What a stop at an exception was (decision T485), for a front-end's
+/// banner.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum StopDetail {
+    /// An error: its message, the stack it was raised in, whether a
+    /// handler caught it.
+    Error {
+        message: String,
+        stack: String,
+        caught: bool,
+    },
+    /// A protected action refused to an addon: which, the action, and the
+    /// taint's chain (where the tainted values came from).
+    Blocked {
+        addon: String,
+        action: String,
+        report: String,
+    },
+    /// Secure code became tainted: by which addon, and the chain.
+    Taint { by: String, report: String },
 }
 
 /// One frame of a stack, innermost first.
@@ -234,6 +267,15 @@ pub enum Request {
     ProfileStop,
     /// What was printed and raised since the last time asked.
     Output,
+    /// Every breakpoint with its state and hit count (decision T485).
+    Breakpoints,
+    /// The clock from now on: `manual` (time moves when asked) or
+    /// realtime (decision T485).
+    SetClock {
+        manual: bool,
+    },
+    /// The running world as a world profile's JSON (decision T485).
+    SaveWorld,
     /// One frame's or region's details for an inspector, by its `id` in
     /// the frame tree (decision T484).
     Inspect {
@@ -348,8 +390,15 @@ pub enum Event {
         /// The breakpoints it stopped at.
         #[serde(default)]
         hit: Vec<u32>,
+        /// An exception's details (decision T485).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        detail: Option<StopDetail>,
     },
+    /// Running again after a stop (a continue, a step).
     Continued,
+    /// The UI reloaded (`/reload`): a new client, the session's
+    /// breakpoints on it.
+    Reloaded,
     Output {
         line: OutputLine,
     },
