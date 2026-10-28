@@ -169,6 +169,32 @@ b:SetScript('OnEvent', function(self, event, bag)
 end)
 ";
 
+/// A function breakpoint naming where a function is defined (as a profile
+/// names it) stops on entry to each of its closures, local ones too
+/// (decision T495).
+#[test]
+fn a_function_breakpoint_by_definition_stops_its_calls() {
+    let mut s = session();
+    s.set_functions(&["src/defs.lua:1"]);
+    s.script(vec![
+        Request::StackTrace,
+        Request::Continue,
+        Request::StackTrace,
+        Request::Continue,
+    ]);
+    s.run(
+        "defs.lua",
+        "local function sq(x)\n    return x * x\nend\nfunction Twice() return sq(2) + sq(3) end\nTwice()\n",
+    );
+    let stops = s.stops();
+    assert_eq!(stops.len(), 2, "{stops:?}");
+    assert!(stops.iter().all(|s| s.0 == StopReason::FunctionBreakpoint));
+    let stacks = s.stacks();
+    assert_eq!(stacks[0][0].line, 2);
+    assert_eq!(stacks[0][0].source.as_deref(), Some("src/defs.lua"));
+    assert_eq!(stacks[1][0].line, 2);
+}
+
 #[test]
 fn an_event_breakpoint_stops_before_its_first_handler() {
     let mut s = session();

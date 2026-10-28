@@ -87,6 +87,7 @@ the pause, layout included.
 |------|-----------|-------|
 | Line | a source line, with an optional condition, hit count and log message | before the line runs |
 | Function | `Name`, `Table.name`, `Table:method` | when that Lua function is entered |
+| Function by definition | `src/Threat.wowlua:560` (a source and the line a function is defined on, as a profile names it) | when any closure of that function is entered, local ones too (decision T495) |
 | API call | `C_Timer.After`, `CreateFrame` | when Lua calls that native function |
 | Event | `event:PLAYER_LOGIN`, `event:*` | before the event's first handler runs |
 | Script | `script:OnClick`, `script:MyFrame:OnUpdate` | before a widget's script runs (of any widget, or the named one) |

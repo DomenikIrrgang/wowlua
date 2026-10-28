@@ -55,6 +55,12 @@ pub(crate) enum FuncTarget {
     /// A Lua or native function at this path from the globals
     /// (`A.b.c`, `A:m`).
     Path(Vec<String>),
+    /// The Lua function defined at a line of a source (`src/x.wowlua:560`,
+    /// as profiles name it; decision T495).
+    Defined {
+        source: String,
+        line: u32,
+    },
     Event(Option<String>),
     Script {
         frame: Option<String>,
@@ -220,7 +226,7 @@ impl Shared {
             let target = parse_target(&spec.name);
             out.push(BreakpointState {
                 id,
-                verified: !matches!(target, FuncTarget::Path(_)),
+                verified: !matches!(target, FuncTarget::Path(_) | FuncTarget::Defined { .. }),
                 line: None,
                 message: None,
                 hits: 0,
@@ -311,6 +317,9 @@ pub struct Controller {
     chunks: HashMap<String, Vec<Rc<Proto>>>,
     /// Function breakpoints' functions as last resolved.
     resolved: Vec<(u32, FuncRef)>,
+    /// Function breakpoints by definition: their prototypes (pointers into
+    /// `chunks`) as last resolved.
+    resolved_protos: Vec<(u32, usize)>,
 }
 
 const PINS_KEY: &str = "wowlua.debugger.pins";
@@ -322,6 +331,7 @@ impl Controller {
             shared: shared.clone(),
             chunks: HashMap::new(),
             resolved: Vec::new(),
+            resolved_protos: Vec::new(),
         };
         vm.attach_debugger(Box::new(c));
         vm.set_interrupt_handle(shared.borrow().interrupt.clone());
@@ -415,8 +425,10 @@ impl Controller {
         s.funcs
             .iter()
             .map(|f| {
-                let verified = !matches!(f.target, FuncTarget::Path(_))
-                    || self.resolved.iter().any(|(id, _)| *id == f.id);
+                let verified =
+                    !matches!(f.target, FuncTarget::Path(_) | FuncTarget::Defined { .. })
+                        || self.resolved.iter().any(|(id, _)| *id == f.id)
+                        || self.resolved_protos.iter().any(|(id, _)| *id == f.id);
                 BreakpointState {
                     id: f.id,
                     verified,
@@ -451,6 +463,36 @@ impl Controller {
         if resolved != self.resolved {
             vm.set_function_breakpoints(resolved.iter().map(|(_, f)| *f));
             self.resolved = resolved;
+        }
+        // The functions defined at a line: their prototypes in the chunks
+        // loaded from that source.
+        let defined: Vec<(u32, String, u32)> = self
+            .shared
+            .borrow()
+            .funcs
+            .iter()
+            .filter_map(|f| match &f.target {
+                FuncTarget::Defined { source, line } => Some((f.id, source.clone(), *line)),
+                _ => None,
+            })
+            .collect();
+        let mut protos: Vec<(u32, Rc<Proto>)> = Vec::new();
+        for (id, source, line) in defined {
+            let mut todo: Vec<Rc<Proto>> = self.chunks.get(&source).cloned().unwrap_or_default();
+            while let Some(p) = todo.pop() {
+                if p.line_defined == line {
+                    protos.push((id, p.clone()));
+                }
+                todo.extend(p.protos.iter().cloned());
+            }
+        }
+        let ptrs: Vec<(u32, usize)> = protos
+            .iter()
+            .map(|(id, p)| (*id, Rc::as_ptr(p) as usize))
+            .collect();
+        if ptrs != self.resolved_protos {
+            vm.set_proto_breakpoints(protos.iter().map(|(_, p)| p));
+            self.resolved_protos = ptrs;
         }
     }
 
@@ -1071,11 +1113,18 @@ impl Controller {
         let Some(top) = frames.first() else { return };
         let source = self.source_of(&top.proto.source);
         if cause == LineCause::FunctionEntry {
+            let proto = Rc::as_ptr(&top.proto) as usize;
             let hit: Vec<u32> = self
                 .resolved
                 .iter()
                 .filter(|(_, f)| *f == top.func)
                 .map(|(id, _)| *id)
+                .chain(
+                    self.resolved_protos
+                        .iter()
+                        .filter(|(_, p)| *p == proto)
+                        .map(|(id, _)| *id),
+                )
                 .collect();
             if !hit.is_empty() && self.function_condition_holds(vm, &hit) {
                 self.stop(vm, StopReason::FunctionBreakpoint, None, hit);
@@ -1417,6 +1466,15 @@ fn parse_target(name: &str) -> FuncTarget {
     }
     if name == "timer" {
         return FuncTarget::Timer;
+    }
+    if let Some((source, line)) = name.rsplit_once(':')
+        && (source.ends_with(".lua") || source.ends_with(".wowlua"))
+        && let Ok(line) = line.parse()
+    {
+        return FuncTarget::Defined {
+            source: source.to_string(),
+            line,
+        };
     }
     FuncTarget::Path(name.split(['.', ':']).map(str::to_string).collect())
 }
