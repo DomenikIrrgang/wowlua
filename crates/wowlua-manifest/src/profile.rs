@@ -187,6 +187,22 @@ pub enum ProfileError {
     Cycle(Vec<String>),
 }
 
+impl std::fmt::Display for ProfileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProfileError::Unknown(p) => write!(f, "no profile `{p}`"),
+            ProfileError::MissingInherits(p) => {
+                write!(f, "custom profile `{p}` must name the profile it builds on")
+            }
+            ProfileError::Cycle(chain) => {
+                write!(f, "profile inheritance cycle: {}", chain.join(" → "))
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProfileError {}
+
 /// Merges `overlay` into `base`: objects deeply, everything else replaces.
 pub fn deep_merge(base: &mut Value, overlay: &Value) {
     match (base, overlay) {
@@ -242,6 +258,21 @@ pub fn chain(manifest: &Manifest, name: &str) -> Result<Vec<String>, ProfileErro
 /// `inherits` chain (base first), merged deeply. `config` starts from the
 /// manifest's top-level `config`.
 pub fn resolve(manifest: &Manifest, name: &str) -> Result<Profile, ProfileError> {
+    let (chain, value) = resolve_value(manifest, name)?;
+    let base = BuiltinProfile::from_name(&chain[0]).expect("chains start at a built-in profile");
+    let mut profile: Profile =
+        serde_json::from_value(value).expect("merged built-in and validated settings deserialize");
+    profile.name = name.to_string();
+    profile.base = base;
+    Ok(profile)
+}
+
+/// A profile's settings as [`resolve`] reads them, by `wowlua.json`'s keys
+/// (an editor shows what a profile inherits), with its `inherits` chain.
+pub fn resolve_value(
+    manifest: &Manifest,
+    name: &str,
+) -> Result<(Vec<String>, Value), ProfileError> {
     let chain = chain(manifest, name)?;
     let base = BuiltinProfile::from_name(&chain[0]).expect("chains start at a built-in profile");
     let mut value = base.defaults();
@@ -255,11 +286,7 @@ pub fn resolve(manifest: &Manifest, name: &str) -> Result<Profile, ProfileError>
             deep_merge(&mut value, &overlay);
         }
     }
-    let mut profile: Profile =
-        serde_json::from_value(value).expect("merged built-in and validated settings deserialize");
-    profile.name = name.to_string();
-    profile.base = base;
-    Ok(profile)
+    Ok((chain, value))
 }
 
 /// Checks a profile `config` object against the top-level `config` (E4012):
@@ -357,6 +384,30 @@ mod tests {
 
     /// The dev window's starting switches and thresholds (spec §9.9,
     /// decision T174): off, 1 ms and 2 ms unless a profile sets them.
+    /// What an editor shows a profile inherits: the settings by the
+    /// manifest's keys, with the chain; errors as the checks word them.
+    #[test]
+    fn settings_as_json() {
+        let m = manifest(json!({ "profiles": {
+            "release": { "minify": "compact" },
+            "readable": { "inherits": "release", "minify": "none" },
+            "lost": { "minify": "none" }
+        }}));
+        let (chain, value) = resolve_value(&m, "readable").unwrap();
+        assert_eq!(chain, ["release", "readable"]);
+        assert_eq!(value["minify"], "none");
+        assert_eq!(value["bundle"], true, "release's default");
+        assert_eq!(value["optimize"]["cache-globals"], "safe");
+        assert_eq!(
+            resolve_value(&m, "lost").unwrap_err().to_string(),
+            "custom profile `lost` must name the profile it builds on"
+        );
+        assert_eq!(
+            resolve_value(&m, "nope").unwrap_err().to_string(),
+            "no profile `nope`"
+        );
+    }
+
     #[test]
     fn performance_settings() {
         let m = manifest(json!({ "profiles": {
