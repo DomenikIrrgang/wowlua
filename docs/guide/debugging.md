@@ -166,6 +166,7 @@ longer need it.
 | `/wl record <addon> [name]`, `/wl record <addon> stop` | Start or stop a recording |
 | `/wl bench <addon> <expression> [n]` | Run an expression n times (10,000 by default) and print the fastest, median and slowest run |
 | `/wl hints <addon>` | Print the performance hints |
+| `/wl snapshot <addon>` | Record your character's world for a [world profile](testing.md#world-profiles) |
 | `/wl hud` | Show or hide the HUD |
 | `/wl reload` | Reload the UI |
 

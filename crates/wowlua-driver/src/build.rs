@@ -5274,6 +5274,7 @@ fn tool_slices(
     let mut out = used.clone();
     if profile.dev_console {
         out.insert(Slice::DevConsole);
+        out.insert(Slice::Snapshot);
     }
     if profile.monitor {
         out.insert(Slice::Monitor);

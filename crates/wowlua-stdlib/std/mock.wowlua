@@ -122,6 +122,16 @@ export interface MockUnit
     --- A group member logging in or out (`UnitIsConnected`,
     --- `UNIT_CONNECTION(unit, isConnected)`, the roster).
     function setOnline(online: boolean)
+    --- The fields of its data that `data` names, changed in place (its
+    --- GUID kept), each told as the client tells it: `UNIT_LEVEL`,
+    --- `UNIT_NAME_UPDATE`, the health's and power's events,
+    --- `UNIT_DISPLAYPOWER`, `UNIT_FACTION` (reaction, faction, PvP),
+    --- `UNIT_CLASSIFICATION_CHANGED`, `UNIT_PORTRAIT_UPDATE` and
+    --- `UNIT_MODEL_CHANGED` (class, race, sex); `distance`, `role` and
+    --- `online` as `setDistance`, `setRole` and `setOnline` tell them;
+    --- `dead` as a death without a killer, or alive again (the player dies
+    --- with `die`).
+    function update(data: UnitData)
     --- An aura on it (`UNIT_AURA`), its instance ID; `quiet = true`: there
     --- already (a snapshot's), untold.
     function applyAura(data: table): number

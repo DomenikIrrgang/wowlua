@@ -102,7 +102,7 @@ return a, b, c",
 /// The snapshot records the stats the engine answers (one list in each).
 #[test]
 fn the_snapshot_records_every_stat() {
-    let snapshot = include_str!("../../../tests/ingame/src/snapshot.wowlua");
+    let snapshot = include_str!("../../wowlua-runtime/wowlua/snapshot.wowlua");
     let ask = |a: wowlua_engine::stats::Ask| match a {
         wowlua_engine::stats::Ask::Unit => "unit",
         wowlua_engine::stats::Ask::Plain => "plain",

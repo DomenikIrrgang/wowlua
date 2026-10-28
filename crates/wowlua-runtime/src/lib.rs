@@ -37,6 +37,9 @@ pub enum Slice {
     Errors,
     /// The dev console and window (spec §7.7).
     DevConsole,
+    /// The snapshot: the character's world as a world profile's data (spec
+    /// §7.7.10); with the dev console.
+    Snapshot,
 }
 
 impl Slice {
@@ -54,6 +57,7 @@ impl Slice {
             Slice::Monitor => include_str!("../lua/monitor.lua"),
             Slice::Errors => include_str!("../lua/errors.lua"),
             Slice::DevConsole => include_str!("../lua/devconsole.lua"),
+            Slice::Snapshot => include_str!("../lua/snapshot.lua"),
         }
     }
 

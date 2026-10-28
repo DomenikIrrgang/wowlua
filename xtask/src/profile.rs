@@ -4,7 +4,7 @@
 //! and realm, a player target's name, and CVars that may identify the
 //! account are scrubbed.
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use std::path::Path;
 
 /// A Lua value as JSON: a table with the keys 1..n is an array (as is one
@@ -72,92 +72,6 @@ fn to_json(v: &mlua::Value) -> serde_json::Value {
     }
 }
 
-/// The chat channels as a profile's `channels` (`mock.setChannels`), from
-/// the client's lists (`GetChannelList`: number, name, disabled; the
-/// pane's rows: a channel's category; `GetChannelName`: its full name;
-/// `GetChannelInfoFromIdentifier` and `IsChannelRegional`: its info).
-fn channels(raw: &serde_json::Value) -> serde_json::Value {
-    let list = raw["list"].as_array().cloned().unwrap_or_default();
-    let display = raw["display"].as_array().cloned().unwrap_or_default();
-    let names = raw["names"].as_array().cloned().unwrap_or_default();
-    let mut joined = Vec::new();
-    for triple in list.chunks(3) {
-        let [number, name, disabled] = triple else {
-            continue;
-        };
-        let number = number.as_i64().unwrap_or(0);
-        let name = name.as_str().unwrap_or("");
-        // Its row in the pane (not a header).
-        let category = display.iter().find_map(|row| {
-            let row = row.as_array()?;
-            (row.first()?.as_str()? == name && row.get(1)?.as_bool() == Some(false))
-                .then(|| row.get(6)?.as_str().map(str::to_string))?
-        });
-        let full_name = names
-            .get((number - 1).max(0) as usize)
-            .and_then(|n| n.get(1))
-            .and_then(|n| n.as_str())
-            .unwrap_or(name);
-        let mut channel = serde_json::json!({
-            "name": name,
-            "fullName": full_name,
-            "category": category.unwrap_or_else(|| "CHANNEL_CATEGORY_CUSTOM".into()),
-            "disabled": disabled.as_bool().unwrap_or(false),
-        });
-        // Its info (`GetChannelInfoFromIdentifier`) and regional flag, by
-        // number.
-        let key = number.to_string();
-        let info = raw["infos"].get(&key).or_else(|| {
-            raw["infos"]
-                .as_array()
-                .and_then(|a| a.get((number - 1).max(0) as usize))
-        });
-        if let Some(info) = info.and_then(|i| i.get(0)).and_then(|i| i.as_object()) {
-            for k in ["shortcut", "instanceID", "zoneChannelID", "channelType"] {
-                if let Some(v) = info.get(k) {
-                    channel[k] = v.clone();
-                }
-            }
-        }
-        let regional = raw["regional"].get(&key).or_else(|| {
-            raw["regional"]
-                .as_array()
-                .and_then(|a| a.get((number - 1).max(0) as usize))
-        });
-        if let Some(r) = regional.and_then(|r| r.get(0)).and_then(|r| r.as_bool()) {
-            channel["regional"] = r.into();
-        }
-        joined.push(channel);
-    }
-    let group = raw["groupChannels"]
-        .get(0)
-        .cloned()
-        .unwrap_or(serde_json::json!(0));
-    let mut out = serde_json::json!({ "joined": joined, "groupChannels": group });
-    if let Some(b) = raw["regionalService"].get(0).and_then(|b| b.as_bool()) {
-        out["regionalService"] = b.into();
-    }
-    out
-}
-
-/// CVars whose names suggest they hold the account, the realm or the
-/// character.
-fn identifying(name: &str) -> bool {
-    let n = name.to_ascii_lowercase();
-    [
-        "account",
-        "realm",
-        "portal",
-        "password",
-        "lastcharacter",
-        "character",
-        "battlenet",
-        "bnet",
-    ]
-    .iter()
-    .any(|w| n.contains(w))
-}
-
 pub fn run(saved: &Path, out: &Path) -> Result<()> {
     let src = std::fs::read(saved).with_context(|| saved.display().to_string())?;
     let lua = mlua::Lua::new();
@@ -177,55 +91,18 @@ pub fn run(saved: &Path, out: &Path) -> Result<()> {
     Ok(())
 }
 
-/// A snapshot (`/stdtest snapshot`'s) as a test profile's JSON, the
-/// character's name, realm and other players' names scrubbed; with the
-/// names it scrubbed (for other text recorded with it).
+/// A snapshot (`/stdtest snapshot`'s) as a test profile's JSON, scrubbed
+/// as `wowlua_driver::snapshots` scrubs one, and the names of StdTest's
+/// probes' character too; with the names it scrubbed (for other text
+/// recorded with it).
 pub fn profile_text(state: &mlua::Table, snapshot: &mlua::Value) -> Result<(String, Vec<String>)> {
-    let mut profile = to_json(snapshot);
-    let obj = profile
-        .as_object_mut()
-        .ok_or_else(|| anyhow!("no snapshot: run /stdtest snapshot, then /reload"))?;
-    let mut secrets: Vec<String> = Vec::new();
-    if let Some(c) = obj.get_mut("character").and_then(|c| c.as_object_mut()) {
-        for (key, scrubbed) in [("name", "Player"), ("realm", "Realm")] {
-            if let Some(v) = c.get(key).and_then(|v| v.as_str()) {
-                secrets.push(v.to_string());
-            }
-            c.insert(key.into(), scrubbed.into());
-        }
+    let profile = to_json(snapshot);
+    if !profile.is_object() {
+        bail!("no snapshot: run /stdtest snapshot, then /reload");
     }
-    if let Some(units) = obj.get_mut("units").and_then(|u| u.as_array_mut()) {
-        for (i, u) in units.iter_mut().enumerate() {
-            if let Some(u) = u.as_object_mut()
-                && u.get("player").and_then(|p| p.as_bool()) == Some(true)
-            {
-                if let Some(v) = u.get("name").and_then(|v| v.as_str()) {
-                    secrets.push(v.to_string());
-                }
-                u.insert("name".into(), format!("Player{}", i + 2).into());
-            }
-        }
-    }
-    if let Some(raw) = obj.remove("channels") {
-        obj.insert("channels".into(), channels(&raw));
-    }
-    if let Some(cvars) = obj.get_mut("cvars").and_then(|c| c.as_object_mut()) {
-        cvars.retain(|k, v| {
-            !identifying(k)
-                && !v.as_str().is_some_and(|s| {
-                    secrets
-                        .iter()
-                        .any(|x| !x.is_empty() && s.contains(x.as_str()))
-                })
-        });
-    }
-    let errors = obj.remove("errors");
-    let text = serde_json::to_string_pretty(&profile)?;
-    // Anything else naming the character (an item link would not).
-    let text = secrets
-        .iter()
-        .filter(|s| s.len() > 2)
-        .fold(text, |t, s| t.replace(s.as_str(), "Player"));
+    let errors = profile.get("errors").cloned();
+    let (text, secrets) =
+        wowlua_driver::snapshots::profile_text(&profile).map_err(|e| anyhow!(e))?;
     // The account's other character, the probes' player (`/stdtest
     // engine`): account-wide parts (macros) may name it.
     let battery_names: Option<String> = state
@@ -255,5 +132,5 @@ pub fn profile_text(state: &mlua::Table, snapshot: &mlua::Value) -> Result<(Stri
     {
         println!("parts the client refused: {e:?}");
     }
-    Ok((text + "\n", secrets))
+    Ok((text, secrets))
 }

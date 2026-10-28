@@ -287,6 +287,11 @@ interface WowluaRuntime
     errors?: WowluaErrorLog
     --- What the dev console knows about this addon.
     dev?: WowluaDev
+    --- Dev builds: the world the character is in, as a world profile's data
+    --- (`/wl snapshot`, spec §7.7.10). `prepare` opens what lists its data a
+    --- frame later (the toy box) and returns how to put it back; `take`
+    --- reads the world, read-only calls only.
+    snapshot?: { take: () -> { [string]: any }, prepare: () -> (() -> ()) }
 
     -- the standard library's
     --- The standard library's work per lifecycle phase.
