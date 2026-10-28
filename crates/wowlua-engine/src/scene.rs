@@ -539,40 +539,20 @@ fn masks_of(vm: &Vm, id: WidgetId) -> Vec<Mask> {
     out
 }
 
-/// A status bar's texture (a file's or an atlas's made for it, or one set).
-fn bar_texture(vm: &Vm, bar: WidgetId) -> Option<WidgetId> {
-    ["StatusBarTexture", "StatusBarTextureObject"]
-        .iter()
-        .find_map(|k| first(vm, bar, k).and_then(|v| widgets::widget_of(vm, v)))
-}
-
-/// A status bar's texture: the part its value fills.
+/// A status bar's texture: the part its value fills. Without points of its
+/// own, the layout has placed it there already (`bars::fill_place`).
 fn bar_fill(vm: &Vm, id: WidgetId, rect: &mut Rect, tc: &mut [f32; 8]) {
-    let Some(parent) = engine(vm).world.widgets[id.0].parent else {
+    let Some((_, f, vertical, reverse)) = crate::bars::fill_place(vm, id) else {
         return;
     };
-    let is_fill = bar_texture(vm, parent).is_some_and(|t| t == id);
-    if !is_fill {
-        return;
-    }
-    let Some(bar) = engine(vm).world.bars.get(&parent.0) else {
-        return;
-    };
-    let range = bar.max - bar.min;
-    let f = if range > 0.0 {
-        ((bar.value - bar.min) / range).clamp(0.0, 1.0) as f32
-    } else {
-        0.0
-    };
-    let vertical = first(vm, parent, "Orientation")
-        .and_then(|v| text_of(vm, v))
-        .is_some_and(|o| o == "VERTICAL");
-    let reverse = first(vm, parent, "ReverseFill").is_some_and(|v| v.truthy());
+    let f = f as f32;
+    let laid_out = engine(vm).world.widgets[id.0].points.is_empty();
+    let mut cut = *rect;
     let lerp = |a: f32, b: f32, t: f32| a + (b - a) * t;
     if vertical {
-        let h = rect.h * f;
+        let h = cut.h * f;
         if !reverse {
-            rect.y += rect.h - h;
+            cut.y += cut.h - h;
             // Keep the bottom part of the image.
             for i in [1, 5] {
                 tc[i] = lerp(tc[i + 2], tc[i], f);
@@ -582,30 +562,27 @@ fn bar_fill(vm: &Vm, id: WidgetId, rect: &mut Rect, tc: &mut [f32; 8]) {
                 tc[i] = lerp(tc[i - 2], tc[i], f);
             }
         }
-        rect.h = h;
+        cut.h = h;
     } else {
-        let w = rect.w * f;
+        let w = cut.w * f;
         if reverse {
-            rect.x += rect.w - w;
+            cut.x += cut.w - w;
             tc[0] = lerp(tc[4], tc[0], f);
             tc[2] = lerp(tc[6], tc[2], f);
         } else {
             tc[4] = lerp(tc[0], tc[4], f);
             tc[6] = lerp(tc[2], tc[6], f);
         }
-        rect.w = w;
+        cut.w = w;
+    }
+    if !laid_out {
+        *rect = cut;
     }
 }
 
 fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
     let (image, base, tile, plain) = image_of(vm, id)?;
-    // A status bar's texture without points fills the bar.
-    let mut rect = rect_of(vm, id).or_else(|| {
-        let w = &engine(vm).world.widgets[id.0];
-        let parent = w.parent?;
-        let fills = w.points.is_empty() && bar_texture(vm, parent).is_some_and(|t| t == id);
-        if fills { rect_of(vm, parent) } else { None }
-    })?;
+    let mut rect = rect_of(vm, id)?;
     if rect.w <= 0.0 || rect.h <= 0.0 {
         return None;
     }

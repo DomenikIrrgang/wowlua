@@ -487,3 +487,31 @@ return tostring(link == C_Container.GetContainerItemLink(0, 1)), tostring(byLink
     );
     assert_eq!(r, ["true", "true", "Linked Thing", "my link"]);
 }
+
+/// A status bar's texture is laid out over the part its value fills, so a
+/// frame anchored to its right edge follows the value (the default UI's
+/// heal prediction, at the health fill's right), from the right when the
+/// bar fills in reverse.
+#[test]
+fn frames_anchored_to_a_bars_fill_follow_its_value() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local bar = CreateFrame('StatusBar', nil, UIParent)
+bar:SetPoint('BOTTOMLEFT', 100, 100)
+bar:SetSize(200, 20)
+bar:SetStatusBarTexture('Interface\\\\Buttons\\\\WHITE8X8')
+bar:SetMinMaxValues(0, 100)
+bar:SetValue(25)
+local next = CreateFrame('Frame', nil, bar)
+next:SetPoint('TOPLEFT', bar:GetStatusBarTexture(), 'TOPRIGHT')
+next:SetPoint('BOTTOMLEFT', bar:GetStatusBarTexture(), 'BOTTOMRIGHT')
+next:SetWidth(10)
+local at25 = next:GetLeft()
+bar:SetValue(secretwrap(60))
+local at60 = next:GetLeft()
+bar:SetReverseFill(true)
+return at25, at60, next:GetLeft(), next:GetHeight()",
+    );
+    assert_eq!(r, ["150", "220", "300", "20"]);
+}

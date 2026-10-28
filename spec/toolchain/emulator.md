@@ -262,6 +262,12 @@ releases a timer with `SetMinMaxValues(0, 0)`; decision T487;
 unverified: the range and value the client reports, and whether it runs
 `OnValueChanged` or `OnMinMaxChanged`, which the engine doesn't).
 
+A status bar's texture without points of its own is laid out over the
+part of the bar its value fills, from the right (or the top, vertical)
+when the bar fills in reverse, secret value or not, so a frame anchored to
+its edge follows the value (decision T490). `GetNumPoints` still gives 0
+(unverified: the points the client reports for it).
+
 A protected frame anchored to a region (a texture, a font string, a line,
 a mask texture) is refused with the client's error, out of combat too:
 "Action[SetPoint] failed because[Cannot anchor protected frames to

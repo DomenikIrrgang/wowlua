@@ -3037,6 +3037,18 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
                 (left, r.1 + (r.3 - height) / 2.0, width, height)
             });
         }
+        // A status bar's texture without points: the part of the bar its
+        // value fills, which a frame can anchor to (the default UI's heal
+        // prediction, at the health fill's right).
+        if let Some((bar, f, vertical, reverse)) = crate::bars::fill_place(vm, id) {
+            let (l, b, w, h) = bounds_in(vm, bar, depth + 1, known)?;
+            return Some(match (vertical, reverse) {
+                (false, false) => (l, b, w * f, h),
+                (false, true) => (l + w * (1.0 - f), b, w * f, h),
+                (true, false) => (l, b, w, h * f),
+                (true, true) => (l, b + h * (1.0 - f), w, h * f),
+            });
+        }
         let p = w.scroll_parent?;
         let r = bounds_in(vm, p, depth + 1, known)?;
         return Some((r.0, r.1 + r.3 - height, width, height));
