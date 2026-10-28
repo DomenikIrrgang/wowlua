@@ -262,11 +262,7 @@ fn configure(shared: &SharedRef) -> bool {
     }
 }
 
-/// What a host runs on the session's thread with the client's VM whenever
-/// the client may have changed, before the session waits (after each game
-/// frame, an `Advance`, requests served): Studio's game page builds the
-/// scene it draws (decision T484).
-pub type FrameHook = Box<dyn FnMut(&mut Vm)>;
+pub use crate::controller::FrameHook;
 
 /// Runs a session on this thread until it ends; the suite's `instrument`
 /// must be [`instrument`]. Tells the front-end `Terminated` at the end.
@@ -287,7 +283,7 @@ pub fn run_hosted(
     link: Box<dyn Link>,
     interrupt: Arc<AtomicBool>,
     screenshot: Option<Screenshotter>,
-    mut on_frame: Option<FrameHook>,
+    on_frame: Option<FrameHook>,
 ) {
     let shared = Shared::new(link, wowlua_test::chunk_mapper(suite), host_clock());
     {
@@ -296,6 +292,7 @@ pub fn run_hosted(
         s.interrupt = interrupt;
         s.screenshot = screenshot;
         s.debug_blizzard_ui = opts.debug_blizzard_ui;
+        s.frame_hook = on_frame;
         s.drives_time = matches!(opts.target, Target::Addon);
     }
     if !configure(&shared) {
@@ -333,7 +330,7 @@ pub fn run_hosted(
     })));
     let (summary, failed) = match &opts.target {
         Target::Test { file, filters } => run_test(suite, file, filters),
-        Target::Addon => run_addon(suite, opts, &shared, &mut on_frame),
+        Target::Addon => run_addon(suite, opts, &shared),
     };
     wowlua_test::set_tee(None);
     SESSION.with(|s| *s.borrow_mut() = None);
@@ -375,18 +372,14 @@ fn run_test(suite: &Suite, file: &str, filters: &[String]) -> (Option<String>, b
 
 const FRAME_MS: f64 = 1000.0 / 60.0;
 
-fn run_addon(
-    suite: &Suite,
-    opts: &Options,
-    shared: &SharedRef,
-    on_frame: &mut Option<FrameHook>,
-) -> (Option<String>, bool) {
+fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<String>, bool) {
     let mut session = match wowlua_test::AddonSession::open(suite) {
         Ok(s) => s,
         Err(e) => return (Some(e), true),
     };
-    let started = Instant::now();
+    let mut started = Instant::now();
     let mut frames_run: u64 = 0;
+    let mut last_clock = opts.clock;
     loop {
         // A `/reload` (`ReloadUI()`) ended the addon's session: the UI loads
         // again, its SavedVariables kept, the debugger on the new one.
@@ -395,6 +388,7 @@ fn run_addon(
             if let Err(e) = session.reload(suite) {
                 return (Some(format!("reloading the UI: {e}")), true);
             }
+            shared.borrow_mut().link.event(Event::Reloaded);
         }
         let vm = &mut session.vm;
         vm.with_debugger(|d, vm| d.idle(vm));
@@ -428,13 +422,23 @@ fn run_addon(
             shared.borrow_mut().link.respond(id, Ok(Response::Ok));
             continue;
         }
-        match opts.clock {
+        // The clock a front-end chose meanwhile over the launch's; going
+        // realtime again counts frames from now.
+        let clock = match shared.borrow().manual {
+            Some(true) => ClockMode::Manual,
+            Some(false) => ClockMode::Realtime,
+            None => opts.clock,
+        };
+        if clock != last_clock {
+            last_clock = clock;
+            started = Instant::now();
+            frames_run = 0;
+        }
+        match clock {
             ClockMode::Realtime => {
                 wowlua_engine::clock::advance_frames(vm, 1, FRAME_MS);
                 frames_run += 1;
-                if let Some(hook) = on_frame.as_mut() {
-                    hook(vm);
-                }
+                Shared::run_frame_hook(shared, vm);
                 let deadline =
                     started + Duration::from_secs_f64(frames_run as f64 * FRAME_MS / 1000.0);
                 // Requests that come before the next frame wait for it.
@@ -459,9 +463,7 @@ fn run_addon(
                 }
             }
             ClockMode::Manual => {
-                if let Some(hook) = on_frame.as_mut() {
-                    hook(vm);
-                }
+                Shared::run_frame_hook(shared, vm);
                 // Nothing moves until asked.
                 let next = shared.borrow_mut().link.recv(None);
                 match next {

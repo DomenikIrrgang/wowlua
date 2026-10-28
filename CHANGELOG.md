@@ -22,6 +22,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A frame anchored to a status bar's texture (`bar:GetStatusBarTexture()`), such as a heal prediction or heal absorb bar at the health fill's edge, is placed and drawn, and follows the bar's value.
 - An adopted addon's `@localization(…)@` lines can be filled from its own locale files: `"compat": { "localization": "locales/{locale}.lua" }` puts each locale's file in place of its keyword, and a locale without a file stays a comment. Before, the keyword was always W4030.
 - `WorldFrame` covers the screen as in the game: 768 units high at any resolution and UI scale, its width following the screen's aspect ratio. Before, it had no size, and frames anchored to it weren't drawn.
+- Pausing a running addon session in VS Code stops it: the pause button was answered and did nothing until a breakpoint hit.
 
 ## 0.13.4 (2026-10-28)
 

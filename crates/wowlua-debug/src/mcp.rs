@@ -91,7 +91,7 @@ impl Session {
                         .unwrap_or_default()
                 );
             }
-            Event::Initialized | Event::Breakpoint { .. } => {}
+            Event::Initialized | Event::Breakpoint { .. } | Event::Reloaded => {}
         }
     }
 

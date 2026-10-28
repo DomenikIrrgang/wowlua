@@ -657,6 +657,8 @@ pub fn serve(
 
 fn send_event(w: &Writer, e: Event, launched: &mut bool, launch_seq: u64) {
     match e {
+        // (VS Code tells it as the output's "Reloading the UI")
+        Event::Reloaded => {}
         Event::Initialized => {
             if !*launched {
                 *launched = true;
@@ -664,7 +666,9 @@ fn send_event(w: &Writer, e: Event, launched: &mut bool, launch_seq: u64) {
             }
             w.event("initialized", json!({}));
         }
-        Event::Stopped { reason, text, hit } => {
+        Event::Stopped {
+            reason, text, hit, ..
+        } => {
             let mut body = json!({
                 "reason": reason.dap(),
                 "threadId": 1,

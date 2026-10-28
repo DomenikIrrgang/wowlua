@@ -733,7 +733,8 @@ timeline.
 wowlua studio links the debugger and runs a session on a thread of its own
 (decision T484): `session::run_hosted` takes a frame hook that runs there
 with the client's VM whenever the client may have changed (after each game
-frame, an `advance`, requests served), in which Studio builds the scene
+frame, an `advance`, requests served, and at a stop, a test file's session
+too: decision T494), in which Studio builds the scene
 (§18.9) and hands it to its UI thread, which draws it with the renderer
 (§18.11) on Studio's own GPU device: no screenshots, no polling. Besides the
 requests above it has:
@@ -755,6 +756,27 @@ requests above it has:
   T482), as the Graphics settings change them.
 - Input `dragAt(x, y, dx, dy)`: the frame at a point dragged by an offset,
   as the mouse drags it.
+
+For its debugger page (decision T494):
+
+- `breakpoints`: every breakpoint with its state and how often it was
+  hit this session (its condition held), line breakpoints with their
+  source.
+- `stopped` carries an exception's `detail`: an error's message, the stack
+  it was raised in and whether a handler caught it; a blocked action's
+  addon, action and taint chain; a taint's addon and chain.
+- `continued` after every resume (a continue, a step), `reloaded` after a
+  `/reload`.
+- `pause` while the addon runs stops it at the next line run, else
+  between frames.
+- `setClock(manual)`: the clock from now on, over the launch's.
+- `saveWorld`: the running world as a world profile's JSON (the
+  character, its money and place, the other units with the target,
+  focus and group, the CVars changed); items, bags, spells, auras and
+  saved variables are not written.
+- `units` tells each unit's threat on the player's target, and
+  `mock.unitAt(index)` is the unit at that place of the list (in
+  `world` scripts).
 
 ### 18.12.4 `wowlua screenshot`
 
