@@ -740,7 +740,7 @@ fn world_profiles() {
   "equipment": { "MainHandSlot": 19019 },
   "bags": { "0": { "slots": 16, "items": { "1": { "id": 159, "count": 5 } } } },
   "position": { "mapID": 1453, "zone": "Stormwind City", "subZone": "Trade District", "x": 0.5, "y": 0.6 },
-  "units": [ { "name": "Hogger", "level": 11, "reaction": "hostile", "distance": 12, "target": true } ],
+  "units": [ { "name": "Hogger", "level": 11, "reaction": "hostile", "distance": 12, "target": true, "nameplate": true } ],
   "cvars": { "nameplateShowEnemies": "1" },
   "trained": [403, 529],
   "savedVariables": { "DemoDB": { "logins": 41 } }
@@ -779,6 +779,8 @@ local function world()
     expect(CheckInteractDistance("target", 2)).toBe(false)
     expect(CheckInteractDistance("target", 1)).toBe(true)
     expect(C_CVar.GetCVar("nameplateShowEnemies")).toBe("1")
+    -- Its nameplate came with the world, after the login.
+    expect(UnitName("nameplate1")).toBe("Hogger")
     -- Trained: known; others not.
     expect(C_SpellBook.IsSpellKnown(403)).toBe(true)
     expect(IsPlayerSpell(529)).toBe(true)

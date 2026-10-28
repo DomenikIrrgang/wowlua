@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,157 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,158 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,157 rules unverified: each rests on Blizzard's
+The engine's code marks 1,158 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2173,7 +2173,7 @@ page changes only when a rule is added, removed or reworded.
 - [unitinfo.rs](../crates/wowlua-engine/src/unitinfo.rs): Recorded: slots 8 and 10 true (the others unverified).
 - [unitinfo.rs](../crates/wowlua-engine/src/unitinfo.rs): As the client answered (the full probe; facts of Forever's account and systems, unverified for another account).
 
-### units (48)
+### units (49)
 
 - [units.rs](../crates/wowlua-engine/src/units.rs): Unverified until probed: the player's defaults; GUID formats; the order of the events a change fires (a unit event fi...
 - [units.rs](../crates/wowlua-engine/src/units.rs): Each class's ID, file and name (enUS; the client's for Paladin, `UnitClass`; the others unverified).
@@ -2215,6 +2215,7 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine/src/units.rs): The combat text's delay after a hit lands (`/stdtest engine scenario combat`: `UNIT_COMBAT` 0.33 to 0.53 s after the...
 - [units.rs](../crates/wowlua-engine/src/units.rs): Sets a restriction's state, firing `ADDON_RESTRICTION_STATE_CHANGED` with `Activating` before it becomes active (unve...
 - [units.rs](../crates/wowlua-engine/src/units.rs): The corpses still on the player drop it too, before the player's flags (no targettarget: recorded, `quest`'s 4 of 4 c...
+- [units.rs](../crates/wowlua-engine/src/units.rs): The nameplates that waited for the player to enter the world, shown (after `PLAYER_ENTERING_WORLD`; unverified: the c...
 - [units.rs](../crates/wowlua-engine/src/units.rs): A slot's first use makes its frame: `NAME_PLATE_CREATED(frame)` in the same frame as, and before, its `NAME_PLATE_UNI...
 - [units.rs](../crates/wowlua-engine/src/units.rs): `mock.addToGroup(unit, raid? | { raid, subgroup })`: the unit joins the player's group (a raid with `raid`; in a raid...
 - [units.rs](../crates/wowlua-engine/src/units.rs): `mock.removeFromGroup(unit [, { quiet }])`: the unit leaves the player's group (`GROUP_ROSTER_UPDATE`; `quiet`: nothi...

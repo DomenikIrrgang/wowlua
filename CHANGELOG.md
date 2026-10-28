@@ -18,6 +18,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A world profile's unit with `"nameplate": true` no longer stops Blizzard's nameplates with an error (`bad argument #2 to 'SetSize'`): its nameplate appears once your character enters the world, as in the game.
 - camelot's client is found in `_forever_`, where WoW Forever installs it: `wowlua install`, `wowlua dev`, the game's art in screenshots and the game data read from the client work with it again (`_classic_beta_` still works for a beta client).
 
 ## 0.13.6 (2026-10-28)

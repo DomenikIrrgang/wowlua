@@ -103,8 +103,10 @@ export interface MockUnit
     --- (`UNIT_HEALTH`, `UNIT_FLAGS`).
     function resurrect(target: MockUnit, opts: { health?: number }?)
     --- Its nameplate appears in the first free `nameplateN` slot
-    --- (`NAME_PLATE_UNIT_ADDED`); nothing if it is shown.
-    function showNameplate()
+    --- (`NAME_PLATE_UNIT_ADDED`); nothing if it is shown. `entering =
+    --- true` (a world profile's): before the login, it appears when the
+    --- player enters the world.
+    function showNameplate(opts: { entering?: boolean }?)
     --- Its nameplate goes (`NAME_PLATE_UNIT_REMOVED`).
     function hideNameplate()
     --- It leaves the world: its nameplate and auras go, and it stops being

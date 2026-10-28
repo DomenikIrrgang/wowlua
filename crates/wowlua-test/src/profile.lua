@@ -85,7 +85,7 @@ each(profile.units, function(_, data)
         mock.addToGroup(unit, data.group == "raid")
     end
     if data.nameplate then
-        unit:showNameplate()
+        unit:showNameplate({ entering = true })
     end
     each(data.auras, function(_, aura)
         unit:applyAura(aura)
