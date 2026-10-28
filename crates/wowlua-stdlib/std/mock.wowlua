@@ -465,6 +465,12 @@ export function unitOf(token: string): MockUnit?
     return engine().unitOf(token)
 end
 
+--- The unit at a place of the world's list (0 the player, then in the
+--- order they came): a debugger's units panel names units so.
+export function unitAt(index: number): MockUnit?
+    return engine().unitAt(index)
+end
+
 --- The player's data (a world profile's character). No events, unless
 --- `{ events = true }`: then what changed is told as the client tells it
 --- (the level: `PLAYER_LEVEL_CHANGED(old, new, true)` and `UNIT_LEVEL`; the

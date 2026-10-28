@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- Pausing a running addon session in VS Code stops it: the pause button was answered and did nothing until a breakpoint hit.
+
 ## 0.13.4 (2026-10-28)
 
 ### New
