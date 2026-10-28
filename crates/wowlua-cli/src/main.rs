@@ -6,6 +6,7 @@ mod data;
 mod debug;
 mod output;
 mod prof;
+mod profile;
 mod screenshot;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -538,6 +539,11 @@ enum Command {
         #[command(subcommand)]
         command: ProfCommand,
     },
+    /// World profiles: the worlds tests and runs start in (tests/profiles/)
+    Profile {
+        #[command(subcommand)]
+        command: ProfileCommand,
+    },
     /// Game data from your WoW installation, for `wowlua test --game-data`
     Data {
         #[command(subcommand)]
@@ -575,6 +581,32 @@ enum ProfCommand {
     /// Write an HTML report of the recordings exported from the dev window
     /// (read from WowluaDevDB_<Addon> in WoW's SavedVariables)
     Report(ProfReportArgs),
+}
+
+#[derive(Subcommand, Debug)]
+enum ProfileCommand {
+    /// Write the newest snapshot taken in the game with /wl snapshot as
+    /// tests/profiles/<name>.json (read from WowluaDevDB_<Addon> in WoW's
+    /// SavedVariables)
+    Snapshot(ProfileSnapshotArgs),
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct ProfileSnapshotArgs {
+    /// The profile's name: tests/profiles/<name>.json
+    pub name: String,
+    /// The account folder under WTF/Account/ (when several have a snapshot)
+    #[arg(long, value_name = "NAME")]
+    pub account: Option<String>,
+    /// The client folder, e.g. _retail_ (when several have a snapshot)
+    #[arg(long, value_name = "FOLDER")]
+    pub client: Option<String>,
+    /// The WoW installation directory
+    #[arg(long, value_name = "PATH")]
+    pub wow: Option<PathBuf>,
+    /// Replace the profile if it exists
+    #[arg(long)]
+    pub force: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -938,6 +970,9 @@ fn run() -> ExitCode {
         Command::Prof {
             command: ProfCommand::Report(args),
         } => prof::report(&out, &cli.global, &args),
+        Command::Profile {
+            command: ProfileCommand::Snapshot(args),
+        } => profile::snapshot(&out, &cli.global, &args),
         Command::Data {
             command: DataCommand::Pull { wow, flavor },
         } => data::pull(&out, wow.as_deref(), &flavor),

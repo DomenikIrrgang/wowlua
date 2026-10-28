@@ -1580,7 +1580,12 @@ fn unit_distance_squared(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `UnitInRange`'s 38 yards tells it.
 pub fn control_set_distance(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
-    let d = num(c.arg(2));
+    set_distance(vm, me, num(c.arg(2)));
+    Ok(vec![])
+}
+
+/// A unit's distance now `d`, told as `setDistance` tells it.
+pub(crate) fn set_distance(vm: &mut Vm, me: units::UnitId, d: Option<f64>) {
     let in_range = |d: Option<f64>| d.is_some_and(|d| d <= 38.0);
     let was = in_range(engine(vm).units.list[me.0].distance);
     engine_mut(vm).units.list[me.0].distance = d;
@@ -1588,7 +1593,6 @@ pub fn control_set_distance(vm: &mut Vm, c: NativeCall) -> Ret {
     if was != in_range(d) && me != units::PLAYER && engine(vm).units.group.contains(&me) {
         unit_in_range_update(vm, me, in_range(d));
     }
-    Ok(vec![])
 }
 
 /// `UNIT_IN_RANGE_UPDATE(unit, isInRange)` for each of a group member's

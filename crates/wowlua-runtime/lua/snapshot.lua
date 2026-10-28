@@ -1,0 +1,838 @@
+-- wowlua runtime: the snapshot (spec §7.7.10, decision T498): the world
+-- the character is in, as a world profile's data for `wowlua test` and
+-- wowlua studio: the character, money, stats, gear, bags, place, auras, the
+-- units around, CVars that differ from their defaults, the key bindings,
+-- action bars, channels, macros and collections. `/wl snapshot` keeps it
+-- in the addon's dev data; read-only calls only.
+
+local G = _G
+
+--- A value unless secret.
+local function plain(v)
+	if issecretvalue(v) then
+		return nil
+	end
+	return v
+end
+
+local function character()
+	local _, class = UnitClass("player")
+	local _, race = UnitRace("player")
+	return {
+	name = plain(UnitName("player")),
+	realm = plain(GetRealmName()),
+	class = class,
+	race = race,
+	sex = UnitSex("player"),
+	level = UnitLevel("player"),
+	health = plain(UnitHealth("player")),
+	maxHealth = plain(UnitHealthMax("player")),
+	power = plain(UnitPower("player")),
+	maxPower = plain(UnitPowerMax("player")),
+	powerType = UnitPowerType("player"),
+	faction = UnitFactionGroup("player")
+	}
+end
+
+-- Items seen, with the data `defineItem` takes.
+local function itemData(items, id)
+	if id == nil or items[id] then
+		return
+	end
+	local name, link, quality, itemLevel, minLevel, kind, subType, stackCount, equipLoc, icon, sellPrice, classID, subclassID =
+	C_Item.GetItemInfo(id)
+	items[id] = {
+	name = name,
+	link = link,
+	quality = quality,
+	itemLevel = itemLevel,
+	minLevel = minLevel,
+	type = kind,
+	subType = subType,
+	stackCount = stackCount,
+	equipLoc = equipLoc,
+	icon = icon,
+	sellPrice = sellPrice,
+	classID = classID,
+	subclassID = subclassID
+	}
+end
+
+local function equipment(items)
+	local out = {}
+	-- The gear, and the bags in the bag slots (31 to 35).
+	for _, slot in ipairs({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 31, 32, 33, 34, 35}) do
+		local id = GetInventoryItemID("player", slot)
+		if id then
+			local durability, maxDurability = GetInventoryItemDurability(slot)
+			out[slot] = {
+			id = id,
+			link = GetInventoryItemLink("player", slot),
+			durability = durability,
+			maxDurability = maxDurability
+			}
+			itemData(items, id)
+		end
+	end
+	return out
+end
+
+local function bags(items)
+	local out = {}
+	-- The bags, then the bank's tabs (6 to 11) and the account's (12 to
+	-- 16): read while the bank is open.
+	for bag = 0, 16 do
+		local slots = C_Container.GetContainerNumSlots(bag)
+		if slots and slots > 0 then
+			local contents = {}
+			for slot = 1, slots do
+				local info = C_Container.GetContainerItemInfo(bag, slot)
+				if info then
+					local quest = C_Container.GetContainerItemQuestInfo(bag, slot)
+					-- A running cooldown: what is left of it, and its length.
+					local cooldown = nil
+					local start, duration = C_Container.GetContainerItemCooldown(bag, slot)
+					if not issecretvalue(start) and not issecretvalue(duration)
+					and type(duration) == "number" and duration > 0 then
+						cooldown = {remaining = start + duration - GetTime(), duration = duration}
+					end
+					local __wl_itemID = info.itemID contents[slot] = {
+					id = __wl_itemID,
+					count = info.stackCount,
+					link = info.hyperlink,
+					bound = info.isBound,
+					questItem = quest and quest.isQuestItem or nil,
+					questID = quest and quest.questID or nil,
+					questActive = quest and quest.isActive or nil,
+					cooldown = cooldown
+					}
+					itemData(items, __wl_itemID)
+					if info.isReadable then
+						items[info.itemID].readable = true
+					end
+				end
+			end
+			out[bag] = {slots = slots, items = contents}
+		end
+	end
+	return out
+end
+
+--- The action bars: each slot's action (`GetActionInfo`), its texture and
+--- count, as a test profile's `actions`.
+local function actions()
+	local out = {}
+	-- The bars and the gamepad bars (from 181), to the first slot the
+	-- client refuses.
+	for slot = 1, 540 do
+		local ok, has = pcall(C_ActionBar.HasAction, slot)
+		if not ok then
+			break
+		end
+		if has then
+			local kind, id, subType = GetActionInfo(slot)
+			out[slot] = {
+			type = kind,
+			id = id,
+			subType = subType,
+			texture = C_ActionBar.GetActionTexture(slot),
+			count = C_ActionBar.GetActionDisplayCount(slot),
+			text = GetActionText(slot),
+			usable = {C_ActionBar.IsUsableAction(slot)}
+			}
+		end
+	end
+	return out
+end
+
+--- The player's stats (`crates/wowlua-engine/src/stats.rs` keeps the same
+--- list): key, the client function and how it is asked.
+local STATS = {
+{key = "stat", fn = "UnitStat", ask = "unitIndex"},
+{key = "resistance", fn = "UnitResistance", ask = "unitIndex"},
+{key = "armor", fn = "UnitArmor", ask = "unit"},
+{key = "damage", fn = "UnitDamage", ask = "unit"},
+{key = "rangedDamage", fn = "UnitRangedDamage", ask = "unit"},
+{key = "attackSpeed", fn = "UnitAttackSpeed", ask = "unit"},
+{key = "attackPower", fn = "UnitAttackPower", ask = "unit"},
+{key = "rangedAttackPower", fn = "UnitRangedAttackPower", ask = "unit"},
+{key = "defense", fn = "UnitDefenseSkill", ask = "unit"},
+{key = "hpPerStamina", fn = "UnitHPPerStamina", ask = "unit"},
+{key = "spellHaste", fn = "UnitSpellHaste", ask = "unit"},
+{key = "movement", fn = "GetUnitSpeed", ask = "unit"},
+{key = "xp", fn = "UnitXP", ask = "unit"},
+{key = "xpMax", fn = "UnitXPMax", ask = "unit"},
+{key = "honor", fn = "UnitHonor", ask = "unit"},
+{key = "honorMax", fn = "UnitHonorMax", ask = "unit"},
+{key = "honorLevel", fn = "UnitHonorLevel", ask = "unit"},
+{key = "restedXP", fn = "GetXPExhaustion", ask = "plain"},
+{key = "restState", fn = "GetRestState", ask = "plain"},
+{key = "xpDisabled", fn = "IsXPUserDisabled", ask = "plain"},
+{key = "expertise", fn = "GetExpertise", ask = "plain"},
+{key = "spellHealing", fn = "GetSpellBonusHealing", ask = "plain"},
+{key = "spellPenetration", fn = "GetSpellPenetration", ask = "plain"},
+{key = "spellHit", fn = "GetSpellHitModifier", ask = "plain"},
+{key = "spellCrit", fn = "GetSpellCritChance", ask = "plain"},
+{key = "shieldBlock", fn = "GetShieldBlock", ask = "plain"},
+{key = "rangedHaste", fn = "GetRangedHaste", ask = "plain"},
+{key = "rangedCrit", fn = "GetRangedCritChance", ask = "plain"},
+{key = "rangedHit", fn = "GetRangedHitModifier", ask = "plain"},
+{key = "crit", fn = "GetCritChance", ask = "plain"},
+{key = "hit", fn = "GetHitModifier", ask = "plain"},
+{key = "offhandHit", fn = "GetOffhandHitModifier", ask = "plain"},
+{key = "meleeHaste", fn = "GetMeleeHaste", ask = "plain"},
+{key = "mastery", fn = "GetMasteryEffect", ask = "plain"},
+{key = "powerRegen", fn = "GetPowerRegen", ask = "plain"},
+{key = "manaRegen", fn = "GetManaRegen", ask = "plain"},
+{key = "manaRegenFromSpirit", fn = "GetManaRegenFromSpirit", ask = "plain"},
+{key = "healthRegen", fn = "GetHealthRegen", ask = "plain"},
+{key = "healthRegenFromSpirit", fn = "GetHealthRegenFromSpirit", ask = "plain"},
+{key = "block", fn = "GetBlockChance", ask = "plain"},
+{key = "dodge", fn = "GetDodgeChance", ask = "plain"},
+{key = "dodgeFromAttribute", fn = "GetDodgeChanceFromAttribute", ask = "plain"},
+{key = "parry", fn = "GetParryChance", ask = "plain"},
+{key = "resilience", fn = "GetModResilienceDamageReduction", ask = "plain"},
+{key = "lifesteal", fn = "GetLifesteal", ask = "plain"},
+{key = "avoidance", fn = "GetAvoidance", ask = "plain"},
+{key = "speed", fn = "GetSpeed", ask = "plain"},
+{key = "itemLevel", fn = "GetAverageItemLevel", ask = "plain"},
+{key = "armorPenetration", fn = "GetArmorPenetration", ask = "plain"},
+{key = "spellPowerByAttackPower", fn = "GetOverrideSpellPowerByAP", ask = "plain"},
+{key = "attackPowerBySpellPower", fn = "GetOverrideAPBySpellPower", ask = "plain"},
+{key = "specGroups", fn = "GetNumSpecGroups", ask = "plain"},
+{key = "activeSpecGroup", fn = "C_SpecializationInfo.GetActiveSpecGroup", ask = "plain"},
+{key = "specialization", fn = "C_SpecializationInfo.GetSpecialization", ask = "plain"},
+{key = "specializationInfo", fn = "C_SpecializationInfo.GetSpecializationInfo", ask = "index"},
+{key = "combatConfig", fn = "C_SpecializationInfo.GetCombatConfigIDForSpecGroup", ask = "index"},
+{key = "talentUI", fn = "C_SpecializationInfo.CanPlayerUseTalentUI", ask = "plain"},
+{key = "talentSpecUI", fn = "C_SpecializationInfo.CanPlayerUseTalentSpecUI", ask = "plain"},
+{key = "earnedTalentPoint", fn = "C_SpecializationInfo.HasPlayerEarnedATalentPoint", ask = "plain"},
+{key = "shapeshiftForms", fn = "GetNumShapeshiftForms", ask = "plain"},
+{key = "shapeshiftForm", fn = "GetShapeshiftForm", ask = "plain"},
+{key = "shapeshiftFormID", fn = "GetShapeshiftFormID", ask = "plain"},
+{key = "shapeshiftFormInfo", fn = "GetShapeshiftFormInfo", ask = "index"},
+{key = "cooldownViewerSet", fn = "C_CooldownViewer.GetCooldownViewerCategorySet", ask = "index"},
+{key = "groupBuffs", fn = "C_CooldownViewer.GetGroupBuffItems", ask = "plain"},
+{key = "spellBookSkillLines", fn = "C_SpellBook.GetNumSpellBookSkillLines", ask = "plain"},
+{key = "spellBookSkillLine", fn = "C_SpellBook.GetSpellBookSkillLineInfo", ask = "index"},
+{key = "classSkillLine", fn = "C_SpellBook.GetClassSkillLineInfo", ask = "plain"},
+{key = "hasPetSpells", fn = "C_SpellBook.HasPetSpells", ask = "plain"},
+{key = "spellBookItem", fn = "C_SpellBook.GetSpellBookItemInfo", ask = "slot"},
+{key = "spellBookItemName", fn = "C_SpellBook.GetSpellBookItemName", ask = "slot"},
+{key = "spellBookItemTexture", fn = "C_SpellBook.GetSpellBookItemTexture", ask = "slot"},
+{key = "spellBookItemType", fn = "C_SpellBook.GetSpellBookItemType", ask = "slot"},
+{key = "spellBookItemPassive", fn = "C_SpellBook.IsSpellBookItemPassive", ask = "slot"},
+{key = "spellBookItemLowRank", fn = "C_SpellBook.IsSpellBookItemLowRank", ask = "slot"},
+{key = "spellBookItemLevel", fn = "C_SpellBook.GetSpellBookItemLevelLearned", ask = "slot"},
+{key = "spellBookItemLink", fn = "C_SpellBook.GetSpellBookItemLink", ask = "slot"},
+{key = "professions", fn = "GetProfessions", ask = "plain"},
+{key = "professionInfo", fn = "GetProfessionInfo", ask = "index"},
+{key = "skillLines", fn = "C_SkillInfo.GetNumSkillLines", ask = "plain"},
+{key = "skillLine", fn = "C_SkillInfo.GetSkillLineInfo", ask = "index"},
+{key = "selectedSkill", fn = "C_SkillInfo.GetSelectedSkill", ask = "plain"},
+{key = "factions", fn = "C_Reputation.GetNumFactions", ask = "plain"},
+{key = "faction", fn = "C_Reputation.GetFactionDataByIndex", ask = "index"},
+{key = "selectedFaction", fn = "C_Reputation.GetSelectedFaction", ask = "plain"},
+{key = "watchedFaction", fn = "C_Reputation.GetWatchedFactionData", ask = "plain"},
+{key = "currencyListSize", fn = "C_CurrencyInfo.GetCurrencyListSize", ask = "plain"},
+{key = "currencyListInfo", fn = "C_CurrencyInfo.GetCurrencyListInfo", ask = "index"},
+{key = "backpackCurrency", fn = "C_CurrencyInfo.GetBackpackCurrencyInfo", ask = "index"},
+{key = "questLogEntries", fn = "C_QuestLog.GetNumQuestLogEntries", ask = "plain"},
+{key = "questLogInfo", fn = "C_QuestLog.GetInfo", ask = "index"},
+{key = "questCompletionText", fn = "GetQuestLogCompletionText", ask = "index"},
+{key = "selectedQuest", fn = "C_QuestLog.GetSelectedQuest", ask = "plain"},
+{key = "questWatches", fn = "C_QuestLog.GetNumQuestWatches", ask = "plain"},
+{key = "questWatchID", fn = "C_QuestLog.GetQuestIDForQuestWatchIndex", ask = "index"},
+{key = "questLogIndex", fn = "C_QuestLog.GetLogIndexForQuestID", ask = "index"},
+{key = "questObjectives", fn = "C_QuestLog.GetQuestObjectives", ask = "index"},
+{key = "questComplete", fn = "C_QuestLog.IsComplete", ask = "index"},
+{key = "questWatchType", fn = "C_QuestLog.GetQuestWatchType", ask = "index"},
+{key = "questTag", fn = "C_QuestLog.GetQuestTagInfo", ask = "index"},
+{key = "questTitle", fn = "C_QuestLog.GetTitleForQuestID", ask = "index"},
+{key = "spellBookItemCooldown", fn = "C_SpellBook.GetSpellBookItemCooldown", ask = "slot"},
+{key = "spellBookItemAutoCast", fn = "C_SpellBook.GetSpellBookItemAutoCast", ask = "slot"},
+{key = "spellBookItemFlyoutMember", fn = "C_SpellBook.IsSpellBookItemLooseFlyoutMember", ask = "slot"},
+{key = "flyoutInfo", fn = "GetFlyoutInfo", ask = "index"},
+{key = "flyoutSlot", fn = "GetFlyoutSlotInfo", ask = "flyoutSlot"},
+{key = "questFailed", fn = "C_QuestLog.IsFailed", ask = "index"},
+{key = "questElite", fn = "C_QuestLog.IsEliteQuest", ask = "index"},
+{key = "questDifficulty", fn = "C_QuestLog.GetQuestDifficultyLevel", ask = "index"},
+{key = "questTheme", fn = "C_QuestLog.GetQuestDetailsTheme", ask = "index"},
+{key = "questTimeAllowed", fn = "C_QuestLog.GetTimeAllowed", ask = "index"},
+{key = "questDisabled", fn = "C_QuestLog.IsQuestDisabledForSession", ask = "index"},
+{key = "questSequenced", fn = "IsQuestSequenced", ask = "index"},
+{key = "questClassification", fn = "C_QuestInfoSystem.GetQuestClassification", ask = "index"},
+{key = "questContentDifficulty", fn = "C_PlayerInfo.GetContentDifficultyQuestForPlayer", ask = "index"},
+{key = "questGroup", fn = "C_LFGList.CanCreateQuestGroup", ask = "index"},
+{key = "questSpecialItem", fn = "GetQuestLogSpecialItemInfo", ask = "index"},
+{key = "factionParagon", fn = "C_Reputation.IsFactionParagonForCurrentPlayer", ask = "index"},
+{key = "factionMajor", fn = "C_Reputation.IsMajorFaction", ask = "index"},
+{key = "factionAccountWide", fn = "C_Reputation.IsAccountWideReputation", ask = "index"},
+{key = "factionFriendship", fn = "C_GossipInfo.GetFriendshipReputation", ask = "index"},
+{key = "cooldownViewerInfo", fn = "C_CooldownViewer.GetCooldownViewerCooldownInfo", ask = "index"},
+{key = "transmogSlot", fn = "C_Transmog.GetSlotVisualInfo", ask = "location"},
+{key = "combatRating", fn = "GetCombatRating", ask = "index"},
+{key = "combatRatingBonus", fn = "GetCombatRatingBonus", ask = "index"},
+{key = "spellDamage", fn = "GetSpellBonusDamage", ask = "index"},
+{key = "versatility", fn = "GetVersatilityBonus", ask = "index"},
+{key = "attackPowerForStat", fn = "GetAttackPowerForStat", ask = "forStat"},
+{key = "rangedAttackPowerForStat", fn = "GetRangedAttackPowerForStat", ask = "forStat"},
+{key = "critFromStat", fn = "GetCritChanceFromStat", ask = "forStat"},
+{key = "spellCritFromStat", fn = "GetSpellCritChanceFromStat", ask = "forStat"}
+}
+
+--- The indices each indexed stat is asked for.
+local INDICES = {
+stat = {1, 2, 3, 4, 5},
+resistance = {0, 1, 2, 3, 4, 5, 6},
+spellDamage = {1, 2, 3, 4, 5, 6, 7},
+versatility = {29, 31},
+specializationInfo = {1, 2, 3, 4},
+combatConfig = {1, 2},
+shapeshiftFormInfo = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+cooldownViewerSet = {0, 1, 2, 3, 4, 5, 6, 7, 8},
+spellBookSkillLine = {1, 2, 3, 4, 5, 6, 7, 8}
+}
+
+--- The spellbook's flyouts: their IDs (`actionID` of the items of type
+--- Flyout).
+local function flyoutIDs()
+	local book = C_SpellBook
+	local out = {}
+	local last = 0
+	for line = 1, book.GetNumSpellBookSkillLines() do
+		local info = book.GetSpellBookSkillLineInfo(line)
+		if info then
+			last = math.max(last, info.itemIndexOffset + info.numSpellBookItems)
+		end
+	end
+	for slot = 1, last do
+		local item = book.GetSpellBookItemInfo(slot, 0)
+		if item and item.itemType == Enum.SpellBookItemType.Flyout and item.actionID then
+			out[#out + 1] = item.actionID
+		end
+	end
+	return out
+end
+
+--- The indices the client's own counts give (a stat not in `INDICES` and
+--- not here: the 31 combat ratings).
+local function counted(key)
+	local A = _G
+	local function upTo(n)
+		local out = {}
+		for i = 1, n or 0 do
+			out[#out + 1] = i
+		end
+		return out
+	end
+	-- The quest IDs in the log.
+	local function questIDs() local A = A
+		local out = {}
+		for i = 1, A.C_QuestLog.GetNumQuestLogEntries() do
+			local info = A.C_QuestLog.GetInfo(i)
+			if info and info.questID and info.questID > 0 then
+				out[#out + 1] = info.questID
+			end
+		end
+		return out
+	end
+	if key == "skillLine" then
+		return upTo(A.C_SkillInfo.GetNumSkillLines())
+	elseif key == "faction" then
+		return upTo(A.C_Reputation.GetNumFactions())
+	elseif key == "currencyListInfo" then
+		return upTo(A.C_CurrencyInfo.GetCurrencyListSize())
+	elseif key == "backpackCurrency" then
+		return upTo(3)
+	elseif key == "questLogInfo" or key == "questCompletionText" then
+		return upTo(A.C_QuestLog.GetNumQuestLogEntries())
+	elseif key == "questWatchID" then
+		return upTo(A.C_QuestLog.GetNumQuestWatches())
+	elseif key == "professionInfo" then
+		local out = {}
+		for _, i in pairs({A.GetProfessions()}) do
+			out[#out + 1] = i
+		end
+		return out
+	elseif key == "questLogIndex" or key == "questObjectives" or key == "questComplete"
+	or key == "questWatchType" or key == "questTag" or key == "questTitle"
+	or key == "questFailed" or key == "questElite" or key == "questDifficulty"
+	or key == "questTheme" or key == "questTimeAllowed" or key == "questDisabled"
+	or key == "questSequenced" or key == "questClassification"
+	or key == "questContentDifficulty" or key == "questGroup" then
+		return questIDs()
+	elseif key == "questSpecialItem" then
+		return upTo(A.C_QuestLog.GetNumQuestLogEntries())
+	elseif key == "factionParagon" or key == "factionMajor" or key == "factionAccountWide"
+	or key == "factionFriendship" then
+		-- The faction IDs in the list.
+		local out = {}
+		for i = 1, A.C_Reputation.GetNumFactions() do
+			local data = A.C_Reputation.GetFactionDataByIndex(i)
+			if data and data.factionID and data.factionID > 0 then
+				out[#out + 1] = data.factionID
+			end
+		end
+		return out
+	elseif key == "cooldownViewerInfo" then
+		-- The cooldown IDs of every category.
+		local out = {}
+		for category = 0, 8 do
+			do local __wl_t1 = A.C_CooldownViewer.GetCooldownViewerCategorySet(category, true) if __wl_t1 == nil then __wl_t1 = {} end for _, id in ipairs(__wl_t1) do
+					out[#out + 1] = id
+				end end
+		end
+		return out
+	end
+	-- The spellbook's flyouts, by ID.
+	if key == "flyoutInfo" then
+		return flyoutIDs()
+	end
+	return nil
+end
+
+--- A call's results with their count (`n`; nils kept), secrets left out.
+local function results(...)
+	local out = {n = select("#", ...)}
+	for i = 1, out.n do
+		out[i] = plain((select(i, ...)))
+	end
+	return out
+end
+
+local function stats() local G, INDICES = G, INDICES
+	local out = {}
+	local ratings = {}
+	for i = 1, 31 do
+		ratings[#ratings + 1] = i
+	end
+	for _, row in ipairs(STATS) do repeat
+			local key = row.key
+			local name = row.fn
+			local ask = row.ask
+			-- A global, or a namespace's (`C_SpecializationInfo.GetSpecialization`).
+			local f = G
+			for part in string.gmatch(name, "[^.]+") do
+				f = f ~= nil and f[part] or nil
+			end
+			if f == nil then
+				break
+			end
+			if ask == "unit" then
+				out[key] = results(f("player"))
+			elseif ask == "plain" then
+				out[key] = results(f())
+			else
+				local byIndex = {}
+				if ask == "slot" then
+					-- The player's spellbook slots, to the last skill line's
+					-- last item.
+					local last = 0
+					for line = 1, (C_SpellBook).GetNumSpellBookSkillLines() do
+						local info = (C_SpellBook).GetSpellBookSkillLineInfo(line)
+						if info then
+							last = math.max(last, info.itemIndexOffset + info.numSpellBookItems)
+						end
+					end
+					local slots = {}
+					for slot = 1, last do
+						slots[#slots + 1] = slot
+					end
+					-- The professions' spells, past the skill lines.
+					local A = _G
+					for _, prof in pairs({A.GetProfessions()}) do
+						local _, _, _, _, numSpells, spellOffset = A.GetProfessionInfo(prof)
+						do local __wl_t2 = numSpells if __wl_t2 == nil then __wl_t2 = 0 end for k = 1, __wl_t2 do
+								do local __wl_t3 = spellOffset if __wl_t3 == nil then __wl_t3 = 0 end slots[#slots + 1] = (__wl_t3) + k end
+							end end
+					end
+					for _, slot in ipairs(slots) do
+						local ok, r = pcall(function() return results(f(slot, 0)) end)
+						if ok then
+							byIndex[slot] = r
+						end
+					end
+				elseif ask == "location" then
+					-- Each transmog location (slot, appearance or illusion,
+					-- main or secondary), by Blizzard's lookup key.
+					for slot = 1, 19 do
+						for kind = 0, 1 do
+							for modification = 0, 1 do
+								local ok, r = pcall(function()
+									return results(f({slotID = slot, type = kind, modification = modification}))
+								end)
+								if ok and r.n > 0 then
+									byIndex[slot * 100 + kind * 10 + modification] = r
+								end
+							end
+						end
+					end
+				elseif ask == "flyoutSlot" then
+					-- Each flyout's slots, by `id * 100 + slot`.
+					for _, id in ipairs(flyoutIDs()) do
+						local _, _, n = (_G).GetFlyoutInfo(id)
+						do local __wl_t4 = n if __wl_t4 == nil then __wl_t4 = 0 end for j = 1, __wl_t4 do
+								local ok, r = pcall(function() return results(f(id, j)) end)
+								if ok then
+									byIndex[id * 100 + j] = r
+								end
+							end end
+					end
+				elseif ask == "forStat" then
+					-- At each attribute's effective value, as the sheet asks.
+					for i = 1, 5 do
+						local _, effective = UnitStat("player", i)
+						if not issecretvalue(effective) and effective ~= nil then
+							byIndex[i] = results(f(i, effective))
+						end
+					end
+				else
+					for _, i in ipairs(INDICES[key] or counted(key) or ratings) do
+						if ask == "unitIndex" then
+							byIndex[i] = results(f("player", i))
+						elseif key == "cooldownViewerSet" then
+							byIndex[i] = results(f(i, true))
+						else
+							byIndex[i] = results(f(i))
+						end
+					end
+				end
+				out[key] = byIndex
+			end
+		until true end
+	return out
+end
+
+--- The mount journal: every mount with its info, as `mock.setMounts`
+--- takes it (decision T235). Whether the character can ride one not
+--- collected is what the journal's unusable check hides (the not collected
+--- check on for it, both put back; recorded: it hid 37 of 90 uncollected
+--- mounts); a collected one's is its own.
+local function mounts()
+	local out = {}
+	local MJ = C_MountJournal
+	local notCollected = MJ.GetCollectedFilterSetting(2)
+	local unusable = MJ.GetCollectedFilterSetting(3)
+	MJ.SetCollectedFilterSetting(2, true)
+	MJ.SetCollectedFilterSetting(3, false)
+	local rideable = {}
+	for i = 1, MJ.GetNumDisplayedMounts() do
+		rideable[MJ.GetDisplayedMountID(i)] = true
+	end
+	MJ.SetCollectedFilterSetting(2, notCollected)
+	MJ.SetCollectedFilterSetting(3, unusable)
+	for _, id in ipairs(MJ.GetMountIDs()) do
+		local name, spellID, icon, _, isUsable, sourceType, isFavorite, _, faction, shouldHideOnChar, isCollected, _, isSteadyFlight =
+		MJ.GetMountInfoByID(id)
+		if name then
+			local display, description, source, isSelfMount, mountType, modelScene, animID, visualKit, noPreview =
+			MJ.GetMountInfoExtraByID(id)
+			out[id] = {
+			name = name,
+			spellID = spellID,
+			icon = icon,
+			sourceType = sourceType,
+			source = source,
+			description = description,
+			display = display,
+			mountType = mountType,
+			modelScene = modelScene,
+			animID = animID,
+			visualKit = visualKit,
+			selfMount = isSelfMount,
+			noPreview = noPreview,
+			faction = faction,
+			hidden = shouldHideOnChar,
+			collected = isCollected,
+			favorite = isFavorite,
+			usable = (isCollected and isUsable) or (not isCollected and rideable[id] == true),
+			steadyFlight = isSteadyFlight
+			}
+		end
+	end
+	return out
+end
+
+--- The toy box: its toys as `mock.setToys` takes them. The box lists only
+--- collected toys, and only a frame after its checks change, so `/stdtest
+--- snapshot` opens its collected and unusable checks and clears its search
+--- a moment before (`openToyBox`); here the list is read as it is. A toy's
+--- item the client has not loaded yet is asked for: a second snapshot has
+--- its name.
+local function toys(items)
+	local out = {}
+	for i = 1, C_ToyBox.GetNumFilteredToys() do
+		local id = C_ToyBox.GetToyFromIndex(i)
+		if id and id > 0 then
+			out[id] = {
+			collected = PlayerHasToy(id),
+			favorite = C_ToyBox.GetIsFavorite(id),
+			usable = C_ToyBox.IsToyUsable(id),
+			fanfare = C_ToyBoxInfo.NeedsFanfare(id)
+			}
+			if C_Item.GetItemInfo(id) then
+				itemData(items, id)
+			else
+				C_Item.RequestLoadItemDataByID(id)
+			end
+		end
+	end
+	return out
+end
+
+--- Opens the toy box's checks for the snapshot; returns how to put them
+--- back.
+local function openToyBox()
+	local collected = C_ToyBox.GetCollectedShown()
+	local unusable = C_ToyBox.GetUnusableShown()
+	C_ToyBox.SetCollectedShown(true)
+	C_ToyBox.SetUnusableShown(true)
+	C_ToyBox.SetFilterString("")
+	return function()
+		C_ToyBox.SetCollectedShown(collected == true)
+		C_ToyBox.SetUnusableShown(unusable == true)
+	end
+end
+
+--- The wardrobe: the collected sources of every category's collected
+--- appearances, and the favourite appearances, as `mock.setAppearances`
+--- takes them.
+local function appearances()
+	local sources = {}
+	local favorites = {}
+	for _, category in pairs(Enum.TransmogCollectionType) do
+		if C_TransmogCollection.GetCategoryInfo(category) then
+			for _, a in ipairs(C_TransmogCollection.GetCategoryAppearances(category) or {}) do
+				if a.isFavorite then
+					favorites[a.visualID] = true
+				end
+				if a.isCollected then
+					for _, s in ipairs(C_TransmogCollection.GetAppearanceSources(a.visualID, category) or {}) do
+						if s.isCollected then
+							sources[s.sourceID] = true
+						end
+					end
+				end
+			end
+		end
+	end
+	local function sorted(set)
+		local list = {}
+		for id in pairs(set) do
+			list[#list + 1] = id
+		end
+		table.sort(list)
+		return list
+	end
+	return {collected = sorted(sources), favorites = sorted(favorites)}
+end
+
+--- The quest log's objectives as classic's functions give them (to check
+--- the engine's, which derives them from `C_QuestLog`).
+local function leaderBoards()
+	local A = _G
+	local out = {}
+	for i = 1, A.C_QuestLog.GetNumQuestLogEntries() do
+		local n = A.GetNumQuestLeaderBoards(i)
+		local boards = {}
+		do local __wl_t5 = n if __wl_t5 == nil then __wl_t5 = 0 end for j = 1, __wl_t5 do
+				boards[j] = results(A.GetQuestLogLeaderBoard(j, i))
+			end end
+		out[i] = {count = n, boards = boards}
+	end
+	return out
+end
+
+--- The chat channels as the client lists them (raw, for the engine's
+--- channel model): the joined channels, the channel pane's list, each
+--- channel's name lookup, General's IDs.
+local function channels()
+	local display = {}
+	local count = GetNumDisplayChannels()
+	for i = 1, count do
+		display[i] = results(GetChannelDisplayInfo(i))
+	end
+	local names = {}
+	local infos = {}
+	local regional = {}
+	local C = C_ChatInfo
+	for id = 1, 20 do
+		names[id] = results(GetChannelName(id))
+	end
+	-- Each joined channel by its short name, as Blizzard's chat settings
+	-- ask (`GetChannelList`: number, name, disabled).
+	local list = {GetChannelList()}
+	for i = 1, #list, 3 do
+		local id = list[i]
+		infos[id] = results(C.GetChannelInfoFromIdentifier(list[i + 1]))
+		regional[id] = results(C.IsChannelRegional(id))
+	end
+	return {
+	list = results(GetChannelList()),
+	displayCount = count,
+	display = display,
+	names = names,
+	infos = infos,
+	regional = regional,
+	regionalService = results(C.IsRegionalServiceAvailable()),
+	groupChannels = results(GetNumGroupChannels()),
+	generalLocalID = results((C_ChatInfo).GetGeneralChannelLocalID()),
+	generalID = results((C_ChatInfo).GetGeneralChannelID())
+	}
+end
+
+--- The macros, the account's then the character's (`GetMacroInfo` in
+--- full, for the engine's macro model).
+local function macros()
+	local numAccount, numCharacter = GetNumMacros()
+	local out = {account = {}, character = {}, info = {}}
+	for i = 1, numAccount do
+		local name, icon, body = GetMacroInfo(i)
+		out.account[i] = {name = name, icon = icon, body = body}
+		out.info[i] = results(GetMacroInfo(i))
+	end
+	for i = 1, numCharacter do
+		local name, icon, body = GetMacroInfo(120 + i)
+		out.character[i] = {name = name, icon = icon, body = body}
+		out.info[120 + i] = results(GetMacroInfo(120 + i))
+	end
+	return out
+end
+
+local function position()
+	local map = C_Map.GetBestMapForUnit("player")
+	local out = {
+	mapID = map,
+	zone = GetZoneText(),
+	subZone = GetSubZoneText()
+	}
+	if map then
+		local ok, pos = pcall(C_Map.GetPlayerMapPosition, map, "player")
+		if ok and pos then
+			local x, y = pos:GetXY()
+			out.x, out.y = plain(x), plain(y)
+		end
+	end
+	return out
+end
+
+local function auras()
+	local out = {}
+	for i = 1, 40 do
+		local a = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+		if issecretvalue(a) or a == nil then
+			break
+		end
+		out[#out + 1] = {
+		spellId = plain(a.spellId),
+		name = plain(a.name),
+		icon = plain(a.icon),
+		applications = plain(a.applications),
+		duration = plain(a.duration),
+		isHelpful = true,
+		auraInstanceID = plain(a.auraInstanceID),
+		sourceUnit = plain(a.sourceUnit),
+		expirationTime = plain(a.expirationTime)
+		}
+	end
+	return out
+end
+
+-- The target, with how far it is (the smallest of CheckInteractDistance's
+-- ranges it is in).
+local function units()
+	if not UnitExists("target") then
+		return {}
+	end
+	local _, class = UnitClass("target")
+	local distance = nil
+	for _, r in ipairs({{3, 9.9}, {2, 11.11}, {1, 28}}) do
+		if distance == nil and CheckInteractDistance("target", r[1]) then
+			distance = r[2]
+		end
+	end
+	local reaction = UnitReaction("target", "player")
+	return {
+	{
+	name = plain(UnitName("target")),
+	level = UnitLevel("target"),
+	class = class,
+	player = UnitIsPlayer("target"),
+	reaction = reaction and (reaction >= 5 and "friendly" or reaction == 4 and "neutral" or "hostile"),
+	health = plain(UnitHealth("target")),
+	maxHealth = plain(UnitHealthMax("target")),
+	distance = distance,
+	target = true
+	}
+	}
+end
+
+local function cvars()
+	local out = {}
+	local list = G.ConsoleGetAllCommands and G.ConsoleGetAllCommands() or {}
+	for _, c in ipairs(list) do
+		if c.commandType == 0 then
+			local value = C_CVar.GetCVar(c.command)
+			local default = C_CVar.GetCVarDefault(c.command)
+			if value ~= nil and value ~= default then
+				out[c.command] = value
+			end
+		end
+	end
+	return out
+end
+
+local function bindings()
+	local out = {}
+	for i = 1, GetNumBindings() do
+		local command, _, key1, key2 = GetBinding(i)
+		if key1 then
+			out[key1] = command
+		end
+		if key2 then
+			out[key2] = command
+		end
+	end
+	return out
+end
+
+--- The character's world now, as a test profile's data.
+local function takeSnapshot()
+	local items = {}
+	local parts = {
+	character = character,
+	money = GetMoney,
+	equipment = function() return equipment(items) end,
+	bags = function() return bags(items) end,
+	position = position,
+	auras = auras,
+	units = units,
+	cvars = cvars,
+	bindings = bindings,
+	actions = actions,
+	stats = stats,
+	channels = channels,
+	macros = macros,
+	leaderBoards = leaderBoards,
+	mounts = mounts,
+	toys = function() return toys(items) end,
+	appearances = appearances
+	}
+	local profile = {}
+	local failed = {}
+	for name, part in pairs(parts) do
+		local ok, value = pcall(part)
+		if ok then
+			profile[name] = value
+		else
+			failed[#failed + 1] = name .. ": " .. tostring(value)
+		end
+	end
+	profile.items = items
+	profile.client = (GetBuildInfo()) .. " (" .. select(2, GetBuildInfo()) .. ")"
+	profile.errors = failed
+	return profile
+end
+
+wl.snapshot = {take = takeSnapshot, prepare = openToyBox}

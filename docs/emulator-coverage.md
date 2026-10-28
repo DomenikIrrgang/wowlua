@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,154 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,155 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,154 rules unverified: each rests on Blizzard's
+The engine's code marks 1,155 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2171,7 +2171,7 @@ page changes only when a rule is added, removed or reworded.
 - [unitinfo.rs](../crates/wowlua-engine/src/unitinfo.rs): Recorded: slots 8 and 10 true (the others unverified).
 - [unitinfo.rs](../crates/wowlua-engine/src/unitinfo.rs): As the client answered (the full probe; facts of Forever's account and systems, unverified for another account).
 
-### units (47)
+### units (48)
 
 - [units.rs](../crates/wowlua-engine/src/units.rs): Unverified until probed: the player's defaults; GUID formats; the order of the events a change fires (a unit event fi...
 - [units.rs](../crates/wowlua-engine/src/units.rs): Each class's ID, file and name (enUS; the client's for Paladin, `UnitClass`; the others unverified).
@@ -2205,6 +2205,7 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine/src/units.rs): A hostile target on someone: that one's flags, by its tokens with targettarget (recorded, `talents`: the fox on the p...
 - [units.rs](../crates/wowlua-engine/src/units.rs): `C_ClickBindings.GetEffectiveInteractionButton(button, modifiers)`: the default interaction bindings' (a unit frame's...
 - [units.rs](../crates/wowlua-engine/src/units.rs): `C_ClickBindings.GetBindingType(button, modifiers)`: the recorded answer (the left button unmodified: an interaction)...
+- [units.rs](../crates/wowlua-engine/src/units.rs): `unit:update(data)`: the fields of a unit's data (`spawnUnit`'s, a world profile's unit or character) that `data` nam...
 - [units.rs](../crates/wowlua-engine/src/units.rs): What of `n` the unit's damage absorbs (`heal`: its heal absorbs) take, used up, `UNIT_ABSORB_AMOUNT_CHANGED` (`UNIT_H...
 - [units.rs](../crates/wowlua-engine/src/units.rs): The death's events.
 - [units.rs](../crates/wowlua-engine/src/units.rs): `player:raiseSkill(name, rank)`: a skill up, as recorded (scenarios combat and quest: Defense, Swords): "Your skill i...
@@ -2412,6 +2413,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Owed from M13 (next beta, about 2026-11-07)
 - Owed from M14 (next beta, about 2026-11-07)
 - Owed from the contributions in 0.13.5 (next beta, about 2026-11-07)
+- Owed from the world profiles (next beta, about 2026-11-07)
 - Answered on the beta's last day (2026-10-24)
 - The dev tools (0.12.1)
 

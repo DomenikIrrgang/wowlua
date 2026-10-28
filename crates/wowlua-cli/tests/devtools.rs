@@ -510,6 +510,33 @@ end
     );
 }
 
+/// The snapshot (§7.7.10): `/wl snapshot` keeps the world, as a world
+/// profile's data, in the addon's dev data half a second later.
+#[test]
+fn snapshot() {
+    run(
+        "",
+        r#"
+@test
+local function taken()
+    mock.player:setMoney(12345)
+    mock.player:target(mock.spawnUnit({ name = "Hogger", level = 11, reaction = "hostile" }))
+    mock.slash("/wl snapshot")
+    local db: any = _G.WowluaDevDB_Probe
+    expect(db.snapshot).toBe(nil)
+    mock.advanceTime(1)
+    local s = db.snapshot
+    expect(type(s.at)).toBe("number")
+    expect(s.profile.money).toBe(12345)
+    expect(s.profile.character.class).toBe("WARRIOR")
+    expect(s.profile.units[1].name).toBe("Hogger")
+    expect(s.profile.units[1].target).toBe(true)
+    expect(s.profile.errors).toBe(nil)
+end
+"#,
+    );
+}
+
 /// The HUD (§7.7.8): a row per dev build; hidden while the window is open
 /// and in cinematics; its choice saved.
 #[test]
@@ -598,6 +625,94 @@ local function toast()
     expect(#mock.errors()).toBe(4)
 end
 "#,
+    );
+}
+
+/// `wowlua profile snapshot` (decision T498): the snapshot `/wl snapshot`
+/// kept in the addon's dev data, found in the installation, written as a
+/// world profile with the names scrubbed, checked clean; an existing
+/// profile is kept unless `--force`.
+#[test]
+fn profile_snapshot_writes_a_world_profile() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("wowlua.json"),
+        r#"{ "package": { "name": "probe", "version": "1.0.0" }, "flavors": { "camelot": {} } }"#,
+    )
+    .unwrap();
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(dir.path().join("src/main.wowlua"), "print(\"hi\")\n").unwrap();
+    let sv = dir
+        .path()
+        .join("wow/_classic_era_/WTF/Account/ACC/SavedVariables");
+    fs::create_dir_all(&sv).unwrap();
+    fs::write(
+        sv.join("WowluaDevDB_Probe.lua"),
+        r#"
+WowluaDevDB_Probe = {
+	["snapshot"] = {
+		["at"] = 1793170000,
+		["failed"] = {
+			"toys: no toy box", -- [1]
+		},
+		["profile"] = {
+			["character"] = {
+				["name"] = "Suuna",
+				["realm"] = "Golemagg",
+				["class"] = "SHAMAN",
+				["level"] = 60,
+			},
+			["money"] = 123456,
+			["actions"] = {
+				[1] = { ["type"] = "spell", ["id"] = 403 },
+				[5] = { ["type"] = "item", ["id"] = 159 },
+			},
+			["units"] = {
+				{ ["name"] = "Hogger", ["level"] = 11, ["target"] = true }, -- [1]
+			},
+		},
+	},
+}
+"#,
+    )
+    .unwrap();
+    let snapshot = |args: &[&str]| {
+        let out = wowlua(dir.path())
+            .args(["profile", "snapshot", "raid", "--wow", "wow"])
+            .args(args)
+            .output()
+            .unwrap();
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        (out.status.success(), text)
+    };
+    let (ok, text) = snapshot(&[]);
+    assert!(ok, "{text}");
+    assert!(text.contains("toys: no toy box"), "{text}");
+    assert!(text.contains("tests/profiles/raid.json"), "{text}");
+    let profile = fs::read_to_string(dir.path().join("tests/profiles/raid.json")).unwrap();
+    assert!(
+        !profile.contains("Suuna") && !profile.contains("Golemagg"),
+        "{profile}"
+    );
+    let v: serde_json::Value = serde_json::from_str(&profile).unwrap();
+    assert_eq!(v["character"]["name"], "Player");
+    assert_eq!(v["actions"]["5"]["id"], 159);
+    assert_eq!(v["units"][0]["name"], "Hogger");
+    // There already: kept, unless --force.
+    let (ok, text) = snapshot(&[]);
+    assert!(!ok && text.contains("exists"), "{text}");
+    let (ok, text) = snapshot(&["--force"]);
+    assert!(ok, "{text}");
+    // The package checks clean with it.
+    let out = wowlua(dir.path()).arg("check").output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
     );
 }
 

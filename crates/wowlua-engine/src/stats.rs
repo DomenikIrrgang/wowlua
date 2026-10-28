@@ -5,7 +5,7 @@
 //! client function that reports it.
 //! A world profile's `stats` (recorded by `/stdtest snapshot`) sets them,
 //! and tests change them with `mock.player:setStats`. The snapshot records
-//! the same keys (`tests/ingame/src/snapshot.wowlua`; a test keeps the two
+//! the same keys (`crates/wowlua-runtime/wowlua/snapshot.wowlua`; a test keeps the two
 //! lists together).
 //!
 //! The default character's stats are stand-ins (no recording of it yet):
