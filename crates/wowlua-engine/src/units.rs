@@ -79,6 +79,14 @@ pub struct Unit {
     /// Others' threat on it (`setThreat(value, unit)`: group members,
     /// pets), in the order they came on its list.
     pub threat_others: Vec<(UnitId, f64)>,
+    /// Damage absorb shields on the unit (`setAbsorb`), used up by damage
+    /// before its health.
+    pub absorbs: f64,
+    /// Heal absorbs on the unit (`setHealAbsorb`), used up by healing
+    /// before its health.
+    pub heal_absorbs: f64,
+    /// Heals being cast on the unit, by healer (`setIncomingHeal`).
+    pub incoming_heals: Vec<(UnitId, f64)>,
     /// Dead with the player on its threat list, the list's update not told
     /// yet (told as the player leaves combat, or by `setThreat(nil)`); its
     /// `threat` kept meanwhile.
@@ -307,6 +315,9 @@ pub fn install(vm: &mut Vm) {
         classification: "normal".into(),
         threat: None,
         threat_others: Vec::new(),
+        absorbs: 0.0,
+        heal_absorbs: 0.0,
+        incoming_heals: Vec::new(),
         listed_dead: false,
         loot: Vec::new(),
         creature_type: None,
@@ -665,6 +676,9 @@ fn clone_unit(u: &Unit) -> Unit {
         classification: u.classification.clone(),
         loot: u.loot.clone(),
         threat_others: u.threat_others.clone(),
+        absorbs: u.absorbs,
+        heal_absorbs: u.heal_absorbs,
+        incoming_heals: u.incoming_heals.clone(),
         creature_type: u.creature_type.clone(),
         creature_family: u.creature_family.clone(),
         role: u.role.clone(),
@@ -1563,6 +1577,9 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("mouseover", control_mouseover),
         ("damage", control_damage),
         ("heal", control_heal),
+        ("setAbsorb", control_set_absorb),
+        ("setHealAbsorb", control_set_heal_absorb),
+        ("setIncomingHeal", control_set_incoming_heal),
         ("kill", control_kill),
         ("setPower", control_set_power),
         ("enterCombat", control_enter_combat),
@@ -1889,6 +1906,9 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         classification: text(vm, "classification", "normal"),
         threat: None,
         threat_others: Vec::new(),
+        absorbs: 0.0,
+        heal_absorbs: 0.0,
+        incoming_heals: Vec::new(),
         listed_dead: false,
         loot: Vec::new(),
         creature_type: match get(vm, "creatureType") {
@@ -2503,11 +2523,91 @@ fn control_set_name(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `unit:damage(amount [, { statesAfter }])`: the unit's shields take what
+/// they can (`absorbed`), its health the rest; a hit its shields take
+/// whole leaves its health untold.
 fn control_damage(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let n = vm.check_number(&c, 2)?;
     let after = states_after_arg(vm, &c, 3);
-    change_health(vm, me, -n, after);
+    let taken = absorbed(vm, me, n, false);
+    if taken == 0.0 || taken < n {
+        change_health(vm, me, -(n - taken), after);
+    }
+    Ok(vec![])
+}
+
+/// What of `n` the unit's damage absorbs (`heal`: its heal absorbs) take,
+/// used up, `UNIT_ABSORB_AMOUNT_CHANGED` (`UNIT_HEAL_ABSORB_AMOUNT_CHANGED`)
+/// told before the health's change (unverified: the order).
+fn absorbed(vm: &mut Vm, id: UnitId, n: f64, heal: bool) -> f64 {
+    let u = &mut engine_mut(vm).units.list[id.0];
+    let pool = if heal {
+        &mut u.heal_absorbs
+    } else {
+        &mut u.absorbs
+    };
+    let taken = pool.min(n.max(0.0));
+    *pool -= taken;
+    if taken > 0.0 {
+        fire_unit(vm, absorb_event(heal), id, &[]);
+    }
+    taken
+}
+
+fn absorb_event(heal: bool) -> &'static str {
+    if heal {
+        "UNIT_HEAL_ABSORB_AMOUNT_CHANGED"
+    } else {
+        "UNIT_ABSORB_AMOUNT_CHANGED"
+    }
+}
+
+/// `unit:setAbsorb(amount)`: the unit's damage absorb shields, in all;
+/// a change tells `UNIT_ABSORB_AMOUNT_CHANGED` for each of its tokens.
+fn control_set_absorb(vm: &mut Vm, c: NativeCall) -> Ret {
+    set_absorbs(vm, c, false)
+}
+
+/// `unit:setHealAbsorb(amount)`: the unit's heal absorbs, in all; a
+/// change tells `UNIT_HEAL_ABSORB_AMOUNT_CHANGED`.
+fn control_set_heal_absorb(vm: &mut Vm, c: NativeCall) -> Ret {
+    set_absorbs(vm, c, true)
+}
+
+fn set_absorbs(vm: &mut Vm, c: NativeCall, heal: bool) -> Ret {
+    let me = this(vm, &c)?;
+    let n = vm.check_number(&c, 2)?.max(0.0);
+    let u = &mut engine_mut(vm).units.list[me.0];
+    let pool = if heal {
+        &mut u.heal_absorbs
+    } else {
+        &mut u.absorbs
+    };
+    if *pool != n {
+        *pool = n;
+        fire_unit(vm, absorb_event(heal), me, &[]);
+    }
+    Ok(vec![])
+}
+
+/// `unit:setIncomingHeal(amount [, healer])`: the heal the healer (the
+/// player unless given) is casting on the unit (0: none);
+/// `UNIT_HEAL_PREDICTION` for each of the unit's tokens.
+fn control_set_incoming_heal(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = this(vm, &c)?;
+    let n = vm.check_number(&c, 2)?.max(0.0);
+    let healer = match c.arg(3) {
+        Value::Nil => PLAYER,
+        v => handle_of(vm, v)
+            .ok_or_else(|| vm.error("setIncomingHeal(amount, healer): healer is a unit"))?,
+    };
+    let list = &mut engine_mut(vm).units.list[me.0].incoming_heals;
+    list.retain(|(h, _)| *h != healer);
+    if n > 0.0 {
+        list.push((healer, n));
+    }
+    fire_unit(vm, "UNIT_HEAL_PREDICTION", me, &[]);
     Ok(vec![])
 }
 
@@ -2523,11 +2623,16 @@ fn states_after_arg(vm: &mut Vm, c: &NativeCall, i: usize) -> Option<f64> {
     }
 }
 
+/// `unit:heal(amount [, { statesAfter }])`: the unit's heal absorbs take
+/// what they can, its health the rest.
 fn control_heal(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let n = vm.check_number(&c, 2)?;
     let after = states_after_arg(vm, &c, 3);
-    change_health(vm, me, n, after);
+    let taken = absorbed(vm, me, n, true);
+    if taken == 0.0 || taken < n {
+        change_health(vm, me, n - taken, after);
+    }
     Ok(vec![])
 }
 

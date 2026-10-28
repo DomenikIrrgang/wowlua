@@ -94,19 +94,32 @@ fn unit_is_player_online(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(online)])
 }
 
-/// `UnitGetIncomingHeals(unit [, healer])`: none, for a unit that exists
-/// (secret, as documented); nil without the unit.
+/// `UnitGetIncomingHeals(unit [, healer])`: the heals being cast on the
+/// unit (`setIncomingHeal`), the healer's only if given (secret, as
+/// documented); nil without the unit.
 fn incoming_heals(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![match units::unit_arg(vm, &c, 1) {
-        Some(_) => Value::Num(0.0),
+        Some(id) => {
+            let healer = units::unit_arg(vm, &c, 2);
+            let all = c.arg(2).is_nil();
+            Value::Num(crate::healcalc::incoming(vm, id, healer, all))
+        }
         None => Value::Nil,
     }])
 }
 
-/// `UnitGetTotalAbsorbs(unit)`, `UnitGetTotalHealAbsorbs(unit)`: none, even
-/// for a unit that does not exist (recorded secret 0s).
-fn no_absorbs(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(0.0)])
+/// `UnitGetTotalAbsorbs(unit)`: the unit's damage absorb shields
+/// (`setAbsorb`); 0 for a unit that does not exist (recorded secret 0s).
+fn total_absorbs(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = units::unit_arg(vm, &c, 1).map_or(0.0, |id| engine(vm).units.list[id.0].absorbs);
+    Ok(vec![Value::Num(n)])
+}
+
+/// `UnitGetTotalHealAbsorbs(unit)`: the unit's heal absorbs
+/// (`setHealAbsorb`); 0 for a unit that does not exist.
+fn total_heal_absorbs(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = units::unit_arg(vm, &c, 1).map_or(0.0, |id| engine(vm).units.list[id.0].heal_absorbs);
+    Ok(vec![Value::Num(n)])
 }
 
 /// An item check of a system camelot does not have (azerite, corruption,
@@ -533,8 +546,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_CVar.SetCVarBitfield", set_cvar_bitfield),
         ("UnitIsHumanPlayer", unit_is_player_online),
         ("UnitGetIncomingHeals", incoming_heals),
-        ("UnitGetTotalAbsorbs", no_absorbs),
-        ("UnitGetTotalHealAbsorbs", no_absorbs),
+        ("UnitGetTotalAbsorbs", total_absorbs),
+        ("UnitGetTotalHealAbsorbs", total_heal_absorbs),
         ("UnitIsInInteractRange", unit_exists),
         // No new appearances, glyphs, press-and-hold spells, spell
         // overlays, waypoint texts (recorded, every call).

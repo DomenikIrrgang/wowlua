@@ -82,10 +82,10 @@ calc:SetMaximumHealthMode(1)
 UnitGetDetailedHealPrediction('player', nil, calc)
 local _, clamped = calc:GetDamageAbsorbs()
 return before, tostring(plain), tostring(calc:HasSecretValues()),
-    tostring(issecretvalue(calc:GetCurrentHealth())), tostring(clamped),
+    tostring(issecretvalue(calc:GetCurrentHealth())), tostring(issecretvalue(clamped)),
     calc:GetMaximumHealthMode(), calc:GetHealAbsorbMode()",
     );
-    assert_eq!(r, ["0", "false", "true", "true", "false", "1", "0"]);
+    assert_eq!(r, ["0", "false", "true", "true", "true", "1", "0"]);
 }
 
 #[test]
@@ -410,4 +410,68 @@ return GetNumGroupMembers(), tostring(UnitIsGroupLeader('player')), leader, tabl
     assert!(r[0].contains("Ed Test has joined the guild."), "{}", r[0]);
     assert_eq!(r[1], "1", "the guild has one more member");
     assert_eq!(r[2], "7");
+}
+
+/// A unit's shields, heal absorbs and incoming heals, set by the test
+/// world: told by their events, used up by damage and healing, answered
+/// by the global functions and by a calculator by its modes.
+#[test]
+fn absorbs_and_incoming_heals_reach_the_calculator() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local seen = {}
+local f = CreateFrame('Frame')
+for _, e in ipairs({ 'UNIT_ABSORB_AMOUNT_CHANGED', 'UNIT_HEAL_ABSORB_AMOUNT_CHANGED',
+        'UNIT_HEAL_PREDICTION', 'UNIT_HEALTH' }) do
+    f:RegisterUnitEvent(e, 'player')
+end
+f:SetScript('OnEvent', function(_, e) seen[#seen + 1] = e end)
+local me, healer = mock.player, mock.spawnUnit({ name = 'Priest', reaction = 'friendly' })
+me:damage(40)
+me:setAbsorb(30)
+me:setHealAbsorb(5)
+me:setIncomingHeal(8)
+me:setIncomingHeal(4, healer)
+local calc = CreateUnitHealPredictionCalculator()
+calc:SetPredictedValues({ health = 60000, healthMax = 100000, totalDamageAbsorbs = 36000,
+    totalHealAbsorbs = 5000, totalIncomingHeals = 12000, totalIncomingHealsFromHealer = 8000 })
+local out = {}
+local function add(...) for i = 1, select('#', ...) do out[#out + 1] = tostring((select(i, ...))) end end
+-- heal absorbs and incoming heals reduce each other: 7000 heals, no heal absorb left
+add(calc:GetIncomingHeals())
+add(calc:GetHealAbsorbs())
+-- shields up to the missing health less the heals: 33000, clamped
+add(calc:GetDamageAbsorbs())
+calc:SetHealAbsorbMode(Enum.UnitHealAbsorbMode.Total)
+calc:SetDamageAbsorbClampMode(Enum.UnitDamageAbsorbClampMode.MissingHealthWithoutIncomingHeals)
+add(calc:GetHealAbsorbs())
+add(calc:GetDamageAbsorbs())
+calc:SetMaximumHealthMode(Enum.UnitMaximumHealthMode.WithAbsorbs)
+add(calc:GetMaximumDamageAbsorbs())
+-- the world's: the shield takes the hit, the heal absorb most of the heal
+me:damage(10)
+me:heal(7)
+local filled = CreateUnitHealPredictionCalculator()
+UnitGetDetailedHealPrediction('player', 'player', filled)
+add(issecretvalue(filled:GetTotalDamageAbsorbs()),
+    mock.sameSecret(filled:GetTotalDamageAbsorbs(), 20),
+    mock.sameSecret(filled:GetTotalHealAbsorbs(), 0),
+    mock.sameSecret(filled:GetCurrentHealth(), 62),
+    mock.sameSecret(filled:GetTotalIncomingHealsFromHealer(), 8),
+    mock.sameSecret(UnitGetTotalAbsorbs('player'), 20),
+    mock.sameSecret(UnitGetIncomingHeals('player'), 12),
+    mock.sameSecret(UnitGetIncomingHeals('player', 'player'), 8))
+return table.concat(out, ' '), table.concat(seen, ' ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "7000 7000 0 false 0 false 33000 true 5000 false 36000 false 76000 \
+             true true true true true true true true",
+            "UNIT_HEALTH UNIT_ABSORB_AMOUNT_CHANGED UNIT_HEAL_ABSORB_AMOUNT_CHANGED \
+             UNIT_HEAL_PREDICTION UNIT_HEAL_PREDICTION UNIT_ABSORB_AMOUNT_CHANGED \
+             UNIT_HEAL_ABSORB_AMOUNT_CHANGED UNIT_HEALTH",
+        ]
+    );
 }

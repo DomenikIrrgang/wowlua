@@ -4,6 +4,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### New
+
+- **Shields and heal prediction**: `unit:setAbsorb`, `unit:setHealAbsorb` and `unit:setIncomingHeal` put absorb shields, heal absorbs and incoming heals on a unit in tests. Damage uses up a shield before health, and healing uses up a heal absorb. `UnitGetTotalAbsorbs`, `UnitGetIncomingHeals` and a heal prediction calculator (`CreateUnitHealPredictionCalculator`) answer them, so shield and heal prediction bars can be tested.
+
 ### Fixed
 
 - A secure group header (`SecureGroupHeaderTemplate`) runs its `initialConfigFunction` for buttons made from your own template that has an `<OnLoad>`, as the game does; before, the header skipped it.

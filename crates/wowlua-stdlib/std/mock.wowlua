@@ -26,12 +26,21 @@ export interface MockUnit
     --- a soft friend's actions' usability `usableAfter` seconds later (a
     --- recording's; else at once).
     function softTarget(unit: MockUnit?, kind: ("enemy" | "friend" | "interact")?, opts: { usableAfter?: number }?)
-    --- Its health down or up; `statesAfter`: its aura states' change told
-    --- that many seconds later (the server's next update), else at once.
+    --- Its health down; its absorb shields (`setAbsorb`) take what they
+    --- can first. `statesAfter`: its aura states' change told that many
+    --- seconds later (the server's next update), else at once.
     function damage(amount: number, opts: { statesAfter?: number | boolean }?)
-    --- Its health up by `amount`: `UNIT_HEALTH` (`statesAfter` as for
+    --- Its health up by `amount`: `UNIT_HEALTH`; its heal absorbs
+    --- (`setHealAbsorb`) take what they can first (`statesAfter` as for
     --- `damage`).
     function heal(amount: number, opts: { statesAfter?: number | boolean }?)
+    --- Its damage absorb shields, in all: `UNIT_ABSORB_AMOUNT_CHANGED`.
+    function setAbsorb(amount: number)
+    --- Its heal absorbs, in all: `UNIT_HEAL_ABSORB_AMOUNT_CHANGED`.
+    function setHealAbsorb(amount: number)
+    --- The heal `healer` (the player by default) is casting on it (0:
+    --- none): `UNIT_HEAL_PREDICTION`.
+    function setIncomingHeal(amount: number, healer: MockUnit?)
     --- Dies (`UNIT_DIED`); `by` the player or the group: `PARTY_KILL` and
     --- the killing blow's `UNIT_COMBAT` (`amount`, else the health left;
     --- `school`, 1 physical by default); `lootable`: `UNIT_LOOT`. Its
