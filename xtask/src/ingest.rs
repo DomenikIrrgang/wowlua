@@ -1440,11 +1440,11 @@ fn with_books(profile: &str, books: &std::collections::BTreeSet<String>) -> Stri
 /// files, every account's in the WoW installation (`wowlua install`'s:
 /// `--wow`'s environment `WOWLUA_WOW_PATH`, the config, Battle.net's
 /// default folder on macOS, Windows and under Wine on Linux) client
-/// folder (`_classic_beta_` unless `--client`).
+/// folder (`_forever_` unless `--client`).
 pub fn run_all(root: &Path, args: &[String]) -> Result<()> {
     let mut unstamped = false;
     let mut world_account = "1".to_string();
-    let mut client = "_classic_beta_".to_string();
+    let mut client = "_forever_".to_string();
     let mut paths: Vec<std::path::PathBuf> = Vec::new();
     let mut it = args.iter();
     while let Some(arg) = it.next() {
@@ -1459,7 +1459,7 @@ pub fn run_all(root: &Path, args: &[String]) -> Result<()> {
             "--client" => {
                 client = it
                     .next()
-                    .ok_or_else(|| anyhow!("--client needs a client folder (_classic_beta_)"))?
+                    .ok_or_else(|| anyhow!("--client needs a client folder (_forever_)"))?
                     .clone();
             }
             other if other.starts_with("--") => {

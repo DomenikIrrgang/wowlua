@@ -17,8 +17,8 @@ fn reads_every_products_textures_and_fonts() {
         return;
     };
     let storage = FsStorage { root: root.clone() };
-    let camelot = Casc::product_of_folder(&storage, "_classic_beta_");
-    eprintln!("_classic_beta_ is {camelot:?}");
+    let camelot = Casc::product_of_folder(&storage, "_forever_");
+    eprintln!("_forever_ is {camelot:?}");
     let products = Casc::products(&storage);
     assert!(!products.is_empty());
     for (product, version) in products {
@@ -360,7 +360,7 @@ fn spells_read_as_the_client_shows_them() {
         return;
     };
     let storage = FsStorage { root: root.clone() };
-    let Some(product) = Casc::product_of_folder(&storage, "_classic_beta_") else {
+    let Some(product) = Casc::product_of_folder(&storage, "_forever_") else {
         eprintln!("no camelot client: skipped");
         return;
     };
@@ -453,7 +453,7 @@ fn spell_costs_read_as_the_client_answers_them() {
         return;
     };
     let storage = FsStorage { root: root.clone() };
-    let Some(product) = Casc::product_of_folder(&storage, "_classic_beta_") else {
+    let Some(product) = Casc::product_of_folder(&storage, "_forever_") else {
         eprintln!("no camelot client: skipped");
         return;
     };
@@ -582,7 +582,7 @@ fn pulled_game_data_reads_as_the_installation() {
         }
     }
     let storage = FsStorage { root: root.clone() };
-    let product = Casc::product_of_folder(&storage, "_classic_beta_").unwrap_or("wow".into());
+    let product = Casc::product_of_folder(&storage, "_forever_").unwrap_or("wow".into());
     let live = Casc::open(Box::new(FsStorage { root }), &product).expect("opens");
     let memory = Memory::default();
     let files = live.pull(&["Fonts\\FRIZQT__.TTF"]);

@@ -10,7 +10,7 @@ fn the_client_fonts_measure_as_the_client_does() {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| "/Applications/World of Warcraft".into());
     let storage = wowlua_casc::FsStorage { root: root.clone() };
-    let Some(product) = wowlua_casc::Casc::product_of_folder(&storage, "_classic_beta_") else {
+    let Some(product) = wowlua_casc::Casc::product_of_folder(&storage, "_forever_") else {
         eprintln!("no camelot client: skipped");
         return;
     };

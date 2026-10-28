@@ -95,7 +95,7 @@
     },
     {
       "name": "forever", "flavor": "camelot", "version": "1.60.1", "interface": 16001,
-      "folders": ["_classic_beta_"], "suffixes": ["_Camelot", "_Forever", "_Mainline"],
+      "folders": ["_forever_", "_classic_beta_"], "suffixes": ["_Camelot", "_Forever", "_Mainline"],
       "features": { "comma-interfaces": true, "inline-file-directives": true, "inline-directive-lines": true, "allow-load-text-locale": true, "file-variables": true, "binding-defaults": false },
       "game-types": ["standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla"]
     },

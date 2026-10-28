@@ -6,7 +6,7 @@
 -- and the client gives C functions 100 free slots, so it crashes at
 -- `#results >= #pcall arguments + 100` (experiments 2 and 3). Each experiment
 -- below raises the count `r` by one from 1, so a crash report's Lua stack
--- (`_classic_beta_/Errors/`) shows the exact count; one that does not crash
+-- (`_forever_/Errors/`) shows the exact count; one that does not crash
 -- records where the count stops (StdTestState.crashLimits, after /reload).
 -- Separate from /stdtest probe, whose cases must never crash.
 import state from "/state"

@@ -359,7 +359,7 @@ impl Casc {
             .collect()
     }
 
-    /// The product of a client folder (`_classic_beta_` →
+    /// The product of a client folder (`_forever_` →
     /// `wow_classic_beta`), from its `.flavor.info`.
     pub fn product_of_folder(storage: &dyn Storage, folder: &str) -> Option<String> {
         let text = storage.read(&format!("{folder}/.flavor.info"))?;
@@ -538,7 +538,7 @@ impl Casc {
         all.get(&table_hash).map_or(&[], Vec::as_slice)
     }
 
-    /// The installation's client folders of this product (`_classic_beta_`).
+    /// The installation's client folders of this product (`_forever_`).
     fn folders(&self) -> Vec<String> {
         self.storage
             .list("")

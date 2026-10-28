@@ -495,7 +495,7 @@ takes the flavor's `Interface` folder and its global strings:
   (its id and family, for `AllowLoadGameType` and `ExcludeLoadGameType`),
   read from the client's suffixed TOC first (`_Mainline.toc`); a
   `LoadOnDemand` one only as a startup addon's dependency; `OnlyBetaAndPTR`
-  ones on beta and PTR clients (WoW Forever runs from `_classic_beta_`).
+  ones on beta and PTR clients (WoW Forever's beta ran from `_classic_beta_`).
 - **Load order** (inferred, unverified): `LoadFirst` ones first, each after
   its `Dep`, `Dependencies`, `RequiredDep` and `OptionalDep` addons,
   otherwise by name.

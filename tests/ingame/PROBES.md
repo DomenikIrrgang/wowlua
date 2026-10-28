@@ -3,7 +3,7 @@
 The probes that would close the emulator's open gaps
 ([coverage report](../../docs/emulator-coverage.md)), for WoW Forever (the
 camelot flavor). Install a current StdTest build first (`wowlua install
---client _classic_beta_` in `tests/ingame`), then `/reload` in game so it
+--client _forever_` in `tests/ingame`), then `/reload` in game so it
 loads.
 
 Everything here is read-only: no item is used, nothing is bought, moved or
@@ -765,7 +765,7 @@ so. "wowlua:" is what the engine answers now.
 The snapshot moved from StdTest into the dev runtime (decision T498):
 `/wl snapshot` takes it in any dev build and `wowlua profile snapshot`
 writes the profile. Its calls are StdTest's, probed before; these check the
-move. Install StdTest (`wowlua install --client _classic_beta_` in
+move. Install StdTest (`wowlua install --client _forever_` in
 `tests/ingame`) and log in with a character that has gear, bags, action
 bars and a target.
 
@@ -775,14 +775,14 @@ bars and a target.
    3. Wait for the line `StdTest: snapshot taken; /reload, then wowlua profile snapshot <name>`
       and note whether it says that parts failed.
    4. `/reload`
-   5. On the desktop, in `tests/ingame`: `wowlua profile snapshot probe-world --client _classic_beta_`
+   5. On the desktop, in `tests/ingame`: `wowlua profile snapshot probe-world --client _forever_`
 
    Send `tests/ingame/tests/profiles/probe-world.json` and the command's
    output. The file must not name your character or realm.
 2. **`/stdtest snapshot` through the runtime's**:
    1. `/stdtest snapshot`
    2. Wait for `snapshot: recorded`, then `/reload`
-   3. On the desktop: `cargo xtask profile "<WoW>/_classic_beta_/WTF/Account/<account>/SavedVariables/StdTest.lua" stdtest-world.json`
+   3. On the desktop: `cargo xtask profile "<WoW>/_forever_/WTF/Account/<account>/SavedVariables/StdTest.lua" stdtest-world.json`
 
    Send `stdtest-world.json`.
 
