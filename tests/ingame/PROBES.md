@@ -3,7 +3,7 @@
 The probes that would close the emulator's open gaps
 ([coverage report](../../docs/emulator-coverage.md)), for WoW Forever (the
 camelot flavor). Install a current StdTest build first (`wowlua install
---client _classic_beta_` in `tests/ingame`), then `/reload` in game so it
+--client _forever_` in `tests/ingame`), then `/reload` in game so it
 loads.
 
 Everything here is read-only: no item is used, nothing is bought, moved or

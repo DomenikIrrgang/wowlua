@@ -4,7 +4,7 @@
 // uploaded: the bytes go from the user's disk into the worker's memory.
 //
 // What is indexed: `.build.info`, `Data/config/**`, `Data/data/*` and each
-// client folder's (`_classic_beta_/`) `.flavor.info` and `Cache/**`.
+// client folder's (`_forever_/`) `.flavor.info` and `Cache/**`.
 
 const norm = (path) => path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").toLowerCase();
 

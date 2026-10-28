@@ -110,7 +110,7 @@ struct Target {
     /// `_Mainline`).
     suffixes: Vec<String>,
     /// A beta or PTR client (`## OnlyBetaAndPTR` addons load): WoW Forever
-    /// runs from `_classic_beta_`.
+    /// runs from `_forever_`.
     beta: bool,
 }
 

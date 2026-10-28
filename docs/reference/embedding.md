@@ -210,7 +210,7 @@ await wowlua.useInstallation(input.files, { flavor: "camelot" });
 ```
 
 The user picks the folder that holds `Data` and the clients' folders
-(`_classic_beta_`, …); wowlua indexes `.build.info`, `Data/config`,
+(`_forever_`, …); wowlua indexes `.build.info`, `Data/config`,
 `Data/data` and each client's `.flavor.info` and `Cache` (the hotfixes),
 about 500 files, and opens the flavor's client in well under a second.
 Runs of that flavor started afterwards use it. A browser keeps a picked

@@ -20,7 +20,7 @@ fn renderer() -> &'static Mutex<Option<Result<Renderer, String>>> {
 /// Where a package's screenshots find their files.
 pub struct Sources {
     addons: Vec<(String, PathBuf)>,
-    /// The flavor's client folders (`_classic_beta_`).
+    /// The flavor's client folders (`_forever_`).
     folders: Vec<String>,
     assets: OnceLock<ClientAssets>,
     out: PathBuf,

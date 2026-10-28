@@ -79,13 +79,13 @@ commit it. Builds go to `dist/`, which git ignores. The
 ```console
 $ wowlua dev
        Built MyAddon 0.1.0-dev (dev: camelot) in 0.09s
-   Installed /Applications/World of Warcraft/_classic_beta_/Interface/AddOns/MyAddon
+   Installed /Applications/World of Warcraft/_forever_/Interface/AddOns/MyAddon
        Ready type /reload in game to load the changes
 ```
 
 `wowlua dev` builds your addon with the `dev` profile and copies it into the
 client folders of your WoW installation that match the flavors you build for.
-For camelot that is `_classic_beta_`; for `standard` it is `_retail_`,
+For camelot that is `_forever_`; for `standard` it is `_retail_`,
 `_ptr_` and the other retail folders. Then it watches your files. Each time
 you save, it builds again, compiling only what changed, and copies the result
 over.

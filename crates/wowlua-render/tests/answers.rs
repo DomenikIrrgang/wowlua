@@ -8,7 +8,7 @@ fn client() -> Option<wowlua_render::client::CascClientData> {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| "/Applications/World of Warcraft".into());
     let storage = wowlua_casc::FsStorage { root };
-    let product = wowlua_casc::Casc::product_of_folder(&storage, "_classic_beta_")?;
+    let product = wowlua_casc::Casc::product_of_folder(&storage, "_forever_")?;
     let casc = std::sync::Arc::new(wowlua_casc::Casc::open(Box::new(storage), &product).ok()?);
     Some(wowlua_render::client::CascClientData::new(Box::new(
         move || Some(casc.clone()),

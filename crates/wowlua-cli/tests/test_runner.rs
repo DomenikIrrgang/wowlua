@@ -5394,7 +5394,7 @@ fn pulled_game_data_answers_game_data_tests() {
     let install = std::env::var_os("WOWLUA_WOW_PATH")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| "/Applications/World of Warcraft".into());
-    if !install.join("_classic_beta_").is_dir() {
+    if !install.join("_forever_").is_dir() {
         eprintln!("no WoW installation with camelot's client: skipped");
         return;
     }

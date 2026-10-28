@@ -235,7 +235,7 @@ so every machine builds identical TOCs. The values below are as of 2026-10-11.
 | Flavor ID | Aliases | Family | Current client(s) | Interface | `WOW_PROJECT_ID` | Client folder(s) | Game suffix (family suffix) |
 |-----------|---------|--------|-------------------|-----------|------------------|------------------|-----------------------------|
 | `standard` | `retail`, `mainline` | Mainline | Retail (Midnight) 12.1.0 | 120100 | 1 | `_retail_`, `_ptr_`, `_xptr_`, `_beta_` | `_Standard`, 12.1.5+ only (`_Mainline`) |
-| `camelot` | `forever` | Mainline | WoW: Forever (launch 2026-11-04) | 16001 (beta) | 18 | `_classic_beta_` (beta). Live folder pending. | `_Camelot` / `_Forever` (`_Mainline`) |
+| `camelot` | `forever` | Mainline | WoW: Forever (launch 2026-11-04) | 16001 (beta) | 18 | `_forever_` (decision T499; the beta's `_classic_beta_` too) | `_Camelot` / `_Forever` (`_Mainline`) |
 | `mists` | | Classic | MoP Classic 5.5.4 | 50504 | 19 | `_classic_`, `_classic_ptr_` | `_Mists` (`_Classic`) |
 | `cata` | | Classic | Cataclysm Classic 4.4.2 (closed) | 40402 | 14 | — | `_Cata` (`_Classic`) |
 | `wrath` | `titan` | Classic | Titan Reforged 3.80.2 (China); Wrath Classic 3.4.5 (closed) | 38002 | 11 | pending | `_Wrath` (`_Classic`) |

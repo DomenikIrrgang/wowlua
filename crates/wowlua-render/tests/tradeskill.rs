@@ -10,7 +10,7 @@ fn the_client_recipes_answer_as_recorded() {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| "/Applications/World of Warcraft".into());
     let storage = wowlua_casc::FsStorage { root };
-    let Some(product) = wowlua_casc::Casc::product_of_folder(&storage, "_classic_beta_") else {
+    let Some(product) = wowlua_casc::Casc::product_of_folder(&storage, "_forever_") else {
         eprintln!("no camelot client: skipped");
         return;
     };
