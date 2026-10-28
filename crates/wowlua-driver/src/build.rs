@@ -1713,6 +1713,36 @@ fn build_inner(
             });
         }
     }
+    // Entries that name nothing are dropped: tell the author (W4337).
+    {
+        let mut known: Vec<String> = files.iter().map(|(s, _)| s.rel.clone()).collect();
+        known.extend(toc_items.iter().map(|i| i.rel.clone()));
+        known.extend(build_cfg.external_files.iter().map(|e| e.path.clone()));
+        for lib in &libs {
+            known.extend(lib.entries.iter().map(|(entry, _)| lib.output(entry)));
+        }
+        let orders =
+            std::iter::once(&build_cfg.load_order).chain(build_cfg.flavor_load_order.values());
+        let mut told = BTreeSet::new();
+        for pattern in orders.flatten() {
+            if told.contains(pattern) || load_order_matches(pattern, &known) {
+                continue;
+            }
+            told.insert(pattern.clone());
+            session.push(
+                Diagnostic::warning(
+                    "W4337",
+                    format!("`build.load-order` entry `{pattern}` names no file of the build"),
+                )
+                .with_path(&manifest.path)
+                .with_help(format!(
+                    "entries are paths from the package root (`{}/…` for sources), or the \
+                     output path of a library's file; the build leaves this one out",
+                    build_cfg.src
+                )),
+            );
+        }
+    }
     let unordered = (!own_orders.is_empty()).then(|| toc_items.clone());
     order_by_load_order(&mut toc_items, &build_cfg.load_order);
     let flavor_edges: Vec<FlavorEdges> = builds
@@ -3378,6 +3408,26 @@ fn listed_positions(
         }
     }
     positions
+}
+
+/// Whether a `build.load-order` entry names one of `known` (exactly, in
+/// any case, or as a glob); entries with file variables (`[Game]`) always
+/// do: their expansions depend on the flavor.
+fn load_order_matches(pattern: &str, known: &[String]) -> bool {
+    let lower = pattern.to_ascii_lowercase();
+    if ["[game]", "[family]", "[textlocale]"]
+        .iter()
+        .any(|v| lower.contains(v))
+    {
+        return true;
+    }
+    if known.iter().any(|k| k.eq_ignore_ascii_case(pattern)) {
+        return true;
+    }
+    globset::Glob::new(pattern).is_ok_and(|g| {
+        let m = g.compile_matcher();
+        known.iter().any(|k| m.is_match(k))
+    })
 }
 
 fn order_by_load_order(entries: &mut Vec<TocItem>, load_order: &[String]) {

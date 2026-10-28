@@ -172,6 +172,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E4334", summary: "Both a hand-written `Bindings.xml` and `wowlua:bindings` declarations" },
     CodeInfo { code: "E4335", summary: "Packager `@version-…@` blocks in a multi-version build" },
     CodeInfo { code: "E4336", summary: "`wowlua publish` with uncommitted changes in the working tree (without `--allow-dirty`)" },
+    CodeInfo { code: "W4337", summary: "`build.load-order` entry that names no file of the build" },
     CodeInfo { code: "E4400", summary: "World profile is not valid JSON, or not a JSON object" },
     CodeInfo { code: "E4401", summary: "World profile does not match its schema (unknown part, wrong type, a key that is no ID)" },
     CodeInfo { code: "E4402", summary: "`test.profile` or a test file's `config({ profile })` names no world profile of the package" },

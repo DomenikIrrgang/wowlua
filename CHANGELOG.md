@@ -18,6 +18,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Nameplates shown with `unit:showNameplate()` have a size and a place on the screen, so what nameplate addons build on them shows in screenshots; before, nothing on them was drawn.
 - E5001 for a file whose main chunk is over Lua's 200 locals only because of the locals the build adds (`__wl` in a plain Lua file's dev and test builds) names them, and says which profile settings leave them out; before, it told you to split your own code.
 - `wowlua mcp` and `wowlua debug` in a package that doesn't load (a dependency that can't be installed, say) show its errors, as `wowlua build` does; before, they said no `wowlua.json` was found.
+- W4337 warns about a `build.load-order` entry that names no file of the build (a typo, or a file outside `build.src`), which the build leaves out; before, it was dropped without a word.
 
 ## 0.13.4 (2026-10-28)
 

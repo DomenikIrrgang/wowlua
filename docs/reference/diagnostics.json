@@ -4851,6 +4851,45 @@
       "examples": [],
       "related": []
     },
+    "W4337": {
+      "area": "manifest",
+      "text": "An entry of `build.load-order` (or of a flavor's `build.flavor-load-order`)\nnames no file of the build, so the build leaves it out of the TOC. Entries\nare paths from the package root: a source is `src/…` (`build.src`), a\nlibrary's file is its output path (`libs/LibStub/LibStub.lua`), and a glob\nmust match at least one of them. A typo, a file that moved, or a file\noutside `build.src` (an addon's `libs/` folder kept next to `src/`) all\nend up here, and the AddOn then loads without that file.\n\nFix the path, move the file under `build.src`, or make the libraries\ndependencies.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "wowlua.json",
+              "lang": "json",
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"build\": {\n        \"load-order\": [\"src/Libs/libs.xml\", \"src/main.lua\"]\n    }\n}\n"
+            },
+            {
+              "path": "src/main.lua",
+              "lang": "lua",
+              "text": "print(\"loaded\")\n"
+            }
+          ],
+          "output": "warning[W4337]: `build.load-order` entry `src/Libs/libs.xml` names no file of the build\n = in wowlua.json\n = help: entries are paths from the package root (`src/…` for sources), or the output path of a library's file; the build leaves this one out"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "wowlua.json",
+              "lang": "json",
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"build\": {\n        \"load-order\": [\"src/main.lua\"]\n    }\n}\n"
+            },
+            {
+              "path": "src/main.lua",
+              "lang": "lua",
+              "text": "print(\"loaded\")\n"
+            }
+          ],
+          "output": null
+        }
+      ],
+      "related": []
+    },
     "E4400": {
       "area": "manifest",
       "text": "A world profile (`tests/profiles/<name>.json`) is not valid JSON, or is not a\nJSON object. World profiles describe the character and world that tests and\nplayground runs start in, and like the manifest they are strict JSON: no\ncomments, no trailing commas.\n\nFix the JSON at the position the message gives.",
