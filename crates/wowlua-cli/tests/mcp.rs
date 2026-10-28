@@ -179,3 +179,27 @@ fn an_agent_drives_and_debugs_an_addon() {
     }
     assert_eq!(m.ok("stop_session", json!({})), "the session ended");
 }
+
+#[test]
+fn a_package_that_does_not_load_says_why() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("wowlua.json"),
+        r#"{ "package": { "name": "counter", "version": "1.0.0" }, "flavors": { "standard": {} }, "addon": { "title": "Counter" },
+            "dependencies": { "missing": { "path": "../nope" } } }"#,
+    )
+    .unwrap();
+    let out = Command::new(assert_cmd::cargo::cargo_bin("wowlua"))
+        .arg("mcp")
+        .current_dir(root)
+        .env("NO_COLOR", "1")
+        .env("WOWLUA_HOME", root.join(".wowlua-home"))
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success());
+    assert!(stderr.contains("E4102"), "{stderr}");
+    assert!(!stderr.contains("no wowlua.json found"), "{stderr}");
+}

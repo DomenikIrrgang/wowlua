@@ -46,7 +46,7 @@ impl wowlua_debug::dap::Launcher for CliLauncher {
 /// Serves MCP on stdio until the client disconnects.
 pub fn mcp(out: &Output, global: &GlobalArgs) -> bool {
     let Some(root) = crate::commands::package_root(out, global) else {
-        eprintln!("error: wowlua mcp runs in an addon package (no wowlua.json found)");
+        eprintln!("error: wowlua mcp runs in an addon package that loads");
         return false;
     };
     let launcher = Arc::new(CliLauncher {
@@ -61,7 +61,7 @@ pub fn mcp(out: &Output, global: &GlobalArgs) -> bool {
 /// Serves DAP until the client disconnects.
 pub fn debug(out: &Output, global: &GlobalArgs, port: Option<u16>) -> bool {
     let Some(root) = crate::commands::package_root(out, global) else {
-        eprintln!("error: wowlua debug runs in an addon package (no wowlua.json found)");
+        eprintln!("error: wowlua debug runs in an addon package that loads");
         return false;
     };
     let launcher = Arc::new(CliLauncher {
