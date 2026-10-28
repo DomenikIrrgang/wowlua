@@ -284,8 +284,8 @@ fn follow_timer(vm: &mut Vm, id: WidgetId) {
     let draining = args
         .get(2)
         .is_some_and(|&d| vm.tonumber(vm.hidden(d)) == Some(1.0));
-    // ponytail: the engine's clock; a duration on a manual clock
-    // (`SetClock`) reads it at the engine's time here.
+    // The engine's clock: a duration on a manual clock (`SetClock`) reads
+    // it at the engine's time here.
     let (total, elapsed, secret) = crate::curves::elapsed_fraction(vm, duration);
     let f = if draining { 1.0 - elapsed } else { elapsed };
     // The duration is the bar's range (Blizzard's code sets none for a

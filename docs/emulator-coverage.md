@@ -2411,6 +2411,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Owed from the M12 screenshots (next beta, about 2026-11-07)
 - Owed from M13 (next beta, about 2026-11-07)
 - Owed from M14 (next beta, about 2026-11-07)
+- Owed from the contributions in 0.13.5 (next beta, about 2026-11-07)
 - Answered on the beta's last day (2026-10-24)
 - The dev tools (0.12.1)
 

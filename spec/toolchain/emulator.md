@@ -266,7 +266,9 @@ A status bar's texture without points of its own is laid out over the
 part of the bar its value fills, from the right (or the top, vertical)
 when the bar fills in reverse, secret value or not, so a frame anchored to
 its edge follows the value (decision T490). `GetNumPoints` still gives 0
-(unverified: the points the client reports for it).
+(unverified: the points the client reports for it, and whether a
+frame anchored to it answers its position as secrets while the bar's value
+is secret; here it answers plain numbers).
 
 A protected frame anchored to a region (a texture, a font string, a line,
 a mask texture) is refused with the client's error, out of combat too:

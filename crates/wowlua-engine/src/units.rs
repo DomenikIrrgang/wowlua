@@ -3834,10 +3834,12 @@ fn place_nameplate(
     let (x, y) = (-350.0 + 700.0 * part(40), -50.0 + 250.0 * part(16));
     let plate = Value::Table(engine(vm).world.widgets[frame.0].table);
     widgets::call_method(vm, plate, "ClearAllPoints", &[])?;
-    // The screen's center: the engine's world frame has no size.
-    let screen = engine(vm).world.ui_parent.map_or(Value::Nil, |ui| {
-        Value::Table(engine(vm).world.widgets[ui.0].table)
-    });
+    // The screen's center: its parent, WorldFrame, covers the screen.
+    let screen = engine(vm).world.widgets[frame.0]
+        .parent
+        .map_or(Value::Nil, |world| {
+            Value::Table(engine(vm).world.widgets[world.0].table)
+        });
     let (p, rp) = (vm.str("CENTER"), vm.str("CENTER"));
     widgets::call_method(
         vm,

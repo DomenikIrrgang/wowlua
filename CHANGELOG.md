@@ -2,11 +2,20 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- W4337 also warns about a `build.load-order` entry that differs from its file only in case (`src/Core.lua` for `src/core.lua`), and names the file's spelling: the build matches your own files by their case, so such an entry ordered nothing.
+- `compat.localization` fills `@localization(…)@` lines without `compat.packager-keywords` too; before, it did nothing unless that was on.
+- A nameplate shown with `unit:showNameplate()` is anchored to `WorldFrame`, its parent, instead of `UIParent`.
+
 ## 0.13.5 (2026-10-28)
 
 ### New
 
 - **Shields and heal prediction**: `unit:setAbsorb`, `unit:setHealAbsorb` and `unit:setIncomingHeal` put absorb shields, heal absorbs and incoming heals on a unit in tests. Damage uses up a shield before health, and healing uses up a heal absorb. `UnitGetTotalAbsorbs`, `UnitGetIncomingHeals` and a heal prediction calculator (`CreateUnitHealPredictionCalculator`) answer them, so shield and heal prediction bars can be tested.
+- An adopted addon's `@localization(…)@` lines can be filled from its own locale files: `"compat": { "localization": "locales/{locale}.lua" }` puts each locale's file in place of its keyword, and a locale without a file stays a comment. Before, the keyword was always W4030.
 - `mock.unitAt(index)` is the unit at that place of the world's units (0 the player), for a test that goes through the units a world profile brings.
 
 ### Fixed
@@ -17,11 +26,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A group member moved in or out of range with `unit:setDistance` fires `UNIT_IN_RANGE_UPDATE`, so unit frames that fade out-of-range members (Blizzard's raid frames among them) react in tests; before, only `UnitInRange` changed.
 - A status bar given `SetTimerDuration` fills (or drains) with its duration, in `GetValue` and in screenshots, so cast bars that run on a timer show their progress, with or without a range set first; before, the bar stayed where it was.
 - Nameplates shown with `unit:showNameplate()` have a size and a place on the screen, so what nameplate addons build on them shows in screenshots; before, nothing on them was drawn.
-- E5001 for a file whose main chunk is over Lua's 200 locals only because of the locals the build adds (`__wl` in a plain Lua file's dev and test builds) names them, and says which profile settings leave them out; before, it told you to split your own code.
+- E5001 for a file whose main chunk is over Lua's 200 locals with the locals the build adds (`__wl` in a plain Lua file's dev and test builds) names them, and says which profile settings leave them out; before, it told you to split your own code.
 - `wowlua mcp` and `wowlua debug` in a package that doesn't load (a dependency that can't be installed, say) show its errors, as `wowlua build` does; before, they said no `wowlua.json` was found.
 - W4337 warns about a `build.load-order` entry that names no file of the build (a typo, or a file outside `build.src`), which the build leaves out; before, it was dropped without a word.
 - A frame anchored to a status bar's texture (`bar:GetStatusBarTexture()`), such as a heal prediction or heal absorb bar at the health fill's edge, is placed and drawn, and follows the bar's value.
-- An adopted addon's `@localization(…)@` lines can be filled from its own locale files: `"compat": { "localization": "locales/{locale}.lua" }` puts each locale's file in place of its keyword, and a locale without a file stays a comment. Before, the keyword was always W4030.
 - `WorldFrame` covers the screen as in the game: 768 units high at any resolution and UI scale, its width following the screen's aspect ratio. Before, it had no size, and frames anchored to it weren't drawn.
 - Pausing a running addon session in VS Code stops it: the pause button was answered and did nothing until a breakpoint hit.
 

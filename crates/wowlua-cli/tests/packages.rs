@@ -2292,8 +2292,20 @@ fn packager_localization_reads_the_packages_locale_files() {
     let out = read_lf(dir.join("dist/release/Loc/Loc.lua")).unwrap();
     assert!(out.contains("L[\"Hello\"] = \"Hallo\""), "{out}");
     assert!(!dir.join("dist/release/Loc/locales").exists());
-    // Without the setting, the keyword is W4030 and stays a comment.
     let manifest = fs::read_to_string(dir.join("wowlua.json")).unwrap();
+    // Without the packager's other keywords, the setting still fills it.
+    fs::write(
+        dir.join("wowlua.json"),
+        manifest.replace(r#""packager-keywords": true, "#, ""),
+    )
+    .unwrap();
+    wowlua(dir, &e.home)
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let out = read_lf(dir.join("dist/release/Loc/Loc.lua")).unwrap();
+    assert!(out.contains("L[\"Hello\"] = \"Hallo\""), "{out}");
+    // Without the setting, the keyword is W4030 and stays a comment.
     fs::write(
         dir.join("wowlua.json"),
         manifest.replace(r#", "localization": "locales/{locale}.lua""#, ""),

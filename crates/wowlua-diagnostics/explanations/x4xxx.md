@@ -1993,9 +1993,11 @@ An entry of `build.load-order` (or of a flavor's `build.flavor-load-order`)
 names no file of the build, so the build leaves it out of the TOC. Entries
 are paths from the package root: a source is `src/…` (`build.src`), a
 library's file is its output path (`libs/LibStub/LibStub.lua`), and a glob
-must match at least one of them. A typo, a file that moved, or a file
-outside `build.src` (an addon's `libs/` folder kept next to `src/`) all
-end up here, and the AddOn then loads without that file.
+must match at least one of them. A source is matched by its case, as the
+build orders it (`src/Core.lua` is not `src/core.lua`; the message names
+the file's spelling). A typo, a file that moved, or a file outside
+`build.src` (an addon's `libs/` folder kept next to `src/`) all end up
+here, and the AddOn then loads without that file.
 
 Fix the path, move the file under `build.src`, or make the libraries
 dependencies.

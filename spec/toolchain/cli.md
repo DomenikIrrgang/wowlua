@@ -352,7 +352,8 @@ externals: repository keywords from the library's locked commit or revision,
 `<!--@no-lib-strip@-->` blocks commented out (decision T120). Keywords are applied before the files are checked. Flavor blocks
 need `build.flavor-mode: "split"` when several flavors are built, and then
 produce per-flavor variants of the file (decision T118). `@localization(...)@` lines are filled from the package's own locale
-files when `compat.localization` names them: the keyword is replaced by the
+files when `compat.localization` names them, with or without
+`compat.packager-keywords`: the keyword is replaced by the
 file of its locale, the text before it on the line kept, as the packager puts
 CurseForge's export there. A locale without a file, and a single-key line
 (`key=`), are left as written. Without `compat.localization` the keyword is
