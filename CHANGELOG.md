@@ -21,6 +21,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - W4337 warns about a `build.load-order` entry that names no file of the build (a typo, or a file outside `build.src`), which the build leaves out; before, it was dropped without a word.
 - A frame anchored to a status bar's texture (`bar:GetStatusBarTexture()`), such as a heal prediction or heal absorb bar at the health fill's edge, is placed and drawn, and follows the bar's value.
 - An adopted addon's `@localization(…)@` lines can be filled from its own locale files: `"compat": { "localization": "locales/{locale}.lua" }` puts each locale's file in place of its keyword, and a locale without a file stays a comment. Before, the keyword was always W4030.
+- `WorldFrame` covers the screen as in the game: 768 units high at any resolution and UI scale, its width following the screen's aspect ratio. Before, it had no size, and frames anchored to it weren't drawn.
 
 ## 0.13.4 (2026-10-28)
 

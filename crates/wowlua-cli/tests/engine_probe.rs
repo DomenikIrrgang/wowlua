@@ -2921,12 +2921,8 @@ fn the_engine_measures_each_screen_as_the_client_did() {
     };
     let n = fixture_vm.heap.table(list).border();
     // Not the engine's to answer: the window (a recorded answer), the
-    // CVars (the engine's own), WorldFrame (unscaled in the client).
-    let skip = |k: &str| {
-        k.starts_with("GetCurrentGameWindowSize")
-            || k.starts_with("CVars")
-            || k.starts_with("WorldFrame")
-    };
+    // CVars (the engine's own).
+    let skip = |k: &str| k.starts_with("GetCurrentGameWindowSize") || k.starts_with("CVars");
     let number = regex::Regex::new(r"-?\d+(\.\d+)?(e-?\d+)?").unwrap();
     let close = |a: &str, b: &str| {
         let (na, nb): (Vec<&str>, Vec<&str>) = (

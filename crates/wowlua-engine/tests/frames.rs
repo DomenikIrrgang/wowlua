@@ -530,6 +530,45 @@ return w .. 'x' .. h, size.x .. 'x' .. size.y, scale, w2 .. 'x' .. h2, table.con
     );
 }
 
+/// WorldFrame covers the screen unscaled: 768 units high at any UI scale,
+/// its width following the screen's aspect ratio, and frames anchored to it
+/// get the screen's rectangle (decision T492).
+#[test]
+fn world_frame_covers_the_screen() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+f:SetAllPoints(WorldFrame)
+local w, h = WorldFrame:GetSize()
+return w, h, WorldFrame:GetEffectiveScale(), tostring(math.abs(f:GetWidth() - UIParent:GetWidth()) < 1e-3),
+    tostring(math.abs(f:GetHeight() - UIParent:GetHeight()) < 1e-3)",
+    );
+    assert_eq!(r, ["1365.3333740234375", "768", "1", "true", "true"]);
+    // Its width follows the screen's aspect ratio; its height stays 768.
+    for (width, height, ui_scale, size) in [
+        (2560.0, 1080.0, None, ["1820.4444580078125", "768"]),
+        (1280.0, 1024.0, Some(0.8), ["960", "768"]),
+    ] {
+        let screen = wowlua_engine::Screen {
+            width,
+            height,
+            ui_scale,
+            ..Default::default()
+        };
+        wowlua_engine::set_screen(&mut vm, screen);
+        assert_eq!(run(&mut vm, "return WorldFrame:GetSize()"), size);
+    }
+    // and the window's size as the game's settings change it.
+    assert_eq!(
+        run(
+            &mut vm,
+            "C_VideoOptions.SetGameWindowSize(1024, 768) return WorldFrame:GetSize()"
+        ),
+        ["1024", "768"]
+    );
+}
+
 /// Every atlas of the client from its own tables (decision T238): one
 /// never recorded has its size, file, coordinates and raw size (its 2x
 /// texture's, half the pixels); `useAtlasSize` takes the size; an atlas the
