@@ -254,13 +254,16 @@ local w, h = pa:GetSize()
 a:hideNameplate()
 a:showNameplate()
 local _, _, _, again = pa:GetPoint(1)
-return point, rel == UIParent, pa:GetParent() == WorldFrame, w, h, tostring(xa ~= xb or ya ~= yb), tostring(again == xa),
-    tostring(math.abs(xa) <= 350 and ya >= -50 and ya <= 200)",
+local cx, cy = pa:GetCenter()
+local sx, sy = WorldFrame:GetCenter()
+return point, rel == WorldFrame, pa:GetParent() == WorldFrame, w, h, tostring(xa ~= xb or ya ~= yb), tostring(again == xa),
+    tostring(math.abs(xa) <= 350 and ya >= -50 and ya <= 200),
+    tostring(math.abs(cx - sx - again) < 1e-3)",
     );
     assert_eq!(
         r,
         [
-            "CENTER", "true", "true", "237.5", "85", "true", "true", "true"
+            "CENTER", "true", "true", "237.5", "85", "true", "true", "true", "true"
         ]
     );
 }

@@ -694,6 +694,72 @@ Take a screenshot after each step that names one.
    Note the order of the three lines ("before", "event", "after"): is the
    event before "after", and is the panel shown at "after"?
 
+## Owed from the contributions in 0.13.5 (next beta, about 2026-11-07)
+
+What pull requests #81 to #91 guessed. Their decisions (T485 to T490)
+stay proposals, open for review, until these answer. Each item stands
+alone: after a `/reload` (or an error) start it again from its first step.
+After each step, note what it prints; take a screenshot where a step says
+so. "wowlua:" is what the engine answers now.
+
+1. **`GetTotemInfo` beyond the first four slots** (#81; slots 1 to 4
+   recorded empty, 5 to 8 guessed the same):
+   1. `/run for s=0,9 do print(s, select("#", GetTotemInfo(s)), GetTotemInfo(s)) end`
+
+   wowlua: slots 1 to 8 `7 false  0 0 nil 0 0`, slots 0 and 9 `0`.
+2. **Aura options left out** (#82; wowlua leaves out an optional structure
+   unless every field of it has a default):
+   1. `/dump C_AuraContainerUtil.ProcessCustomAuraButtonDurationTextOptions({})`
+   2. `/dump C_AuraContainerUtil.ProcessAuraTooltipBackdropOptions({ backdropInfo = {} })`
+
+   wowlua: the first has no `textColor` and no `textFormat`; the second
+   has `anchorOffsets` with `left = 0`.
+3. **`UNIT_IN_RANGE_UPDATE`** (decision T485): in a party with another
+   player, who can walk away.
+   1. `/run local f=CreateFrame("Frame") f:RegisterEvent("UNIT_IN_RANGE_UPDATE") f:SetScript("OnEvent",function(_,e,u,r) print(e,u,issecretvalue(r)) end) WOWLUA_RANGE=f`
+   2. The other player walks more than 40 yards away.
+   3. The other player comes back next to you.
+
+   wowlua: one line at each crossing of 38 yards, for `party1` only, with
+   `true` (the payload secret). Note every token it names, and whether
+   the payload is secret.
+4. **The heal prediction calculator** (decision T486):
+   1. `/run local c=CreateUnitHealPredictionCalculator() print(c:GetIncomingHealOverflowPercent(), c:GetMaximumHealthMode(), c:GetHealAbsorbMode(), c:GetDamageAbsorbClampMode(), c:GetHealAbsorbClampMode(), c:GetIncomingHealClampMode())`
+   2. `/run local c=CreateUnitHealPredictionCalculator() c:SetPredictedValues({health=60000,healthMax=100000,totalDamageAbsorbs=36000,totalHealAbsorbs=5000,totalIncomingHeals=12000,totalIncomingHealsFromHealer=8000}) print(c:GetIncomingHeals()) print(c:GetHealAbsorbs()) print(c:GetDamageAbsorbs()) print(c:GetMaximumIncomingHeals(), c:GetMaximumDamageAbsorbs(), c:GetMaximumHealAbsorbs())`
+   3. `/run local c=CreateUnitHealPredictionCalculator() c:SetPredictedValues({health=60000,healthMax=100000,totalDamageAbsorbs=36000,totalHealAbsorbs=5000,totalIncomingHeals=12000,totalIncomingHealsFromHealer=8000}) c:SetHealAbsorbMode(Enum.UnitHealAbsorbMode.Total) print(c:GetIncomingHeals()) print(c:GetHealAbsorbs()) print(c:GetDamageAbsorbs())`
+
+   wowlua: step 1 `1 0 0 0 0 0`; step 2 `7000 7000 0 false`, `0 false`,
+   `33000 true`, `40000 33000 60000`; step 3 `12000 8000 4000 false`,
+   `5000 false`, `28000 true`.
+5. **Shields and `UNIT_HEALTH`** (decision T486): on a character that can
+   get an absorb shield (a priest's Power Word: Shield).
+   1. `/run local f=CreateFrame("Frame") for _,e in ipairs({"UNIT_ABSORB_AMOUNT_CHANGED","UNIT_HEAL_ABSORB_AMOUNT_CHANGED","UNIT_HEALTH","UNIT_HEAL_PREDICTION"}) do f:RegisterUnitEvent(e,"player") end f:SetScript("OnEvent",function(_,e) print(GetTime(),e) end) WOWLUA_ABS=f`
+   2. Get the shield, then take one hit the shield takes whole.
+   3. Take a hit bigger than what is left of the shield.
+
+   wowlua: the shield's `UNIT_ABSORB_AMOUNT_CHANGED` before `UNIT_HEALTH`,
+   and no `UNIT_HEALTH` for the hit the shield takes whole.
+6. **A status bar on a timer** (decision T487):
+   1. `/run local b=CreateFrame("StatusBar",nil,UIParent) b:SetSize(200,20) b:SetPoint("CENTER") b:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8") print(b:GetMinMaxValues()) b:SetScript("OnValueChanged",function() WOWLUA_VC=(WOWLUA_VC or 0)+1 end) b:SetScript("OnMinMaxChanged",function() WOWLUA_MC=(WOWLUA_MC or 0)+1 end) local d=C_DurationUtil.CreateDuration() d:SetTimeFromStart(GetTime(),10) b:SetTimerDuration(d) WOWLUA_BAR=b print(b:GetMinMaxValues()) print(b:GetValue())`
+   2. About 3 seconds later, with a screenshot: `/run print(WOWLUA_BAR:GetMinMaxValues()) print(WOWLUA_BAR:GetValue(), WOWLUA_VC, WOWLUA_MC)`
+   3. `/run WOWLUA_BAR:SetValue(3) print(WOWLUA_BAR:GetValue())`
+   4. About 2 seconds later: `/run print(WOWLUA_BAR:GetValue())`
+   5. `/run local b=CreateFrame("StatusBar",nil,UIParent) b:SetMinMaxValues(0,200) local d=C_DurationUtil.CreateDuration() d:SetTimeFromStart(GetTime(),10) b:SetTimerDuration(d,Enum.StatusBarInterpolation.Immediate,Enum.StatusBarTimerDirection.RemainingTime) WOWLUA_BAR2=b print(b:GetMinMaxValues()) print(b:GetValue())`
+   6. About 3 seconds later: `/run print(WOWLUA_BAR2:GetValue()) WOWLUA_BAR2:SetMinMaxValues(0,0) print(WOWLUA_BAR2:GetValue())`
+
+   wowlua: step 1 `0 0` before the timer, `0 10` and `0` after it; step 2 `0 10`, about
+   `3`, `nil nil` (no scripts run); steps 3 and 4 `3` (a value set stops
+   the timer); step 5 `0 10` and `10`; step 6 about `7`, then `0`.
+7. **A frame anchored to a bar's fill, with a secret value** (decision
+   T490): in a dungeon, where the player's health is secret in combat.
+   1. Out of combat: `/run local b=CreateFrame("StatusBar",nil,UIParent) b:SetSize(200,20) b:SetPoint("CENTER") b:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8") local n=CreateFrame("Frame",nil,b) n:SetPoint("TOPLEFT",b:GetStatusBarTexture(),"TOPRIGHT") n:SetPoint("BOTTOMLEFT",b:GetStatusBarTexture(),"BOTTOMRIGHT") n:SetWidth(10) local t=n:CreateTexture() t:SetAllPoints() t:SetColorTexture(1,0,0) WOWLUA_HB=b WOWLUA_HN=n print(b:GetStatusBarTexture():GetNumPoints())`
+   2. In combat, with a screenshot: `/run WOWLUA_HB:SetMinMaxValues(0,UnitHealthMax("player")) WOWLUA_HB:SetValue(UnitHealth("player")) print(issecretvalue(UnitHealth("player")), issecretvalue(WOWLUA_HN:GetLeft()))`
+   3. Still in combat: `/run print(WOWLUA_HN:GetLeft())`
+
+   wowlua: step 1 `0`; step 2 `true false`, the red square at the fill's
+   right edge; step 3 a plain number. If step 2 prints `false` first, the
+   health isn't secret there: try again in a boss fight.
+
 ## Answered on the beta's last day (2026-10-24)
 
 - PvP ranks (major faction 2800): `GetMajorFactionProgressionInfo` gives

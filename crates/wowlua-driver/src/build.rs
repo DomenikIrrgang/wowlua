@@ -684,6 +684,34 @@ fn build_inner(
     };
     let asset_rels = &package_assets;
 
+    // The packager's `@localization(…)@` lines filled from the package's
+    // locale files, with or without its other keywords (decision T491).
+    if let Some(pattern) = &manifest.manifest.compat.localization {
+        let plain = &manifest.manifest.compat.plain_copy;
+        for (source, file) in &mut files {
+            if !matches!(source.kind, SourceKind::Lua | SourceKind::Xml)
+                || crate::keywords::plain_copy(plain, &[&source.src_rel, &source.rel])
+            {
+                continue;
+            }
+            let Ok(text) = std::str::from_utf8(&raw[&source.rel]) else {
+                continue;
+            };
+            if !crate::keywords::uses_localization(text) {
+                continue;
+            }
+            let localized = crate::keywords::localize(text, |locale| {
+                let bytes =
+                    crate::host::read(root.join(pattern.replace("{locale}", locale))).ok()?;
+                String::from_utf8(crate::keywords::lf(&bytes)).ok()
+            });
+            if localized != text {
+                *file = session.db.add(&source.rel, localized.clone());
+                raw.insert(source.rel.clone(), localized.into_bytes().into());
+            }
+        }
+    }
+
     // Packager keywords in passthrough files (spec CLI §12.6). Flavor blocks
     // are applied per flavor after compiling.
     let keywords = manifest.manifest.compat.packager_keywords;
@@ -713,31 +741,20 @@ fn build_inner(
             let Ok(text) = std::str::from_utf8(&raw[&source.rel]) else {
                 continue;
             };
-            let localized;
-            let text = match &manifest.manifest.compat.localization {
-                // The keyword's locale files, read from the package (decision T491).
-                Some(pattern) if crate::keywords::uses_localization(text) => {
-                    localized = crate::keywords::localize(text, |locale| {
-                        let bytes =
-                            crate::host::read(root.join(pattern.replace("{locale}", locale)))
-                                .ok()?;
-                        String::from_utf8(crate::keywords::lf(&bytes)).ok()
-                    });
-                    &localized[..]
-                }
-                None if crate::keywords::uses_localization(text) => {
-                    session.push(
-                        Diagnostic::warning(
-                            "W4030",
-                            "`@localization(…)@` is not supported; the line is left unchanged",
-                        )
-                        .with_path(&source.rel)
-                        .with_help("set `compat.localization` to the package's locale files, or use `wowlua:locale`"),
-                    );
-                    text
-                }
-                _ => text,
-            };
+            // With `compat.localization` its locale files filled the keyword
+            // in above; a locale without one stays a comment.
+            if manifest.manifest.compat.localization.is_none()
+                && crate::keywords::uses_localization(text)
+            {
+                session.push(
+                    Diagnostic::warning(
+                        "W4030",
+                        "`@localization(…)@` is not supported; the line is left unchanged",
+                    )
+                    .with_path(&source.rel)
+                    .with_help("set `compat.localization` to the package's locale files, or use `wowlua:locale`"),
+                );
+            }
             let mut processed = crate::keywords::apply(
                 text,
                 info,
@@ -1730,31 +1747,47 @@ fn build_inner(
     }
     // Entries that name nothing are dropped: tell the author (W4337).
     {
-        let mut known: Vec<String> = files.iter().map(|(s, _)| s.rel.clone()).collect();
-        known.extend(toc_items.iter().map(|i| i.rel.clone()));
-        known.extend(build_cfg.external_files.iter().map(|e| e.path.clone()));
+        // As the ordering matches them: the package's own files by their
+        // case, libraries' entry files in any case.
+        let mut own: Vec<String> = files.iter().map(|(s, _)| s.rel.clone()).collect();
+        own.extend(
+            toc_items
+                .iter()
+                .filter(|i| !i.dependency)
+                .map(|i| i.rel.clone()),
+        );
+        own.extend(build_cfg.external_files.iter().map(|e| e.path.clone()));
+        let mut libraries: Vec<String> = toc_items
+            .iter()
+            .filter(|i| i.dependency)
+            .map(|i| i.rel.clone())
+            .collect();
         for lib in &libs {
-            known.extend(lib.entries.iter().map(|(entry, _)| lib.output(entry)));
+            libraries.extend(lib.entries.iter().map(|(entry, _)| lib.output(entry)));
         }
         let orders =
             std::iter::once(&build_cfg.load_order).chain(build_cfg.flavor_load_order.values());
         let mut told = BTreeSet::new();
         for pattern in orders.flatten() {
-            if told.contains(pattern) || load_order_matches(pattern, &known) {
+            if told.contains(pattern) || load_order_matches(pattern, &own, &libraries) {
                 continue;
             }
             told.insert(pattern.clone());
+            let help = match own.iter().find(|k| k.eq_ignore_ascii_case(pattern)) {
+                Some(file) => format!("the file is spelled `{file}`: an entry matches its case"),
+                None => format!(
+                    "entries are paths from the package root (`{}/…` for sources), or the \
+                     output path of a library's file; the build leaves this one out",
+                    build_cfg.src
+                ),
+            };
             session.push(
                 Diagnostic::warning(
                     "W4337",
                     format!("`build.load-order` entry `{pattern}` names no file of the build"),
                 )
                 .with_path(&manifest.path)
-                .with_help(format!(
-                    "entries are paths from the package root (`{}/…` for sources), or the \
-                     output path of a library's file; the build leaves this one out",
-                    build_cfg.src
-                )),
+                .with_help(help),
             );
         }
     }
@@ -3425,10 +3458,11 @@ fn listed_positions(
     positions
 }
 
-/// Whether a `build.load-order` entry names one of `known` (exactly, in
-/// any case, or as a glob); entries with file variables (`[Game]`) always
-/// do: their expansions depend on the flavor.
-fn load_order_matches(pattern: &str, known: &[String]) -> bool {
+/// Whether a `build.load-order` entry names a file as the ordering matches
+/// it (`order_by_load_order`, `listed_positions`): one of `own` exactly or
+/// as a glob, one of `libraries` exactly in any case; entries with file
+/// variables (`[Game]`) always do: their expansions depend on the flavor.
+fn load_order_matches(pattern: &str, own: &[String], libraries: &[String]) -> bool {
     let lower = pattern.to_ascii_lowercase();
     if ["[game]", "[family]", "[textlocale]"]
         .iter()
@@ -3436,12 +3470,13 @@ fn load_order_matches(pattern: &str, known: &[String]) -> bool {
     {
         return true;
     }
-    if known.iter().any(|k| k.eq_ignore_ascii_case(pattern)) {
+    if libraries.iter().any(|k| k.eq_ignore_ascii_case(pattern)) || own.iter().any(|k| k == pattern)
+    {
         return true;
     }
     globset::Glob::new(pattern).is_ok_and(|g| {
         let m = g.compile_matcher();
-        known.iter().any(|k| m.is_match(k))
+        own.iter().any(|k| m.is_match(k))
     })
 }
 

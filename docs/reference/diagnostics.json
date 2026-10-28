@@ -4874,7 +4874,7 @@
     },
     "W4337": {
       "area": "manifest",
-      "text": "An entry of `build.load-order` (or of a flavor's `build.flavor-load-order`)\nnames no file of the build, so the build leaves it out of the TOC. Entries\nare paths from the package root: a source is `src/…` (`build.src`), a\nlibrary's file is its output path (`libs/LibStub/LibStub.lua`), and a glob\nmust match at least one of them. A typo, a file that moved, or a file\noutside `build.src` (an addon's `libs/` folder kept next to `src/`) all\nend up here, and the AddOn then loads without that file.\n\nFix the path, move the file under `build.src`, or make the libraries\ndependencies.",
+      "text": "An entry of `build.load-order` (or of a flavor's `build.flavor-load-order`)\nnames no file of the build, so the build leaves it out of the TOC. Entries\nare paths from the package root: a source is `src/…` (`build.src`), a\nlibrary's file is its output path (`libs/LibStub/LibStub.lua`), and a glob\nmust match at least one of them. A source is matched by its case, as the\nbuild orders it (`src/Core.lua` is not `src/core.lua`; the message names\nthe file's spelling). A typo, a file that moved, or a file outside\n`build.src` (an addon's `libs/` folder kept next to `src/`) all end up\nhere, and the AddOn then loads without that file.\n\nFix the path, move the file under `build.src`, or make the libraries\ndependencies.",
       "examples": [
         {
           "compiles": false,

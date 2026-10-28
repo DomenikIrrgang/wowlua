@@ -2376,7 +2376,9 @@ fn build_metadata_errors() {
 }
 
 /// A `build.load-order` entry that names no file of the build is told
-/// (W4337); sources, globs and file variables that match are not.
+/// (W4337); sources, globs and file variables that match are not. A source
+/// is matched by its case, as the ordering does: another case is told,
+/// with the file's spelling.
 #[test]
 fn load_order_entries_that_name_nothing() {
     let dir = tempfile::tempdir().unwrap();
@@ -2386,11 +2388,12 @@ fn load_order_entries_that_name_nothing() {
             (
                 "wowlua.json",
                 r#"{ "package": { "name": "orders", "version": "1.0.0" }, "flavors": { "standard": {} },
-  "build": { "load-order": ["libs/libs.xml", "src/core.lua", "src/ui/*.lua", "src/[Game]/x.lua"] } }
+  "build": { "load-order": ["libs/libs.xml", "src/core.lua", "src/ui/*.lua", "src/[Game]/x.lua", "src/Util.lua"] } }
 "#,
             ),
             ("libs/libs.xml", "<Ui/>\n"),
             ("src/core.lua", "Core = 1\n"),
+            ("src/util.lua", "Util = 1\n"),
             ("src/ui/frame.lua", "Frame = 1\n"),
         ],
     );
@@ -2402,7 +2405,11 @@ fn load_order_entries_that_name_nothing() {
         ),
         "{stderr}"
     );
-    assert_eq!(stderr.matches("W4337").count(), 1, "{stderr}");
+    assert!(
+        stderr.contains("help: the file is spelled `src/util.lua`: an entry matches its case"),
+        "{stderr}"
+    );
+    assert_eq!(stderr.matches("W4337").count(), 2, "{stderr}");
 }
 
 /// Flavors that need opposite orders get per-flavor TOC files (spec §5.4.6).
