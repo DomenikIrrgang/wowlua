@@ -351,8 +351,13 @@ externals: repository keywords from the library's locked commit or revision,
 `@debug@` and `@do-not-package@` blocks as above, and XML
 `<!--@no-lib-strip@-->` blocks commented out (decision T120). Keywords are applied before the files are checked. Flavor blocks
 need `build.flavor-mode: "split"` when several flavors are built, and then
-produce per-flavor variants of the file (decision T118). `@localization(...)@` is not supported (W4030). Use
-`wowlua:locale` instead.
+produce per-flavor variants of the file (decision T118). `@localization(...)@` lines are filled from the package's own locale
+files when `compat.localization` names them: the keyword is replaced by the
+file of its locale, the text before it on the line kept, as the packager puts
+CurseForge's export there. A locale without a file, and a single-key line
+(`key=`), are left as written. Without `compat.localization` the keyword is
+W4030, and the line stays a comment (decision T491). wowlua does not fetch
+CurseForge's translations; `wowlua:locale` is the native way.
 
 ## 12.7 Configuration
 

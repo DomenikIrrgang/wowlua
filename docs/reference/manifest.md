@@ -700,7 +700,11 @@ history.
 
 Settings for addons adopted from the BigWigs packager: reading `.pkgmeta`
 (`pkgmeta`), the packager's keyword substitution (`packager-keywords`), and how
-it names, versions and packages releases. `wowlua init` writes them; see
+it names, versions and packages releases. `localization` names the package's
+locale files for the `@localization(…)@` keyword, as a path with `{locale}`
+(`"locales/export/{locale}.lua"`): each keyword is replaced by its locale's
+file, and a locale without one stays a comment. List those files in
+`build.exclude` if they shouldn't ship. `wowlua init` writes them; see
 [Bring your addon](../guide/adopting.md) and
 [§9.14](../../spec/toolchain/manifest.md#914-compat).
 

@@ -20,6 +20,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua mcp` and `wowlua debug` in a package that doesn't load (a dependency that can't be installed, say) show its errors, as `wowlua build` does; before, they said no `wowlua.json` was found.
 - W4337 warns about a `build.load-order` entry that names no file of the build (a typo, or a file outside `build.src`), which the build leaves out; before, it was dropped without a word.
 - A frame anchored to a status bar's texture (`bar:GetStatusBarTexture()`), such as a heal prediction or heal absorb bar at the health fill's edge, is placed and drawn, and follows the bar's value.
+- An adopted addon's `@localization(…)@` lines can be filled from its own locale files: `"compat": { "localization": "locales/{locale}.lua" }` puts each locale's file in place of its keyword, and a locale without a file stays a comment. Before, the keyword was always W4030.
 
 ## 0.13.4 (2026-10-28)
 

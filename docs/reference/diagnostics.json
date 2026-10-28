@@ -3864,7 +3864,7 @@
     },
     "W4030": {
       "area": "manifest",
-      "text": "A Lua or XML file of a converted packager project (`compat.packager-keywords`)\nuses the BigWigs packager's `@localization(…)@` keyword, which the packager\nreplaces with translations from CurseForge's localization tool. wowlua does\nnot support it and leaves the line unchanged, so it stays a comment and the\ntranslations are missing.\n\nMove the translations to `wowlua:locale`, whose locale files live in the\npackage, or write the strings into the file.",
+      "text": "A Lua or XML file of a converted packager project (`compat.packager-keywords`)\nuses the BigWigs packager's `@localization(…)@` keyword, which the packager\nreplaces with translations from CurseForge's localization tool. wowlua does\nnot fetch them and leaves the line unchanged, so it stays a comment and the\ntranslations are missing.\n\nIf the package has the translations as files, `compat.localization` names\nthem, `{locale}` standing for the keyword's locale, and the build puts each\nlocale's file in place of its keyword. Or move the translations to\n`wowlua:locale`, or write the strings into the file.\n\n\n\nWith the translations in the package (`locales/enUS.lua`):",
       "examples": [
         {
           "compiles": false,
@@ -3880,7 +3880,7 @@
               "text": "local L = {}\n--@localization(locale=\"enUS\", format=\"lua_additive_table\")@\nprint(L)\n"
             }
           ],
-          "output": "warning[W4030]: `@localization(…)@` is not supported; the line is left unchanged\n = in src/main.lua\n = help: use `wowlua:locale` instead"
+          "output": "warning[W4030]: `@localization(…)@` is not supported; the line is left unchanged\n = in src/main.lua\n = help: set `compat.localization` to the package's locale files, or use `wowlua:locale`"
         },
         {
           "compiles": true,
@@ -3894,6 +3894,27 @@
               "path": "src/main.lua",
               "lang": "lua",
               "text": "local L = {}\nL[\"Hello\"] = \"Hello\"\nprint(L)\n"
+            }
+          ],
+          "output": null
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "wowlua.json",
+              "lang": "json",
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true,\n        \"localization\": \"locales/{locale}.lua\"\n    }\n}\n"
+            },
+            {
+              "path": "src/main.lua",
+              "lang": "lua",
+              "text": "local L = {}\n--@localization(locale=\"enUS\", format=\"lua_additive_table\")@\nprint(L)\n"
+            },
+            {
+              "path": "locales/enUS.lua",
+              "lang": "lua",
+              "text": "L[\"Hello\"] = \"Hello\"\n"
             }
           ],
           "output": null

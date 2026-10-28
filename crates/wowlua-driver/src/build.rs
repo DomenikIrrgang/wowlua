@@ -713,16 +713,31 @@ fn build_inner(
             let Ok(text) = std::str::from_utf8(&raw[&source.rel]) else {
                 continue;
             };
-            if crate::keywords::uses_localization(text) {
-                session.push(
-                    Diagnostic::warning(
-                        "W4030",
-                        "`@localization(…)@` is not supported; the line is left unchanged",
-                    )
-                    .with_path(&source.rel)
-                    .with_help("use `wowlua:locale` instead"),
-                );
-            }
+            let localized;
+            let text = match &manifest.manifest.compat.localization {
+                // The keyword's locale files, read from the package (decision T491).
+                Some(pattern) if crate::keywords::uses_localization(text) => {
+                    localized = crate::keywords::localize(text, |locale| {
+                        let bytes =
+                            crate::host::read(root.join(pattern.replace("{locale}", locale)))
+                                .ok()?;
+                        String::from_utf8(crate::keywords::lf(&bytes)).ok()
+                    });
+                    &localized[..]
+                }
+                None if crate::keywords::uses_localization(text) => {
+                    session.push(
+                        Diagnostic::warning(
+                            "W4030",
+                            "`@localization(…)@` is not supported; the line is left unchanged",
+                        )
+                        .with_path(&source.rel)
+                        .with_help("set `compat.localization` to the package's locale files, or use `wowlua:locale`"),
+                    );
+                    text
+                }
+                _ => text,
+            };
             let mut processed = crate::keywords::apply(
                 text,
                 info,
@@ -778,7 +793,7 @@ fn build_inner(
                     );
                 }
             }
-            if processed != text {
+            if processed.as_bytes() != &raw[&source.rel][..] {
                 raw.insert(source.rel.clone(), processed.into_bytes().into());
             }
         }
