@@ -733,7 +733,8 @@ timeline.
 wowlua studio links the debugger and runs a session on a thread of its own
 (decision T484): `session::run_hosted` takes a frame hook that runs there
 with the client's VM whenever the client may have changed (after each game
-frame, an `advance`, requests served), in which Studio builds the scene
+frame, an `advance`, requests served, and at a stop, a test file's session
+too: decision T485), in which Studio builds the scene
 (§18.9) and hands it to its UI thread, which draws it with the renderer
 (§18.11) on Studio's own GPU device: no screenshots, no polling. Besides the
 requests above it has:

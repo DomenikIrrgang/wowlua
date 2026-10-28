@@ -246,6 +246,26 @@ fn a_hosted_session_draws_inspects_and_changes_its_settings() {
     };
     assert_eq!((last.0, last.1), (1280, 720));
 
+    // A stop draws the screen as it is: the hook runs there too.
+    front
+        .ask(Request::SetExceptionBreakpoints {
+            filters: vec!["all".into()],
+        })
+        .expect("filters");
+    // (the manual clock's pass after that answer runs the hook once)
+    scene_rx.recv().expect("a scene");
+    while scene_rx.try_recv().is_ok() {}
+    let raised = front.send(Request::World {
+        script: "error('stop here')".into(),
+    });
+    front.event(|e| matches!(e, Event::Stopped { .. }));
+    assert!(scene_rx.try_recv().is_ok(), "a scene at the stop");
+    front
+        .ask(Request::SetExceptionBreakpoints { filters: vec![] })
+        .expect("filters");
+    front.ask(Request::Continue).expect("continuing");
+    let _ = front.answer(raised);
+
     front.ask(Request::Terminate).ok();
     drop(front);
     thread.join().unwrap();

@@ -136,6 +136,25 @@ pub struct Shared {
     /// The clock a front-end chose while running (`SetClock`): manual or
     /// not, over the launch's.
     pub manual: Option<bool>,
+    /// A host's frame hook (`session::run_hosted`): run whenever the
+    /// client may have changed, a stop too (decision T485).
+    pub frame_hook: Option<FrameHook>,
+}
+
+/// What a host runs on the session's thread with the client's VM whenever
+/// the client may have changed (after each game frame, an advance,
+/// requests served, a stop): Studio builds the scene it draws.
+pub type FrameHook = Box<dyn FnMut(&mut Vm)>;
+
+impl Shared {
+    /// Runs the host's frame hook, if it has one.
+    pub fn run_frame_hook(shared: &SharedRef, vm: &mut Vm) {
+        let hook = shared.borrow_mut().frame_hook.take();
+        if let Some(mut hook) = hook {
+            hook(vm);
+            shared.borrow_mut().frame_hook = Some(hook);
+        }
+    }
 }
 
 pub type SharedRef = Rc<RefCell<Shared>>;
@@ -165,6 +184,7 @@ impl Shared {
             idle_paused: false,
             detail: None,
             manual: None,
+            frame_hook: None,
         }))
     }
 
@@ -453,6 +473,8 @@ impl Controller {
         let mut paused = self.pause_state(vm);
         // The frames requests name (a stack trace builds them again).
         self.stack_trace(vm, &mut paused);
+        // The screen as it is at the stop.
+        Shared::run_frame_hook(&self.shared, vm);
         let detail = {
             let mut s = self.shared();
             if reason == StopReason::FunctionBreakpoint {
