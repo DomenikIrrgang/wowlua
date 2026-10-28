@@ -2,13 +2,16 @@
 //! store (macOS Keychain, Windows Credential Manager, Secret Service), or,
 //! where none is available, `tokens` in `$WOWLUA_HOME/config.json` (mode
 //! 0600, W4326). `WOWLUA_NO_KEYRING=1` skips the credential store, and
-//! without a terminal reading, saving and removing a token skip it too.
+//! without a terminal reading, saving and removing a token skip it too,
+//! unless an app someone is in front of allows its dialogs
+//! ([`allow_dialogs`]).
 
 // Only a computer has this (spec M14, decision T394).
 #![allow(clippy::disallowed_methods)]
 
+use crate::config;
 use serde_json::Value;
-use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// The credential store's service name.
 const SERVICE: &str = "wowlua";
@@ -39,12 +42,27 @@ enum StoreUse {
     NoTerminal,
 }
 
+/// Set by [`allow_dialogs`].
+static DIALOGS_ALLOWED: AtomicBool = AtomicBool::new(false);
+
+/// Lets this process read, save and remove tokens in the OS credential
+/// store without a terminal: for an app someone is in front of to answer
+/// the store's dialogs (wowlua Studio). `WOWLUA_NO_KEYRING` still wins.
+pub fn allow_dialogs() {
+    DIALOGS_ALLOWED.store(true, Ordering::Relaxed);
+}
+
 /// The store is read only with a terminal on both ends (standard input and
-/// standard error), on every platform.
-fn store_use(enabled: bool, stdin_terminal: bool, stderr_terminal: bool) -> StoreUse {
+/// standard error), on every platform, or when dialogs are allowed.
+fn store_use(
+    enabled: bool,
+    dialogs: bool,
+    stdin_terminal: bool,
+    stderr_terminal: bool,
+) -> StoreUse {
     if !enabled {
         StoreUse::Off
-    } else if stdin_terminal && stderr_terminal {
+    } else if dialogs || (stdin_terminal && stderr_terminal) {
         StoreUse::Read
     } else {
         StoreUse::NoTerminal
@@ -55,6 +73,7 @@ fn current_store_use() -> StoreUse {
     use std::io::IsTerminal;
     store_use(
         keyring_enabled(),
+        DIALOGS_ALLOWED.load(Ordering::Relaxed),
         std::io::stdin().is_terminal(),
         std::io::stderr().is_terminal(),
     )
@@ -70,41 +89,6 @@ fn entry(kind: &str) -> Option<keyring::Entry> {
     keyring_enabled()
         .then(|| keyring::Entry::new(SERVICE, kind).ok())
         .flatten()
-}
-
-fn config_path() -> Option<PathBuf> {
-    crate::install::wowlua_home().map(|h| h.join("config.json"))
-}
-
-fn read_config() -> Value {
-    config_path()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_else(|| Value::Object(Default::default()))
-}
-
-fn write_config(config: &Value) -> Result<(), String> {
-    let path = config_path().ok_or("cannot find the wowlua home directory (set `WOWLUA_HOME`)")?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let text = serde_json::to_string_pretty(config).map_err(|e| e.to_string())? + "\n";
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    use std::io::Write;
-    let mut file = options.open(&path).map_err(|e| e.to_string())?;
-    // An existing file keeps its mode: tighten it.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-    }
-    file.write_all(text.as_bytes()).map_err(|e| e.to_string())
 }
 
 /// Why there is no saved token.
@@ -150,7 +134,7 @@ pub fn get(kind: &str) -> Result<String, Unread> {
     decide(
         store,
         stored,
-        read_config()["tokens"][kind].as_str().map(str::to_string),
+        config::read()["tokens"][kind].as_str().map(str::to_string),
     )
 }
 
@@ -166,20 +150,9 @@ pub fn set(kind: &str, token: &str) -> Result<Saved, String> {
         let _ = remove_from_config(kind);
         return Ok(Saved::CredentialStore);
     }
-    let mut config = read_config();
-    if !config.is_object() {
-        config = Value::Object(Default::default());
-    }
-    let tokens = config
-        .as_object_mut()
-        .expect("an object")
-        .entry("tokens")
-        .or_insert_with(|| Value::Object(Default::default()));
-    if !tokens.is_object() {
-        *tokens = Value::Object(Default::default());
-    }
-    tokens[kind] = Value::String(token.to_string());
-    write_config(&config)?;
+    let mut config = config::read();
+    config::object(&mut config, "tokens").insert(kind.into(), Value::String(token.to_string()));
+    config::write(&config)?;
     Ok(if store == StoreUse::NoTerminal {
         Saved::ConfigNoTerminal
     } else {
@@ -188,13 +161,13 @@ pub fn set(kind: &str, token: &str) -> Result<Saved, String> {
 }
 
 fn remove_from_config(kind: &str) -> Result<bool, String> {
-    let mut config = read_config();
+    let mut config = config::read();
     let removed = config
         .get_mut("tokens")
         .and_then(Value::as_object_mut)
         .is_some_and(|t| t.shift_remove(kind).is_some());
     if removed {
-        write_config(&config)?;
+        config::write(&config)?;
     }
     Ok(removed)
 }
@@ -252,15 +225,19 @@ mod tests {
     use super::*;
 
     /// The credential store is read only with a terminal on both ends, on
-    /// every platform, and never with `WOWLUA_NO_KEYRING`.
+    /// every platform, or in an app that allows its dialogs, and never with
+    /// `WOWLUA_NO_KEYRING`.
     #[test]
     fn the_store_needs_a_terminal() {
-        assert_eq!(store_use(true, true, true), StoreUse::Read);
-        assert_eq!(store_use(true, false, true), StoreUse::NoTerminal);
-        assert_eq!(store_use(true, true, false), StoreUse::NoTerminal);
-        assert_eq!(store_use(true, false, false), StoreUse::NoTerminal);
-        assert_eq!(store_use(false, true, true), StoreUse::Off);
-        assert_eq!(store_use(false, false, false), StoreUse::Off);
+        assert_eq!(store_use(true, false, true, true), StoreUse::Read);
+        assert_eq!(store_use(true, false, false, true), StoreUse::NoTerminal);
+        assert_eq!(store_use(true, false, true, false), StoreUse::NoTerminal);
+        assert_eq!(store_use(true, false, false, false), StoreUse::NoTerminal);
+        assert_eq!(store_use(false, false, true, true), StoreUse::Off);
+        assert_eq!(store_use(false, false, false, false), StoreUse::Off);
+        // wowlua Studio: no terminal, someone to answer the dialog.
+        assert_eq!(store_use(true, true, false, false), StoreUse::Read);
+        assert_eq!(store_use(false, true, false, false), StoreUse::Off);
     }
 
     /// The store's token wins when it was read; otherwise `config.json`

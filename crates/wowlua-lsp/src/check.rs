@@ -498,6 +498,7 @@ fn check_and(
                 tests: true,
                 left_out: Vec::new(),
                 reproducible: false,
+                progress: None,
             };
             let _ = match warm.as_deref_mut() {
                 Some(w) => {

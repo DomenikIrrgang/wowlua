@@ -465,6 +465,7 @@ pub fn parse_sources(
     summarize: bool,
     keep_tokens: bool,
     jobs: &crate::parallel::Jobs,
+    progress: Option<&crate::build::Progress>,
 ) -> Parsed {
     /// What to do with a source or declaration.
     #[derive(Clone)]
@@ -614,6 +615,16 @@ pub fn parse_sources(
     let mut ok = vec![true; files.len()];
     let mut fronts = vec![Front::None; files.len()];
     let mut parsed_declarations = Vec::with_capacity(declarations.len());
+    let parse_count = std::sync::atomic::AtomicUsize::new(0);
+    let to_parse = items.len();
+    let compute = |item: Item| {
+        let result = compute(item);
+        if let Some(progress) = progress {
+            let done = parse_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            progress.tell(crate::build::Step::Parsed { done, of: to_parse });
+        }
+        result
+    };
     // Parsing takes about this much memory per source byte while it runs
     // (the tree it keeps is the build's anyway).
     jobs.region(items, weight, 20, compute, |done| match done {

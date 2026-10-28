@@ -147,6 +147,13 @@ identical effective settings share one build.
 Stages 7–19 run once per flavor in `split` mode, and once in `shared` mode.
 Stages 1–4 and 6 are shared by all configurations and flavors.
 
+A build tells its progress to whoever asked for it (wowlua Studio's meter;
+decision T503), from any of its threads: the sources read (how many, after
+stage 3), each file parsed and each linted as it finishes (done of all),
+the program checked for each flavor (stages 7–15, with the flavor's index
+of all), bundling (stage 16) and writing (stage 22). Diagnostics and output
+are the same with or without it.
+
 ## 13.4 Core data structures
 
 - **`SourceDb`** stores file contents, `FileId`, path, line index and hash.

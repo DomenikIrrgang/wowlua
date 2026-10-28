@@ -11,6 +11,7 @@ pub mod build;
 mod bundle;
 mod compile;
 pub mod compile_cache;
+pub mod config;
 #[cfg(feature = "native")]
 pub mod credentials;
 pub mod deps;

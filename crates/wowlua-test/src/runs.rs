@@ -109,6 +109,7 @@ pub fn build(
             tests: true,
             left_out: left_out.clone(),
             reproducible: false,
+            progress: None,
         };
         let build = wowlua_driver::build(session, project, &request);
         project.apply_lints(session);

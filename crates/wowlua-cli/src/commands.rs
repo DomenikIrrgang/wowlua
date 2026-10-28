@@ -248,6 +248,7 @@ fn build_once(
         tests: false,
         left_out: Vec::new(),
         reproducible: args.reproducible,
+        progress: None,
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -788,6 +789,7 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
         tests: false,
         left_out: Vec::new(),
         reproducible: false,
+        progress: None,
     };
     let result = load_and_build(out, &mut session, global, &request, None);
     let ok = out.flush(&mut session);
@@ -862,6 +864,7 @@ fn check_once(
         tests: true,
         left_out: Vec::new(),
         reproducible: false,
+        progress: None,
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -1631,6 +1634,7 @@ pub fn compile(out: &Output, global: &GlobalArgs, args: &crate::CompileArgs) -> 
         tests: false,
         left_out: Vec::new(),
         reproducible: false,
+        progress: None,
     };
     let build = wowlua_driver::build(&mut session, &project, &request);
     apply_lints(&mut session, &project);
@@ -1834,6 +1838,7 @@ pub fn install(out: &Output, global: &GlobalArgs, profile: &str, target: &Instal
         tests: false,
         left_out: Vec::new(),
         reproducible: false,
+        progress: None,
     };
     let Some(built) = load_and_build_all(out, &mut session, global, &request) else {
         out.flush(&mut session);
@@ -2213,6 +2218,7 @@ pub fn dev(
         tests: false,
         left_out: Vec::new(),
         reproducible: false,
+        progress: None,
     };
     let install = install_request(target, link);
     // What one build compiled, for the next ones.
@@ -2293,6 +2299,7 @@ fn apply_fixes(out: &Output, global: &GlobalArgs, lints_only: bool) -> Option<us
         tests: false,
         left_out: Vec::new(),
         reproducible: false,
+        progress: None,
     };
     let mut total = 0;
     let mut files: std::collections::BTreeSet<PathBuf> = Default::default();
@@ -2354,6 +2361,7 @@ pub fn lint(out: &Output, global: &GlobalArgs, fix: bool) -> bool {
         tests: false,
         left_out: Vec::new(),
         reproducible: false,
+        progress: None,
     };
     let Some(project) = load_project(global, &mut session, &load_options(out, global)) else {
         out.flush(&mut session);
@@ -2420,6 +2428,7 @@ pub fn fix(out: &Output, global: &GlobalArgs, migrate: bool) -> bool {
         tests: false,
         left_out: Vec::new(),
         reproducible: false,
+        progress: None,
     };
     let _ = load_and_build(out, &mut session, global, &request, None);
     out.flush(&mut session)

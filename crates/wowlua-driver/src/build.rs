@@ -53,6 +53,53 @@ pub struct BuildRequest {
     /// `build.timestamp` from `SOURCE_DATE_EPOCH`, else the commit time,
     /// else 0, never from the clock.
     pub reproducible: bool,
+    /// Told each step of the build as it starts (wowlua Studio's meter).
+    pub progress: Option<Progress>,
+}
+
+/// A step of a build (decision T503). Steps that work per file say how
+/// many are done, as each one finishes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Step {
+    /// The sources were read: how many.
+    Read {
+        files: usize,
+    },
+    /// Sources and declarations parsed, of all.
+    Parsed {
+        done: usize,
+        of: usize,
+    },
+    /// Files linted, of all.
+    Linted {
+        done: usize,
+        of: usize,
+    },
+    /// The program checked and compiled: once, or for each flavor in split
+    /// flavor mode (`index` from 0, of `count`).
+    Checking {
+        flavor: Option<String>,
+        index: usize,
+        count: usize,
+    },
+    Bundling,
+    Writing,
+}
+
+/// Where a build tells its [`Step`]s, from any of its threads.
+#[derive(Clone)]
+pub struct Progress(pub Arc<dyn Fn(Step) + Send + Sync>);
+
+impl Progress {
+    pub fn tell(&self, step: Step) {
+        (self.0)(step)
+    }
+}
+
+impl std::fmt::Debug for Progress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Progress")
+    }
 }
 
 /// The files `wowlua compile` compiles.
@@ -82,6 +129,7 @@ impl BuildRequest {
             tests: false,
             left_out: Vec::new(),
             reproducible: false,
+            progress: None,
         }
     }
 }
@@ -506,6 +554,9 @@ fn build_inner(
                     .with_path(&source.rel),
             ),
         }
+    }
+    if let Some(progress) = &request.progress {
+        progress.tell(Step::Read { files: files.len() });
     }
     // The world profiles the test side starts in (decision T401).
     if request.tests && request.only.is_none() {
@@ -1064,6 +1115,7 @@ fn build_inner(
         summarize,
         passes.rename_private,
         &request.jobs,
+        request.progress.as_ref(),
     );
     crate::compile::add_libraries(
         &mut session.db,
@@ -1179,6 +1231,8 @@ fn build_inner(
         HashMap::new()
     };
     // Linting is pure per file: on worker threads (#8), in file order.
+    let linted = std::sync::atomic::AtomicUsize::new(0);
+    let to_lint = lint_files.len();
     request.jobs.region(
         lint_files,
         |&i| raw[&files[i].0.rel].len() as u64,
@@ -1188,7 +1242,12 @@ fn build_inner(
             let read = read_by_tests
                 .get(&files[i].0.src_rel)
                 .map_or(&[][..], Vec::as_slice);
-            wowlua_sema::lint::lint_reading(parse, &raw[&files[i].0.rel], read)
+            let lints = wowlua_sema::lint::lint_reading(parse, &raw[&files[i].0.rel], read);
+            if let Some(progress) = &request.progress {
+                let done = linted.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                progress.tell(Step::Linted { done, of: to_lint });
+            }
+            lints
         },
         |lints| diagnostics.extend(lints),
     );
@@ -1285,6 +1344,13 @@ fn build_inner(
         .unwrap_or_default();
     let mut api_shared: Option<Arc<crate::compile::ParsedDeclaration>> = None;
     for (idx, flavor) in compile_flavors.iter().enumerate() {
+        if let Some(progress) = &request.progress {
+            progress.tell(Step::Checking {
+                flavor: flavor.clone(),
+                index: idx,
+                count: compile_flavors.len(),
+            });
+        }
         let meta = crate::meta::build_meta(
             project,
             &crate::meta::MetaInput {
@@ -2615,6 +2681,9 @@ fn build_inner(
     roots.extend(shipped_as_is);
     // Bundling (spec optimization §15.3) rewrites the TOC's file list.
     let (toc_items, flavor_orders) = if profile.bundle {
+        if let Some(progress) = &request.progress {
+            progress.tell(Step::Bundling);
+        }
         bundle_output(
             session,
             &BundleInput {
@@ -2742,6 +2811,9 @@ fn build_inner(
     let dir = request.out_dir.clone().unwrap_or_else(|| {
         wowlua_pkg::source::normalize(&manifest.out_dir().join(&profile.name).join(&addon_name))
     });
+    if let (Some(progress), true) = (&request.progress, request.write) {
+        progress.tell(Step::Writing);
+    }
     let written = match cache {
         // `wowlua dev` (#7 stage 4): only what changed is written.
         Some(cache) if request.write => {

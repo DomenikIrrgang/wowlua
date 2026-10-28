@@ -69,7 +69,10 @@ A missing token is error E4201. Before reading what `wowlua login` saved,
 credential store may wait for the user to allow it (a macOS Keychain
 dialog). Without a terminal (standard input or standard error is not one),
 wowlua does not read the OS credential store at all, on every platform, so
-a background job never waits for a dialog nobody answers: the token then
+a background job never waits for a dialog nobody answers. An app someone is
+in front of (wowlua Studio) allows the store's dialogs and reads, saves and
+removes tokens there like `wowlua login` in a terminal (decision T501).
+Otherwise, without a terminal, the token then
 comes only from the environment variable or `config.json`. A token missing
 then is E4201 saying so, with the fixes (set the variable, run
 `wowlua publish` in a terminal, or save the token in `config.json` with
