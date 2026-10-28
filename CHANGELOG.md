@@ -2,6 +2,17 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### New
+
+- A function breakpoint can name where a function is defined: `src/Threat.wowlua:560` stops in every call of the function defined on that line, local functions too.
+
+### Changed
+
+- Watches and hovers in the debugger only read: they set nothing and call only functions that change nothing (the Lua library's, like `string.format`, and the game's queries, like `UnitHealth` or `frame:GetWidth()`). Anything else says so instead of running; the debug console still runs any code.
+- `wowlua test --profile-out` and the MCP server's `profile_stop` keep the whole profile in the speedscope file: each function's calls, the events and scripts, and the call trees of the last 600 game frames. speedscope still opens it.
+
 ## 0.13.6 (2026-10-28)
 
 ### Fixed

@@ -1,10 +1,14 @@
 //! Evaluation (spec debugger §18.7): code compiled as a chunk whose
 //! environment reads the frame's locals and upvalues first, then the
 //! frame's environment; run with the frame's execution taint; locals and
-//! upvalues it assigns written back to the frame.
+//! upvalues it assigns written back to the frame. A watch or a hover only
+//! reads (decision T496): it assigns nothing, and calls only functions
+//! known to change nothing.
 
+use rustc_hash::FxHashSet;
+use wowlua_vm::function::Function;
 use wowlua_vm::heap::FuncRef;
-use wowlua_vm::{Value, Vm};
+use wowlua_vm::{CallGuard, Value, Vm};
 
 use crate::controller::{FrameRef, Paused};
 use crate::protocol::{EvalContext, Variable};
@@ -19,6 +23,187 @@ return setmetatable(env, {
     __index = function(_, k) if own[k] then return nil end return genv[k] end,
     __newindex = function(t, k, v) if own[k] then rawset(t, k, v) else genv[k] = v end end,
 }), own";
+
+/// The environment of code that only reads: assigning is an error.
+const READ_ENV_HELPER: &[u8] = b"local names, values, n, genv = ...
+local own, env = {}, {}
+for i = 1, n do own[names[i]] = true; env[names[i]] = values[i] end
+return setmetatable(env, {
+    __index = function(_, k) if own[k] then return nil end return genv[k] end,
+    __newindex = function(_, k) error('a watch only reads: it cannot set ' .. tostring(k), 2) end,
+}), own";
+
+/// The debugger's own chunks (the environment's helpers).
+const DEBUGGER_CHUNK: &str = "=(debugger)";
+
+/// The Lua library's functions a watch may call: they change nothing
+/// (`math.random` moves the generator, `table.sort` the table: not these).
+const PURE: &[(&str, &[&str])] = &[
+    ("string", &["*"]),
+    ("bit", &["*"]),
+    (
+        "math",
+        &[
+            "abs", "acos", "asin", "atan", "atan2", "ceil", "cos", "cosh", "deg", "exp", "floor",
+            "fmod", "frexp", "ldexp", "log", "log10", "max", "min", "modf", "pow", "rad", "sin",
+            "sinh", "sqrt", "tan", "tanh",
+        ],
+    ),
+    ("table", &["concat", "getn", "maxn", "unpack"]),
+    ("coroutine", &["status", "running", "isyieldable"]),
+    ("os", &["clock", "date", "difftime", "time"]),
+    (
+        "_G",
+        &[
+            "type",
+            "tostring",
+            "tonumber",
+            "select",
+            "unpack",
+            "next",
+            "pairs",
+            "ipairs",
+            "rawget",
+            "rawequal",
+            "rawlen",
+            "getmetatable",
+            "assert",
+            "error",
+            "pcall",
+            "xpcall",
+            "issecretvalue",
+            "issecrettable",
+            "strlen",
+            "strsub",
+            "strfind",
+            "strmatch",
+            "strupper",
+            "strlower",
+            "strrep",
+            "strrev",
+            "strbyte",
+            "strchar",
+            "format",
+            "gsub",
+            "gmatch",
+            "strsplit",
+            "strjoin",
+            "strtrim",
+            "strconcat",
+            "tostringall",
+            "floor",
+            "ceil",
+            "abs",
+            "max",
+            "min",
+            "sqrt",
+            "mod",
+            "date",
+            "time",
+        ],
+    ),
+];
+
+/// The library's tables: what is in them and not pure is refused, whatever
+/// its name.
+const LIBRARY: &[&str] = &[
+    "string",
+    "bit",
+    "math",
+    "table",
+    "coroutine",
+    "os",
+    "io",
+    "debug",
+];
+
+/// The library's functions: the pure ones, and all of them.
+fn library_functions(vm: &mut Vm) -> (FxHashSet<FuncRef>, FxHashSet<FuncRef>) {
+    let mut pure = FxHashSet::default();
+    let mut all = FxHashSet::default();
+    let globals = vm.globals;
+    let table_of = |vm: &mut Vm, name: &str| -> Option<wowlua_vm::TableRef> {
+        if name == "_G" {
+            return Some(globals);
+        }
+        match vm.get_global(name) {
+            Value::Table(t) => Some(t),
+            _ => None,
+        }
+    };
+    let funcs = |vm: &Vm, t: wowlua_vm::TableRef| -> Vec<FuncRef> {
+        vm.heap
+            .table(t)
+            .entries()
+            .filter_map(|(_, v)| match v {
+                Value::Func(f) => Some(f),
+                _ => None,
+            })
+            .collect()
+    };
+    for name in LIBRARY {
+        if let Some(t) = table_of(vm, name) {
+            all.extend(funcs(vm, t));
+        }
+    }
+    for (lib, names) in PURE {
+        let Some(t) = table_of(vm, lib) else { continue };
+        if names == &["*"] {
+            pure.extend(funcs(vm, t));
+            continue;
+        }
+        for name in *names {
+            let key = vm.heap.intern(name.as_bytes());
+            if let Value::Func(f) = vm.heap.table(t).get_str(key) {
+                pure.insert(f);
+            }
+        }
+    }
+    (pure, all)
+}
+
+/// Whether the game's function or method by this name only reads: a
+/// query by its name (`GetText`, `IsShown`, `UnitHealth`,
+/// `C_Spell.GetSpellInfo`), nothing it makes.
+fn reads(name: &str) -> bool {
+    let short = name.rsplit(['.', ':']).next().unwrap_or(name);
+    ["Get", "Is", "Has", "Can", "Unit", "Should", "Does"]
+        .iter()
+        .any(|p| short.starts_with(p))
+        && !short.contains("Create")
+}
+
+/// The check of code that only reads: the debugger's own helpers, pure
+/// library functions and the game's queries are called; anything else is
+/// refused (it may change the game).
+fn reads_only(vm: &mut Vm) -> Box<CallGuard> {
+    let (pure, library) = library_functions(vm);
+    Box::new(move |vm: &Vm, f: FuncRef| match vm.heap.func(f) {
+        Function::Lua(l) if &*l.proto.source == DEBUGGER_CHUNK.as_bytes() => None,
+        Function::Lua(l) => Some(format!(
+            "a watch only reads: it does not call {} (it may change the game); evaluate it in the console",
+            if l.proto.line_defined == 0 {
+                "a chunk".to_string()
+            } else {
+                format!(
+                    "the function at {}:{}",
+                    String::from_utf8_lossy(&wowlua_vm::vm::chunkid(&l.proto.source)),
+                    l.proto.line_defined
+                )
+            }
+        )),
+        Function::Native(n) => {
+            if pure.contains(&f) || (!library.contains(&f) && reads(n.name)) {
+                None
+            } else {
+                Some(format!(
+                    "a watch only reads: it does not call {}() (it may change the game); evaluate it in the console",
+                    n.name
+                ))
+            }
+        }
+    })
+}
 
 /// The frame an evaluation runs in: a Lua frame's index and function.
 type At = Option<(usize, FuncRef)>;
@@ -63,14 +248,16 @@ enum Place {
 
 fn compile(vm: &mut Vm, code: &str) -> Result<Value, String> {
     let as_expr = format!("return {code}");
-    match vm.load(as_expr.as_bytes(), "=(debugger)") {
+    match vm.load(as_expr.as_bytes(), "=(watch)") {
         Ok(f) => Ok(f),
-        Err(_) => vm.load(code.as_bytes(), "=(debugger)"),
+        Err(_) => vm.load(code.as_bytes(), "=(watch)"),
     }
 }
 
-/// Runs `code` in the frame: its results, or its error's text.
-fn run(vm: &mut Vm, at: At, code: &str) -> Result<Vec<Value>, String> {
+/// Runs `code` in the frame: its results, or its error's text. Code that
+/// only reads (`reading`) assigns nothing and calls nothing that may
+/// change the game.
+fn run(vm: &mut Vm, at: At, code: &str, reading: bool) -> Result<Vec<Value>, String> {
     let f = compile(vm, code)?;
     let vars = visible(vm, at);
     let names = vm.new_table();
@@ -86,7 +273,10 @@ fn run(vm: &mut Vm, at: At, code: &str) -> Result<Vec<Value>, String> {
         None => vm.globals,
     };
     let helper = vm
-        .load(ENV_HELPER, "=(debugger)")
+        .load(
+            if reading { READ_ENV_HELPER } else { ENV_HELPER },
+            DEBUGGER_CHUNK,
+        )
         .map_err(|e| format!("the debugger's environment: {e}"))?;
     let taint = vm.execution_taint();
     vm.with_execution_taint(taint, |vm| -> Result<Vec<Value>, String> {
@@ -108,13 +298,28 @@ fn run(vm: &mut Vm, at: At, code: &str) -> Result<Vec<Value>, String> {
             return Err("not a function".into());
         };
         vm.set_func_env(fr, env);
-        let results = vm
-            .pcall(f, &[])
-            .map_err(|e| values::error_text(vm, e.value))?;
-        // Locals and upvalues the code assigned go back to the frame.
+        if reading {
+            let guard = reads_only(vm);
+            let watch = fr;
+            vm.set_call_guard(Some(Box::new(
+                move |vm: &Vm, g: FuncRef| {
+                    if g == watch { None } else { guard(vm, g) }
+                },
+            )));
+        }
+        let results = vm.pcall(f, &[]);
+        if reading {
+            vm.set_call_guard(None);
+        }
+        let results = results.map_err(|e| values::error_text(vm, e.value))?;
+        // Locals and upvalues the code assigned go back to the frame; code
+        // that only reads assigns none.
         for (name, old, place) in &vars {
             let k = vm.str(name);
             let now = vm.heap.table(env).get(k);
+            if !now.raw_eq(*old) && reading {
+                return Err(format!("a watch only reads: it cannot set {name}"));
+            }
             if !now.raw_eq(*old) {
                 let s = vm.taint().fresh(now);
                 match *place {
@@ -134,10 +339,11 @@ pub(crate) fn evaluate(
     paused: Option<&mut Paused>,
     frame: Option<u32>,
     code: &str,
-    _context: EvalContext,
+    context: EvalContext,
 ) -> Result<Variable, String> {
     let at = frame_at(vm, paused.as_deref(), frame);
-    let results = run(vm, at, code)?;
+    let reading = matches!(context, EvalContext::Watch | EvalContext::Hover);
+    let results = run(vm, at, code, reading)?;
     let first = results.first().copied().unwrap_or(Value::Nil);
     match paused {
         Some(p) => {
@@ -184,7 +390,7 @@ pub(crate) fn log_message(vm: &mut Vm, msg: &str) -> String {
             return out;
         };
         let expr = &after[..close];
-        match run(vm, at, expr) {
+        match run(vm, at, expr, false) {
             Ok(r) => {
                 let v = r.first().copied().unwrap_or(Value::Nil);
                 let v = vm.hidden(v);
@@ -221,7 +427,10 @@ pub(crate) fn set_variable(
             .map(|f| (f.index, f.func)),
         _ => top,
     };
-    let v = run(vm, at, value)?.first().copied().unwrap_or(Value::Nil);
+    let v = run(vm, at, value, false)?
+        .first()
+        .copied()
+        .unwrap_or(Value::Nil);
     let s = vm.taint().fresh(v);
     match target {
         RefTarget::Locals(i) => {
@@ -244,7 +453,10 @@ pub(crate) fn set_variable(
         }
         RefTarget::Table(t) | RefTarget::Widget(t) => {
             let key = match name.strip_prefix('[').and_then(|k| k.strip_suffix(']')) {
-                Some(k) => run(vm, at, k)?.first().copied().unwrap_or(Value::Nil),
+                Some(k) => run(vm, at, k, false)?
+                    .first()
+                    .copied()
+                    .unwrap_or(Value::Nil),
                 None => vm.str(name),
             };
             vm.heap

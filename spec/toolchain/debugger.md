@@ -149,7 +149,15 @@ expression or statement list, compiled as a chunk whose environment reads
 the frame's locals and upvalues first, then its environment; it runs with
 the frame's execution taint (so it cannot make insecure code secure), with
 breakpoints off, and its errors are its result. Assignments to locals and
-upvalues write the frame's. What the session prints goes to the console,
+upvalues write the frame's. A watch or a hover only reads (decision T496):
+it assigns nothing (a local, an upvalue or a global), and calls only the
+Lua library's functions that change nothing (`string`'s, `bit`'s,
+`math`'s but `random`, `table.concat`, `type`, `tostring`, `pairs`, …) and
+the game's functions and methods named as queries (`Get…`, `Is…`, `Has…`,
+`Can…`, `Unit…`, `Should…`, `Does…`, none with `Create`); any other call,
+a Lua function's too, is refused with an error that says so, before it
+runs. The console, conditions and log messages run any code. What the
+session prints goes to the console,
 as the chat frame shows it: colour codes, links' codes and inline
 textures left out, `|4one:many;` its word for the number (a chat line's
 text, `ChatFrame1:AddMessage`'s, is otherwise the game's own).
@@ -777,6 +785,10 @@ For its debugger page (decision T494):
 - `pause` while the addon runs stops it at the next line run, else
   between frames.
 - `setClock(manual)`: the clock from now on, over the launch's.
+- `setDebugBlizzardUi(on)`: stepping into Blizzard's UI code from now on,
+  over the launch's `debugBlizzardUI` (decision T496).
+- `frameTree` marks a frame the client or Blizzard's UI code made
+  (`blizzard`), so a tree can leave them out (decision T496).
 - `saveWorld`: the running world as a world profile's JSON (the
   character, its money and place, the other units with the target,
   focus and group, the CVars changed); items, bags, spells, auras and

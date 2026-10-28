@@ -28,4 +28,4 @@ pub use function::{NativeCall, NativeFn};
 pub use heap::{FuncRef, StrRef, TableRef};
 pub use taint::{Slot, Taint};
 pub use value::Value;
-pub use vm::Vm;
+pub use vm::{CallGuard, Vm};
