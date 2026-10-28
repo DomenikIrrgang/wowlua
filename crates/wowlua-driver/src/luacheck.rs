@@ -167,7 +167,20 @@ pub fn check(db: &SourceDb, file: FileId, code: &[u8]) -> Option<Diagnostic> {
     };
     let span = db.line_span(file, line);
     let is_limit = LIMIT_MESSAGES.iter().any(|m| message.contains(m));
-    let diagnostic = if is_limit {
+    let generated = generated_main_locals(code, &message);
+    let diagnostic = if is_limit && !generated.is_empty() {
+        // Spec §14.2: the build names the generated locals involved.
+        Diagnostic::error("E5001", format!("Lua 5.1 limit exceeded: {message}"))
+            .with_label(span, "in the function containing this line")
+            .with_note(format!(
+                "the build adds {} to the file's main chunk",
+                generated.join(", ")
+            ))
+            .with_help(
+                "move locals of the main chunk into a table; for a plain Lua file, the \
+                 profile's `\"instrument\": \"none\"` and `\"monitor\": false` leave `__wl` out",
+            )
+    } else if is_limit {
         Diagnostic::error("E5001", format!("Lua 5.1 limit exceeded: {message}"))
             .with_label(span, "in the function containing this line")
             .with_help("split the function or move locals into a table")
@@ -178,6 +191,21 @@ pub fn check(db: &SourceDb, file: FileId, code: &[u8]) -> Option<Diagnostic> {
             .with_note("wowlua's parser accepted this file; please report this as a bug")
     };
     Some(diagnostic)
+}
+
+/// The generated locals (`__wl…`) the prologue on line 1 declares, when
+/// the main chunk has too many locals; none otherwise.
+fn generated_main_locals(code: &[u8], message: &str) -> Vec<String> {
+    static LOCAL: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\blocal (__wl\w*)").expect("valid pattern"));
+    if !(message.contains("main function") && message.contains("local variables")) {
+        return Vec::new();
+    }
+    let first = code.split(|&b| b == b'\n').next().unwrap_or_default();
+    LOCAL
+        .captures_iter(&String::from_utf8_lossy(first))
+        .map(|c| format!("`{}`", &c[1]))
+        .collect()
 }
 
 /// wowlua's own Lua 5.1 compiles as the C Lua: the same outcome, message
@@ -307,6 +335,23 @@ mod tests {
         assert!(check_unless_compiled(&db, file, b"local a = 1\n", true).is_none());
         // A byte order mark is compiled again, as `check` skips it.
         assert!(check_unless_compiled(&db, file, b"\xEF\xBB\xBFlocal a = 1\n", true).is_none());
+    }
+
+    #[test]
+    fn generated_locals_over_the_limit_are_named() {
+        let user: String = (0..200).map(|i| format!("local v{i} = {i}\n")).collect();
+        let d = run(&format!("local __wl = select(2, ...).__wowlua; {user}")).expect("E5001");
+        assert_eq!(d.code, Some("E5001"));
+        assert!(
+            d.notes
+                .iter()
+                .any(|n| n.contains("adds `__wl` to the file's main chunk")),
+            "{:?}",
+            d.notes
+        );
+        let plain: String = (0..201).map(|i| format!("local v{i} = {i}\n")).collect();
+        let d = run(&plain).expect("E5001");
+        assert!(d.notes.is_empty(), "{:?}", d.notes);
     }
 
     #[test]

@@ -16,6 +16,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A group member moved in or out of range with `unit:setDistance` fires `UNIT_IN_RANGE_UPDATE`, so unit frames that fade out-of-range members (Blizzard's raid frames among them) react in tests; before, only `UnitInRange` changed.
 - A status bar given `SetTimerDuration` fills (or drains) with its duration, in `GetValue` and in screenshots, so cast bars that run on a timer show their progress, with or without a range set first; before, the bar stayed where it was.
 - Nameplates shown with `unit:showNameplate()` have a size and a place on the screen, so what nameplate addons build on them shows in screenshots; before, nothing on them was drawn.
+- E5001 for a file whose main chunk is over Lua's 200 locals only because of the locals the build adds (`__wl` in a plain Lua file's dev and test builds) names them, and says which profile settings leave them out; before, it told you to split your own code.
 
 ## 0.13.4 (2026-10-28)
 
