@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,111 of the 5,111 documented camelot functions have
-  behaviour (100.0%): 1,057 modelled, 355 answered from recordings, 3,699 by a
+  behaviour (100.0%): 1,057 modelled, 354 answered from recordings, 3,700 by a
   documentation-based fill-in. Of all 7,175 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
@@ -28,17 +28,17 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,151 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,154 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| standard | 4,871 | 4,506 (92.5%) | 0 | 1,438 | 1,430 (99.4%) | none |
-| camelot | 5,111 | 5,111 (100.0%) | 355 | 1,477 | 1,477 (100.0%) | all |
-| mists | 3,221 | 2,888 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| cata | 1,927 | 1,669 (86.6%) | 0 | 1,008 | 995 (98.7%) | none |
-| wrath | 3,227 | 2,895 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| tbc | 3,220 | 2,891 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| vanilla | 3,220 | 2,891 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| standard | 4,871 | 4,507 (92.5%) | 0 | 1,438 | 1,430 (99.4%) | none |
+| camelot | 5,111 | 5,111 (100.0%) | 354 | 1,477 | 1,477 (100.0%) | all |
+| mists | 3,221 | 2,889 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| cata | 1,927 | 1,670 (86.7%) | 0 | 1,008 | 995 (98.7%) | none |
+| wrath | 3,227 | 2,896 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| tbc | 3,220 | 2,892 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| vanilla | 3,220 | 2,892 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
 
 ## API behaviour
 
@@ -62,7 +62,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 748 | 101 | 1,253 | 0 |
+| `(globals)` | 2,102 | 748 | 100 | 1,254 | 0 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -348,13 +348,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,175 | 1,648 | 438 | 5,089 | 0 |
+| **All** | 7,175 | 1,648 | 437 | 5,090 | 0 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,111 | 1,057 | 355 | 3,699 | 0 |
+| Blizzard's API documentation | 5,111 | 1,057 | 354 | 3,700 | 0 |
 | the client's other C functions (`/stdtest inventory`) | 2,064 | 591 | 83 | 1,390 | 0 |
 | the engine's own, in neither list | 15 | 14 | 0 | 1 | 0 |
 
@@ -377,13 +377,13 @@ The modules that answer, by how many functions and methods:
 | `leftovers2` | fill-in | 388 |
 | `collections` | fill-in | 377 |
 | `social` | fill-in | 373 |
-| `recorded` | recorded | 321 |
+| `recorded` | recorded | 320 |
 | `questinfo` | fill-in | 316 |
 | `systeminfo` | fill-in | 308 |
 | `iteminfo` | fill-in | 228 |
 | `methods3` | fill-in | 215 |
+| `spellinfo` | fill-in | 198 |
 | `vm` | model | 198 |
-| `spellinfo` | fill-in | 197 |
 | `unitinfo` | fill-in | 172 |
 | `blanks` | fill-in | 153 |
 | `stats` | model | 136 |
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,151 rules unverified: each rests on Blizzard's
+The engine's code marks 1,154 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1009,7 +1009,7 @@ page changes only when a rule is added, removed or reworded.
 
 - [channels.rs](../crates/wowlua-engine/src/channels.rs): Unverified: what `GetNumGroupChannels` counts (recorded 1 without a group); collapsed headers; joining and leaving; a...
 
-### character (15)
+### character (16)
 
 - [character.rs](../crates/wowlua-engine/src/character.rs): Unverified (inferred from Blizzard's documentation and UI code): `BAG_CONTAINER_UPDATE` for a bag put in, other flavo...
 - [character.rs](../crates/wowlua-engine/src/character.rs): `GetInventoryItemCount(unit, slot)`: the worn item's count, 1 where none is (the full probe: `("player")` and `("x")`...
@@ -1023,6 +1023,7 @@ page changes only when a rule is added, removed or reworded.
 - [character.rs](../crates/wowlua-engine/src/character.rs): The player's place in the world as `UnitPosition` gives it: the north (`y`) and west (`x`) coordinates, the height an...
 - [character.rs](../crates/wowlua-engine/src/character.rs): A unit that does not exist (or a GUID): three nils and instance 0 (the full probe); another unit's nothing (unverified).
 - [character.rs](../crates/wowlua-engine/src/character.rs): Another unit: where the test put it (`world`), in the player's instance; else nothing (unverified).
+- [character.rs](../crates/wowlua-engine/src/character.rs): `UNIT_IN_RANGE_UPDATE(unit, isInRange)` for each of a group member's group tokens; `isInRange` secret, as `UnitInRang...
 - [character.rs](../crates/wowlua-engine/src/character.rs): The backpack, the keyring, the bank's tabs (the character's and the account's): their general names (the full probe,...
 - [character.rs](../crates/wowlua-engine/src/character.rs): `GetInventoryAlertStatus(slot)`: no durability warning (recorded for whole gear; unverified for damaged).
 - [character.rs](../crates/wowlua-engine/src/character.rs): `GetInventoryItemBroken(unit, slot)`, `GetInventoryItemEquippedUnusable( unit, slot)`: whole and usable (recorded; un...
@@ -1456,10 +1457,11 @@ page changes only when a rule is added, removed or reworded.
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): The guild club's streams: Guild (1, `Enum.ClubStreamType.Guild`) and, for a rank that hears officer chat, Officer (2,...
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): `C_Club.AreMembersReady(clubId)`: the guild's club's members known (unverified); any other false (recorded).
 
-### healcalc (2)
+### healcalc (3)
 
-- [healcalc.rs](../crates/wowlua-engine/src/healcalc.rs): The engine's units have no absorbs and no incoming heals (`UnitGetIncomingHeals`, `UnitGetTotalAbsorbs`: none), so th...
-- [healcalc.rs](../crates/wowlua-engine/src/healcalc.rs): `UnitGetDetailedHealPrediction(unit, healer, calculator)`: the unit's health and maximum kept in the calculator (noth...
+- [healcalc.rs](../crates/wowlua-engine/src/healcalc.rs): A unit fills it with its health, its damage and heal absorbs and the heals being cast on it (`setAbsorb`, `setHealAbs...
+- [healcalc.rs](../crates/wowlua-engine/src/healcalc.rs): `UnitGetDetailedHealPrediction(unit, healer, calculator)`: the unit's health, maximum, absorbs and incoming heals kep...
+- [healcalc.rs](../crates/wowlua-engine/src/healcalc.rs): The incoming heals' overflow: what was set, else 1 (unverified).
 
 ### input (6)
 
@@ -2169,7 +2171,7 @@ page changes only when a rule is added, removed or reworded.
 - [unitinfo.rs](../crates/wowlua-engine/src/unitinfo.rs): Recorded: slots 8 and 10 true (the others unverified).
 - [unitinfo.rs](../crates/wowlua-engine/src/unitinfo.rs): As the client answered (the full probe; facts of Forever's account and systems, unverified for another account).
 
-### units (46)
+### units (47)
 
 - [units.rs](../crates/wowlua-engine/src/units.rs): Unverified until probed: the player's defaults; GUID formats; the order of the events a change fires (a unit event fi...
 - [units.rs](../crates/wowlua-engine/src/units.rs): Each class's ID, file and name (enUS; the client's for Paladin, `UnitClass`; the others unverified).
@@ -2203,6 +2205,7 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine/src/units.rs): A hostile target on someone: that one's flags, by its tokens with targettarget (recorded, `talents`: the fox on the p...
 - [units.rs](../crates/wowlua-engine/src/units.rs): `C_ClickBindings.GetEffectiveInteractionButton(button, modifiers)`: the default interaction bindings' (a unit frame's...
 - [units.rs](../crates/wowlua-engine/src/units.rs): `C_ClickBindings.GetBindingType(button, modifiers)`: the recorded answer (the left button unmodified: an interaction)...
+- [units.rs](../crates/wowlua-engine/src/units.rs): What of `n` the unit's damage absorbs (`heal`: its heal absorbs) take, used up, `UNIT_ABSORB_AMOUNT_CHANGED` (`UNIT_H...
 - [units.rs](../crates/wowlua-engine/src/units.rs): The death's events.
 - [units.rs](../crates/wowlua-engine/src/units.rs): `player:raiseSkill(name, rank)`: a skill up, as recorded (scenarios combat and quest: Defense, Swords): "Your skill i...
 - [units.rs](../crates/wowlua-engine/src/units.rs): Several skills up in one packet (`raiseSkill(name, rank, name2, rank2)`): their messages, then the stats' events once...
