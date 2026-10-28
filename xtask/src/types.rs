@@ -619,6 +619,49 @@ fn client_facts(root: &Path) -> Result<wowlua_types_gen::ClientFacts> {
     })
 }
 
+/// The flavors whose pinned dump (`STRINGS`) is their own client's.
+const CLIENT_DUMPS: &[&str] = &["standard", "mists", "tbc", "vanilla"];
+
+/// C functions the clients have and their dumps lack (recorded 2026-10-28 on
+/// Retail 12.1.5, Mists 5.5.4, TBC 2.5.6 and Classic Era 1.15.9).
+const NOT_IN_DUMPS: &[(&str, &str)] = &[
+    (
+        "standard",
+        "C_SocialRestrictions.IsAgeVerificationRestricted",
+    ),
+    ("standard", "Kiosk.GetCharacterTemplateSetIndex"),
+    ("mists", "Kiosk.GetCharacterTemplateSetIndex"),
+    ("tbc", "Kiosk.GetCharacterTemplateSetIndex"),
+    ("vanilla", "Kiosk.GetCharacterTemplateSetIndex"),
+];
+
+/// Writes `crates/wowlua-engine/data/<flavor>-functions.txt`: the dump's C
+/// functions (its `GlobalAPI` table, not `LuaAPI`) and those it lacks
+/// ([`NOT_IN_DUMPS`]), one per line.
+fn write_inventory(root: &Path, flavor: &str, branch: &str, commit: &str, api: &str) -> Result<()> {
+    let c_functions = api.split("local LuaAPI").next().unwrap_or_default();
+    let mut names: Vec<String> = wowlua_types_gen::framexml::quoted_names(c_functions)
+        .into_iter()
+        .chain(
+            NOT_IN_DUMPS
+                .iter()
+                .filter(|(f, _)| *f == flavor)
+                .map(|(_, n)| n.to_string()),
+        )
+        .collect();
+    names.sort();
+    names.dedup();
+    let mut out = format!(
+        "# The C functions of the {flavor} client (Ketho's BlizzardInterfaceResources {branch}\n# {commit}, GlobalAPI.lua; `cargo xtask types gen`), one per line.\n"
+    );
+    for name in names {
+        out.push_str(&name);
+        out.push('\n');
+    }
+    let path = root.join(format!("crates/wowlua-engine/data/{flavor}-functions.txt"));
+    fs::write(&path, out).with_context(|| path.display().to_string())
+}
+
 pub fn generate(root: &Path, dir: &Path) -> Result<()> {
     let mut flavors = Vec::new();
     for (flavor, _, _) in flavor_tags()? {
@@ -646,6 +689,14 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
             .with_context(|| format!("no global strings for {flavor}"))?;
         let strings_text = fs::read_to_string(dir.join("strings").join(format!("{commit}.lua")))
             .context("global strings missing: run `cargo xtask types fetch`")?;
+        // The engine's inventory of the client's C functions, where the
+        // dump is the flavor's own client (cata and wrath take Mists') and
+        // `/stdtest inventory` has not recorded it (camelot's).
+        if CLIENT_DUMPS.contains(&flavor.as_str()) {
+            let api = fs::read_to_string(dir.join("api").join(format!("{commit}.lua")))
+                .context("global API names missing: run `cargo xtask types fetch`")?;
+            write_inventory(root, &flavor, branch, commit, &api)?;
+        }
         let lod_files = lod_files(&dir.join(&flavor).join("Interface/AddOns"))?;
         // The build on disk, as the mirror's commit names it:
         // `1.60.1 (70425)`.

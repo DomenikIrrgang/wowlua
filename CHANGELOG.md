@@ -10,6 +10,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A world profile's `trained` lists the spells your character has trained, by ID: they are known in the test (`IsSpellKnown`, `IsPlayerSpell`), and `/wl snapshot` records your spellbook into it. `mock.player:learn` and `mock.player:unlearn` change them in a test. A profile's `spells` is only for changing a spell's data now.
 - `unit:update(data)` changes a unit's data in place, any field `mock.spawnUnit` takes: its level, name, reaction, class, health, distance and so on. The unit stays the same unit, and each change fires the event the game fires for it (`UNIT_LEVEL`, `UNIT_FACTION`, `UNIT_NAME_UPDATE`, …).
 - A function breakpoint can name where a function is defined: `src/Threat.wowlua:560` stops in every call of the function defined on that line, local functions too.
+- `mock.setHardcore(true)` makes the test's realm a hardcore realm on `vanilla` (Classic Era): `C_GameRules.IsHardcoreActive()` answers true.
 
 ### Changed
 
@@ -20,6 +21,12 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 - A world profile's unit with `"nameplate": true` no longer stops Blizzard's nameplates with an error (`bad argument #2 to 'SetSize'`): its nameplate appears once your character enters the world, as in the game.
 - camelot's client is found in `_forever_`, where WoW Forever installs it: `wowlua install`, `wowlua dev`, the game's art in screenshots and the game data read from the client work with it again (`_classic_beta_` still works for a beta client).
+- On `standard`, `mists`, `tbc` and `vanilla`, functions the game client has but Blizzard does not document exist, as on `camelot`: `GetQuestLogTitle` on Classic Era, `GetGlyphSocketInfo` on Mists, `GetReadyCheckStatus` everywhere. Without a behaviour they raise "not mocked", so a test can mock them; before they were nil, even though the type checker knew them. A function only some clients have still exists only on theirs.
+- `C_ActionBar.GetBonusBarOffset`, `C_ActionBar.HasOverrideActionBar`, `C_ActionBar.HasVehicleActionBar`, `C_PetBattles.IsInBattle`, `IsTargetLoose`, `UnitIsMinion`, `UnitNameplateShowsWidgetsOnly`, `UnitIsTapDenied`, `GetRaidTargetIndex`, `GetNumArenaOpponentSpecs`, `GetArenaOpponentSpec`, `GetReadyCheckStatus`, `C_TTSSettings.GetSpeechRate` and `C_TTSSettings.GetSpeechVolume` answer on every flavor as the client does with nothing there, instead of "not mocked" or nil. `GetExpansionLevel`, `GetServerExpansionLevel`, `GetClassicExpansionLevel`, `GetAccountExpansionLevel`, `GetMaximumExpansionLevel` and `GetMinimumExpansionLevel` answer what each client does (the server's expansion only after login).
+- `C_ClassColor.GetClassColor` answers each class's colour on every flavor, as the game does (Classic Era's Shaman in pink), and nothing for a class the client doesn't have.
+- On `mists`, `tbc` and `vanilla`, `GetTalentGroupRole` raises the client's "API unsupported in this version of World of Warcraft." error, as do `GetNumTalentTabs`, `GetNumTalentGroups` and `GetUnspentTalentPoints` on `mists` and `GetNumSpecGroups` and `GetTalentTierInfo` on `tbc` and `vanilla`. `GetRuneType` answers each rune's type as the game does (1, 1, 3, 3, 2, 2).
+- `Kiosk.GetCharacterTemplateSetIndex` exists on `standard`, `mists`, `tbc` and `vanilla` (as on `camelot`), and `C_SocialRestrictions.IsAgeVerificationRestricted` on `standard`.
+- On `mists`, `tbc` and `vanilla`, `C_CombatLog.GetCurrentEventInfo()` answers the payload of the last `COMBAT_LOG_EVENT_UNFILTERED` a test fired, `C_GameRules.IsHardcoreActive()` answers false unless the test set a hardcore realm, and `GetWeaponEnchantInfo()` answers no enchant with the client's number of values (8 on Mists, 12 on TBC and Classic Era).
 
 ## 0.13.6 (2026-10-28)
 

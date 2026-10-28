@@ -335,7 +335,28 @@ The WoW API the VM's code calls, per flavor.
   each flavor's as JSON, every key kept, to
   `crates/wowlua-api/data/<flavor>.api.json.gz`. Functions the client has
   but does not document (`UseAction`, about 2,000 on WoW Forever, from
-  `/stdtest inventory`) exist too, with their behaviour or "not mocked".
+  `/stdtest inventory`) exist too, with their behaviour or "not mocked";
+  on standard, mists, tbc and vanilla, whose clients StdTest does not record yet,
+  the client's C functions are those of Ketho's dump of it (the one the
+  flavor's declarations take, `data/<flavor>-functions.txt`), so a
+  function only some clients have exists on theirs alone (decision T504).
+  What every client answers with nothing there (no vehicle bar, pet
+  battle, ready check or raid target; the flavor's expansion) answers on
+  every flavor, and `C_CombatLog.GetCurrentEventInfo`, which only the
+  classic clients give addons, answers the payload of the combat log
+  event last fired. As recorded on those clients (decision T505), each
+  class's colour is Retail's (Classic Era's Shaman the Paladin's pink,
+  a class the client lacks none), and the classic clients refuse
+  `GetTalentGroupRole` with "Script_<name>: API unsupported in this version
+  of World of Warcraft." (Mists also the talent tabs' `GetNumTalentTabs`,
+  `GetNumTalentGroups` and `GetUnspentTalentPoints`, TBC and Classic Era
+  the tiers' `GetNumSpecGroups` and `GetTalentTierInfo`), and their
+  `GetRuneType` answers two runes of each type (1, 1, 3, 3, 2, 2) on every
+  class. The expansion
+  getters answer the client's (the server's only after login, as the
+  client's does), and the classic clients' `GetWeaponEnchantInfo` answers
+  no enchant on each hand (Mists: two hands, 8 values; TBC and Classic Era
+  also the ranged slot, 12).
 - **Natives.** The API functions are natives of the VM, as the client's are C
   functions (decision T198): `[C]` in stack traces, the client's argument
   errors, no taint of their own.

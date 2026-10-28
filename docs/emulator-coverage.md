@@ -32,13 +32,13 @@ their clients answer differently is unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| standard | 4,871 | 4,507 (92.5%) | 0 | 1,438 | 1,430 (99.4%) | none |
+| standard | 4,871 | 4,520 (92.8%) | 0 | 1,438 | 1,430 (99.4%) | none |
 | camelot | 5,111 | 5,111 (100.0%) | 354 | 1,477 | 1,477 (100.0%) | all |
-| mists | 3,221 | 2,889 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| cata | 1,927 | 1,670 (86.7%) | 0 | 1,008 | 995 (98.7%) | none |
-| wrath | 3,227 | 2,896 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| tbc | 3,220 | 2,892 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| vanilla | 3,220 | 2,892 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| mists | 3,221 | 2,903 (90.1%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| cata | 1,927 | 1,675 (86.9%) | 0 | 1,008 | 995 (98.7%) | none |
+| wrath | 3,227 | 2,908 (90.1%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| tbc | 3,220 | 2,906 (90.2%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| vanilla | 3,220 | 2,906 (90.2%) | 0 | 1,360 | 1,348 (99.1%) | none |
 
 ## API behaviour
 
@@ -372,14 +372,14 @@ The modules that answer, by how many functions and methods:
 |--------|------|----------------------:|
 | `extras` | fill-in | 1,489 |
 | `widgets` | model | 635 |
-| `globalsinfo` | fill-in | 545 |
+| `globalsinfo` | fill-in | 546 |
 | `content` | fill-in | 520 |
 | `leftovers2` | fill-in | 388 |
 | `collections` | fill-in | 377 |
 | `social` | fill-in | 373 |
 | `recorded` | recorded | 320 |
 | `questinfo` | fill-in | 316 |
-| `systeminfo` | fill-in | 308 |
+| `systeminfo` | fill-in | 307 |
 | `iteminfo` | fill-in | 228 |
 | `methods3` | fill-in | 215 |
 | `spellinfo` | fill-in | 198 |
@@ -1987,7 +1987,7 @@ page changes only when a rule is added, removed or reworded.
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `C_DateAndTime.AdjustTimeByDays(date, days)`, `…ByMinutes`: the date moved (unverified: a date without its time).
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `C_DateAndTime.AdjustTimeByMonths(date, months)`: the same day of the month that many on, the month's last if it has...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `C_DateAndTime.CompareCalendarTime(lhs, rhs)`: 1 when rhs is later, -1 when earlier, 0 the same minute (warcraft.wiki...
-- [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `GetClientDisplayExpansionLevel()`, `GetAccountExpansionLevel()`, `GetExpansionForLevel(level)`: classic's, 0 (as `Ge...
+- [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `GetClientDisplayExpansionLevel()`, `GetExpansionForLevel(level)`: classic's, 0 (as `GetExpansionLevel`, recorded 0 a...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `C_AddOns.GetAddOnEnableState(name [, character])`: all (2) for an add-on that exists, none (0) disabled or unknown (...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `C_AddOns.GetAddOnDependencies(name)`: the required add-ons, one result each (the client returns them so; unverified).
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `C_AddOns.GetAddOnSecurity(name)`: Blizzard's secure (0), others insecure (1), unknown ones not available (3) (`Enum....

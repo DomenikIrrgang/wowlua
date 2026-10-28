@@ -293,6 +293,26 @@ const BLANKS: &[(&str, &str)] = &[
     // No death to recap (the global `DeathRecap_GetEvents` is it, Blizzard's
     // deprecation file).
     ("C_DeathRecap.GetRecapEvents", "0: "),
+    // Every client has these (Ketho's client dumps): no bonus, override or
+    // vehicle bar, pet battle, soft target, minion, widgets-only nameplate,
+    // tapped unit, raid target (`SetRaidTarget` sets none), arena
+    // opponent or ready check; text to speech at its defaults. Recorded on
+    // camelot, Retail 12.1.5, Mists 5.5.4, TBC 2.5.6 and Classic Era 1.15.9
+    // (alone, no target, out of combat).
+    ("C_ActionBar.GetBonusBarOffset", "1: number 0"),
+    ("C_ActionBar.HasOverrideActionBar", "1: boolean false"),
+    ("C_ActionBar.HasVehicleActionBar", "1: boolean false"),
+    ("C_PetBattles.IsInBattle", "1: boolean false"),
+    ("IsTargetLoose", "1: boolean false"),
+    ("UnitIsMinion", "1: boolean false"),
+    ("UnitNameplateShowsWidgetsOnly", "1: boolean false"),
+    ("UnitIsTapDenied", "1: boolean false"),
+    ("GetRaidTargetIndex", "1: nil nil"),
+    ("GetNumArenaOpponentSpecs", "1: number 0"),
+    ("GetArenaOpponentSpec", "0: "),
+    ("GetReadyCheckStatus", "0: "),
+    ("C_TTSSettings.GetSpeechRate", "1: number 0"),
+    ("C_TTSSettings.GetSpeechVolume", "1: number 100"),
 ];
 
 /// Every recorded answer: the function and its answer (the type
