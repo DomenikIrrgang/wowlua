@@ -267,6 +267,10 @@ pub struct Renderer {
     /// The quads' vertices and the buffer's size, rewritten each draw and
     /// made again only when a scene needs more.
     quads: Option<(wgpu::Buffer, u64)>,
+    /// The memory both are written through, kept between draws: a buffer
+    /// made is a wait in the GPU driver (`queue.write_buffer` makes one per
+    /// write).
+    belt: wgpu::util::StagingBelt,
 }
 
 /// The color format the renderer draws in.
@@ -475,6 +479,7 @@ impl Renderer {
             }],
         });
         let mut r = Renderer {
+            belt: wgpu::util::StagingBelt::new(device.clone(), 1 << 20),
             device,
             queue,
             pipelines,
@@ -1050,7 +1055,8 @@ impl Renderer {
     }
 
     /// Draws the scene into `view` (`width` × `height` pixels, the
-    /// renderer's [`FORMAT`]) at `scale`, cleared to `clear` first.
+    /// renderer's [`FORMAT`]) at `scale`, cleared to `clear` first. The
+    /// encoder is submitted before the next draw.
     pub fn draw(
         &mut self,
         scene: &Scene,
@@ -1065,11 +1071,20 @@ impl Renderer {
         for b in &batches {
             self.bind_group(b.tex, b.mask);
         }
-        self.queue.write_buffer(
-            &self.screen,
-            0,
-            bytemuck::cast_slice(&[width as f32, height as f32, 0.0, 0.0]),
-        );
+        // The previous draw's encoder is submitted: its memory is free again.
+        self.belt.recall();
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("ui") });
+        let screen: [f32; 4] = [width as f32, height as f32, 0.0, 0.0];
+        self.belt
+            .write_buffer(
+                &mut encoder,
+                &self.screen,
+                0,
+                wgpu::BufferSize::new(16).expect("the screen's size"),
+            )
+            .copy_from_slice(bytemuck::cast_slice(&screen));
         let screen_group = &self.screen_group;
         let vbuf = (!verts.is_empty()).then(|| {
             let bytes: &[u8] = bytemuck::cast_slice(&verts);
@@ -1086,18 +1101,18 @@ impl Renderer {
                 self.quads = Some((buffer, size));
             }
             let (buffer, _) = self.quads.as_ref().expect("the quads' buffer");
-            if bytes.len() as u64 == len {
-                self.queue.write_buffer(buffer, 0, bytes);
-            } else {
-                let mut padded = bytes.to_vec();
-                padded.resize(len as usize, 0);
-                self.queue.write_buffer(buffer, 0, &padded);
-            }
+            let mut view = self.belt.write_buffer(
+                &mut encoder,
+                buffer,
+                0,
+                wgpu::BufferSize::new(len).expect("a quad's vertices"),
+            );
+            view.slice(..bytes.len()).copy_from_slice(bytes);
+            let pad = len as usize - bytes.len();
+            view.slice(bytes.len()..).copy_from_slice(&[0; 4][..pad]);
             buffer.slice(..len)
         });
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("ui") });
+        self.belt.finish();
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("ui"),
