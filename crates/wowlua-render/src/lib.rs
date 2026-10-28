@@ -269,8 +269,9 @@ pub struct Renderer {
     quads: Option<(wgpu::Buffer, u64)>,
     /// The memory both are written through, kept between draws: a buffer
     /// made is a wait in the GPU driver (`queue.write_buffer` makes one per
-    /// write).
+    /// write), and the size of its chunks.
     belt: wgpu::util::StagingBelt,
+    belt_size: u64,
 }
 
 /// The color format the renderer draws in.
@@ -480,6 +481,7 @@ impl Renderer {
         });
         let mut r = Renderer {
             belt: wgpu::util::StagingBelt::new(device.clone(), 1 << 20),
+            belt_size: 1 << 20,
             device,
             queue,
             pipelines,
@@ -1070,6 +1072,15 @@ impl Renderer {
         self.upload_atlas();
         for b in &batches {
             self.bind_group(b.tex, b.mask);
+        }
+        // One chunk holds a draw's writes: the belt keeps every chunk it
+        // made, so a larger scene makes the belt again rather than add one.
+        let upload = (std::mem::size_of_val(&verts[..]) as u64 + 64)
+            .next_power_of_two()
+            .max(1 << 20);
+        if upload > self.belt_size {
+            self.belt = wgpu::util::StagingBelt::new(self.device.clone(), upload);
+            self.belt_size = upload;
         }
         // The previous draw's encoder is submitted: its memory is free again.
         self.belt.recall();
