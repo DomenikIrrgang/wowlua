@@ -40,6 +40,7 @@ pub mod profiles;
 pub mod project;
 #[cfg(feature = "native")]
 pub mod publish;
+pub mod recordings;
 pub mod scaffold;
 mod sources;
 pub mod trace;
