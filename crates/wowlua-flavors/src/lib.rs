@@ -17,10 +17,12 @@
 //! the one it shows), its races ([`Flavor::races`], each with its faction:
 //! decision T513) and its powers' defaults ([`Flavor::power_defaults`]),
 //! and the power types' tokens and `Enum.PowerType` values
-//! ([`FlavorTable::power_types`]). Each flavor's racial spells and its
-//! client's race records ([`Flavor::racials`], [`Flavor::race_records`])
-//! are read from the game's tables by `cargo xtask racials` into
-//! `data/racials.txt`.
+//! ([`FlavorTable::power_types`]). Each flavor's racial spells, its
+//! client's race records with the classes each race can be
+//! ([`Flavor::racials`], [`Flavor::race_records`], [`Flavor::allows`]) and
+//! its classes' base mana ([`Flavor::base_mana`]) are read from the game's
+//! tables by `cargo xtask flavor-data` into `data/races.txt` and
+//! `data/base-mana.txt`.
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -151,13 +153,23 @@ impl Race {
 }
 
 /// A race's record in the flavor's client (`ChrRaces`): its race ID and
-/// name for a faction (`None`: neither, a Pandaren yet to choose one).
+/// name for a faction (`None`: neither, a Pandaren yet to choose one), and
+/// the classes it can be (`CharBaseInfo`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RaceRecord {
     pub file: String,
     pub faction: Option<Faction>,
     pub id: u32,
     pub name: String,
+    /// The class files it can be (empty: every class of the flavor).
+    pub classes: Vec<String>,
+}
+
+impl RaceRecord {
+    /// Whether it can be of this class (its file name, any case).
+    pub fn allows(&self, class: &str) -> bool {
+        self.classes.is_empty() || self.classes.iter().any(|c| c.eq_ignore_ascii_case(class))
+    }
 }
 
 /// A racial spell: a spell of a race's racial skill line in the flavor's
@@ -188,7 +200,7 @@ impl Racial {
     }
 }
 
-/// One flavor's section of `data/racials.txt`.
+/// One flavor's section of `data/races.txt`.
 struct FlavorRacials {
     build: String,
     races: Vec<RaceRecord>,
@@ -196,13 +208,60 @@ struct FlavorRacials {
 }
 
 static RACIALS: LazyLock<BTreeMap<String, FlavorRacials>> =
-    LazyLock::new(|| parse_racials(include_str!("../data/racials.txt")));
+    LazyLock::new(|| parse_racials(include_str!("../data/races.txt")));
 
 fn racials_of(flavor: &str) -> Option<&'static FlavorRacials> {
     RACIALS.get(flavor)
 }
 
-/// Parses `data/racials.txt` (written by `cargo xtask racials`): a
+/// One flavor's section of `data/base-mana.txt`: the classes' columns and
+/// a row per level from 1.
+struct BaseMana {
+    classes: Vec<String>,
+    levels: Vec<Vec<f64>>,
+}
+
+static BASE_MANA: LazyLock<BTreeMap<String, BaseMana>> =
+    LazyLock::new(|| parse_base_mana(include_str!("../data/base-mana.txt")));
+
+/// Parses `data/base-mana.txt` (written by `cargo xtask flavor-data`): a
+/// section per flavor, `[flavor] build`, a `level` line naming the
+/// classes, then a row per level.
+fn parse_base_mana(text: &str) -> BTreeMap<String, BaseMana> {
+    let mut out: BTreeMap<String, BaseMana> = BTreeMap::new();
+    let mut current: Option<String> = None;
+    for line in text.lines() {
+        if line.starts_with('#') || line.trim().is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('[') {
+            let id = rest.split(']').next().unwrap_or(rest).to_string();
+            out.insert(
+                id.clone(),
+                BaseMana {
+                    classes: Vec::new(),
+                    levels: Vec::new(),
+                },
+            );
+            current = Some(id);
+            continue;
+        }
+        let Some(section) = current.as_ref().and_then(|id| out.get_mut(id)) else {
+            continue;
+        };
+        let mut cols = line.split('\t');
+        match cols.next() {
+            Some("level") => section.classes = cols.map(str::to_string).collect(),
+            Some(_) => section
+                .levels
+                .push(cols.map(|v| v.parse().unwrap_or(0.0)).collect()),
+            None => {}
+        }
+    }
+    out
+}
+
+/// Parses `data/races.txt` (written by `cargo xtask flavor-data`): a
 /// section per flavor, `[flavor] build`, then its `race` and `spell` lines
 /// (tab-separated; `-` every faction or class; `Neutral` no faction).
 fn parse_racials(text: &str) -> BTreeMap<String, FlavorRacials> {
@@ -237,11 +296,12 @@ fn parse_racials(text: &str) -> BTreeMap<String, FlavorRacials> {
         };
         let cols: Vec<&str> = line.split('\t').collect();
         match cols.as_slice() {
-            ["race", file, faction, id, name] => section.races.push(RaceRecord {
+            ["race", file, faction, id, name, classes] => section.races.push(RaceRecord {
                 file: file.to_string(),
                 faction: Faction::parse(faction),
                 id: id.parse().unwrap_or(0),
                 name: name.to_string(),
+                classes: list(classes),
             }),
             ["spell", race, factions, classes, spell, name] => section.spells.push(Racial {
                 race: race.to_string(),
@@ -417,7 +477,7 @@ impl Flavor {
     }
 
     /// The client's records of a race: its race IDs and names by faction
-    /// (the Skyborne's two), as `cargo xtask racials` read them from the
+    /// (the Skyborne's two), as `cargo xtask flavor-data` read them from the
     /// flavor's client; none where it was not read.
     pub fn race_records<'a>(&'a self, race: &'a str) -> impl Iterator<Item = &'a RaceRecord> {
         racials_of(&self.id)
@@ -457,7 +517,7 @@ impl Flavor {
             .filter(move |r| r.race == race && r.applies_to(faction, class))
     }
 
-    /// Every racial spell of the flavor's races (`cargo xtask racials`).
+    /// Every racial spell of the flavor's races (`cargo xtask flavor-data`).
     pub fn racial_spells(&self) -> &[Racial] {
         racials_of(&self.id)
             .map(|r| r.spells.as_slice())
@@ -468,6 +528,60 @@ impl Flavor {
     /// (`wowf 1.60.1.70658`), if any.
     pub fn racials_build(&self) -> Option<&str> {
         racials_of(&self.id).map(|r| r.build.as_str())
+    }
+
+    /// The classes a character of `race` can be (decision T513), of the
+    /// race's records of `faction` (`None`: of any), in the flavor's class
+    /// order: the client's pairs (`CharBaseInfo`), or every class where
+    /// the flavor's client was not read; none for a race the flavor lacks.
+    pub fn classes_for(&self, race: &str, faction: Option<Faction>) -> Vec<&str> {
+        if !self.has_race(race) {
+            return Vec::new();
+        }
+        let records: Vec<&RaceRecord> = self
+            .race_records(race)
+            .filter(|r| faction.is_none() || r.faction == faction)
+            .collect();
+        self.classes
+            .iter()
+            .map(|c| c.file.as_str())
+            .filter(|c| {
+                if self.racials_build().is_none() {
+                    return true;
+                }
+                records.iter().any(|r| r.allows(c))
+            })
+            .collect()
+    }
+
+    /// Whether a character of `race` can be of `class` (any case) in this
+    /// flavor, of any faction (decision T513: a vanilla Orc is no priest).
+    pub fn allows(&self, race: &str, class: &str) -> bool {
+        self.allows_for(race, None, class)
+    }
+
+    /// [`Flavor::allows`] for a faction (`None`: any): a High Order
+    /// Skyborne (Alliance) is no shaman, a Windshaper (Horde) no mage.
+    pub fn allows_for(&self, race: &str, faction: Option<Faction>, class: &str) -> bool {
+        self.classes_for(race, faction)
+            .iter()
+            .any(|c| c.eq_ignore_ascii_case(class))
+    }
+
+    /// A class's base mana at a level (decision T512: the client's
+    /// `GameTables/BaseMp.txt`; a level past the table's its last), where
+    /// the flavor's client was read and the class has some.
+    pub fn base_mana(&self, class: &str, level: u32) -> Option<f64> {
+        let table = BASE_MANA.get(&self.id)?;
+        let column = table
+            .classes
+            .iter()
+            .position(|c| c.eq_ignore_ascii_case(class))?;
+        let row = (level.max(1) as usize - 1).min(table.levels.len().checked_sub(1)?);
+        table.levels[row]
+            .get(column)
+            .copied()
+            .filter(|mana| *mana > 0.0)
     }
 
     /// What a unit has of a power (its token) when nothing says.
@@ -852,7 +966,7 @@ mod tests {
     }
 
     /// Each race's faction (decision T513): the client's records agree
-    /// (`ChrRaces`, read by `cargo xtask racials`): a race of one faction
+    /// (`ChrRaces`, read by `cargo xtask flavor-data`): a race of one faction
     /// has records of it only, one of either both.
     #[test]
     fn races_have_their_factions() {
@@ -954,7 +1068,7 @@ mod tests {
     }
 
     /// The racial spells (decision T513), read from each flavor's client
-    /// (`cargo xtask racials`): every flavor but standard (no retail client
+    /// (`cargo xtask flavor-data`): every flavor but standard (no retail client
     /// was installed); each of its races has some; they name the flavor's
     /// races and classes.
     #[test]
@@ -1028,6 +1142,80 @@ mod tests {
         assert_eq!(langs(Some(Faction::Alliance)), [143368]);
         assert_eq!(langs(Some(Faction::Horde)), [143369]);
         assert_eq!(langs(None), [131701]);
+    }
+
+    /// The classes each race can be (decision T513), the clients'
+    /// `CharBaseInfo` pairs.
+    #[test]
+    fn races_and_their_classes() {
+        let t = table();
+        let vanilla = t.flavor("vanilla").unwrap();
+        assert!(!vanilla.allows("Orc", "PRIEST"));
+        assert!(vanilla.allows("Orc", "warlock"));
+        assert!(!vanilla.allows("Human", "HUNTER"));
+        assert!(!vanilla.allows("BloodElf", "PALADIN"));
+        assert_eq!(
+            vanilla.classes_for("Tauren", None),
+            ["WARRIOR", "SHAMAN", "DRUID", "HUNTER"]
+        );
+        assert!(t.flavor("tbc").unwrap().allows("BloodElf", "PALADIN"));
+        assert!(t.flavor("mists").unwrap().allows("Pandaren", "MONK"));
+        assert!(!t.flavor("mists").unwrap().allows("Pandaren", "PALADIN"));
+        // WoW Forever's own: an Undead paladin, a Human hunter; the
+        // Skyborne by faction.
+        let camelot = t.flavor("camelot").unwrap();
+        assert!(camelot.allows("Scourge", "PALADIN") && camelot.allows("Human", "HUNTER"));
+        assert_eq!(
+            camelot.classes_for("Skyborne", Some(Faction::Alliance)),
+            ["WARRIOR", "DRUID", "ROGUE", "MAGE", "HUNTER"]
+        );
+        assert_eq!(
+            camelot.classes_for("Skyborne", Some(Faction::Horde)),
+            ["WARRIOR", "SHAMAN", "DRUID", "ROGUE", "HUNTER"]
+        );
+        assert_eq!(camelot.classes_for("Skyborne", None).len(), 6);
+        assert!(!camelot.allows_for("Skyborne", Some(Faction::Alliance), "SHAMAN"));
+        assert!(camelot.allows("Skyborne", "SHAMAN"));
+        assert!(camelot.classes_for("BloodElf", None).is_empty());
+        // Retail's pairs are not read: any class.
+        let standard = t.flavor("standard").unwrap();
+        assert_eq!(standard.classes_for("Orc", None).len(), 13);
+        // Every read race can be some class, each the flavor's.
+        for flavor in &t.flavors {
+            for race in flavor.race_files() {
+                assert!(!flavor.classes_for(race, None).is_empty(), "{race}");
+            }
+        }
+    }
+
+    /// Each class's base mana by level (decision T512), the clients'
+    /// `BaseMp` table.
+    #[test]
+    fn base_mana() {
+        let t = table();
+        let camelot = t.flavor("camelot").unwrap();
+        assert_eq!(camelot.base_mana("MAGE", 1), Some(100.0));
+        assert_eq!(camelot.base_mana("priest", 1), Some(110.0));
+        assert_eq!(camelot.base_mana("WARRIOR", 1), None);
+        assert!(camelot.base_mana("MAGE", 60) > camelot.base_mana("MAGE", 1));
+        assert_eq!(camelot.base_mana("MAGE", 99), camelot.base_mana("MAGE", 60));
+        assert_eq!(camelot.base_mana("MAGE", 0), camelot.base_mana("MAGE", 1));
+        assert_eq!(
+            t.flavor("vanilla").unwrap().base_mana("MAGE", 1),
+            Some(155.0)
+        );
+        assert_eq!(t.flavor("standard").unwrap().base_mana("MAGE", 1), None);
+        for flavor in &t.flavors {
+            assert_eq!(
+                flavor.power_default("MANA"),
+                Some(PowerAmount {
+                    current: 100.0,
+                    max: 100.0
+                }),
+                "{}",
+                flavor.id
+            );
+        }
     }
 
     /// Each flavor's max level (camelot's recorded: `GetMaxPlayerLevel()`

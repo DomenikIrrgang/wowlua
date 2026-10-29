@@ -199,6 +199,23 @@ pub(crate) fn default_power(flavor: &str, kind: f64) -> Power {
     }
 }
 
+/// What a unit of a class and level has of a power when nothing says: its
+/// mana full at the class's base mana for the level (decision T512: the
+/// client's `BaseMp` table, `Flavor::base_mana`), else the flavor's
+/// default (mana 100 of 100).
+pub(crate) fn class_default_power(flavor: &str, kind: f64, class: &str, level: f64) -> Power {
+    let mut p = default_power(flavor, kind);
+    if kind == 0.0
+        && let Some(mana) = wowlua_flavors::table()
+            .flavor(flavor)
+            .and_then(|f| f.base_mana(class, level.max(1.0) as u32))
+    {
+        p.current = mana;
+        p.max = mana;
+    }
+    p
+}
+
 /// The powers a class has in a flavor (`Enum.PowerType` values, the shown
 /// one first); none for a unit without a class or one the flavor lacks.
 pub(crate) fn class_powers(flavor: &str, class: &str) -> Vec<f64> {
@@ -2219,7 +2236,11 @@ fn unit_from(
         Some(shown) => shown,
         None => default_shown(vm, &class, is_player).unwrap_or(0.0),
     };
-    let mut powers: Vec<Power> = kinds.iter().map(|k| default_power(&flavor, *k)).collect();
+    let level = num(vm, "level", 1.0);
+    let mut powers: Vec<Power> = kinds
+        .iter()
+        .map(|k| class_default_power(&flavor, *k, &class, level))
+        .collect();
     apply_power_data(&flavor, &mut powers, power_type, &powers_given);
     // Its faction (`factionGroup`, a world profile's `faction`): a race of
     // either's (the Skyborne, recorded Horde) or a creature's; a race of
@@ -2248,7 +2269,7 @@ fn unit_from(
             Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
             _ => None,
         },
-        level: num(vm, "level", 1.0),
+        level,
         class_id: num(vm, "classID", class_id(&class)),
         class,
         class_name,
@@ -3047,7 +3068,7 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
                 .map(|k| {
                     u.power_of(*k)
                         .copied()
-                        .unwrap_or_else(|| default_power(&flavor, *k))
+                        .unwrap_or_else(|| class_default_power(&flavor, *k, &u.class, u.level))
                 })
                 .collect();
             u.power_type = class_shown.unwrap_or(kinds[0]);

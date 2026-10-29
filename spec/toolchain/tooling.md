@@ -372,7 +372,8 @@ table is E4401 (decision T512). `power`, `powerMax` (or `maxPower`) and
 `powerType` stay the shown power's. A unit's faction follows its `race`
 (decision T513): `faction` (or `factionGroup`) is for a race of either
 faction (the Pandaren, the Skyborne) or a creature, and another faction than
-a race's own is E4401. The character's level is 1 to the highest max level of
+a race's own is E4401; so is a `class` the race can't be in any of the
+package's flavors (decision T513: a vanilla Orc priest). The character's level is 1 to the highest max level of
 the package's flavors ([Manifest §9.4.1](manifest.md#941-flavor-table): 60 on
 camelot). `position.world` is where `UnitPosition` places the character,
 `{ y, x, z?, instanceID? }` (yards north, west and up, the continent's
@@ -420,8 +421,8 @@ language server, `wowlua test`) checks every profile: E4400 when it is
 no JSON object, E4401 when a part is unknown (the world would ignore
 it), has the wrong type, is keyed by something other than IDs where
 the schema says so, or has a UI scale off the game's slider, a
-character's level outside 1 to the flavors' max level or a faction that is
-not its race's; a part's fields beyond the schema's pass to the
+character's level outside 1 to the flavors' max level, a faction that is
+not its race's or a race and class no flavor of the package pairs; a part's fields beyond the schema's pass to the
 controls as they are. A profile `test.profile` or a test file's
 `config({ profile })` names must be there (E4402). A debugging session
 or a playground run starts in a profile by name too, or in one given as

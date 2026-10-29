@@ -612,6 +612,62 @@ pub fn check_for(
             );
         }
     }
+    // A race can be only the classes its flavor's game pairs it with
+    // (decision T513): in none of the package's flavors that have the
+    // race is an error.
+    for (at, unit) in &with_powers {
+        let (Some(race), Some(class)) = (unit.race.as_deref(), unit.class.as_deref()) else {
+            continue;
+        };
+        let faction = unit
+            .faction
+            .as_deref()
+            .or_else(|| match unit.other.get("factionGroup") {
+                Some(Value::String(f)) => Some(f.as_str()),
+                _ => None,
+            })
+            .and_then(wowlua_flavors::Faction::parse);
+        let having: Vec<&wowlua_flavors::Flavor> = table
+            .flavors
+            .iter()
+            .filter(|f| (flavors.is_empty() || flavors.contains(&f.id)) && f.has_race(race))
+            .collect();
+        if having.is_empty() || having.iter().any(|f| f.allows_for(race, faction, class)) {
+            continue;
+        }
+        let named: Vec<String> = having
+            .iter()
+            .map(|f| {
+                format!(
+                    "{}: {}",
+                    f.id,
+                    f.classes_for(race, faction)
+                        .iter()
+                        .map(|c| format!("`{c}`"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })
+            .collect();
+        let who = match faction {
+            Some(f)
+                if having
+                    .iter()
+                    .all(|fl| fl.race(race).is_some_and(|r| r.is_either())) =>
+            {
+                format!("a `{race}` of the {f}")
+            }
+            _ => format!("a `{race}`"),
+        };
+        wrong(
+            at.clone().key("class"),
+            format!(
+                "{who} can't be a `{class}` (its classes: {})",
+                named.join("; ")
+            ),
+            "not a class of the race",
+        );
+    }
     for (at, unit) in with_powers {
         for token in unit.powers.iter().flat_map(|p| p.keys()) {
             if table.power_type(token).is_none() {
@@ -849,6 +905,81 @@ mod tests {
         assert_eq!(
             codes(r#"{ "character": { "race": "Human", "faction": "Neutral" } }"#)[0].0,
             "E4401"
+        );
+    }
+
+    /// A race can be only the classes its flavor's game pairs it with
+    /// (decision T513; the clients' `CharBaseInfo`).
+    #[test]
+    fn a_race_can_be_only_its_classes() {
+        let for_flavor = |flavor: &str, text: &str| -> Vec<String> {
+            let mut db = SourceDb::new();
+            let (_, found) = check_for(
+                &mut db,
+                Path::new("tests/profiles/p.json"),
+                text.to_string(),
+                &[flavor.to_string()],
+            );
+            found.into_vec().into_iter().map(|d| d.message).collect()
+        };
+        let orc_priest = r#"{ "character": { "race": "Orc", "class": "PRIEST" } }"#;
+        assert_eq!(
+            for_flavor("vanilla", orc_priest),
+            [
+                "a `Orc` can't be a `PRIEST` (its classes: vanilla: `WARRIOR`, `SHAMAN`, `ROGUE`, `WARLOCK`, `HUNTER`)"
+            ]
+        );
+        // Nor MoP Classic's, though they can be mages there; a package of
+        // every flavor has Retail, whose pairs are not read (any class).
+        assert_eq!(for_flavor("mists", orc_priest).len(), 1);
+        assert!(
+            for_flavor(
+                "mists",
+                r#"{ "character": { "race": "Orc", "class": "MAGE" } }"#
+            )
+            .is_empty()
+        );
+        assert!(codes(orc_priest).is_empty());
+        // WoW Forever's own pairs: an Undead paladin; the Skyborne by
+        // faction.
+        assert!(
+            for_flavor(
+                "camelot",
+                r#"{ "character": { "race": "Scourge", "class": "PALADIN" } }"#
+            )
+            .is_empty()
+        );
+        assert!(
+            for_flavor(
+                "camelot",
+                r#"{ "character": { "race": "Skyborne", "faction": "Horde", "class": "SHAMAN" } }"#
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            for_flavor(
+                "camelot",
+                r#"{ "character": { "race": "Skyborne", "faction": "Alliance", "class": "SHAMAN" } }"#
+            ),
+            [
+                "a `Skyborne` of the Alliance can't be a `SHAMAN` (its classes: camelot: `WARRIOR`, `DRUID`, `ROGUE`, `MAGE`, `HUNTER`)"
+            ]
+        );
+        // A Blood Elf paladin from TBC on; a unit's pair too.
+        assert!(
+            for_flavor(
+                "tbc",
+                r#"{ "units": [ { "name": "Liadrin", "player": true, "race": "BloodElf", "class": "PALADIN" } ] }"#
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            for_flavor(
+                "tbc",
+                r#"{ "units": [ { "name": "X", "race": "Tauren", "class": "MAGE" } ] }"#
+            )
+            .len(),
+            1
         );
     }
 

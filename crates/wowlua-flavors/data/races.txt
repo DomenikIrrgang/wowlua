@@ -1,21 +1,23 @@
-# Each flavor's races and racial spells, from the game's own tables
-# (`cargo xtask racials <WoW installation>`, decision T513): a section per
-# flavor, `[flavor]` and the client build it was read from, then
-#   race   <file> <faction> <race ID> <name>       (ChrRaces' playable records)
+# Each flavor's races, the classes they can be and their racial spells,
+# from the game's own tables (`cargo xtask flavor-data <WoW installation>`,
+# decisions T512, T513): a section per flavor, `[flavor]` and the client
+# build it was read from, then
+#   race   <file> <faction> <race ID> <name> <classes>   (ChrRaces' playable
+#          records; the classes CharBaseInfo pairs with each)
 #   spell  <race file> <factions> <classes> <spell ID> <name>
 # a spell of the race's racial skill lines (SkillLineAbility's race and
-# class masks); `-` every faction of the race / every class.
+# class masks); `-` every faction of the race / every class of the flavor.
 [camelot]	wowf 1.60.1.70658
-race	Human	Alliance	1	Human
-race	Orc	Horde	2	Orc
-race	Dwarf	Alliance	3	Dwarf
-race	NightElf	Alliance	4	Night Elf
-race	Scourge	Horde	5	Undead
-race	Tauren	Horde	6	Tauren
-race	Gnome	Alliance	7	Gnome
-race	Troll	Horde	8	Troll
-race	Skyborne	Alliance	95	High Order Skyborne
-race	Skyborne	Horde	96	Windshaper Skyborne
+race	Human	Alliance	1	Human	WARRIOR,PALADIN,PRIEST,ROGUE,MAGE,WARLOCK,HUNTER
+race	Orc	Horde	2	Orc	WARRIOR,SHAMAN,ROGUE,MAGE,WARLOCK,HUNTER
+race	Dwarf	Alliance	3	Dwarf	WARRIOR,PALADIN,PRIEST,SHAMAN,ROGUE,HUNTER
+race	NightElf	Alliance	4	Night Elf	WARRIOR,PRIEST,DRUID,ROGUE,HUNTER
+race	Scourge	Horde	5	Undead	WARRIOR,PALADIN,PRIEST,ROGUE,MAGE,WARLOCK
+race	Tauren	Horde	6	Tauren	WARRIOR,SHAMAN,DRUID,HUNTER
+race	Gnome	Alliance	7	Gnome	WARRIOR,PRIEST,ROGUE,MAGE,WARLOCK
+race	Troll	Horde	8	Troll	WARRIOR,PRIEST,SHAMAN,ROGUE,MAGE,WARLOCK,HUNTER
+race	Skyborne	Alliance	95	High Order Skyborne	WARRIOR,DRUID,ROGUE,MAGE,HUNTER
+race	Skyborne	Horde	96	Windshaper Skyborne	WARRIOR,SHAMAN,DRUID,ROGUE,HUNTER
 spell	Human	-	-	20597	Ruthless
 spell	Human	-	-	20598	The Human Spirit
 spell	Human	-	-	20600	Perception
@@ -62,14 +64,14 @@ spell	Skyborne	-	-	1259710	Wind Blessed
 spell	Skyborne	Alliance	-	1259705	Read Leyline
 spell	Skyborne	Horde	-	1259686	Skysight
 [vanilla]	wow_classic_era 1.15.9.70576
-race	Human	Alliance	1	Human
-race	Orc	Horde	2	Orc
-race	Dwarf	Alliance	3	Dwarf
-race	NightElf	Alliance	4	Night Elf
-race	Scourge	Horde	5	Undead
-race	Tauren	Horde	6	Tauren
-race	Gnome	Alliance	7	Gnome
-race	Troll	Horde	8	Troll
+race	Human	Alliance	1	Human	WARRIOR,PALADIN,PRIEST,ROGUE,MAGE,WARLOCK
+race	Orc	Horde	2	Orc	WARRIOR,SHAMAN,ROGUE,WARLOCK,HUNTER
+race	Dwarf	Alliance	3	Dwarf	WARRIOR,PALADIN,PRIEST,ROGUE,HUNTER
+race	NightElf	Alliance	4	Night Elf	WARRIOR,PRIEST,DRUID,ROGUE,HUNTER
+race	Scourge	Horde	5	Undead	WARRIOR,PRIEST,ROGUE,MAGE,WARLOCK
+race	Tauren	Horde	6	Tauren	WARRIOR,SHAMAN,DRUID,HUNTER
+race	Gnome	Alliance	7	Gnome	WARRIOR,ROGUE,MAGE,WARLOCK
+race	Troll	Horde	8	Troll	WARRIOR,PRIEST,SHAMAN,ROGUE,MAGE,HUNTER
 spell	Human	-	-	20597	Sword Specialization
 spell	Human	-	-	20598	The Human Spirit
 spell	Human	-	-	20599	Diplomacy
@@ -111,16 +113,16 @@ spell	Troll	-	-	26290	Bow Specialization
 spell	Troll	-	WARRIOR	26296	Berserking
 spell	Troll	-	ROGUE	26297	Berserking
 [tbc]	wow_anniversary 2.5.6.70577
-race	Human	Alliance	1	Human
-race	Orc	Horde	2	Orc
-race	Dwarf	Alliance	3	Dwarf
-race	NightElf	Alliance	4	Night Elf
-race	Scourge	Horde	5	Undead
-race	Tauren	Horde	6	Tauren
-race	Gnome	Alliance	7	Gnome
-race	Troll	Horde	8	Troll
-race	BloodElf	Horde	10	Blood Elf
-race	Draenei	Alliance	11	Draenei
+race	Human	Alliance	1	Human	WARRIOR,PALADIN,PRIEST,ROGUE,MAGE,WARLOCK
+race	Orc	Horde	2	Orc	WARRIOR,SHAMAN,ROGUE,WARLOCK,HUNTER
+race	Dwarf	Alliance	3	Dwarf	WARRIOR,PALADIN,PRIEST,ROGUE,HUNTER
+race	NightElf	Alliance	4	Night Elf	WARRIOR,PRIEST,DRUID,ROGUE,HUNTER
+race	Scourge	Horde	5	Undead	WARRIOR,PRIEST,ROGUE,MAGE,WARLOCK
+race	Tauren	Horde	6	Tauren	WARRIOR,SHAMAN,DRUID,HUNTER
+race	Gnome	Alliance	7	Gnome	WARRIOR,ROGUE,MAGE,WARLOCK
+race	Troll	Horde	8	Troll	WARRIOR,PRIEST,SHAMAN,ROGUE,MAGE,HUNTER
+race	BloodElf	Horde	10	Blood Elf	PALADIN,PRIEST,ROGUE,MAGE,WARLOCK,HUNTER
+race	Draenei	Alliance	11	Draenei	WARRIOR,PALADIN,PRIEST,SHAMAN,MAGE,HUNTER
 spell	Human	-	-	20597	Sword Specialization
 spell	Human	-	-	20598	The Human Spirit
 spell	Human	-	-	20599	Diplomacy
@@ -173,21 +175,21 @@ spell	Draenei	-	-	28875	Gemcutting
 spell	Draenei	-	PRIEST,SHAMAN,MAGE	28878	Inspiring Presence
 spell	Draenei	-	-	28880	Gift of the Naaru
 [mists]	wow_classic 5.5.4.70631
-race	Human	Alliance	1	Human
-race	Orc	Horde	2	Orc
-race	Dwarf	Alliance	3	Dwarf
-race	NightElf	Alliance	4	Night Elf
-race	Scourge	Horde	5	Undead
-race	Tauren	Horde	6	Tauren
-race	Gnome	Alliance	7	Gnome
-race	Troll	Horde	8	Troll
-race	Goblin	Horde	9	Goblin
-race	BloodElf	Horde	10	Blood Elf
-race	Draenei	Alliance	11	Draenei
-race	Worgen	Alliance	22	Worgen
-race	Pandaren	Neutral	24	Pandaren
-race	Pandaren	Alliance	25	Pandaren
-race	Pandaren	Horde	26	Pandaren
+race	Human	Alliance	1	Human	WARRIOR,DEATHKNIGHT,PALADIN,MONK,PRIEST,ROGUE,MAGE,WARLOCK,HUNTER
+race	Orc	Horde	2	Orc	WARRIOR,DEATHKNIGHT,MONK,SHAMAN,ROGUE,MAGE,WARLOCK,HUNTER
+race	Dwarf	Alliance	3	Dwarf	WARRIOR,DEATHKNIGHT,PALADIN,MONK,PRIEST,SHAMAN,ROGUE,MAGE,WARLOCK,HUNTER
+race	NightElf	Alliance	4	Night Elf	WARRIOR,DEATHKNIGHT,MONK,PRIEST,DRUID,ROGUE,MAGE,HUNTER
+race	Scourge	Horde	5	Undead	WARRIOR,DEATHKNIGHT,MONK,PRIEST,ROGUE,MAGE,WARLOCK,HUNTER
+race	Tauren	Horde	6	Tauren	WARRIOR,DEATHKNIGHT,PALADIN,MONK,PRIEST,SHAMAN,DRUID,HUNTER
+race	Gnome	Alliance	7	Gnome	WARRIOR,DEATHKNIGHT,MONK,PRIEST,ROGUE,MAGE,WARLOCK
+race	Troll	Horde	8	Troll	WARRIOR,DEATHKNIGHT,MONK,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER
+race	Goblin	Horde	9	Goblin	WARRIOR,DEATHKNIGHT,PRIEST,SHAMAN,ROGUE,MAGE,WARLOCK,HUNTER
+race	BloodElf	Horde	10	Blood Elf	WARRIOR,DEATHKNIGHT,PALADIN,MONK,PRIEST,ROGUE,MAGE,WARLOCK,HUNTER
+race	Draenei	Alliance	11	Draenei	WARRIOR,DEATHKNIGHT,PALADIN,MONK,PRIEST,SHAMAN,MAGE,HUNTER
+race	Worgen	Alliance	22	Worgen	WARRIOR,DEATHKNIGHT,PRIEST,DRUID,ROGUE,MAGE,WARLOCK,HUNTER
+race	Pandaren	Neutral	24	Pandaren	WARRIOR,MONK,PRIEST,SHAMAN,ROGUE,MAGE,HUNTER
+race	Pandaren	Alliance	25	Pandaren	WARRIOR,MONK,PRIEST,SHAMAN,ROGUE,MAGE,HUNTER
+race	Pandaren	Horde	26	Pandaren	WARRIOR,MONK,PRIEST,SHAMAN,ROGUE,MAGE,HUNTER
 spell	Human	-	-	20597	Sword Specialization
 spell	Human	-	-	20598	The Human Spirit
 spell	Human	-	-	20599	Diplomacy

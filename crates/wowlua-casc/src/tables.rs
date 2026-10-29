@@ -13,6 +13,7 @@ const FILES: &[(&str, u32)] = &[
     ("Achievement", 1260179),
     ("Achievement_Category", 1324299),
     ("AreaTable", 1353545),
+    ("CharBaseInfo", 1343386),
     ("CharComponentTextureLayouts", 1360262),
     ("CharComponentTextureSections", 1360263),
     ("ChrCustomizationChoice", 3450554),

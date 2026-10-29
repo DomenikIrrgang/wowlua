@@ -370,8 +370,9 @@ The WoW API the VM's code calls, per flavor.
   messages, settings, tooltips, menus and dialogs. The M8 test mock is the
   starting point.
 - **Powers.** A unit has every power its class has in the flavor table
-  ([Manifest §9.4.1](manifest.md#941-flavor-table); decision T512) and
-  shows one (`UnitPowerType`, its token the table's). `UnitPower(unit,
+  ([Manifest §9.4.1](manifest.md#941-flavor-table); decision T512), its
+  mana full at its class's base mana for its level (100 of 100 without),
+  and shows one (`UnitPowerType`, its token the table's). `UnitPower(unit,
   type)`, `UnitPowerMax`, `UnitPowerMissing` and `UnitPowerPercent` answer
   that power, the shown one without a type (or with one not a number); a
   type the unit lacks a plain 0 (recorded: a paladin's

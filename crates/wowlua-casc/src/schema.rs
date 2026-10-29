@@ -2068,6 +2068,15 @@ pub(crate) static LAYOUTS: &[(&str, Layouts)] = &[
             ),
         ],
     ),
+    // The classes each race can be (WoWDBDefs): camelot's, then the
+    // classic clients' (1.15.9, 2.5.6, 5.5.4).
+    (
+        "CharBaseInfo",
+        &[
+            (0xFEC46FB7, &["RaceID", "ClassID", "OtherFactionRaceID"]),
+            (0x781A2640, &["RaceID", "ClassID"]),
+        ],
+    ),
     ("SpellFocusObject", &[(0x782EE721, &["$Name_lang"])]),
     (
         "SpellTotems",

@@ -35,7 +35,7 @@
         { "file": "Skyborne", "faction": "either" }
       ],
       "power-defaults": {
-        "MANA": { "current": 0, "max": 100 },
+        "MANA": { "current": 100, "max": 100 },
         "RAGE": { "current": 0, "max": 100 },
         "ENERGY": { "current": 100, "max": 100 },
         "COMBO_POINTS": { "current": 0, "max": 5 }
@@ -99,7 +99,7 @@
         { "file": "Harronir", "faction": "either" }
       ],
       "power-defaults": {
-        "MANA": { "current": 0, "max": 100 },
+        "MANA": { "current": 100, "max": 100 },
         "RAGE": { "current": 0, "max": 100 },
         "FOCUS": { "current": 100, "max": 100 },
         "ENERGY": { "current": 100, "max": 100 },
@@ -150,7 +150,7 @@
         { "file": "Troll", "faction": "horde" }
       ],
       "power-defaults": {
-        "MANA": { "current": 0, "max": 100 },
+        "MANA": { "current": 100, "max": 100 },
         "RAGE": { "current": 0, "max": 100 },
         "ENERGY": { "current": 100, "max": 100 },
         "COMBO_POINTS": { "current": 0, "max": 5 }
@@ -191,7 +191,7 @@
         { "file": "Draenei", "faction": "alliance" }
       ],
       "power-defaults": {
-        "MANA": { "current": 0, "max": 100 },
+        "MANA": { "current": 100, "max": 100 },
         "RAGE": { "current": 0, "max": 100 },
         "ENERGY": { "current": 100, "max": 100 },
         "COMBO_POINTS": { "current": 0, "max": 5 }
@@ -237,7 +237,7 @@
         { "file": "Pandaren", "faction": "either" }
       ],
       "power-defaults": {
-        "MANA": { "current": 0, "max": 100 },
+        "MANA": { "current": 100, "max": 100 },
         "RAGE": { "current": 0, "max": 100 },
         "FOCUS": { "current": 100, "max": 100 },
         "ENERGY": { "current": 100, "max": 100 },

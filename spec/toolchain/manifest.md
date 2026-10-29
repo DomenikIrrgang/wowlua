@@ -339,11 +339,11 @@ Retail's races, but for the Haranir, whose one playable record there is
 the Alliance's).
 
 Each flavor's **racial spells** and its client's **race records** come from
-the game (decision T513): `cargo xtask racials` reads them from each flavor's
+the game (decision T513): `cargo xtask flavor-data` reads them from each flavor's
 installed client (`ChrRaces`' playable records; the spells of the skill lines
 named `Racial` in `SkillLineAbility`, for the races and classes of their
 masks, a mask of 0 the line's own in `SkillRaceClassInfo`) into
-`crates/wowlua-flavors/data/racials.txt`, which the crate embeds.
+`crates/wowlua-flavors/data/races.txt`, which the crate embeds.
 `Flavor::racials(race, faction, class)` gives a character's
 (`Racial { race, factions, classes, spell, name }`; empty `factions` or
 `classes` every one, a `None` faction a character of none),
@@ -353,9 +353,27 @@ Skyborne: 95 High Order Skyborne of the Alliance, 96 Windshaper Skyborne of
 the Horde, each with a racial of its own) and `Flavor::racials_build()` the
 client build read. Standard has none yet (no Retail client was read).
 
+A race can be only some classes (decision T513), the pairs of the
+client's `CharBaseInfo`, each race record's (`RaceRecord::classes`; the
+Skyborne's differ by faction): `Flavor::classes_for(race, faction)` (in
+the flavor's class order; `None` any faction), `Flavor::allows(race,
+class)`, `Flavor::allows_for(race, faction, class)`. A vanilla Orc is no
+priest, a Blood Elf can be a paladin from tbc on, and camelot has pairs of
+its own (an Undead paladin, a Human hunter; the High Order Skyborne
+warrior, druid, rogue, mage or hunter, the Windshapers warrior, shaman,
+druid, rogue or hunter). Standard's are not read: any class.
+
+A class's **base mana** by level (decision T512) is the client's game table
+`GameTables/BaseMp.txt`, which `cargo xtask flavor-data` reads into
+`crates/wowlua-flavors/data/base-mana.txt` (`Flavor::base_mana(class,
+level)`; none for a class without, a level past the table's its last):
+a unit of the class starts with its mana full at that (camelot's level 1
+mage 100, priest 110, paladin 60). The classic clients' tables give
+hunters none (unverified: their mana there is 100 of 100).
+
 The power defaults, what a unit has of a power nothing names (unverified:
-amounts a fresh character could have): mana 0 of 100 (as the emulated
-client's units had), rage 0 of 100, focus 100 of 100, energy 100 of 100,
+amounts a fresh character could have): mana 100 of 100, full (a class
+with base mana its own: below), rage 0 of 100, focus 100 of 100, energy 100 of 100,
 combo points 0 of 5, runes 6 of 6, runic power 0 of 100, soul shards 3 of 5
 (mists 3 of 4), holy power 0 of 5, chi 0 of 5 (mists 0 of 4), lunar power,
 maelstrom and insanity 0 of 100, arcane charges 0 of 4, fury 0 of 100,

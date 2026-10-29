@@ -88,6 +88,56 @@ return UnitPowerType('player'), UnitPower('player'), UnitPowerMax('player'),
     );
 }
 
+/// A character's mana starts full, at its class's base mana for its level
+/// (the client's `BaseMp`: a level 1 mage 100, a priest 110 on camelot);
+/// without one 100 of 100 (decision T512).
+#[test]
+fn mana_starts_full_at_the_class_s_base_mana() {
+    let mut vm = vm();
+    let mana = |vm: &mut Vm, data: &str| {
+        run(
+            vm,
+            &format!(
+                "mock.setPlayer({data}) return UnitPower('player', 0), UnitPowerMax('player', 0)"
+            ),
+        )
+    };
+    assert_eq!(
+        mana(&mut vm, "{ class = 'MAGE', race = 'Human', level = 1 }"),
+        ["secret:100", "100"]
+    );
+    assert_eq!(
+        mana(&mut vm, "{ class = 'PRIEST', race = 'Human', level = 1 }"),
+        ["secret:110", "110"]
+    );
+    let base = wowlua_flavors::table()
+        .flavor("camelot")
+        .unwrap()
+        .base_mana("PALADIN", 21)
+        .unwrap();
+    assert_eq!(
+        mana(&mut vm, "{ class = 'PALADIN', race = 'Human', level = 21 }"),
+        [format!("secret:{base}"), format!("{base}")]
+    );
+    // Given, it is as given.
+    assert_eq!(
+        mana(
+            &mut vm,
+            "{ class = 'MAGE', race = 'Human', level = 1, powers = { MANA = { current = 5, max = 900 } } }"
+        ),
+        ["secret:5", "900"]
+    );
+    // A creature without a class: 100 of 100.
+    assert_eq!(
+        run(
+            &mut vm,
+            "local wolf = mock.spawnUnit({ name = 'Wolf' }) mock.player:target(wolf)
+             return UnitPower('target', 0), UnitPowerMax('target', 0)"
+        ),
+        ["secret:100", "secret:100"]
+    );
+}
+
 #[test]
 fn a_class_s_defaults_and_its_shown_power() {
     let mut vm = vm();

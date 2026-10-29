@@ -400,10 +400,17 @@ listing them in `trained`: `IsPlayerSpell(20572)` is true for an Orc (Blood
 Fury), and a Skyborne knows Walk on Air, Elemental Insight and Wind Blessed,
 plus Read Leyline of the Alliance or Skysight of the Horde.
 
+A race can be only the classes the game allows in your flavors: a Classic Era
+Orc can't be a priest, a Blood Elf can be a paladin from TBC Anniversary on,
+and WoW Forever has its own pairs (an Undead paladin; a High Order Skyborne
+mage, a Windshaper Skyborne shaman).
+
 A unit has every power its class has: a druid mana, rage, energy and combo
-points, a rogue energy and combo points. Each starts at a default (mana and
-rage 0 of 100, energy 100 of 100, combo points 0 of 5); `powers` sets any of
-them by token, with `current` and `max`:
+points, a rogue energy and combo points. Mana starts full, at the class's
+base mana for the level in the game's data (a level 1 mage 100 on WoW
+Forever), or 100 of 100 for a unit without one; the others at a default
+(rage 0 of 100, energy 100 of 100, combo points 0 of 5). `powers` sets any
+of them by token, with `current` and `max`:
 
 ```json
 {
@@ -429,8 +436,8 @@ still be changed during the test.
 
 `wowlua check` checks the profiles too: an unknown part, a UI scale the
 game's slider doesn't have, a character above the max level, a `powers`
-key that isn't a power token or a faction that isn't the race's is E4401,
-and
+key that isn't a power token, a faction that isn't the race's or a race
+and class the game doesn't pair is E4401, and
 a profile that `config` names but that doesn't exist is E4402. The same
 profiles start
 [debug sessions in VS Code](vscode.md#debug-in-the-emulated-client).
