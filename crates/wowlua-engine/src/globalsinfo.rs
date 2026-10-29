@@ -1415,9 +1415,6 @@ const ZERO: &[&str] = &[
     "GetMaxRewardCurrencies",
     "GetNumActiveQuests",
     "GetNumAvailableQuests",
-    "GetServerExpansionLevel",
-    "GetMinimumExpansionLevel",
-    "GetMaximumExpansionLevel",
     "EJ_GetNumTiers",
     "EJ_GetNumSearchResults",
     "EJ_GetSearchSize",
@@ -1568,6 +1565,13 @@ fn set_legacy_raid_difficulty_id(vm: &mut Vm, c: NativeCall) -> Ret {
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     let mut out: Vec<(&'static str, NativeFn)> = vec![
         ("TableIsEmpty", table_is_empty),
+        ("GetExpansionLevel", get_expansion_level),
+        ("GetServerExpansionLevel", expansion_info),
+        ("GetClassicExpansionLevel", expansion_info),
+        ("GetAccountExpansionLevel", expansion_info),
+        ("GetMaximumExpansionLevel", expansion_info),
+        ("GetMinimumExpansionLevel", expansion_info),
+        ("C_ClassColor.GetClassColor", get_class_color),
         ("SetLegacyRaidDifficultyID", set_legacy_raid_difficulty_id),
         ("CountTable", count_table),
         ("GetKeysArray", get_keys_array),
@@ -1826,6 +1830,138 @@ fn no_tutorial(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// `GetPromotionRank(rank)`: none (the full probe: nil, but 2's 3).
 fn get_promotion_rank(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Nil])
+}
+
+/// Each class's colour, as Retail 12.1.5's `C_ClassColor.GetClassColor`
+/// gives it (`tostring`'s digits, recorded 2026-10-28).
+const CLASS_COLORS: &[(&str, [f64; 3])] = &[
+    (
+        "ADVENTURER",
+        [0.66666668653488, 0.82745105028152, 0.44705885648727],
+    ),
+    (
+        "DEATHKNIGHT",
+        [0.76862752437592, 0.11764706671238, 0.22745099663734],
+    ),
+    (
+        "DEMONHUNTER",
+        [0.63921570777893, 0.18823531270027, 0.78823536634445],
+    ),
+    ("DRUID", [1.0, 0.48627454042435, 0.039215687662363]),
+    (
+        "EVOKER",
+        [0.20000001788139, 0.57647061347961, 0.49803924560547],
+    ),
+    (
+        "HUNTER",
+        [0.66666668653488, 0.82745105028152, 0.44705885648727],
+    ),
+    (
+        "MAGE",
+        [0.24705883860588, 0.78039222955704, 0.9215686917305],
+    ),
+    ("MONK", [0.0, 1.0, 0.59607845544815]),
+    (
+        "PALADIN",
+        [0.95686280727386, 0.54901963472366, 0.7294117808342],
+    ),
+    ("PRIEST", [1.0, 1.0, 1.0]),
+    ("ROGUE", [1.0, 0.95686280727386, 0.4078431725502]),
+    ("SHAMAN", [0.0, 0.43921571969986, 0.8666667342186]),
+    (
+        "TRAVELER",
+        [0.40000003576279, 0.60000002384186, 0.60000002384186],
+    ),
+    (
+        "WARLOCK",
+        [0.52941179275513, 0.53333336114883, 0.93333339691162],
+    ),
+    (
+        "WARRIOR",
+        [0.77647066116333, 0.60784316062927, 0.42745101451874],
+    ),
+];
+
+/// `C_ClassColor.GetClassColor(className)`: the class's colour (a
+/// `ColorMixin`: r, g, b), nothing for a class the client lacks. Recorded
+/// the same on Mists 5.5.4, TBC 2.5.6 and Classic Era 1.15.9 but for those
+/// classes, and Classic Era's Shaman in the Paladin's pink.
+// ponytail: the classes after Mists (Evoker, Adventurer, Traveler) were not
+// asked on the classic clients, taken as lacking.
+fn get_class_color(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Str(s) = c.arg(1) else {
+        return Ok(vec![]);
+    };
+    let class = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+    let flavor = engine(vm).flavor.clone();
+    let lacking: &[&str] = match flavor.as_str() {
+        "standard" => &[],
+        "mists" => &["DEMONHUNTER", "EVOKER", "ADVENTURER", "TRAVELER"],
+        _ => &[
+            "DEATHKNIGHT",
+            "MONK",
+            "DEMONHUNTER",
+            "EVOKER",
+            "ADVENTURER",
+            "TRAVELER",
+        ],
+    };
+    let shown = if flavor == "vanilla" && class == "SHAMAN" {
+        "PALADIN"
+    } else {
+        class.as_str()
+    };
+    let Some((_, rgb)) = CLASS_COLORS.iter().find(|(name, _)| *name == shown) else {
+        return Ok(vec![]);
+    };
+    if lacking.contains(&class.as_str()) {
+        return Ok(vec![]);
+    }
+    let fields: Vec<(&str, Value)> = ["r", "g", "b"]
+        .into_iter()
+        .zip(rgb.map(Value::Num))
+        .collect();
+    Ok(vec![crate::curves::mixin_table(vm, "ColorMixin", &fields)])
+}
+
+/// `GetExpansionLevel()`: the flavor's expansion, as an account that has
+/// it, as `GetServerExpansionLevel` (recorded: Retail 12.1.5 11, Mists 5.5.4
+/// 4, TBC 2.5.6 1, Classic Era 1.15.9 0; camelot's recorded 0 takes this
+/// place).
+fn get_expansion_level(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let level = match engine(vm).flavor.as_str() {
+        "tbc" => 1.0,
+        "mists" => 4.0,
+        "standard" => 11.0,
+        _ => 0.0,
+    };
+    Ok(vec![Value::Num(level)])
+}
+
+/// The other expansion getters, as recorded on each client 2026-10-28
+/// (Retail 12.1.5, Mists 5.5.4, TBC 2.5.6, Classic Era 1.15.9): the
+/// classic clients' account level is 0, their minimum the client's own.
+/// `GetServerExpansionLevel` is 0 until the player logs in (the wiki:
+/// until after `PLAYER_ENTERING_WORLD`).
+// camelot's recordings take this place.
+fn expansion_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = crate::recorded::called_name(vm, &c).unwrap_or_default();
+    let flavor = engine(vm).flavor.as_str();
+    // (expansion, account, minimum)
+    let (level, account, minimum) = match flavor {
+        "standard" => (11.0, 11.0, 10.0),
+        "mists" => (4.0, 0.0, 3.0),
+        "tbc" => (1.0, 0.0, 5.0),
+        "vanilla" => (0.0, 0.0, 5.0),
+        _ => (0.0, 0.0, 0.0),
+    };
+    let v = match name.as_str() {
+        "GetServerExpansionLevel" if !engine(vm).world.logged_in => 0.0,
+        "GetAccountExpansionLevel" => account,
+        "GetMinimumExpansionLevel" => minimum,
+        _ => level,
+    };
+    Ok(vec![Value::Num(v)])
 }
 
 /// `GetNumSpecializations([isInspect, isPet])`: the class's one; an

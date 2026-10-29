@@ -574,9 +574,9 @@ fn calendar_time_from_epoch(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // ------------------------------------------------------ build, account
 
-/// `GetClientDisplayExpansionLevel()`, `GetAccountExpansionLevel()`,
-/// `GetExpansionForLevel(level)`: classic's, 0 (as `GetExpansionLevel`,
-/// recorded 0 at load; unverified each).
+/// `GetClientDisplayExpansionLevel()`, `GetExpansionForLevel(level)`:
+/// classic's, 0 (as `GetExpansionLevel`, recorded 0 at load; unverified
+/// each).
 fn expansion_zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
@@ -2850,7 +2850,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("IsBetaBuild", no),
         ("IsPublicBuild", yes),
         ("GetClientDisplayExpansionLevel", expansion_zero),
-        ("GetAccountExpansionLevel", expansion_zero),
         ("GetExpansionForLevel", expansion_zero),
         ("GetExpansionDisplayInfo", nil),
         ("C_Glue.IsFirstLoadThisSession", no),
