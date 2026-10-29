@@ -174,7 +174,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E4336", summary: "`wowlua publish` with uncommitted changes in the working tree (without `--allow-dirty`)" },
     CodeInfo { code: "W4337", summary: "`build.load-order` entry that names no file of the build" },
     CodeInfo { code: "E4400", summary: "World profile is not valid JSON, or not a JSON object" },
-    CodeInfo { code: "E4401", summary: "World profile does not match its schema (unknown part, wrong type, a key that is no ID, a UI scale off the game's slider, a character's level outside the flavors' range)" },
+    CodeInfo { code: "E4401", summary: "World profile does not match its schema (unknown part, wrong type, a key that is no ID, a UI scale off the game's slider, a character's level outside the flavors' range, a `powers` key that is no power token, a faction that is not the race's, a race and class no flavor pairs)" },
     CodeInfo { code: "E4402", summary: "`test.profile` or a test file's `config({ profile })` names no world profile of the package" },
     CodeInfo { code: "E5001", summary: "Lua 5.1 limit exceeded (locals, upvalues, registers, constants, syntax levels, jump distance), including generated locals" },
     CodeInfo { code: "E5002", summary: "Output validation failed (missing or unreachable file, unresolvable XML reference, invalid TOC or XML)" },

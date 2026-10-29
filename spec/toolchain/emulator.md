@@ -369,6 +369,35 @@ The WoW API the VM's code calls, per flavor.
   chose, decision T357), saved variables across reloads, slash commands, keybindings, addon
   messages, settings, tooltips, menus and dialogs. The M8 test mock is the
   starting point.
+- **Powers.** A unit has every power its class has in the flavor table
+  ([Manifest §9.4.1](manifest.md#941-flavor-table); decision T512), its
+  mana full at its class's base mana for its level (100 of 100 without),
+  and shows one (`UnitPowerType`, its token the table's). `UnitPower(unit,
+  type)`, `UnitPowerMax`, `UnitPowerMissing` and `UnitPowerPercent` answer
+  that power, the shown one without a type (or with one not a number); a
+  type the unit lacks a plain 0 (recorded: a paladin's
+  `UnitPower("player", 1..29)`). A power it has but does not show is as
+  secret as the shown one, combo points never (`GetPowerTypeSecrecy(4)`
+  answers never, recorded; the answers unverified); `UnitHasPowerType` and
+  `C_Secrets.ShouldUnitPowerBeSecret` follow the powers it has. Changing a
+  power tells `UNIT_POWER_UPDATE` (a regeneration tick
+  `UNIT_POWER_FREQUENT`) and a maximum `UNIT_MAXPOWER`, each with the
+  power's token; another power shown, `UNIT_DISPLAYPOWER`. A spell's cost
+  and an action's usability read the shown power, an item's mana the mana
+  (none for a character without it). Unverified: the answers for powers
+  not shown, `UnitPowerType(unit, 1)` of a unit with several powers (none,
+  as recorded for one with one).
+- **Races and factions.** A unit's faction (`UnitFactionGroup`) follows
+  its race's in the flavor table ([Manifest §9.4.1](manifest.md#941-flavor-table);
+  decision T513), whatever its data says; a race of either faction (the
+  Pandaren, the Skyborne) has the one given (`faction`, `factionGroup`),
+  none when none is given; a creature its own. `UnitRace` of a race of
+  either answers its faction's race ID and name (camelot's Skyborne: 95
+  High Order Skyborne, 96 Windshaper Skyborne; with none, 96). A player
+  given no race is a Human, an Orc when given the Horde. The player knows
+  its race's racial spells for its faction and class, from the table,
+  without learning them (`IsPlayerSpell`, `C_SpellBook.IsSpellKnown`);
+  unverified: the recorded spellbook does not list them.
 - **Layout.** A region's rectangle comes from its points as the client
   lays it out: each edge from the points that set it (a `LEFT` and a
   `RIGHT` point give the width, a `TOP` and a `BOTTOM` the height),

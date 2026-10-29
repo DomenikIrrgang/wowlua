@@ -130,17 +130,28 @@ pub struct UnitData {
     /// The class by file name (`WARRIOR`).
     pub class: Option<String>,
     pub class_id: Option<f64>,
-    /// The race by file name (`Human`).
+    /// The race by file name (`Human`). Its faction follows it, and the
+    /// character knows its racial spells (decision T513).
     pub race: Option<String>,
     /// 1 unknown, 2 male, 3 female.
     pub sex: Option<f64>,
     pub health: Option<f64>,
     pub health_max: Option<f64>,
     pub max_health: Option<f64>,
+    /// The shown power's amount (`UnitPower(unit)`).
     pub power: Option<f64>,
+    /// The shown power's maximum (`UnitPowerMax(unit)`); `maxPower` the
+    /// same.
     pub power_max: Option<f64>,
     pub max_power: Option<f64>,
+    /// The power it shows (`Enum.PowerType`: 0 mana, 1 rage, 3 energy, …);
+    /// by default its class's (a druid's mana).
     pub power_type: Option<f64>,
+    /// Any of its powers by token (`MANA`, `RAGE`, `ENERGY`,
+    /// `COMBO_POINTS`, …): how much it has and the most it can have. A
+    /// unit has every power its class has (the flavor table's), each at
+    /// the flavor's default unless named here (decision T512).
+    pub powers: Option<BTreeMap<String, PowerAmount>>,
     /// `hostile`, `neutral` or `friendly`.
     pub reaction: Option<String>,
     /// A player character (not a creature).
@@ -148,6 +159,9 @@ pub struct UnitData {
     pub dead: Option<bool>,
     /// Yards from the player.
     pub distance: Option<f64>,
+    /// `Alliance` or `Horde`: the one a race of either picked (the
+    /// Pandaren, the Skyborne), or a creature's. A race of one faction has
+    /// its own (decision T513): another is an error.
     pub faction: Option<String>,
     pub npc_id: Option<f64>,
     pub classification: Option<String>,
@@ -158,6 +172,17 @@ pub struct UnitData {
     pub pvp: Option<bool>,
     #[serde(flatten)]
     pub other: Rest,
+}
+
+/// One of a unit's powers: how much it has (`UnitPower(unit, type)`) and
+/// the most it can have (`UnitPowerMax(unit, type)`).
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PowerAmount {
+    /// How much it has (`UnitPower(unit, type)`).
+    pub current: Option<f64>,
+    /// The most it can have (`UnitPowerMax(unit, type)`).
+    pub max: Option<f64>,
 }
 
 /// A unit around the player, and how it relates to them.
@@ -537,6 +562,125 @@ pub fn check_for(
             );
         }
     }
+    // A unit's `powers` are keyed by power tokens (decision T512).
+    let mut with_powers: Vec<(JsonPath, &UnitData)> = Vec::new();
+    if let Some(c) = &profile.character {
+        with_powers.push((JsonPath::root().key("character"), c));
+    }
+    match &profile.units {
+        Some(List::Items(units)) => {
+            for (i, u) in units.iter().enumerate() {
+                with_powers.push((JsonPath::root().key("units").index(i), &u.data));
+            }
+        }
+        Some(List::Keyed(units)) => {
+            for (k, u) in units {
+                with_powers.push((JsonPath::root().key("units").key(k), &u.data));
+            }
+        }
+        None => {}
+    }
+    let table = wowlua_flavors::table();
+    // A race of one faction decides the unit's (decision T513): a faction
+    // given that is not it is an error.
+    for (at, unit) in &with_powers {
+        let Some(race) = unit
+            .race
+            .as_deref()
+            .and_then(|r| table.flavors.iter().find_map(|f| f.race(r)))
+        else {
+            continue;
+        };
+        if race.is_either() {
+            continue;
+        }
+        let given = match (&unit.faction, unit.other.get("factionGroup")) {
+            (Some(f), _) => Some(("faction", f.as_str())),
+            (None, Some(Value::String(f))) => Some(("factionGroup", f.as_str())),
+            _ => None,
+        };
+        if let Some((key, faction)) = given
+            && wowlua_flavors::Faction::parse(faction) != Some(race.faction)
+        {
+            wrong(
+                at.clone().key(key),
+                format!(
+                    "the race `{}` is of the {}: its faction follows its race, not `{faction}`",
+                    race.file, race.faction
+                ),
+                "not the race's faction",
+            );
+        }
+    }
+    // A race can be only the classes its flavor's game pairs it with
+    // (decision T513): in none of the package's flavors that have the
+    // race is an error.
+    for (at, unit) in &with_powers {
+        let (Some(race), Some(class)) = (unit.race.as_deref(), unit.class.as_deref()) else {
+            continue;
+        };
+        let faction = unit
+            .faction
+            .as_deref()
+            .or_else(|| match unit.other.get("factionGroup") {
+                Some(Value::String(f)) => Some(f.as_str()),
+                _ => None,
+            })
+            .and_then(wowlua_flavors::Faction::parse);
+        let having: Vec<&wowlua_flavors::Flavor> = table
+            .flavors
+            .iter()
+            .filter(|f| (flavors.is_empty() || flavors.contains(&f.id)) && f.has_race(race))
+            .collect();
+        if having.is_empty() || having.iter().any(|f| f.allows_for(race, faction, class)) {
+            continue;
+        }
+        let named: Vec<String> = having
+            .iter()
+            .map(|f| {
+                format!(
+                    "{}: {}",
+                    f.id,
+                    f.classes_for(race, faction)
+                        .iter()
+                        .map(|c| format!("`{c}`"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })
+            .collect();
+        let who = match faction {
+            Some(f)
+                if having
+                    .iter()
+                    .all(|fl| fl.race(race).is_some_and(|r| r.is_either())) =>
+            {
+                format!("a `{race}` of the {f}")
+            }
+            _ => format!("a `{race}`"),
+        };
+        wrong(
+            at.clone().key("class"),
+            format!(
+                "{who} can't be a `{class}` (its classes: {})",
+                named.join("; ")
+            ),
+            "not a class of the race",
+        );
+    }
+    for (at, unit) in with_powers {
+        for token in unit.powers.iter().flat_map(|p| p.keys()) {
+            if table.power_type(token).is_none() {
+                wrong(
+                    at.clone().key("powers").key(token),
+                    format!(
+                        "`powers` is keyed by power tokens (`MANA`, `RAGE`, `ENERGY`, `COMBO_POINTS`, …), not `{token}`"
+                    ),
+                    "not a power token",
+                );
+            }
+        }
+    }
     for (part, what) in ID_KEYS {
         let Some(map) = raw.get(*part).and_then(Value::as_object) else {
             continue;
@@ -696,6 +840,24 @@ mod tests {
     /// `position.world` and the channels' fields are typed as the engine
     /// reads them.
     #[test]
+    fn powers_are_keyed_by_token_with_current_and_max() {
+        let good = r#"{ "character": { "class": "DRUID", "powerType": 0,
+            "powers": { "MANA": { "current": 300, "max": 900 }, "RAGE": { "current": 20 } } },
+            "units": [ { "name": "Rogue", "powers": { "COMBO_POINTS": { "current": 3, "max": 5 } } } ] }"#;
+        assert!(codes(good).is_empty(), "{:?}", codes(good));
+        for wrong in [
+            r#"{ "character": { "powers": { "MAGIC": { "current": 1 } } } }"#,
+            r#"{ "units": [ { "powers": { "mana": { "current": 1 } } } ] }"#,
+            r#"{ "character": { "powers": { "MANA": { "now": 1 } } } }"#,
+            r#"{ "character": { "powers": { "MANA": 5 } } }"#,
+        ] {
+            assert_eq!(codes(wrong)[0].0, "E4401", "{wrong}");
+        }
+        let found = codes(r#"{ "character": { "powers": { "MAGIC": {} } } }"#);
+        assert!(found[0].1.contains("not `MAGIC`"), "{found:?}");
+    }
+
+    #[test]
     fn world_positions_and_channels_are_typed() {
         assert!(
             codes(
@@ -713,6 +875,112 @@ mod tests {
         ] {
             assert_eq!(codes(wrong)[0].0, "E4401", "{wrong}");
         }
+    }
+
+    /// A race of one faction decides it (decision T513): another faction
+    /// is E4401; a race of either takes either, a creature any.
+    #[test]
+    fn a_faction_follows_a_fixed_race() {
+        for good in [
+            r#"{ "character": { "race": "Orc", "faction": "Horde" } }"#,
+            r#"{ "character": { "race": "Orc" } }"#,
+            r#"{ "character": { "race": "Skyborne", "faction": "Alliance" } }"#,
+            r#"{ "character": { "race": "Pandaren", "faction": "Horde" } }"#,
+            r#"{ "units": [ { "name": "Guard", "faction": "Alliance" } ] }"#,
+            r#"{ "units": [ { "name": "Jaina", "player": true, "race": "Human", "factionGroup": "Alliance" } ] }"#,
+        ] {
+            assert!(codes(good).is_empty(), "{good}: {:?}", codes(good));
+        }
+        let found = codes(r#"{ "character": { "race": "Orc", "faction": "Alliance" } }"#);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, "E4401");
+        assert_eq!(
+            found[0].1,
+            "the race `Orc` is of the Horde: its faction follows its race, not `Alliance`"
+        );
+        let found = codes(
+            r#"{ "units": [ { "name": "Thrall", "race": "Orc", "factionGroup": "Alliance" } ] }"#,
+        );
+        assert_eq!(found[0].0, "E4401", "{found:?}");
+        assert_eq!(
+            codes(r#"{ "character": { "race": "Human", "faction": "Neutral" } }"#)[0].0,
+            "E4401"
+        );
+    }
+
+    /// A race can be only the classes its flavor's game pairs it with
+    /// (decision T513; the clients' `CharBaseInfo`).
+    #[test]
+    fn a_race_can_be_only_its_classes() {
+        let for_flavor = |flavor: &str, text: &str| -> Vec<String> {
+            let mut db = SourceDb::new();
+            let (_, found) = check_for(
+                &mut db,
+                Path::new("tests/profiles/p.json"),
+                text.to_string(),
+                &[flavor.to_string()],
+            );
+            found.into_vec().into_iter().map(|d| d.message).collect()
+        };
+        let orc_priest = r#"{ "character": { "race": "Orc", "class": "PRIEST" } }"#;
+        assert_eq!(
+            for_flavor("vanilla", orc_priest),
+            [
+                "a `Orc` can't be a `PRIEST` (its classes: vanilla: `WARRIOR`, `SHAMAN`, `ROGUE`, `WARLOCK`, `HUNTER`)"
+            ]
+        );
+        // Nor MoP Classic's, though they can be mages there; a package of
+        // every flavor has Retail, whose pairs are not read (any class).
+        assert_eq!(for_flavor("mists", orc_priest).len(), 1);
+        assert!(
+            for_flavor(
+                "mists",
+                r#"{ "character": { "race": "Orc", "class": "MAGE" } }"#
+            )
+            .is_empty()
+        );
+        assert!(codes(orc_priest).is_empty());
+        // WoW Forever's own pairs: an Undead paladin; the Skyborne by
+        // faction.
+        assert!(
+            for_flavor(
+                "camelot",
+                r#"{ "character": { "race": "Scourge", "class": "PALADIN" } }"#
+            )
+            .is_empty()
+        );
+        assert!(
+            for_flavor(
+                "camelot",
+                r#"{ "character": { "race": "Skyborne", "faction": "Horde", "class": "SHAMAN" } }"#
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            for_flavor(
+                "camelot",
+                r#"{ "character": { "race": "Skyborne", "faction": "Alliance", "class": "SHAMAN" } }"#
+            ),
+            [
+                "a `Skyborne` of the Alliance can't be a `SHAMAN` (its classes: camelot: `WARRIOR`, `DRUID`, `ROGUE`, `MAGE`, `HUNTER`)"
+            ]
+        );
+        // A Blood Elf paladin from TBC on; a unit's pair too.
+        assert!(
+            for_flavor(
+                "tbc",
+                r#"{ "units": [ { "name": "Liadrin", "player": true, "race": "BloodElf", "class": "PALADIN" } ] }"#
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            for_flavor(
+                "tbc",
+                r#"{ "units": [ { "name": "X", "race": "Tauren", "class": "MAGE" } ] }"#
+            )
+            .len(),
+            1
+        );
     }
 
     #[test]

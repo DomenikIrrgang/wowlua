@@ -4080,6 +4080,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "walkdir",
+ "wowlua-casc",
  "wowlua-diagnostics",
  "wowlua-driver",
  "wowlua-engine",

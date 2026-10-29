@@ -4945,7 +4945,7 @@
     },
     "E4401": {
       "area": "manifest",
-      "text": "A world profile does not match its schema: an unknown part (the emulated world\nwould ignore it), a part of the wrong type, or a key that should be an ID but\nis not (parts such as `items` and `spells` are keyed by IDs). Fields of a part\nbeyond the schema's are allowed and passed on as they are. Two values are\nchecked against the game too: `screen.uiScale` is a value of the game's UI\nScale slider (0.65 to 1.15 in steps of 0.01), and the character's `level` is\n1 to the max level of the package's flavors (60 on camelot).\n\nFix the part's name or value. An editor completes the parts when the profile\nnames `schema/world-profile-0.1.json` in `$schema`.",
+      "text": "A world profile does not match its schema: an unknown part (the emulated world\nwould ignore it), a part of the wrong type, or a key that should be an ID but\nis not (parts such as `items` and `spells` are keyed by IDs). Fields of a part\nbeyond the schema's are allowed and passed on as they are. Two values are\nchecked against the game too: `screen.uiScale` is a value of the game's UI\nScale slider (0.65 to 1.15 in steps of 0.01), the character's `level` is\n1 to the max level of the package's flavors (60 on camelot), and a unit's\n`faction` is its race's: an Orc is of the Horde, and only a race of either\nfaction (the Pandaren, the Skyborne) takes the one given. A unit's race and\nclass are a pair the game has in one of the package's flavors: a Classic Era\nOrc can't be a priest.\n\nFix the part's name or value. An editor completes the parts when the profile\nnames `schema/world-profile-0.1.json` in `$schema`.",
       "examples": [
         {
           "compiles": false,

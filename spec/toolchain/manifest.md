@@ -258,6 +258,128 @@ and `GetMaxLevelForLatestExpansion`'s answer in the emulated client. Only
 camelot's is recorded (`GetMaxPlayerLevel()` answers 60 in WoW Forever); the
 others are the games' level caps, not recorded (MoP Classic's 90 among them).
 
+Each flavor also records its **classes**, each with the **powers** it has,
+its **races**, and its **power defaults** (decision T512): the one list of
+them every tool reads (the emulated client's units, a world profile's
+checks, wowlua Studio's pickers and sliders). In the crate:
+`wowlua_flavors::table().flavor(id)` gives the `Flavor`, whose `classes`
+(`Vec<Class>`: `file`, the class's file name, `UnitClass`'s second result;
+`powers`, its power tokens, the first the one it shows; `specs`, the power
+each specialization shows where they differ), `races` (`Vec<Race>`: `file`,
+the file name, `UnitRace`'s second result; `faction`, `Faction::Alliance`,
+`Faction::Horde` or `Faction::Either` for a race whose player picks one,
+decision T513) and `power_defaults` (token to
+`PowerAmount { current, max }`) are the data; `Flavor::class(file)`,
+`Flavor::has_race(race)`, `Flavor::race(file)`, `Flavor::race_files()`,
+`Flavor::faction_of(race, chosen)`, `Flavor::power_default(token)`,
+`Class::shown_power()` and `Class::shown_power_for_spec(index)` look them
+up. The table's `power_types` give each power token its `Enum.PowerType`
+value (`FlavorTable::power_type(token)`, `FlavorTable::power_token(id)`),
+the same in every flavor's declarations: `MANA` 0, `RAGE` 1, `FOCUS` 2,
+`ENERGY` 3, `COMBO_POINTS` 4, `RUNES` 5, `RUNIC_POWER` 6, `SOUL_SHARDS` 7,
+`LUNAR_POWER` 8, `HOLY_POWER` 9, `ALTERNATE` 10, `MAELSTROM` 11, `CHI` 12,
+`INSANITY` 13, `BURNING_EMBERS` 14, `DEMONIC_FURY` 15, `ARCANE_CHARGES` 16,
+`FURY` 17, `PAIN` 18, `ESSENCE` 19, `RUNE_BLOOD` 20, `RUNE_FROST` 21,
+`RUNE_UNHOLY` 22, `ALTERNATE_QUEST` 23, `ALTERNATE_ENCOUNTER` 24,
+`ALTERNATE_MOUNT` 25, `BALANCE` 26, `HAPPINESS` 27, `SHADOW_ORBS` 28,
+`RUNE_CHROMATIC` 29. The values are the declarations' `Enum.PowerType`;
+`MANA` is recorded (`UnitPowerType`), the tokens through `ESSENCE` and
+`SHADOW_ORBS` are the ones Blizzard's UI code names (`PowerBarColor`, the
+power bars' `UNIT_POWER_UPDATE` checks), the others are `Enum.PowerType`'s
+names spelt as tokens (unverified).
+
+The classes are in each flavor's `CLASS_SORT_ORDER` (Blizzard's UI code of
+the flavor), which is recorded for every flavor. The powers:
+
+| Class | camelot, vanilla, tbc | mists | standard |
+|-------|-----------------------|-------|----------|
+| Warrior | rage | rage | rage |
+| Paladin | mana | mana, holy power | mana, holy power |
+| Hunter | mana | focus | focus |
+| Rogue | energy, combo points | energy, combo points | energy, combo points |
+| Priest | mana | mana, shadow orbs | mana, insanity (shadow shows insanity) |
+| Death Knight | — | runic power, runes | runic power, runes |
+| Shaman | mana | mana | mana, maelstrom (elemental shows maelstrom) |
+| Mage | mana | mana | mana, arcane charges |
+| Warlock | mana | mana, soul shards, burning embers, demonic fury | mana, soul shards |
+| Monk | — | energy, mana, chi (mistweaver shows mana) | energy, mana, chi (mistweaver shows mana) |
+| Druid | mana, rage, energy, combo points | mana, rage, energy, combo points, balance | mana, rage, energy, combo points, lunar power |
+| Demon Hunter | — | — | fury |
+| Evoker | — | — | mana, essence |
+
+Recorded (WoW Forever 1.60.1): the warrior's rage, the paladin's, the
+druid's and the shaman's mana as the power they show, and that a paladin
+has no other (`UnitPower("player", 1..29)` a plain 0). The rest is the
+games' and their UI code's (the classic flavors' paladins have no holy
+power; mists' paladin, monk, priest and warlock bars read holy power, chi,
+shadow orbs, soul shards, burning embers and demonic fury, its eclipse bar
+`Enum.PowerType.Balance`), unverified in the clients. A unit has every power
+its class has: the ones a specialization uses (insanity, maelstrom, arcane
+charges, chi, …) whichever it has.
+
+The races, by file name, in race ID order: camelot `Human`, `Orc`, `Dwarf`,
+`NightElf`, `Scourge`, `Tauren`, `Gnome`, `Troll`, `Skyborne` (WoW
+Forever's own; `Human`, `Scourge` and `Skyborne` characters recorded);
+vanilla the first eight; tbc those and `BloodElf`, `Draenei`; mists those
+and `Goblin`, `Worgen`, `Pandaren`; standard those and `Nightborne`,
+`HighmountainTauren`, `VoidElf`, `LightforgedDraenei`, `ZandalariTroll`,
+`KulTiran`, `DarkIronDwarf`, `Vulpera`, `MagharOrc`, `Mechagnome`,
+`Dracthyr`, `EarthenDwarf`, `Harronir` (the file names of retail's UI code;
+the Haranir's is `Harronir`). Only camelot's three recorded ones are
+recorded; the others are the games', unverified.
+
+Each race has its faction (decision T513): `alliance` the Human, Dwarf,
+Night Elf, Gnome, Draenei, Worgen, Void Elf, Lightforged Draenei, Dark Iron
+Dwarf, Kul Tiran and Mechagnome; `horde` the Orc, Undead, Tauren, Troll,
+Blood Elf, Goblin, Nightborne, Highmountain Tauren, Mag'har Orc, Zandalari
+Troll and Vulpera; `either` (the player picks one) the Pandaren, Dracthyr,
+Earthen, Haranir and Skyborne. The clients' `ChrRaces` agree where read
+(camelot, vanilla, tbc, mists; standard's from camelot's, which carries
+Retail's races, but for the Haranir, whose one playable record there is
+the Alliance's).
+
+Each flavor's **racial spells** and its client's **race records** come from
+the game (decision T513): `cargo xtask flavor-data` reads them from each flavor's
+installed client (`ChrRaces`' playable records; the spells of the skill lines
+named `Racial` in `SkillLineAbility`, for the races and classes of their
+masks, a mask of 0 the line's own in `SkillRaceClassInfo`) into
+`crates/wowlua-flavors/data/races.txt`, which the crate embeds.
+`Flavor::racials(race, faction, class)` gives a character's
+(`Racial { race, factions, classes, spell, name }`; empty `factions` or
+`classes` every one, a `None` faction a character of none),
+`Flavor::racial_spells()` all of them, `Flavor::race_records(race)` and
+`Flavor::race_record(race, faction)` a race's race IDs and names (camelot's
+Skyborne: 95 High Order Skyborne of the Alliance, 96 Windshaper Skyborne of
+the Horde, each with a racial of its own) and `Flavor::racials_build()` the
+client build read. Standard has none yet (no Retail client was read).
+
+A race can be only some classes (decision T513), the pairs of the
+client's `CharBaseInfo`, each race record's (`RaceRecord::classes`; the
+Skyborne's differ by faction): `Flavor::classes_for(race, faction)` (in
+the flavor's class order; `None` any faction), `Flavor::allows(race,
+class)`, `Flavor::allows_for(race, faction, class)`. A vanilla Orc is no
+priest, a Blood Elf can be a paladin from tbc on, and camelot has pairs of
+its own (an Undead paladin, a Human hunter; the High Order Skyborne
+warrior, druid, rogue, mage or hunter, the Windshapers warrior, shaman,
+druid, rogue or hunter). Standard's are not read: any class.
+
+A class's **base mana** by level (decision T512) is the client's game table
+`GameTables/BaseMp.txt`, which `cargo xtask flavor-data` reads into
+`crates/wowlua-flavors/data/base-mana.txt` (`Flavor::base_mana(class,
+level)`; none for a class without, a level past the table's its last):
+a unit of the class starts with its mana full at that (camelot's level 1
+mage 100, priest 110, paladin 60). The classic clients' tables give
+hunters none (unverified: their mana there is 100 of 100).
+
+The power defaults, what a unit has of a power nothing names (unverified:
+amounts a fresh character could have): mana 100 of 100, full (a class
+with base mana its own: below), rage 0 of 100, focus 100 of 100, energy 100 of 100,
+combo points 0 of 5, runes 6 of 6, runic power 0 of 100, soul shards 3 of 5
+(mists 3 of 4), holy power 0 of 5, chi 0 of 5 (mists 0 of 4), lunar power,
+maelstrom and insanity 0 of 100, arcane charges 0 of 4, fury 0 of 100,
+essence 5 of 5, and in mists burning embers 1 of 4, demonic fury 200 of
+1000, balance 0 of 100 and shadow orbs 0 of 3.
+
 Mists of Pandaria Classic, still in live service, is the flavor `mists`
 (decision T509). Wrath of the Lich King Classic and Titan Reforged, and
 Cataclysm Classic have no flavor (decision T507): `wrath`, `titan` and `cata`

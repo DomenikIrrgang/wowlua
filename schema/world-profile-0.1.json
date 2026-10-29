@@ -296,7 +296,7 @@
           "format": "double"
         },
         "race": {
-          "description": "The race by file name (`Human`).",
+          "description": "The race by file name (`Human`). Its faction follows it, and the\ncharacter knows its racial spells (decision T513).",
           "type": [
             "string",
             "null"
@@ -332,6 +332,7 @@
           "format": "double"
         },
         "power": {
+          "description": "The shown power's amount (`UnitPower(unit)`).",
           "type": [
             "number",
             "null"
@@ -339,6 +340,7 @@
           "format": "double"
         },
         "powerMax": {
+          "description": "The shown power's maximum (`UnitPowerMax(unit)`); `maxPower` the\nsame.",
           "type": [
             "number",
             "null"
@@ -353,11 +355,22 @@
           "format": "double"
         },
         "powerType": {
+          "description": "The power it shows (`Enum.PowerType`: 0 mana, 1 rage, 3 energy, …);\nby default its class's (a druid's mana).",
           "type": [
             "number",
             "null"
           ],
           "format": "double"
+        },
+        "powers": {
+          "description": "Any of its powers by token (`MANA`, `RAGE`, `ENERGY`,\n`COMBO_POINTS`, …): how much it has and the most it can have. A\nunit has every power its class has (the flavor table's), each at\nthe flavor's default unless named here (decision T512).",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/PowerAmount"
+          }
         },
         "reaction": {
           "description": "`hostile`, `neutral` or `friendly`.",
@@ -388,6 +401,7 @@
           "format": "double"
         },
         "faction": {
+          "description": "`Alliance` or `Horde`: the one a race of either picked (the\nPandaren, the Skyborne), or a creature's. A race of one faction has\nits own (decision T513): another is an error.",
           "type": [
             "string",
             "null"
@@ -438,6 +452,29 @@
         }
       },
       "additionalProperties": true
+    },
+    "PowerAmount": {
+      "description": "One of a unit's powers: how much it has (`UnitPower(unit, type)`) and\nthe most it can have (`UnitPowerMax(unit, type)`).",
+      "type": "object",
+      "properties": {
+        "current": {
+          "description": "How much it has (`UnitPower(unit, type)`).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "max": {
+          "description": "The most it can have (`UnitPowerMax(unit, type)`).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "additionalProperties": false
     },
     "List": {
       "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
@@ -1473,7 +1510,7 @@
           "format": "double"
         },
         "race": {
-          "description": "The race by file name (`Human`).",
+          "description": "The race by file name (`Human`). Its faction follows it, and the\ncharacter knows its racial spells (decision T513).",
           "type": [
             "string",
             "null"
@@ -1509,6 +1546,7 @@
           "format": "double"
         },
         "power": {
+          "description": "The shown power's amount (`UnitPower(unit)`).",
           "type": [
             "number",
             "null"
@@ -1516,6 +1554,7 @@
           "format": "double"
         },
         "powerMax": {
+          "description": "The shown power's maximum (`UnitPowerMax(unit)`); `maxPower` the\nsame.",
           "type": [
             "number",
             "null"
@@ -1530,11 +1569,22 @@
           "format": "double"
         },
         "powerType": {
+          "description": "The power it shows (`Enum.PowerType`: 0 mana, 1 rage, 3 energy, …);\nby default its class's (a druid's mana).",
           "type": [
             "number",
             "null"
           ],
           "format": "double"
+        },
+        "powers": {
+          "description": "Any of its powers by token (`MANA`, `RAGE`, `ENERGY`,\n`COMBO_POINTS`, …): how much it has and the most it can have. A\nunit has every power its class has (the flavor table's), each at\nthe flavor's default unless named here (decision T512).",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/PowerAmount"
+          }
         },
         "reaction": {
           "description": "`hostile`, `neutral` or `friendly`.",
@@ -1565,6 +1615,7 @@
           "format": "double"
         },
         "faction": {
+          "description": "`Alliance` or `Horde`: the one a race of either picked (the\nPandaren, the Skyborne), or a creature's. A race of one faction has\nits own (decision T513): another is an error.",
           "type": [
             "string",
             "null"

@@ -357,7 +357,7 @@ pub(crate) fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
     if a.kind == "spell"
         && let Value::Num(cost) = data_field(vm, false, a.id, "powerCost")
     {
-        let power = engine(vm).units.list[crate::units::PLAYER.0].power;
+        let power = engine(vm).units.list[crate::units::PLAYER.0].power();
         let enough = power >= cost;
         return (enough, !enough);
     }

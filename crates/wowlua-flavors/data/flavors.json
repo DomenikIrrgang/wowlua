@@ -11,7 +11,35 @@
       "project-id": 18,
       "interface": [16001],
       "interface-range": [16000, 19999],
-      "game-suffixes": ["_Camelot", "_Forever"]
+      "game-suffixes": ["_Camelot", "_Forever"],
+      "classes": [
+        { "file": "WARRIOR", "powers": ["RAGE"] },
+        { "file": "PALADIN", "powers": ["MANA"] },
+        { "file": "PRIEST", "powers": ["MANA"] },
+        { "file": "SHAMAN", "powers": ["MANA"] },
+        { "file": "DRUID", "powers": ["MANA", "RAGE", "ENERGY", "COMBO_POINTS"] },
+        { "file": "ROGUE", "powers": ["ENERGY", "COMBO_POINTS"] },
+        { "file": "MAGE", "powers": ["MANA"] },
+        { "file": "WARLOCK", "powers": ["MANA"] },
+        { "file": "HUNTER", "powers": ["MANA"] }
+      ],
+      "races": [
+        { "file": "Human", "faction": "alliance" },
+        { "file": "Orc", "faction": "horde" },
+        { "file": "Dwarf", "faction": "alliance" },
+        { "file": "NightElf", "faction": "alliance" },
+        { "file": "Scourge", "faction": "horde" },
+        { "file": "Tauren", "faction": "horde" },
+        { "file": "Gnome", "faction": "alliance" },
+        { "file": "Troll", "faction": "horde" },
+        { "file": "Skyborne", "faction": "either" }
+      ],
+      "power-defaults": {
+        "MANA": { "current": 100, "max": 100 },
+        "RAGE": { "current": 0, "max": 100 },
+        "ENERGY": { "current": 100, "max": 100 },
+        "COMBO_POINTS": { "current": 0, "max": 5 }
+      }
     },
     {
       "id": "standard",
@@ -26,7 +54,68 @@
       "project-id": 1,
       "interface": [120100],
       "interface-range": [100000, 999999],
-      "game-suffixes": ["_Standard"]
+      "game-suffixes": ["_Standard"],
+      "classes": [
+        { "file": "WARRIOR", "powers": ["RAGE"] },
+        { "file": "DEATHKNIGHT", "powers": ["RUNIC_POWER", "RUNES"] },
+        { "file": "PALADIN", "powers": ["MANA", "HOLY_POWER"] },
+        { "file": "MONK", "powers": ["ENERGY", "MANA", "CHI"], "specs": ["ENERGY", "MANA", "ENERGY"] },
+        { "file": "PRIEST", "powers": ["MANA", "INSANITY"], "specs": ["MANA", "MANA", "INSANITY"] },
+        { "file": "SHAMAN", "powers": ["MANA", "MAELSTROM"], "specs": ["MAELSTROM", "MANA", "MANA"] },
+        { "file": "DRUID", "powers": ["MANA", "RAGE", "ENERGY", "COMBO_POINTS", "LUNAR_POWER"] },
+        { "file": "ROGUE", "powers": ["ENERGY", "COMBO_POINTS"] },
+        { "file": "MAGE", "powers": ["MANA", "ARCANE_CHARGES"] },
+        { "file": "WARLOCK", "powers": ["MANA", "SOUL_SHARDS"] },
+        { "file": "HUNTER", "powers": ["FOCUS"] },
+        { "file": "DEMONHUNTER", "powers": ["FURY"] },
+        { "file": "EVOKER", "powers": ["MANA", "ESSENCE"] }
+      ],
+      "races": [
+        { "file": "Human", "faction": "alliance" },
+        { "file": "Orc", "faction": "horde" },
+        { "file": "Dwarf", "faction": "alliance" },
+        { "file": "NightElf", "faction": "alliance" },
+        { "file": "Scourge", "faction": "horde" },
+        { "file": "Tauren", "faction": "horde" },
+        { "file": "Gnome", "faction": "alliance" },
+        { "file": "Troll", "faction": "horde" },
+        { "file": "Goblin", "faction": "horde" },
+        { "file": "BloodElf", "faction": "horde" },
+        { "file": "Draenei", "faction": "alliance" },
+        { "file": "Worgen", "faction": "alliance" },
+        { "file": "Pandaren", "faction": "either" },
+        { "file": "Nightborne", "faction": "horde" },
+        { "file": "HighmountainTauren", "faction": "horde" },
+        { "file": "VoidElf", "faction": "alliance" },
+        { "file": "LightforgedDraenei", "faction": "alliance" },
+        { "file": "ZandalariTroll", "faction": "horde" },
+        { "file": "KulTiran", "faction": "alliance" },
+        { "file": "DarkIronDwarf", "faction": "alliance" },
+        { "file": "Vulpera", "faction": "horde" },
+        { "file": "MagharOrc", "faction": "horde" },
+        { "file": "Mechagnome", "faction": "alliance" },
+        { "file": "Dracthyr", "faction": "either" },
+        { "file": "EarthenDwarf", "faction": "either" },
+        { "file": "Harronir", "faction": "either" }
+      ],
+      "power-defaults": {
+        "MANA": { "current": 100, "max": 100 },
+        "RAGE": { "current": 0, "max": 100 },
+        "FOCUS": { "current": 100, "max": 100 },
+        "ENERGY": { "current": 100, "max": 100 },
+        "COMBO_POINTS": { "current": 0, "max": 5 },
+        "RUNES": { "current": 6, "max": 6 },
+        "RUNIC_POWER": { "current": 0, "max": 100 },
+        "SOUL_SHARDS": { "current": 3, "max": 5 },
+        "LUNAR_POWER": { "current": 0, "max": 100 },
+        "HOLY_POWER": { "current": 0, "max": 5 },
+        "MAELSTROM": { "current": 0, "max": 100 },
+        "CHI": { "current": 0, "max": 5 },
+        "INSANITY": { "current": 0, "max": 100 },
+        "ARCANE_CHARGES": { "current": 0, "max": 4 },
+        "FURY": { "current": 0, "max": 100 },
+        "ESSENCE": { "current": 5, "max": 5 }
+      }
     },
     {
       "id": "vanilla",
@@ -38,7 +127,34 @@
       "project-id": 2,
       "interface": [11509],
       "interface-range": [10000, 15999],
-      "game-suffixes": ["_Vanilla"]
+      "game-suffixes": ["_Vanilla"],
+      "classes": [
+        { "file": "WARRIOR", "powers": ["RAGE"] },
+        { "file": "PALADIN", "powers": ["MANA"] },
+        { "file": "PRIEST", "powers": ["MANA"] },
+        { "file": "SHAMAN", "powers": ["MANA"] },
+        { "file": "DRUID", "powers": ["MANA", "RAGE", "ENERGY", "COMBO_POINTS"] },
+        { "file": "ROGUE", "powers": ["ENERGY", "COMBO_POINTS"] },
+        { "file": "MAGE", "powers": ["MANA"] },
+        { "file": "WARLOCK", "powers": ["MANA"] },
+        { "file": "HUNTER", "powers": ["MANA"] }
+      ],
+      "races": [
+        { "file": "Human", "faction": "alliance" },
+        { "file": "Orc", "faction": "horde" },
+        { "file": "Dwarf", "faction": "alliance" },
+        { "file": "NightElf", "faction": "alliance" },
+        { "file": "Scourge", "faction": "horde" },
+        { "file": "Tauren", "faction": "horde" },
+        { "file": "Gnome", "faction": "alliance" },
+        { "file": "Troll", "faction": "horde" }
+      ],
+      "power-defaults": {
+        "MANA": { "current": 100, "max": 100 },
+        "RAGE": { "current": 0, "max": 100 },
+        "ENERGY": { "current": 100, "max": 100 },
+        "COMBO_POINTS": { "current": 0, "max": 5 }
+      }
     },
     {
       "id": "tbc",
@@ -50,7 +166,36 @@
       "project-id": 5,
       "interface": [20506],
       "interface-range": [20000, 29999],
-      "game-suffixes": ["_TBC"]
+      "game-suffixes": ["_TBC"],
+      "classes": [
+        { "file": "WARRIOR", "powers": ["RAGE"] },
+        { "file": "PALADIN", "powers": ["MANA"] },
+        { "file": "PRIEST", "powers": ["MANA"] },
+        { "file": "SHAMAN", "powers": ["MANA"] },
+        { "file": "DRUID", "powers": ["MANA", "RAGE", "ENERGY", "COMBO_POINTS"] },
+        { "file": "ROGUE", "powers": ["ENERGY", "COMBO_POINTS"] },
+        { "file": "MAGE", "powers": ["MANA"] },
+        { "file": "WARLOCK", "powers": ["MANA"] },
+        { "file": "HUNTER", "powers": ["MANA"] }
+      ],
+      "races": [
+        { "file": "Human", "faction": "alliance" },
+        { "file": "Orc", "faction": "horde" },
+        { "file": "Dwarf", "faction": "alliance" },
+        { "file": "NightElf", "faction": "alliance" },
+        { "file": "Scourge", "faction": "horde" },
+        { "file": "Tauren", "faction": "horde" },
+        { "file": "Gnome", "faction": "alliance" },
+        { "file": "Troll", "faction": "horde" },
+        { "file": "BloodElf", "faction": "horde" },
+        { "file": "Draenei", "faction": "alliance" }
+      ],
+      "power-defaults": {
+        "MANA": { "current": 100, "max": 100 },
+        "RAGE": { "current": 0, "max": 100 },
+        "ENERGY": { "current": 100, "max": 100 },
+        "COMBO_POINTS": { "current": 0, "max": 5 }
+      }
     },
     {
       "id": "mists",
@@ -62,8 +207,84 @@
       "project-id": 19,
       "interface": [50504],
       "interface-range": [50000, 59999],
-      "game-suffixes": ["_Mists"]
+      "game-suffixes": ["_Mists"],
+      "classes": [
+        { "file": "WARRIOR", "powers": ["RAGE"] },
+        { "file": "DEATHKNIGHT", "powers": ["RUNIC_POWER", "RUNES"] },
+        { "file": "PALADIN", "powers": ["MANA", "HOLY_POWER"] },
+        { "file": "MONK", "powers": ["ENERGY", "MANA", "CHI"], "specs": ["ENERGY", "MANA", "ENERGY"] },
+        { "file": "PRIEST", "powers": ["MANA", "SHADOW_ORBS"] },
+        { "file": "SHAMAN", "powers": ["MANA"] },
+        { "file": "DRUID", "powers": ["MANA", "RAGE", "ENERGY", "COMBO_POINTS", "BALANCE"] },
+        { "file": "ROGUE", "powers": ["ENERGY", "COMBO_POINTS"] },
+        { "file": "MAGE", "powers": ["MANA"] },
+        { "file": "WARLOCK", "powers": ["MANA", "SOUL_SHARDS", "BURNING_EMBERS", "DEMONIC_FURY"] },
+        { "file": "HUNTER", "powers": ["FOCUS"] }
+      ],
+      "races": [
+        { "file": "Human", "faction": "alliance" },
+        { "file": "Orc", "faction": "horde" },
+        { "file": "Dwarf", "faction": "alliance" },
+        { "file": "NightElf", "faction": "alliance" },
+        { "file": "Scourge", "faction": "horde" },
+        { "file": "Tauren", "faction": "horde" },
+        { "file": "Gnome", "faction": "alliance" },
+        { "file": "Troll", "faction": "horde" },
+        { "file": "Goblin", "faction": "horde" },
+        { "file": "BloodElf", "faction": "horde" },
+        { "file": "Draenei", "faction": "alliance" },
+        { "file": "Worgen", "faction": "alliance" },
+        { "file": "Pandaren", "faction": "either" }
+      ],
+      "power-defaults": {
+        "MANA": { "current": 100, "max": 100 },
+        "RAGE": { "current": 0, "max": 100 },
+        "FOCUS": { "current": 100, "max": 100 },
+        "ENERGY": { "current": 100, "max": 100 },
+        "COMBO_POINTS": { "current": 0, "max": 5 },
+        "RUNES": { "current": 6, "max": 6 },
+        "RUNIC_POWER": { "current": 0, "max": 100 },
+        "SOUL_SHARDS": { "current": 3, "max": 4 },
+        "HOLY_POWER": { "current": 0, "max": 5 },
+        "CHI": { "current": 0, "max": 4 },
+        "BURNING_EMBERS": { "current": 1, "max": 4 },
+        "DEMONIC_FURY": { "current": 200, "max": 1000 },
+        "BALANCE": { "current": 0, "max": 100 },
+        "SHADOW_ORBS": { "current": 0, "max": 3 }
+      }
     }
+  ],
+  "power-types": [
+    { "token": "MANA", "id": 0 },
+    { "token": "RAGE", "id": 1 },
+    { "token": "FOCUS", "id": 2 },
+    { "token": "ENERGY", "id": 3 },
+    { "token": "COMBO_POINTS", "id": 4 },
+    { "token": "RUNES", "id": 5 },
+    { "token": "RUNIC_POWER", "id": 6 },
+    { "token": "SOUL_SHARDS", "id": 7 },
+    { "token": "LUNAR_POWER", "id": 8 },
+    { "token": "HOLY_POWER", "id": 9 },
+    { "token": "ALTERNATE", "id": 10 },
+    { "token": "MAELSTROM", "id": 11 },
+    { "token": "CHI", "id": 12 },
+    { "token": "INSANITY", "id": 13 },
+    { "token": "BURNING_EMBERS", "id": 14 },
+    { "token": "DEMONIC_FURY", "id": 15 },
+    { "token": "ARCANE_CHARGES", "id": 16 },
+    { "token": "FURY", "id": 17 },
+    { "token": "PAIN", "id": 18 },
+    { "token": "ESSENCE", "id": 19 },
+    { "token": "RUNE_BLOOD", "id": 20 },
+    { "token": "RUNE_FROST", "id": 21 },
+    { "token": "RUNE_UNHOLY", "id": 22 },
+    { "token": "ALTERNATE_QUEST", "id": 23 },
+    { "token": "ALTERNATE_ENCOUNTER", "id": 24 },
+    { "token": "ALTERNATE_MOUNT", "id": 25 },
+    { "token": "BALANCE", "id": 26 },
+    { "token": "HAPPINESS", "id": 27 },
+    { "token": "SHADOW_ORBS", "id": 28 },
+    { "token": "RUNE_CHROMATIC", "id": 29 }
   ],
   "clients": [
     {

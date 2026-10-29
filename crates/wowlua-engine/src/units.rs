@@ -14,6 +14,7 @@
 //! before the regen event, the restriction then active; which restrictions
 //! besides a restricted map make identities secret.
 
+use wowlua_flavors::Faction;
 use wowlua_vm::heap::Userdata;
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, TableRef, Value, Vm};
@@ -58,8 +59,11 @@ pub struct Unit {
     pub player: bool,
     pub health: f64,
     pub health_max: f64,
-    pub power: f64,
-    pub power_max: f64,
+    /// Every power it has (its class's, decision T512), in its class's
+    /// order; the shown one among them.
+    pub powers: Vec<Power>,
+    /// The power it shows (`UnitPowerType`; a druid's form's), by
+    /// `Enum.PowerType`.
     pub power_type: f64,
     pub dead: bool,
     /// Flagged for PvP (`UnitIsPVP`).
@@ -113,6 +117,141 @@ pub struct Unit {
     /// Another player who accepts the player's invitations (to the group,
     /// the guild) a moment after (`acceptsInvites`; decision T363).
     pub accepts_invites: bool,
+}
+
+/// One of a unit's powers: its type (`Enum.PowerType`), how much it has
+/// (`UnitPower`) and the most it can have (`UnitPowerMax`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Power {
+    pub kind: f64,
+    pub current: f64,
+    pub max: f64,
+}
+
+impl Unit {
+    /// Its power of this type, if it has one.
+    pub fn power_of(&self, kind: f64) -> Option<&Power> {
+        self.powers.iter().find(|p| p.kind == kind)
+    }
+
+    pub fn power_of_mut(&mut self, kind: f64) -> Option<&mut Power> {
+        self.powers.iter_mut().find(|p| p.kind == kind)
+    }
+
+    /// How much it has of the power it shows.
+    pub fn power(&self) -> f64 {
+        self.power_of(self.power_type).map_or(0.0, |p| p.current)
+    }
+
+    /// The most it can have of the power it shows.
+    pub fn power_max(&self) -> f64 {
+        self.power_of(self.power_type).map_or(0.0, |p| p.max)
+    }
+
+    /// The power it shows (made, 0 of 100, should it lack it).
+    pub fn shown_power_mut(&mut self) -> &mut Power {
+        let kind = self.power_type;
+        if self.power_of(kind).is_none() {
+            self.powers.push(Power {
+                kind,
+                current: 0.0,
+                max: 100.0,
+            });
+        }
+        self.power_of_mut(kind).expect("just made")
+    }
+}
+
+/// The token of a power type (`Enum.PowerType`'s value): the flavor
+/// table's (`UnitPowerType`'s second result: `/stdtest engine` recorded
+/// `0, "MANA"`; the others by `Enum.PowerType`'s names).
+pub(crate) fn power_token(power_type: f64) -> Option<&'static str> {
+    if power_type < 0.0 || power_type.fract() != 0.0 {
+        return None;
+    }
+    wowlua_flavors::table().power_token(power_type as u32)
+}
+
+/// A power type by its token (`RAGE`) or `Enum.PowerType` value.
+pub(crate) fn power_kind(vm: &Vm, v: Value) -> Option<f64> {
+    match vm.hidden(v) {
+        Value::Num(n) => Some(n),
+        Value::Str(s) => {
+            let token = String::from_utf8_lossy(vm.str_bytes(s)).to_ascii_uppercase();
+            wowlua_flavors::table().power_type(&token).map(f64::from)
+        }
+        _ => None,
+    }
+}
+
+/// What a unit has of a power when nothing says: the flavor table's
+/// default for it (decision T512), else none of 100.
+pub(crate) fn default_power(flavor: &str, kind: f64) -> Power {
+    let amount = power_token(kind).and_then(|token| {
+        wowlua_flavors::table()
+            .flavor(flavor)
+            .and_then(|f| f.power_default(token))
+    });
+    Power {
+        kind,
+        current: amount.map_or(0.0, |a| a.current),
+        max: amount.map_or(100.0, |a| a.max),
+    }
+}
+
+/// What a unit of a class and level has of a power when nothing says: its
+/// mana full at the class's base mana for the level (decision T512: the
+/// client's `BaseMp` table, `Flavor::base_mana`), else the flavor's
+/// default (mana 100 of 100).
+pub(crate) fn class_default_power(flavor: &str, kind: f64, class: &str, level: f64) -> Power {
+    let mut p = default_power(flavor, kind);
+    if kind == 0.0
+        && let Some(mana) = wowlua_flavors::table()
+            .flavor(flavor)
+            .and_then(|f| f.base_mana(class, level.max(1.0) as u32))
+    {
+        p.current = mana;
+        p.max = mana;
+    }
+    p
+}
+
+/// The powers a class has in a flavor (`Enum.PowerType` values, the shown
+/// one first); none for a unit without a class or one the flavor lacks.
+pub(crate) fn class_powers(flavor: &str, class: &str) -> Vec<f64> {
+    let table = wowlua_flavors::table();
+    table
+        .flavor(flavor)
+        .and_then(|f| f.class(class))
+        .map(|c| {
+            c.powers
+                .iter()
+                .filter_map(|t| table.power_type(t))
+                .map(f64::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The power a class shows when nothing says (decision T512): the
+/// player's specialization's (`C_SpecializationInfo.GetSpecialization`'s
+/// answer) where the flavor table names one per specialization (a shadow
+/// priest's insanity), else the class's first; none for a unit without a
+/// class.
+fn default_shown(vm: &mut Vm, class: &str, player: bool) -> Option<f64> {
+    let flavor = engine(vm).flavor.clone();
+    let table = wowlua_flavors::table();
+    let c = table.flavor(&flavor)?.class(class)?;
+    let token = if player && !c.specs.is_empty() {
+        let spec = crate::conditionals::number(vm, "C_SpecializationInfo.GetSpecialization", &[]);
+        match spec {
+            Some(n) if n >= 1.0 => c.shown_power_for_spec(n as usize),
+            _ => c.shown_power(),
+        }
+    } else {
+        c.shown_power()
+    };
+    token.and_then(|t| table.power_type(t)).map(f64::from)
 }
 
 /// The addon restriction types (`Enum.AddOnRestrictionType`).
@@ -242,12 +381,29 @@ fn get_class_info(vm: &mut Vm, c: NativeCall) -> Ret {
         .unwrap_or_default())
 }
 
-/// The classes camelot has (WoW Forever: `LocalizedClassList` lists nine;
-/// no class color for the others).
-const CAMELOT_CLASSES: &[f64] = &[1.0, 2.0, 3.0, 4.0, 5.0, 7.0, 8.0, 9.0, 11.0];
+/// The IDs of the classes the flavor has, the flavor table's (decision
+/// T512; camelot's nine: `LocalizedClassList` lists them, no class color
+/// for the others), in ID order.
+pub(crate) fn flavor_class_ids(vm: &Vm) -> Vec<f64> {
+    let mut ids: Vec<f64> = wowlua_flavors::table()
+        .flavor(&engine(vm).flavor)
+        .map(|f| f.classes.iter().map(|c| class_id(&c.file)).collect())
+        .unwrap_or_default();
+    ids.sort_by(f64::total_cmp);
+    ids
+}
+
+/// The file names of the classes the flavor has, the flavor table's
+/// (decision T512), in its order (`CLASS_SORT_ORDER`).
+pub(crate) fn flavor_class_files(vm: &Vm) -> Vec<String> {
+    wowlua_flavors::table()
+        .flavor(&engine(vm).flavor)
+        .map(|f| f.classes.iter().map(|c| c.file.clone()).collect())
+        .unwrap_or_default()
+}
 
 /// `C_CreatureInfo.GetClassInfo(classID)`: `{ className, classFile,
-/// classID }` for camelot's classes; nil for another (recorded for 0;
+/// classID }` for the flavor's classes; nil for another (recorded for 0;
 /// unverified for the rest, probes queued).
 fn creature_class_info(vm: &mut Vm, c: NativeCall) -> Ret {
     // Truncated (the full probe, 1.60.1: 1.5 named the warriors).
@@ -255,9 +411,10 @@ fn creature_class_info(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(n) => n.trunc(),
         _ => return Ok(vec![Value::Nil]),
     };
+    let classes = flavor_class_ids(vm);
     let Some((i, file, name)) = CLASS_INFO
         .iter()
-        .find(|(i, _, _)| *i == id && CAMELOT_CLASSES.contains(i))
+        .find(|(i, _, _)| *i == id && classes.contains(i))
     else {
         return Ok(vec![Value::Nil]);
     };
@@ -273,11 +430,11 @@ fn creature_class_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
-/// `C_SpecializationInfo.GetAllClassIDs()`: camelot's classes (unverified,
-/// probe queued).
+/// `C_SpecializationInfo.GetAllClassIDs()`: the flavor's classes
+/// (unverified, probe queued).
 fn all_class_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
     let t = vm.new_table();
-    for (i, id) in CAMELOT_CLASSES.iter().enumerate() {
+    for (i, id) in flavor_class_ids(vm).iter().enumerate() {
         let _ = vm
             .heap
             .table_mut(t)
@@ -305,8 +462,8 @@ pub fn install(vm: &mut Vm) {
         player: true,
         health: 100.0,
         health_max: 100.0,
-        power: 0.0,
-        power_max: 100.0,
+        // A warrior's: rage, none of 100 (the flavor's default).
+        powers: vec![default_power(&engine(vm).flavor, 1.0)],
         power_type: 1.0,
         dead: false,
         pvp: false,
@@ -686,6 +843,7 @@ fn clone_unit(u: &Unit) -> Unit {
         creature_family: u.creature_family.clone(),
         role: u.role.clone(),
         zone: u.zone.clone(),
+        powers: u.powers.clone(),
         ..*u
     }
 }
@@ -789,13 +947,28 @@ fn unit_class_base(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `UnitRace`: the race's name, file name and ID (recorded: "Undead",
 /// "Scourge", 5); a creature has none (`/stdtest engine scenario combat`).
+/// A race of either faction has a record per faction in the client
+/// (decision T513: camelot's Skyborne, 95 "High Order Skyborne" of the
+/// Alliance, 96 "Windshaper Skyborne" of the Horde): its faction's, else
+/// the one recorded (the Windshaper's).
 fn unit_race(vm: &mut Vm, c: NativeCall) -> Ret {
+    let flavor = engine(vm).flavor.clone();
     with_unit(vm, &c, |vm, u| {
         if u.race.is_empty() {
             return vec![];
         }
-        let (file, id) = race_file_and_id(&u.race);
-        let name = race_name(&u.race);
+        let (file, mut id) = race_file_and_id(&u.race);
+        let mut name = race_name(&u.race);
+        let faction = faction_of(u).and_then(|f| Faction::parse(&f));
+        if race_faction(&file).is_none()
+            && let Some(f) = faction
+            && let Some(record) = wowlua_flavors::table()
+                .flavor(&flavor)
+                .and_then(|fl| fl.race_record(&file, Some(f)))
+        {
+            id = Some(f64::from(record.id));
+            name.clone_from(&record.name);
+        }
         vec![
             vm.str(&name),
             vm.str(&file),
@@ -903,8 +1076,9 @@ fn unit_is_trivial(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
-/// `UnitHasPowerType(unit, powerType)`: the unit's power is of that type
-/// (unverified: a unit's other powers, a druid's mana in a form).
+/// `UnitHasPowerType(unit, powerType)`: the unit has a power of that type,
+/// shown or not (decision T512; unverified for the powers not shown, a
+/// druid's mana in a form).
 fn unit_has_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
     let wanted = match vm.hidden(c.arg(2)) {
         Value::Num(n) => n,
@@ -914,7 +1088,7 @@ fn unit_has_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
         _ => return Ok(vec![Value::Bool(false)]),
     };
     with_unit_or(vm, &c, Value::Bool(false), |_, u| {
-        vec![Value::Bool(u.power_type == wanted)]
+        vec![Value::Bool(u.power_of(wanted).is_some())]
     })
 }
 
@@ -1000,61 +1174,73 @@ fn unit_health_max(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// `UnitPower(unit [, powerType])`: how much it has of that power, else of
+/// the one it shows (decision T512).
 fn unit_power(vm: &mut Vm, c: NativeCall) -> Ret {
     if other_power_type(vm, &c) {
         return Ok(vec![Value::Num(0.0)]);
     }
-    with_unit_or(vm, &c, Value::Num(0.0), |_, u| vec![Value::Num(u.power)])
+    let asked = asked_power_type(vm, &c);
+    with_unit_or(vm, &c, Value::Num(0.0), |_, u| {
+        vec![Value::Num(asked_power(u, asked).current)]
+    })
 }
 
+/// `UnitPowerMax(unit [, powerType])`: the most it can have of that power,
+/// else of the one it shows (decision T512).
 fn unit_power_max(vm: &mut Vm, c: NativeCall) -> Ret {
     if other_power_type(vm, &c) {
         return Ok(vec![Value::Num(0.0)]);
     }
+    let asked = asked_power_type(vm, &c);
     with_unit_or(vm, &c, Value::Num(0.0), |_, u| {
-        vec![Value::Num(u.power_max)]
+        vec![Value::Num(asked_power(u, asked).max)]
     })
+}
+
+/// The power type a power call names (`UnitPower(unit, powerType)`), when
+/// a number; the shown one is meant otherwise (a type not a number: the
+/// full probe).
+pub(crate) fn asked_power_type(vm: &Vm, c: &NativeCall) -> Option<f64> {
+    match vm.hidden(c.arg(2)) {
+        Value::Num(n) => Some(n),
+        _ => None,
+    }
+}
+
+/// The unit's power a call asks for: of the type asked (one it has), else
+/// the shown one.
+pub(crate) fn asked_power(u: &Unit, asked: Option<f64>) -> Power {
+    asked
+        .and_then(|k| u.power_of(k))
+        .or_else(|| u.power_of(u.power_type))
+        .copied()
+        .unwrap_or(Power {
+            kind: u.power_type,
+            current: 0.0,
+            max: 0.0,
+        })
 }
 
 /// Whether a power call (`UnitPower(unit [, powerType])`) asks for a power
 /// type the unit does not have: it has none of it, 0, and nothing to hide
 /// (the full probe: the paladin's `UnitPower("player", 1..29)` a plain 0,
-/// its mana and a power type not a number secret; unverified for a unit
-/// with a second power, a rogue's combo points).
+/// its mana and a power type not a number secret). A power it has but does
+/// not show is as secret as the shown one, combo points never
+/// (`C_Secrets.GetPowerTypeSecrecy(4)`: never secret, recorded; the
+/// answers unverified, decision T512).
 pub(crate) fn other_power_type(vm: &mut Vm, c: &NativeCall) -> bool {
-    let Value::Num(asked) = vm.hidden(c.arg(2)) else {
+    let Some(asked) = asked_power_type(vm, c) else {
         return false;
     };
-    let other =
-        unit_arg(vm, c, 1).is_some_and(|id| engine(vm).units.list[id.0].power_type != asked);
-    if other {
+    let Some(id) = unit_arg(vm, c, 1) else {
+        return false;
+    };
+    let has = engine(vm).units.list[id.0].power_of(asked).is_some();
+    if !has || asked == 4.0 {
         engine_mut(vm).plain_results = true;
     }
-    other
-}
-
-/// A power type's token (`UnitPowerType`'s second result: `/stdtest
-/// engine` recorded `0, "MANA"`; the others by `Enum.PowerType`).
-fn power_token(power_type: f64) -> Option<&'static str> {
-    const TOKENS: &[&str] = &[
-        "MANA",
-        "RAGE",
-        "FOCUS",
-        "ENERGY",
-        "COMBO_POINTS",
-        "RUNES",
-        "RUNIC_POWER",
-        "SOUL_SHARDS",
-        "LUNAR_POWER",
-        "HOLY_POWER",
-        "ALTERNATE",
-        "MAELSTROM",
-        "CHI",
-        "INSANITY",
-    ];
-    usize::try_from(power_type as i64)
-        .ok()
-        .and_then(|i| TOKENS.get(i).copied())
+    !has
 }
 
 /// `UnitPowerType(unit [, index])`: the power type, its token and its
@@ -1443,11 +1629,15 @@ should!(should_identity, "SecretWhenUnitIdentityRestricted");
 /// `C_Secrets.ShouldUnitPowerBeSecret(unit [, powerType])`: as the unit's
 /// power, but a power type the unit does not have is never secret (the
 /// full probe, 1.60.1: the player's mana, the default and `"x"` alike,
-/// secret, every other type of the player's not; unverified: a unit with
-/// several power types).
+/// secret, every other type of the player's not). A unit with several
+/// powers: each as the shown one, combo points never (decision T512,
+/// unverified).
 fn should_power(vm: &mut Vm, c: NativeCall) -> Ret {
     if let (Some(id), Value::Num(wanted)) = (unit_arg(vm, &c, 1), vm.hidden(c.arg(2)))
-        && engine(vm).units.list[id.0].power_type != wanted.trunc()
+        && (engine(vm).units.list[id.0]
+            .power_of(wanted.trunc())
+            .is_none()
+            || wanted.trunc() == 4.0)
     {
         return Ok(vec![Value::Bool(false)]);
     }
@@ -1709,15 +1899,18 @@ pub fn control_unit_at(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `mock.spawnUnit({ name, level, class, race, sex, reaction, player,
-/// health, maxHealth, power, maxPower, powerType, guid, npcID, distance
-/// })`.
+/// health, maxHealth, power, maxPower, powerType, powers, guid, npcID,
+/// distance })`.
 pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
     let data = match c.arg(1) {
         Value::Table(t) => Some(t),
         Value::Nil => None,
         _ => return Err(vm.error("mock.spawnUnit: a table of the unit's data expected")),
     };
-    let unit = unit_from(vm, data, None);
+    let unit = match unit_from(vm, data, None) {
+        Ok(unit) => unit,
+        Err(e) => return Err(vm.error(&format!("mock.spawnUnit: {e}"))),
+    };
     let units = &mut engine_mut(vm).units;
     units.list.push(unit);
     let id = UnitId(units.list.len() - 1);
@@ -1725,8 +1918,8 @@ pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `mock.setPlayer({ name, realm, lastName, level, class, race, sex,
-/// health, maxHealth, power, maxPower, powerType, guid })`: the player's
-/// data (a world profile's character), firing no events.
+/// health, maxHealth, power, maxPower, powerType, powers, guid })`: the
+/// player's data (a world profile's character), firing no events.
 pub fn set_player(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(t) = c.arg(1) else {
         return Err(vm.error("mock.setPlayer: a table of the player's data expected"));
@@ -1738,39 +1931,95 @@ pub fn set_player(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         _ => false,
     };
-    let player = std::mem::take(&mut engine_mut(vm).units.list[PLAYER.0].guid);
-    let mut unit = unit_from(vm, Some(t), Some(player));
+    let player = engine(vm).units.list[PLAYER.0].guid.clone();
+    let mut unit = match unit_from(vm, Some(t), Some(player)) {
+        Ok(unit) => unit,
+        Err(e) => return Err(vm.error(&format!("mock.setPlayer: {e}"))),
+    };
     let old = &engine(vm).units.list[PLAYER.0];
-    let before = (
-        old.name.clone(),
-        old.level,
-        old.health,
-        old.health_max,
-        old.power,
-        old.power_max,
-    );
+    let before = Before::of(old);
     unit.target = old.target;
     unit.in_combat = old.in_combat;
     unit.distance = Some(0.0);
     engine_mut(vm).units.list[PLAYER.0] = unit;
     if events {
-        tell_player_changes(vm, before);
+        tell_player_changes(vm, &before);
+        if engine(vm).units.list[PLAYER.0].power_type != before.power_type {
+            fire_unit(vm, "UNIT_DISPLAYPOWER", PLAYER, &[]);
+        }
     }
     Ok(vec![])
+}
+
+/// What a unit was before a change: its name, level, health and powers.
+struct Before {
+    name: String,
+    level: f64,
+    health: f64,
+    health_max: f64,
+    powers: Vec<Power>,
+    power_type: f64,
+}
+
+impl Before {
+    fn of(u: &Unit) -> Self {
+        Before {
+            name: u.name.clone(),
+            level: u.level,
+            health: u.health,
+            health_max: u.health_max,
+            powers: u.powers.clone(),
+            power_type: u.power_type,
+        }
+    }
+}
+
+/// The unit's powers' changes since `before`, told: each power's
+/// `UNIT_MAXPOWER` and `UNIT_POWER_UPDATE` with its token, in the unit's
+/// order (a power it did not have compared with the flavor's default for
+/// it). Whether any power's amount changed. Unverified: the order of
+/// several powers' events (decision T512).
+fn tell_power_changes(vm: &mut Vm, id: UnitId, before: &[Power]) -> bool {
+    let flavor = engine(vm).flavor.clone();
+    let now = engine(vm).units.list[id.0].powers.clone();
+    let mut changed = false;
+    for p in now {
+        let was = before
+            .iter()
+            .find(|b| b.kind == p.kind)
+            .copied()
+            .unwrap_or_else(|| default_power(&flavor, p.kind));
+        let token = vm.str(power_token(p.kind).unwrap_or("MANA"));
+        if p.max != was.max {
+            fire_unit(vm, "UNIT_MAXPOWER", id, &[token]);
+        }
+        if p.current != was.current {
+            fire_unit(vm, "UNIT_POWER_UPDATE", id, &[token]);
+            changed = true;
+        }
+    }
+    changed
 }
 
 /// `setPlayer(data, { events = true })`: what changed, told as the client
 /// tells it. The level as its server packet does (`PLAYER_LEVEL_CHANGED(old,
 /// new, true)`, `UNIT_LEVEL`; `levels.rs`), the name (`UNIT_NAME_UPDATE`),
-/// the health and power and their maximums (`UNIT_MAXHEALTH`,
-/// `UNIT_HEALTH`, `UNIT_MAXPOWER`, `UNIT_POWER_UPDATE` with the power's
+/// the health and powers and their maximums (`UNIT_MAXHEALTH`,
+/// `UNIT_HEALTH`, `UNIT_MAXPOWER`, `UNIT_POWER_UPDATE` with each power's
 /// token). Unverified: these together, the order.
-fn tell_player_changes(vm: &mut Vm, before: (String, f64, f64, f64, f64, f64)) {
-    let (name, level, health, health_max, power, power_max) = before;
+fn tell_player_changes(vm: &mut Vm, before: &Before) {
+    let Before {
+        name,
+        level,
+        health,
+        health_max,
+        powers,
+        ..
+    } = before;
+    let (level, health, health_max) = (*level, *health, *health_max);
     let now = &engine(vm).units.list[PLAYER.0];
     let (new_name, new_level) = (now.name.clone(), now.level);
     let (new_health, new_health_max) = (now.health, now.health_max);
-    let (new_power, new_power_max, kind) = (now.power, now.power_max, now.power_type);
     if new_level != level {
         fire(
             vm,
@@ -1779,7 +2028,7 @@ fn tell_player_changes(vm: &mut Vm, before: (String, f64, f64, f64, f64, f64)) {
         );
         fire_unit(vm, "UNIT_LEVEL", PLAYER, &[]);
     }
-    if new_name != name {
+    if new_name != *name {
         fire_unit(vm, "UNIT_NAME_UPDATE", PLAYER, &[]);
     }
     if new_health_max != health_max {
@@ -1788,12 +2037,7 @@ fn tell_player_changes(vm: &mut Vm, before: (String, f64, f64, f64, f64, f64)) {
     if new_health != health {
         fire_unit(vm, "UNIT_HEALTH", PLAYER, &[]);
     }
-    let token = vm.str(power_token(kind).unwrap_or("MANA"));
-    if new_power_max != power_max {
-        fire_unit(vm, "UNIT_MAXPOWER", PLAYER, &[token]);
-    }
-    if new_power != power {
-        fire_unit(vm, "UNIT_POWER_UPDATE", PLAYER, &[token]);
+    if tell_power_changes(vm, PLAYER, powers) {
         crate::actions::update_usability(vm);
     }
 }
@@ -1808,13 +2052,113 @@ pub fn spawn_named(vm: &mut Vm, name: &str) -> UnitId {
         let v = vm.str(v);
         let _ = vm.heap.table_mut(data).set(key, v);
     }
-    let unit = unit_from(vm, Some(data), None);
+    let unit = unit_from(vm, Some(data), None).expect("a name and a reaction are data");
     let units = &mut engine_mut(vm).units;
     units.list.push(unit);
     UnitId(units.list.len() - 1)
 }
 
-fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -> Unit {
+/// What a unit's data says of its powers (decision T512): the shown one's
+/// type, amount and maximum (`powerType`, `power`, `powerMax` or
+/// `maxPower`), and any of its powers by token (`powers = { RAGE = {
+/// current = 20, max = 100 } }`).
+#[derive(Default)]
+struct PowerData {
+    shown: Option<f64>,
+    current: Option<f64>,
+    max: Option<f64>,
+    /// Each power named: its type, amount and maximum, in type order.
+    powers: Vec<(f64, Option<f64>, Option<f64>)>,
+}
+
+/// The powers a unit's data names, or what is wrong with them.
+fn power_data(vm: &mut Vm, t: TableRef) -> Result<PowerData, String> {
+    let get = |vm: &mut Vm, t: TableRef, k: &str| {
+        let key = vm.heap.intern(k.as_bytes());
+        vm.heap.table(t).get_str(key)
+    };
+    let num = |v: Value| match v {
+        Value::Num(n) => Some(n),
+        _ => None,
+    };
+    let mut data = PowerData {
+        shown: num(get(vm, t, "powerType")),
+        current: num(get(vm, t, "power")),
+        max: num(get(vm, t, "powerMax")).or_else(|| num(get(vm, t, "maxPower"))),
+        powers: Vec::new(),
+    };
+    let entries: Vec<(Value, Value)> = match get(vm, t, "powers") {
+        Value::Nil => Vec::new(),
+        Value::Table(p) => vm.heap.table(p).entries().collect(),
+        _ => return Err("`powers` is a table of powers by token (`RAGE`)".into()),
+    };
+    for (k, v) in entries {
+        let name = match k {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            Value::Num(n) => format!("{n}"),
+            _ => String::from("?"),
+        };
+        let Some(kind) = power_kind(vm, k) else {
+            return Err(format!(
+                "`powers` names a power by its token (`MANA`, `RAGE`, `COMBO_POINTS`, …), not `{name}`"
+            ));
+        };
+        let Value::Table(p) = v else {
+            return Err(format!("`powers.{name}` is a table: `{{ current, max }}`"));
+        };
+        let current = num(get(vm, p, "current"));
+        let max = num(get(vm, p, "max"));
+        data.powers.push((kind, current, max));
+    }
+    data.powers.sort_by(|a, b| a.0.total_cmp(&b.0));
+    Ok(data)
+}
+
+/// A power's amount and maximum as given; a maximum alone keeps the
+/// amount within it.
+fn set_amounts(p: &mut Power, current: Option<f64>, max: Option<f64>) {
+    if let Some(max) = max {
+        p.max = max;
+        if current.is_none() {
+            p.current = p.current.min(max);
+        }
+    }
+    if let Some(current) = current {
+        p.current = current;
+    }
+}
+
+/// The data's powers set on a unit's (`shown` the type it shows): each
+/// power it names (one the unit lacks made with the flavor's default
+/// first), then the shown one's amount and maximum; the shown one always
+/// there.
+fn apply_power_data(flavor: &str, powers: &mut Vec<Power>, shown: f64, data: &PowerData) {
+    let entry = |powers: &mut Vec<Power>, kind: f64| -> usize {
+        match powers.iter().position(|p| p.kind == kind) {
+            Some(i) => i,
+            None => {
+                powers.push(default_power(flavor, kind));
+                powers.len() - 1
+            }
+        }
+    };
+    let i = entry(powers, shown);
+    for &(kind, current, max) in &data.powers {
+        let j = entry(powers, kind);
+        set_amounts(&mut powers[j], current, max);
+    }
+    set_amounts(&mut powers[i], data.current, data.max);
+}
+
+fn unit_from(
+    vm: &mut Vm,
+    data: Option<TableRef>,
+    player_guid: Option<String>,
+) -> Result<Unit, String> {
+    let powers_given = match data {
+        Some(t) => power_data(vm, t)?,
+        None => PowerData::default(),
+    };
     let get = |vm: &mut Vm, k: &str| -> Value {
         match data {
             Some(t) => {
@@ -1883,11 +2227,38 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         Value::Num(n) => n,
         _ => num(vm, "maxHealth", health),
     };
-    let power_max = match get(vm, "powerMax") {
-        Value::Num(n) => n,
-        _ => num(vm, "maxPower", 100.0),
+    // Its class's powers with the flavor's defaults, the class's shown one
+    // shown (a creature without a class: mana, none of 100), then what the
+    // data says (decision T512).
+    let flavor = engine(vm).flavor.clone();
+    let kinds = class_powers(&flavor, &class);
+    let power_type = match powers_given.shown {
+        Some(shown) => shown,
+        None => default_shown(vm, &class, is_player).unwrap_or(0.0),
     };
-    Unit {
+    let level = num(vm, "level", 1.0);
+    let mut powers: Vec<Power> = kinds
+        .iter()
+        .map(|k| class_default_power(&flavor, *k, &class, level))
+        .collect();
+    apply_power_data(&flavor, &mut powers, power_type, &powers_given);
+    // Its faction (`factionGroup`, a world profile's `faction`): a race of
+    // either's (the Skyborne, recorded Horde) or a creature's; a race of
+    // one has its own (decision T513, `faction_of`).
+    let faction_group = match (get(vm, "factionGroup"), get(vm, "faction")) {
+        (Value::Str(s), _) | (_, Value::Str(s)) => {
+            Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned())
+        }
+        _ => None,
+    };
+    // A player of no race given is a Human, an Orc when of the Horde (its
+    // faction follows its race).
+    let default_race = match (player, faction_group.as_deref()) {
+        (false, _) => "",
+        (true, Some(f)) if f.eq_ignore_ascii_case("Horde") => "Orc",
+        (true, _) => "Human",
+    };
+    Ok(Unit {
         guid: text(vm, "guid", &default_guid),
         name: text(vm, "name", "Unit"),
         realm: match get(vm, "realm") {
@@ -1898,28 +2269,20 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
             Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
             _ => None,
         },
-        level: num(vm, "level", 1.0),
+        level,
         class_id: num(vm, "classID", class_id(&class)),
         class,
         class_name,
-        race: text(vm, "race", if player { "Human" } else { "" }),
-        // Its faction, else a world profile's character's (`faction`: a
-        // race of either, the Skyborne, recorded Horde).
-        faction_group: match (get(vm, "factionGroup"), get(vm, "faction")) {
-            (Value::Str(s), _) | (_, Value::Str(s)) => {
-                Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned())
-            }
-            _ => None,
-        },
+        race: text(vm, "race", default_race),
+        faction_group,
         sex: num(vm, "sex", 1.0),
         reaction,
         player_reaction,
         player,
         health: num(vm, "health", health_max),
         health_max,
-        power: num(vm, "power", 0.0),
-        power_max,
-        power_type: num(vm, "powerType", 0.0),
+        powers,
+        power_type,
         dead: get(vm, "dead").truthy(),
         pvp: get(vm, "pvp").truthy(),
         ghost: false,
@@ -1976,7 +2339,7 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         subgroup: None,
         online: !matches!(get(vm, "online"), Value::Bool(false)),
         accepts_invites: get(vm, "acceptsInvites").truthy(),
-    }
+    })
 }
 
 fn target_arg(vm: &Vm, c: &NativeCall) -> Option<UnitId> {
@@ -2561,9 +2924,11 @@ fn control_set_name(vm: &mut Vm, c: NativeCall) -> Ret {
 /// GUID kept (decision T497); each change told as the client tells it:
 /// the level (`UNIT_LEVEL`; the player's as `setPlayer(…, { events })`
 /// does), the name, realm or last name (`UNIT_NAME_UPDATE`), the health,
-/// power and their maximums (`UNIT_HEALTH`, `UNIT_MAXHEALTH`,
-/// `UNIT_POWER_UPDATE`, `UNIT_MAXPOWER`), the power's type
-/// (`UNIT_DISPLAYPOWER`), the reaction, faction or PvP flag
+/// powers and their maximums (`UNIT_HEALTH`, `UNIT_MAXHEALTH`,
+/// `UNIT_POWER_UPDATE`, `UNIT_MAXPOWER`, each power's with its token), the
+/// type shown (`UNIT_DISPLAYPOWER`; a new class shows its own, its powers
+/// the new class's, those of both kept: decision T512), the reaction,
+/// faction or PvP flag
 /// (`UNIT_FACTION`), the classification (`UNIT_CLASSIFICATION_CHANGED`),
 /// the class, race or sex (`UNIT_PORTRAIT_UPDATE`, `UNIT_MODEL_CHANGED`);
 /// the distance, role and being online as `setDistance`, `setRole` and
@@ -2611,6 +2976,7 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
         "maxPower",
         "power",
         "powerType",
+        "powers",
         "pvp",
         "classification",
         "creatureType",
@@ -2627,25 +2993,23 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
     let has = |k: &str| named.contains(&k);
     // The data read as `spawnUnit` reads it; GUIDs to come stay as they were.
     let next_guid = engine(vm).units.next_guid;
-    let new = unit_from(vm, Some(t), Some(String::new()));
+    let new = match unit_from(vm, Some(t), Some(String::new())) {
+        Ok(new) => new,
+        Err(e) => return Err(vm.error(&format!("update: {e}"))),
+    };
+    let powers_given = power_data(vm, t).unwrap_or_default();
     engine_mut(vm).units.next_guid = next_guid;
+    let flavor = engine(vm).flavor.clone();
+    let class_shown = if has("class") {
+        default_shown(vm, &new.class, me == PLAYER)
+    } else {
+        None
+    };
 
     let old = &engine(vm).units.list[me.0];
-    let before = (
-        old.name.clone(),
-        old.level,
-        old.health,
-        old.health_max,
-        old.power,
-        old.power_max,
-    );
+    let before = Before::of(old);
     let named_before = (old.realm.clone(), old.last_name.clone());
-    let faction_before = (
-        old.reaction,
-        old.player_reaction,
-        old.faction_group.clone(),
-        old.pvp,
-    );
+    let faction_before = (old.reaction, old.player_reaction, faction_of(old), old.pvp);
     let looks_before = (old.class.clone(), old.race.clone(), old.sex);
     let (classification, power_type) = (old.classification.clone(), old.power_type);
 
@@ -2694,16 +3058,27 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
     if has("health") {
         u.health = new.health;
     }
-    if has("powerMax") || has("maxPower") {
-        u.power_max = new.power_max;
-        u.power = u.power.min(u.power_max);
+    // A new class: its powers, those it shares with the old kept, the
+    // first shown unless the data names one (decision T512).
+    if has("class") && u.class != looks_before.0 {
+        let kinds = class_powers(&flavor, &u.class);
+        if !kinds.is_empty() {
+            u.powers = kinds
+                .iter()
+                .map(|k| {
+                    u.power_of(*k)
+                        .copied()
+                        .unwrap_or_else(|| class_default_power(&flavor, *k, &u.class, u.level))
+                })
+                .collect();
+            u.power_type = class_shown.unwrap_or(kinds[0]);
+        }
     }
-    if has("power") {
-        u.power = new.power;
+    if let Some(shown) = powers_given.shown {
+        u.power_type = shown;
     }
-    if has("powerType") {
-        u.power_type = new.power_type;
-    }
+    let shown = u.power_type;
+    apply_power_data(&flavor, &mut u.powers, shown, &powers_given);
     if has("pvp") {
         u.pvp = new.pvp;
     }
@@ -2727,16 +3102,16 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
     }
 
     if me == PLAYER {
-        tell_player_changes(vm, before);
+        tell_player_changes(vm, &before);
     } else {
         let now = &engine(vm).units.list[me.0];
-        let (name, level, health, health_max, power, power_max) = before;
         let named_now = (now.realm.clone(), now.last_name.clone());
-        let level_changed = now.level != level;
-        let name_changed = now.name != name || named_now != named_before;
-        let (max_changed, health_changed) = (now.health_max != health_max, now.health != health);
-        let (power_max_changed, power_changed) = (now.power_max != power_max, now.power != power);
-        let token = power_token(now.power_type).unwrap_or("MANA");
+        let level_changed = now.level != before.level;
+        let name_changed = now.name != before.name || named_now != named_before;
+        let (max_changed, health_changed) = (
+            now.health_max != before.health_max,
+            now.health != before.health,
+        );
         if level_changed {
             fire_unit(vm, "UNIT_LEVEL", me, &[]);
         }
@@ -2749,21 +3124,10 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
         if health_changed {
             fire_unit(vm, "UNIT_HEALTH", me, &[]);
         }
-        let token = vm.str(token);
-        if power_max_changed {
-            fire_unit(vm, "UNIT_MAXPOWER", me, &[token]);
-        }
-        if power_changed {
-            fire_unit(vm, "UNIT_POWER_UPDATE", me, &[token]);
-        }
+        tell_power_changes(vm, me, &before.powers);
     }
     let now = &engine(vm).units.list[me.0];
-    let faction_now = (
-        now.reaction,
-        now.player_reaction,
-        now.faction_group.clone(),
-        now.pvp,
-    );
+    let faction_now = (now.reaction, now.player_reaction, faction_of(now), now.pvp);
     let looks_now = (now.class.clone(), now.race.clone(), now.sex);
     let power_type_changed = now.power_type != power_type;
     let faction_changed = faction_now != faction_before;
@@ -3199,28 +3563,46 @@ pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
     fire_unit(vm, "UNIT_HEALTH", me, &[]);
 }
 
-/// `unit:setPower(n, { frequent? })`: its power now `n`
-/// (`UNIT_POWER_UPDATE`); `frequent`: a regeneration tick's, told by
-/// `UNIT_POWER_FREQUENT` alone (recorded: mana's every ~0.1 s).
+/// `unit:setPower(n, { frequent?, powerType? })`: its power now `n`
+/// (`UNIT_POWER_UPDATE`), the shown one or `powerType`'s (a token, `RAGE`,
+/// or an `Enum.PowerType` value; one it has, decision T512); `frequent`: a
+/// regeneration tick's, told by `UNIT_POWER_FREQUENT` alone (recorded:
+/// mana's every ~0.1 s).
 fn control_set_power(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let n = vm.check_number(&c, 2)?;
-    let frequent = match c.arg(3) {
+    let (frequent, kind) = match c.arg(3) {
         Value::Table(t) => {
             let k = vm.str("frequent");
-            vm.heap.table(t).get(k).truthy()
+            let frequent = vm.heap.table(t).get(k).truthy();
+            let k = vm.str("powerType");
+            let kind = match vm.heap.table(t).get(k) {
+                Value::Nil => None,
+                v => match power_kind(vm, v) {
+                    Some(kind) => Some(kind),
+                    None => {
+                        return Err(
+                            vm.error("setPower: `powerType` is a power's token (`RAGE`) or type")
+                        );
+                    }
+                },
+            };
+            (frequent, kind)
         }
-        _ => false,
+        _ => (false, None),
     };
+    let kind = kind.unwrap_or(engine(vm).units.list[me.0].power_type);
+    if engine(vm).units.list[me.0].power_of(kind).is_none() {
+        let token = power_token(kind).map_or_else(|| format!("{kind}"), str::to_string);
+        return Err(vm.error(&format!("setPower: the unit has no power {token}")));
+    }
     if !frequent {
-        set_power(vm, me, n);
+        set_power_of(vm, me, kind, n, true);
         return Ok(vec![]);
     }
-    let kind = {
-        let u = &mut engine_mut(vm).units.list[me.0];
-        u.power = n.clamp(0.0, u.power_max.max(0.0));
-        u.power_type
-    };
+    if let Some(p) = engine_mut(vm).units.list[me.0].power_of_mut(kind) {
+        p.current = n.clamp(0.0, p.max.max(0.0));
+    }
     let token = vm.str(power_token(kind).unwrap_or("MANA"));
     fire_unit(vm, "UNIT_POWER_FREQUENT", me, &[token]);
     if me == PLAYER {
@@ -3229,12 +3611,27 @@ fn control_set_power(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// The unit's power now `n`: `UNIT_POWER_UPDATE(unit, token)`; the player's
-/// actions' usability follows.
+/// The unit's power of type `kind` now `n`, within its maximum:
+/// `UNIT_POWER_UPDATE(unit, token)`; with `usable`, the player's actions'
+/// usability follows.
+fn set_power_of(vm: &mut Vm, id: UnitId, kind: f64, n: f64, usable: bool) {
+    if let Some(p) = engine_mut(vm).units.list[id.0].power_of_mut(kind) {
+        p.current = n.clamp(0.0, p.max.max(0.0));
+    }
+    let token = vm.str(power_token(kind).unwrap_or("MANA"));
+    fire_unit(vm, "UNIT_POWER_UPDATE", id, &[token]);
+    if usable && id == PLAYER {
+        crate::actions::update_usability(vm);
+    }
+}
+
+/// The unit's shown power now `n`: `UNIT_POWER_UPDATE(unit, token)`; the
+/// player's actions' usability follows.
 fn set_power(vm: &mut Vm, id: UnitId, n: f64) {
     let kind = {
         let u = &mut engine_mut(vm).units.list[id.0];
-        u.power = n.clamp(0.0, u.power_max.max(0.0));
+        let p = u.shown_power_mut();
+        p.current = n.clamp(0.0, p.max.max(0.0));
         u.power_type
     };
     let token = vm.str(power_token(kind).unwrap_or("MANA"));
@@ -3732,13 +4129,11 @@ fn died_later(vm: &mut Vm, c: NativeCall) -> Ret {
 /// The unit's power now `n`, told (`UNIT_POWER_UPDATE`) without the
 /// actions' usability (told later by the caller).
 fn set_power_quietly(vm: &mut Vm, id: UnitId, n: f64) {
-    let kind = {
-        let u = &mut engine_mut(vm).units.list[id.0];
-        u.power = n.clamp(0.0, u.power_max.max(0.0));
-        u.power_type
-    };
-    let token = vm.str(power_token(kind).unwrap_or("MANA"));
-    fire_unit(vm, "UNIT_POWER_UPDATE", id, &[token]);
+    let kind = engine(vm).units.list[id.0].power_type;
+    if engine(vm).units.list[id.0].power_of(kind).is_none() {
+        engine_mut(vm).units.list[id.0].shown_power_mut();
+    }
+    set_power_of(vm, id, kind, n, false);
 }
 
 /// A swing's combat text: `UNIT_COMBAT(unit, kind, "", amount, 1)`.
@@ -4389,82 +4784,83 @@ fn unit_health_missing(vm: &mut Vm, c: NativeCall) -> Ret {
     with_unit(vm, &c, |_, u| vec![Value::Num(u.health_max - u.health)])
 }
 
+/// `UnitPowerPercent(unit [, powerType, unmodified, curve])`: the share it
+/// has of that power, else of the shown one (decision T512); none of a
+/// power it lacks.
 fn unit_power_percent(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = unit_arg(vm, &c, 1) else {
         return Ok(vec![]);
     };
+    let asked = asked_power_type(vm, &c);
     let u = &engine(vm).units.list[id.0];
-    let pct = if u.power_max > 0.0 {
-        u.power / u.power_max
-    } else {
-        0.0
+    let p = match asked {
+        Some(k) if u.power_of(k).is_none() => Power {
+            kind: k,
+            current: 0.0,
+            max: 0.0,
+        },
+        _ => asked_power(u, asked),
     };
+    let pct = if p.max > 0.0 { p.current / p.max } else { 0.0 };
     Ok(vec![crate::curves::apply(vm, c.arg(4), pct)?])
 }
 
-/// More of this module's behaviours.
-/// The faction of a race (`UnitFactionGroup`); a race neither lists is
-/// neutral (unverified for races the list lacks).
-fn faction(race: &str) -> Option<&'static str> {
-    const ALLIANCE: &[&str] = &[
-        "Human",
-        "Dwarf",
-        "NightElf",
-        "Gnome",
-        "Draenei",
-        "Worgen",
-        "VoidElf",
-        "LightforgedDraenei",
-        "DarkIronDwarf",
-        "KulTiran",
-        "Mechagnome",
-    ];
-    const HORDE: &[&str] = &[
-        "Orc",
-        "Scourge",
-        "Tauren",
-        "Troll",
-        "BloodElf",
-        "Goblin",
-        "Nightborne",
-        "HighmountainTauren",
-        "MagharOrc",
-        "ZandalariTroll",
-        "Vulpera",
-    ];
-    if ALLIANCE.contains(&race) {
-        Some("Alliance")
-    } else if HORDE.contains(&race) {
-        Some("Horde")
-    } else {
-        None
-    }
+// More of this module's behaviours.
+
+/// The faction of a race (`UnitFactionGroup`), by its file name, from the
+/// flavor table (decision T513; every flavor that has a race gives it one
+/// faction): none for a race of either (its player picks one: the
+/// Pandaren, the Skyborne) or one the table lacks (unverified).
+pub(crate) fn race_faction(race: &str) -> Option<Faction> {
+    wowlua_flavors::table()
+        .flavors
+        .iter()
+        .find_map(|f| f.race(race))
+        .and_then(|r| match r.faction {
+            Faction::Either => None,
+            fixed => Some(fixed),
+        })
 }
 
-/// `UnitFactionGroup`: a race's faction; a creature its own (a city's
-/// NPC: "Alliance", recorded) or none; no such unit two empty strings
-/// (recorded, scenario combat).
+/// `UnitFactionGroup`: the unit's faction ([`faction_of`]); none for a
+/// creature without one; no such unit two empty strings (recorded,
+/// scenario combat).
 fn unit_faction_group(vm: &mut Vm, c: NativeCall) -> Ret {
     if unit_arg(vm, &c, 1).is_none() {
         return Ok(vec![vm.str(""), vm.str("")]);
     }
-    with_unit(vm, &c, |vm, u| {
-        let f = u
-            .faction_group
-            .clone()
-            .or_else(|| faction(&race_file_and_id(&u.race).0).map(str::to_string));
-        match f {
-            Some(f) => vec![vm.str(&f), vm.str(&f)],
-            None => vec![],
-        }
+    with_unit(vm, &c, |vm, u| match faction_of(u) {
+        Some(f) => vec![vm.str(&f), vm.str(&f)],
+        None => vec![],
     })
 }
 
-/// A unit's faction (its own, else its race's).
-fn faction_of(u: &Unit) -> Option<String> {
-    u.faction_group
-        .clone()
-        .or_else(|| faction(&race_file_and_id(&u.race).0).map(str::to_string))
+/// A unit's faction (decision T513): its race's, for a race of one
+/// faction, whatever the unit's data says; else its own (a creature's, a
+/// city's NPC: "Alliance", recorded; the one a player of a race of either
+/// picked; none when none was given).
+pub(crate) fn faction_of(u: &Unit) -> Option<String> {
+    race_faction(&race_file_and_id(&u.race).0)
+        .map(|f| f.name().to_string())
+        .or_else(|| u.faction_group.clone())
+}
+
+/// Whether the player knows a spell as its race's (decision T513): one of
+/// the flavor's racial spells for its race, faction and class (the flavor
+/// table's, read from the client's tables), known without learning it.
+pub(crate) fn knows_racial(vm: &Vm, spell: f64) -> bool {
+    let e = engine(vm);
+    let Some(flavor) = wowlua_flavors::table().flavor(&e.flavor) else {
+        return false;
+    };
+    let Some(u) = e.units.list.get(PLAYER.0) else {
+        return false;
+    };
+    let race = race_file_and_id(&u.race).0;
+    let faction = faction_of(u).and_then(|f| Faction::parse(&f));
+    flavor
+        .racials(&race, faction, Some(&u.class))
+        .any(|r| f64::from(r.spell) == spell)
 }
 
 /// `UnitCanCooperate(a, b)`: two players of one faction (unverified: not

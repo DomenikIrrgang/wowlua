@@ -952,18 +952,9 @@ pub(crate) fn recorded_description(vm: &mut Vm, id: i64) -> Option<String> {
 }
 
 /// A power type's token (`Enum.PowerType`), as `GetSpellPowerCost` names
-/// it.
+/// it: the flavor table's (decision T512); none for a type it lacks.
 fn power_name(kind: i32) -> &'static str {
-    match kind {
-        0 => "MANA",
-        1 => "RAGE",
-        2 => "FOCUS",
-        3 => "ENERGY",
-        4 => "COMBO_POINTS",
-        5 => "RUNES",
-        6 => "RUNIC_POWER",
-        _ => "",
-    }
+    crate::units::power_token(f64::from(kind)).unwrap_or("")
 }
 
 /// The engine's timers run a native after a delay: the load results.

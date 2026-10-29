@@ -215,11 +215,12 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// No group: no members of any role.
 fn group_member_counts(vm: &mut Vm, _c: NativeCall) -> Ret {
     let t = vm.new_table();
-    // By role and by class, the client's nine classes (the full probe).
-    for role in [
-        "TANK", "HEALER", "DAMAGER", "NOROLE", "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST",
-        "SHAMAN", "MAGE", "WARLOCK", "DRUID",
-    ] {
+    // By role and by class, the flavor's classes in ID order (the full
+    // probe: camelot's nine).
+    let mut classes = crate::units::flavor_class_files(vm);
+    classes.sort_by(|a, b| crate::units::class_id(a).total_cmp(&crate::units::class_id(b)));
+    let roles = ["TANK", "HEALER", "DAMAGER", "NOROLE"].map(String::from);
+    for role in roles.iter().chain(&classes) {
         let k = vm.str(role);
         let _ = vm.heap.table_mut(t).set(k, Value::Num(0.0));
     }

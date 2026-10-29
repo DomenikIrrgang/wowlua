@@ -47,9 +47,11 @@ export interface MockUnit
     --- auras go with it; `flagsAfter`: the player's flags told these
     --- seconds after (the server's, still in combat).
     function kill(opts: { by?: MockUnit, lootable?: boolean, amount?: number, school?: number, flagsAfter?: number }?)
-    --- Its power now (`UNIT_POWER_UPDATE`); `frequent`: a regeneration
-    --- tick's, `UNIT_POWER_FREQUENT` alone.
-    function setPower(amount: number, opts: { frequent?: boolean }?)
+    --- Its power now (`UNIT_POWER_UPDATE` with the power's token): the one
+    --- it shows, or `powerType`'s (a token, `"COMBO_POINTS"`, or an
+    --- `Enum.PowerType` value; one of its powers); `frequent`: a
+    --- regeneration tick's, `UNIT_POWER_FREQUENT` alone.
+    function setPower(amount: number, opts: { frequent?: boolean, powerType?: number | string }?)
     --- Puts it in combat; the player's: `PLAYER_REGEN_DISABLED`, the combat
     --- lockdown, `PLAYER_IN_COMBAT_CHANGED`, `UNIT_FLAGS`.
     function enterCombat()
@@ -397,6 +399,13 @@ export type HeldItem = {
     maxDurability?: number,
 }
 
+--- One of a unit's powers: how much it has (`UnitPower(unit, type)`) and
+--- the most it can have (`UnitPowerMax(unit, type)`).
+export type UnitPowerAmount = {
+    current?: number,
+    max?: number,
+}
+
 --- What `spawnUnit` takes.
 export type UnitData = {
     name?: string,
@@ -412,9 +421,16 @@ export type UnitData = {
     player?: boolean,
     health?: number,
     healthMax?: number,
+    --- The shown power's amount and maximum (`UnitPower(unit)`).
     power?: number,
     powerMax?: number,
+    --- The power it shows (`Enum.PowerType`), by default its class's (a
+    --- druid's mana).
     powerType?: number,
+    --- Any of its powers by token (`MANA`, `RAGE`, `ENERGY`,
+    --- `COMBO_POINTS`, …). It has every power its class has, each at the
+    --- flavor's default unless named here.
+    powers?: { [string]: UnitPowerAmount },
     dead?: boolean,
     --- How far from the player, in yards.
     distance?: number,
@@ -501,8 +517,9 @@ end
 --- The player's data (a world profile's character). No events, unless
 --- `{ events = true }`: then what changed is told as the client tells it
 --- (the level: `PLAYER_LEVEL_CHANGED(old, new, true)` and `UNIT_LEVEL`; the
---- name: `UNIT_NAME_UPDATE`; health and power: `UNIT_MAXHEALTH`,
---- `UNIT_HEALTH`, `UNIT_MAXPOWER`, `UNIT_POWER_UPDATE`).
+--- name: `UNIT_NAME_UPDATE`; health and powers: `UNIT_MAXHEALTH`,
+--- `UNIT_HEALTH`, each power's `UNIT_MAXPOWER` and `UNIT_POWER_UPDATE`, and
+--- `UNIT_DISPLAYPOWER` for another power shown).
 export function setPlayer(data: UnitData, options: { events?: boolean }?)
     engine().setPlayer(data, options)
 end

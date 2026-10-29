@@ -274,7 +274,8 @@ fn known(vm: &mut Vm, id: f64) -> bool {
 }
 
 /// `IsPlayerSpell(spellID)`: true for a spell learned from a trainer in
-/// the test (as the client knows it once taught), else as recorded.
+/// the test (as the client knows it once taught) and for the player's
+/// racial spells (decision T513), else as recorded.
 fn is_player_spell(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(id) = num(vm.hidden(c.arg(1)))
         && crate::trainer::learned(vm, id)

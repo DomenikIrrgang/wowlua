@@ -1015,9 +1015,12 @@ pub fn control_unlearn(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// Whether the player learned the spell from a trainer in this test.
+/// Whether the player learned the spell from a trainer in this test, or
+/// knows it as its race's (decision T513: its racial spells, known
+/// without learning them).
 pub(crate) fn learned(vm: &Vm, spell: f64) -> bool {
     engine(vm).world.trainers.learned.contains(&(spell as i64))
+        || crate::units::knows_racial(vm, spell)
 }
 
 fn taught(vm: &mut Vm, c: NativeCall) -> Ret {

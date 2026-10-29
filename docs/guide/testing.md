@@ -171,6 +171,8 @@ The controls you reach for most:
 - Units: `mock.spawnUnit`, `unit:damage`, `unit:heal`, `unit:kill`,
   `unit:applyAura`, `unit:castSpell`, `mock.group:add`, and `unit:update`
   to change a unit's level, name, reaction or any other field of its data
+- Powers: `unit:setPower`, and `powers` in a unit's data for every power
+  its class has (`powers = { COMBO_POINTS = { current = 2 } }`)
 - Shields and heal prediction: `unit:setAbsorb`, `unit:setHealAbsorb`,
   `unit:setIncomingHeal`; damage uses up a shield before health
 - The character: `mock.setPlayer`, `mock.player:setMoney`,
@@ -390,6 +392,40 @@ A unit's `level` of -1 is a boss's "??" level: `UnitLevel` answers -1, as in
 the game. Your character's level goes up to your flavors' max level (60 on
 WoW Forever).
 
+Your character's faction follows its race: an Orc is of the Horde, so
+`"faction"` is only for a race of either faction, like the Pandaren or WoW
+Forever's Skyborne (`"race": "Skyborne", "faction": "Alliance"` is a High
+Order Skyborne). Your character also knows its race's racial spells without
+listing them in `trained`: `IsPlayerSpell(20572)` is true for an Orc (Blood
+Fury), and a Skyborne knows Walk on Air, Elemental Insight and Wind Blessed,
+plus Read Leyline of the Alliance or Skysight of the Horde.
+
+A race can be only the classes the game allows in your flavors: a Classic Era
+Orc can't be a priest, a Blood Elf can be a paladin from TBC Anniversary on,
+and WoW Forever has its own pairs (an Undead paladin; a High Order Skyborne
+mage, a Windshaper Skyborne shaman).
+
+A unit has every power its class has: a druid mana, rage, energy and combo
+points, a rogue energy and combo points. Mana starts full, at the class's
+base mana for the level in the game's data (a level 1 mage 100 on WoW
+Forever), or 100 of 100 for a unit without one; the others at a default
+(rage 0 of 100, energy 100 of 100, combo points 0 of 5). `powers` sets any
+of them by token, with `current` and `max`:
+
+```json
+{
+  "character": { "class": "DRUID", "race": "NightElf", "level": 60, "maxPower": 2000,
+                 "powers": { "ENERGY": { "current": 40 }, "COMBO_POINTS": { "current": 2 } } }
+}
+```
+
+`UnitPower("player", Enum.PowerType.ComboPoints)` then answers 2, and
+`UnitPower("player")` the power the character shows (a druid's mana). The
+older `power`, `maxPower` and `powerType` are the shown power's. In a test,
+`unit:update({ powers = { RAGE = { current = 30 } } })` or
+`unit:setPower(3, { powerType = "COMBO_POINTS" })` change a power and fire
+`UNIT_POWER_UPDATE` with its token.
+
 The profile is applied before your addon loads, so the addon finds the
 target already there, as after a login. A unit with `"player": true` is
 another player, online and accepting your invitations: an invite brings them
@@ -399,7 +435,9 @@ Proudmoore")` does the same through the chat. Everything a profile sets can
 still be changed during the test.
 
 `wowlua check` checks the profiles too: an unknown part, a UI scale the
-game's slider doesn't have or a character above the max level is E4401, and
+game's slider doesn't have, a character above the max level, a `powers`
+key that isn't a power token, a faction that isn't the race's or a race
+and class the game doesn't pair is E4401, and
 a profile that `config` names but that doesn't exist is E4402. The same
 profiles start
 [debug sessions in VS Code](vscode.md#debug-in-the-emulated-client).

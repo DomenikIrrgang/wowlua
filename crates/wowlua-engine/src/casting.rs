@@ -519,7 +519,7 @@ pub fn use_spell(vm: &mut Vm, id: f64) -> Ret {
         return Ok(vec![]);
     }
     if let Value::Num(cost) = spell_field(vm, id, "powerCost")
-        && engine(vm).units.list[units::PLAYER.0].power < cost
+        && engine(vm).units.list[units::PLAYER.0].power() < cost
     {
         let token = engine(vm).units.list[units::PLAYER.0].power_type;
         let (code, text) = match token as i64 {

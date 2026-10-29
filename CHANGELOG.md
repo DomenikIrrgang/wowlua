@@ -17,6 +17,12 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `addon.toc-extra` documents the TOC directives you can add there (`AddonCompartmentFunc`, `AllowLoadGameType`, …) in its schema and the manifest reference.
 - A function breakpoint can name where a function is defined: `src/Threat.wowlua:560` stops in every call of the function defined on that line, local functions too.
 - `mock.setHardcore(true)` makes the test's realm a hardcore realm on `vanilla` (Classic Era): `C_GameRules.IsHardcoreActive()` answers true.
+- **Every power of a class**: in tests a unit has all the powers its class has, not just one. A druid has mana, rage, energy and combo points, a rogue energy and combo points, a death knight runic power and runes, a monk energy, mana and chi. `UnitPower(unit, Enum.PowerType.ComboPoints)` and `UnitPowerMax` answer each one; without a type they answer the power the unit shows, as before.
+- `mock.spawnUnit`, `mock.setPlayer`, `unit:update` and a world profile's units take `powers`, by token: `powers = { RAGE = { current = 30 }, COMBO_POINTS = { current = 2, max = 5 } }`. A changed power fires `UNIT_POWER_UPDATE` and `UNIT_MAXPOWER` with its token, and `unit:setPower(n, { powerType = "COMBO_POINTS" })` sets any of them. A key that isn't a power token is E4401 in a profile.
+- Each flavor lists its classes with their powers and its races, so wowlua and wowlua Studio show the same ones (WoW Forever's nine classes and its races, the Skyborne among them; MoP Classic's Death Knights, Monks and Pandaren; Retail's thirteen classes).
+- **Racial spells**: your character knows its race's racial spells in tests without listing them (`IsPlayerSpell`, `C_SpellBook.IsSpellKnown`), taken from the game's own data for WoW Forever, Classic Era, TBC Anniversary and MoP Classic, by class where they differ (an Undead's Touch of the Grave). WoW Forever's Skyborne know Walk on Air, Elemental Insight and Wind Blessed, plus Read Leyline as the Alliance's High Order Skyborne or Skysight as the Horde's Windshaper Skyborne.
+- A world profile's character can only be a race and class the game pairs in your flavors (the game's own data): a Classic Era Orc priest or an Alliance Skyborne shaman is E4401. The flavor table lists each race's classes, so wowlua Studio offers only those.
+- Each race in the flavor table has its faction (Alliance, Horde, or either for the Pandaren, Dracthyr, Earthen, Haranir and Skyborne), so wowlua Studio offers a faction choice only where the player picks one.
 
 ### Changed
 
@@ -26,6 +32,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `mists` stays a flavor, now named MoP Classic: it is coming soon like Retail, Classic Era and TBC Anniversary, and a world profile's character on it goes up to level 90.
 - `cata` and `wrath` (and the alias `titan`) are no flavors anymore: a `wowlua.json` naming one gets E4004. `wowlua init` reads no `_Cata` or `_Wrath` TOC, and a packager project's `--@version-wrath@`, `--@version-titan@` and `--@version-cata@` blocks are left out of every build.
 - Watches and hovers in the debugger only read: they set nothing and call only functions that change nothing (the Lua library's, like `string.format`, and the game's queries, like `UnitHealth` or `frame:GetWidth()`). Anything else says so instead of running; the debug console still runs any code.
+- A unit with a class shows its class's power unless you give `powerType`: a spawned warrior shows rage and a rogue energy (mana before), each at its default (rage 0 of 100, energy 100 of 100, combo points 0 of 5). Changing a unit's class with `unit:update` gives it the new class's powers and fires `UNIT_DISPLAYPOWER`.
+- Mana starts full: a character's mana is its class's base mana for its level in the game's data (a level 1 mage 100, a priest 110 on WoW Forever), and a unit without one has 100 of 100 instead of 0 of 100.
+- `UnitHasPowerType` is true for any power the unit has, and an item's mana only changes the mana of a character that has it.
+- A character's or unit's faction follows its race: `UnitFactionGroup` of an Orc is "Horde" even if `faction` says otherwise, and a world profile giving a race another faction is E4401. `faction` is for races of either faction (a Skyborne's `UnitRace` then answers High Order Skyborne or Windshaper Skyborne) and for creatures. A player given only `faction = "Horde"` is an Orc instead of a Human.
 - `wowlua test --profile-out` and the MCP server's `profile_stop` keep the whole profile in the speedscope file: each function's calls, the events and scripts, and the call trees of the last 600 game frames. speedscope still opens it.
 
 ### Fixed
