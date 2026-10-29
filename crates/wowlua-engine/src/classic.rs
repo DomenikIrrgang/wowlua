@@ -68,18 +68,18 @@ fn get_weapon_enchant_info(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// The runes' types, two of each (1 blood, 3 frost, 2 unholy), on every
 /// class (recorded on Mists' Death Knight and TBC's and Classic Era's
-/// others); nothing for another index. ponytail: no death runes, a test
+/// others); no value at all for another index (rune 7: `select("#", ...)` 0). ponytail: no death runes, a test
 /// that needs them mocks it.
 fn get_rune_type(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Num(rune) = vm.hidden(c.arg(1)) else {
         return Ok(vec![Value::Nil]);
     };
-    Ok(vec![match rune {
-        1.0 | 2.0 => Value::Num(1.0),
-        3.0 | 4.0 => Value::Num(3.0),
-        5.0 | 6.0 => Value::Num(2.0),
-        _ => Value::Nil,
-    }])
+    Ok(match rune {
+        1.0 | 2.0 => vec![Value::Num(1.0)],
+        3.0 | 4.0 => vec![Value::Num(3.0)],
+        5.0 | 6.0 => vec![Value::Num(2.0)],
+        _ => vec![],
+    })
 }
 
 /// A function the client has but refuses: "Script_<name>: API unsupported

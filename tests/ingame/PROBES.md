@@ -788,53 +788,68 @@ bars and a target.
 
    Send `stdtest-world.json`.
 
-## Owed from #103 (the other clients' answers, decisions T510, T511)
+## The other clients' answers (decisions T510, T511)
 
-Pull request #103 recorded these on Retail 12.1.5, MoP Classic 5.5.4, TBC
-Anniversary 2.5.6 and Classic Era 1.15.9 (alone, no target, out of combat),
-but its probe is not in the repository: it was merged with its decisions
-as proposals, to be verified. Run each step on each of those clients, with
-a character alone, no target and out of combat, and note what it prints.
-"wowlua:" is what the engine answers now.
+Recorded on 2026-10-29 on Retail 12.1.5 (70575), MoP Classic 5.5.4
+(70631), TBC Anniversary 2.5.6 (70577) and Classic Era 1.15.9 (70576),
+with a character alone, no target and out of combat (a Death Knight on
+Retail and MoP Classic). Run each step again on each of those clients when
+they change, and note what it prints. "wowlua:" is what the engine answers
+now; "Recorded:" what the clients printed.
 
 1. **Functions the documentation lacks**:
    1. `/dump type(GetQuestLogTitle), type(GetGlyphSocketInfo), type(GetReadyCheckStatus)`
 
    wowlua: Retail `nil nil function`; MoP Classic `function function
    function`; TBC and Classic Era `function nil function`.
+   Recorded: the same.
 2. **Nothing there**:
    1. `/dump IsTargetLoose(), C_ActionBar.GetBonusBarOffset(), UnitIsTapDenied("target"), GetRaidTargetIndex("target")`
    2. `/dump select("#", GetReadyCheckStatus("player")), C_TTSSettings.GetSpeechRate(), C_TTSSettings.GetSpeechVolume()`
 
    wowlua: `false 0 false nil` and `0 0 100` on every client.
+   Recorded: the same.
 3. **Expansions** (after the login, as the server's is 0 before):
    1. `/dump GetExpansionLevel(), GetServerExpansionLevel(), GetAccountExpansionLevel(), GetMaximumExpansionLevel(), GetMinimumExpansionLevel()`
    2. `/dump GetClassicExpansionLevel and GetClassicExpansionLevel()`
 
    wowlua: Retail `11 11 11 11 10`; MoP Classic `4 4 0 4 3`; TBC `1 1 0 1
    5`; Classic Era `0 0 0 0 5`.
+   Recorded: the same, and `GetClassicExpansionLevel()` 11, 4, 1 and 0.
 4. **Class colours**:
    1. `/run for _, c in ipairs({"WARRIOR", "SHAMAN", "MONK", "DEATHKNIGHT", "EVOKER"}) do local x = C_ClassColor.GetClassColor(c) print(c, x and x.r, x and x.g, x and x.b) end`
 
    wowlua: Retail's colours where the client has the class (Classic Era's
    Shaman the Paladin's pink), nothing for a class it lacks.
+   Recorded: the same values, to the last digit.
 5. **Refused functions**:
    1. `/run for _, n in ipairs({"GetTalentGroupRole", "GetNumTalentTabs", "GetNumTalentGroups", "GetUnspentTalentPoints", "GetNumSpecGroups", "GetTalentTierInfo"}) do print(n, pcall(_G[n], 1)) end`
 
    wowlua: on MoP Classic the first four `false Script_<name>: API
    unsupported in this version of World of Warcraft.`; on TBC and Classic
    Era `GetTalentGroupRole`, `GetNumSpecGroups` and `GetTalentTierInfo`.
+   Recorded: the same. The others answer: on Retail the first four do not
+   exist, `GetNumSpecGroups(1)` is 0 and `GetTalentTierInfo(1)` nothing (as
+   on MoP Classic, and in wowlua); on TBC and Classic Era `GetNumTalentTabs`
+   3, `GetNumTalentGroups` 1 and `GetUnspentTalentPoints` the character's
+   (0 at level 1, 1 at level 11), which a test mocks.
 6. **Runes and weapon enchants** (the classic clients):
    1. `/run for i = 1, 7 do print(i, GetRuneType(i)) end`
    2. `/run print(select("#", GetWeaponEnchantInfo()))`
 
-   wowlua: `1 1 3 3 2 2 nil`; 8 values on MoP Classic, 12 on TBC and
-   Classic Era.
+   wowlua: `1 1 3 3 2 2` and nothing for rune 7; 8 values on MoP Classic,
+   12 on TBC and Classic Era.
+   Recorded: the same. On Retail `GetRuneType` does not exist, and
+   `GetWeaponEnchantInfo` gives 12 values: Blizzard's deprecation fallback
+   (`Blizzard_Deprecated`, `Deprecated_12_1_0.lua`) defines it, not the
+   client, so wowlua's `standard` has none without Blizzard's code.
 7. **Hardcore** (the classic clients):
    1. `/dump C_GameRules.IsHardcoreActive()`
 
    wowlua: `false` (a test sets a Classic Era hardcore realm with
    `mock.setHardcore(true)`).
+   Recorded: `false` on the classic clients; on Retail the function does
+   not exist.
 
 ## Answered on the beta's last day (2026-10-24)
 

@@ -223,9 +223,10 @@ fn the_classic_clients_refuse_what_they_no_longer_support() {
                 end
             end
             local runes = {}
-            for i = 1, 7 do runes[i] = tostring(GetRuneType(i)) end
+            for i = 1, 6 do runes[i] = tostring(GetRuneType(i)) end
+            runes[7] = select('#', GetRuneType(7))
             return table.concat(out, ' '), table.concat(runes, ' ')";
-        assert_eq!(run(&mut vm, src), [refused, "1 1 3 3 2 2 nil"], "{flavor}");
+        assert_eq!(run(&mut vm, src), [refused, "1 1 3 3 2 2 0"], "{flavor}");
     }
 }
 

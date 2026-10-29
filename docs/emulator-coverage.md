@@ -2416,7 +2416,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Owed from M14 (next beta, about 2026-11-07)
 - Owed from the contributions in 0.13.5 (next beta, about 2026-11-07)
 - Owed from the world profiles (next beta, about 2026-11-07)
-- Owed from #103 (the other clients' answers, decisions T510, T511)
+- The other clients' answers (decisions T510, T511)
 - Answered on the beta's last day (2026-10-24)
 - The dev tools (0.12.1)
 
