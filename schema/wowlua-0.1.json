@@ -372,7 +372,7 @@
           ]
         },
         "toc-extra": {
-          "description": "Extra TOC directives, emitted verbatim.",
+          "description": "Extra TOC directives, written as they are: the client's directives\nwowlua does not write itself (`AddonCompartmentFunc`,\n`AllowLoadGameType`, `ExcludeLoadGameType`, …) and custom\n`X-` fields. A directive wowlua writes from another key (`Title`,\n`SavedVariables`, …) is E4002; any other name is W4001.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
@@ -1200,9 +1200,17 @@
           ]
         },
         "minify": {
+          "description": "The minification level: a built-in one (`none`, `strip`,\n`compact`, `rename`, `max`) or one of `minify-levels`.",
           "type": [
             "string",
             "null"
+          ],
+          "examples": [
+            "none",
+            "strip",
+            "compact",
+            "rename",
+            "max"
           ]
         },
         "minify-libraries": {
@@ -1493,9 +1501,17 @@
           ]
         },
         "minify": {
+          "description": "The minification level of this target's build (see the profiles'\n`minify`).",
           "type": [
             "string",
             "null"
+          ],
+          "examples": [
+            "none",
+            "strip",
+            "compact",
+            "rename",
+            "max"
           ]
         },
         "bundle": {
@@ -1720,10 +1736,12 @@
       "type": "object",
       "properties": {
         "indent": {
+          "description": "`\"tab\"`, or the number of spaces of an indentation level (2, 4, 8).",
           "$ref": "#/$defs/Indent",
           "default": "tab"
         },
         "line-width": {
+          "description": "The width `wowlua fmt` keeps lines within, in characters.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0,
@@ -1870,12 +1888,15 @@
           "format": "double"
         },
         "uiScale": {
-          "description": "The UI scale with \"Use UI Scale\" on; without, the client's own.",
+          "description": "The game's UI Scale slider (Graphics settings, shown as 65% to\n115% in steps of 1%), with \"Use UI Scale\" on; absent, \"Use UI\nScale\" is off and the client scales the UI itself (768 over the\nscreen's height).",
           "type": [
             "number",
             "null"
           ],
-          "format": "double"
+          "format": "double",
+          "minimum": 0.65,
+          "maximum": 1.15,
+          "multipleOf": 0.01
         }
       },
       "additionalProperties": false,
@@ -1889,39 +1910,54 @@
       "type": "object",
       "properties": {
         "lines": {
+          "description": "Minimum percentage (0 to 100) of lines covered.",
           "type": [
             "number",
             "null"
           ],
-          "format": "double"
+          "format": "double",
+          "minimum": 0,
+          "maximum": 100
         },
         "statements": {
+          "description": "Minimum percentage (0 to 100) of statements covered.",
           "type": [
             "number",
             "null"
           ],
-          "format": "double"
+          "format": "double",
+          "minimum": 0,
+          "maximum": 100
         },
         "branches": {
+          "description": "Minimum percentage (0 to 100) of branches covered.",
           "type": [
             "number",
             "null"
           ],
-          "format": "double"
+          "format": "double",
+          "minimum": 0,
+          "maximum": 100
         },
         "functions": {
+          "description": "Minimum percentage (0 to 100) of functions covered.",
           "type": [
             "number",
             "null"
           ],
-          "format": "double"
+          "format": "double",
+          "minimum": 0,
+          "maximum": 100
         },
         "conditions": {
+          "description": "Minimum percentage (0 to 100) of conditions covered.",
           "type": [
             "number",
             "null"
           ],
-          "format": "double"
+          "format": "double",
+          "minimum": 0,
+          "maximum": 100
         },
         "exclude": {
           "type": "array",
@@ -2109,9 +2145,10 @@
       "type": "object",
       "properties": {
         "history-size": {
+          "description": "How many entries `wowlua:log`'s history keeps (at least 1).",
           "type": "integer",
           "format": "uint32",
-          "minimum": 0,
+          "minimum": 1,
           "default": 500
         }
       },

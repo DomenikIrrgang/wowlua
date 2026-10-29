@@ -271,10 +271,6 @@
     "authors": [],
     "note": "wowlua's typed WoW API of the camelot flavor (spec \u00a710.9)"
   },
-  "wow-api-cata": {
-    "authors": [],
-    "note": "wowlua's typed WoW API of the cata flavor (spec \u00a710.9)"
-  },
   "wow-api-mists": {
     "authors": [],
     "note": "wowlua's typed WoW API of the mists flavor (spec \u00a710.9)"
@@ -290,10 +286,6 @@
   "wow-api-vanilla": {
     "authors": [],
     "note": "wowlua's typed WoW API of the vanilla flavor (spec \u00a710.9)"
-  },
-  "wow-api-wrath": {
-    "authors": [],
-    "note": "wowlua's typed WoW API of the wrath flavor (spec \u00a710.9)"
   },
   "wowlua": {
     "authors": [],

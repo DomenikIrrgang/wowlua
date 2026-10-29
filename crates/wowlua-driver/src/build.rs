@@ -3634,9 +3634,7 @@ fn variant_files(
     entries: &[wowlua_manifest::model::VariableFile],
     files: &[(Source, FileId)],
 ) -> BTreeSet<String> {
-    const ALL: &[&str] = &[
-        "standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla",
-    ];
+    let table = wowlua_flavors::table();
     let by_lower: HashMap<String, &str> = files
         .iter()
         .map(|(s, _)| (s.rel.to_ascii_lowercase(), s.rel.as_str()))
@@ -3651,9 +3649,9 @@ fn variant_files(
         } else {
             vec![String::new()]
         };
-        for flavor in ALL {
+        for flavor in &table.flavors {
             for locale in &locales {
-                let concrete = substitute(&entry.path, flavor, locale).to_ascii_lowercase();
+                let concrete = substitute(&entry.path, &flavor.id, locale).to_ascii_lowercase();
                 if let Some(rel) = by_lower.get(&concrete) {
                     out.insert(rel.to_string());
                 }
@@ -3668,10 +3666,8 @@ fn game_name(flavor: &str) -> &'static str {
     match flavor {
         "standard" => "Standard",
         "camelot" => "Camelot",
-        "mists" => "Mists",
-        "cata" => "Cata",
-        "wrath" => "Wrath",
         "tbc" => "TBC",
+        "mists" => "Mists",
         _ => "Vanilla",
     }
 }
@@ -5423,11 +5419,11 @@ mod tests {
 
     #[test]
     fn fields_group_flavors_by_value() {
-        let all = flavors(&["standard", "mists", "wrath"]);
+        let all = flavors(&["standard", "tbc", "vanilla"]);
         let mut out = Vec::new();
         let overrides = vec![
-            ("mists".to_string(), Some(Some("Mists".to_string()))),
-            ("wrath".to_string(), Some(None)),
+            ("tbc".to_string(), Some(Some("TBC".to_string()))),
+            ("vanilla".to_string(), Some(None)),
         ];
         push_field(&mut out, "Title", Some("Base".into()), &overrides, &all);
         assert_eq!(out.len(), 2);
@@ -5437,7 +5433,7 @@ mod tests {
         );
         assert_eq!(
             (out[1].value.as_str(), out[1].flavors.clone()),
-            ("Mists", Some(flavors(&["mists"])))
+            ("TBC", Some(flavors(&["tbc"])))
         );
 
         let mut out = Vec::new();

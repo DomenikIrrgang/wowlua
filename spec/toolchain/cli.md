@@ -90,7 +90,7 @@ bundling work as in `wowlua build`.
 | `wowlua fetch` | Download all dependencies into the cache |
 | `wowlua tree [--flavor <f>] [--invert <name>]` | Show the dependency graph |
 | `wowlua outdated` | List dependencies with newer registry versions, newer tags (by SemVer), newer commits on their branch, or newer SVN revisions, and what to change |
-| `wowlua cache clean [--all]` | Remove cache entries not used by any fetch or build for 30 days; `--all` empties the cache (decision T109) |
+| `wowlua cache clean [--all]` | Remove cache entries not used by any fetch or build for 30 days; `--all` empties the cache (decision T109). A program can measure and empty one part of it (`check`, `compile`, `git`, …), and forget a fetched Blizzard UI source so the next test run fetches it again (decision T505) |
 | `wowlua types sync [--flavor <f>…]` | Refresh the flavor table, the pinned interface numbers and the locked `wow-api-<flavor>` types packages after a game patch ([Package manager §10.9](package-manager.md#109-types-packages)) |
 | `wowlua types convert <path> [--out <dir>]` | Convert LuaLS `---@` annotations into `.d.wowlua` declarations |
 
@@ -176,8 +176,10 @@ each rebuild writes the same files and reports the same diagnostics as a fresh
    `<Folder><suffix>.toc`, compared case-insensitively, so the addon name is
    the folder name (`LittleWigs_Classic.toc` in `LittleWigs_Classic/` is the
    plain TOC, not a `_Classic` variant). Suffixes are the current ones and the
-   legacy `-Classic`, `-BCC`, `_BCC`, `-WOTLKC`, `_WOTLKC`, `_TBC`, `_Vanilla`
-   and `_Mainline` forms. It takes the metadata (`Title`, `Notes`, `Author`,
+   legacy `-Classic`, `-BCC`, `_BCC`, `_TBC`, `_Vanilla` and `_Mainline`
+   forms. A TOC of a game without a flavor (`_Cata`, `_Wrath`, `-WOTLKC`;
+   decisions T507, T509) belongs to another addon name and is not read,
+   and interface numbers of no flavor are left out. It takes the metadata (`Title`, `Notes`, `Author`,
    `Version`, `IconTexture`, `Category`, …), interface versions (giving the
    flavors), SavedVariables, dependencies and `X-` fields into `wowlua.json`.
    Addon-wide `## AllowLoadGameType:` and `## ExcludeLoadGameType:` lines
@@ -346,10 +348,9 @@ generated, so TOC keywords do not apply.
 | `@retail@`, `@version-retail@` | Flavor `standard` |
 | `@version-classic@`, `@version-vanilla@` | Flavor `vanilla` |
 | `@version-bcc@` | Flavor `tbc` |
-| `@version-wrath@`, `@version-titan@` | Flavor `wrath` |
-| `@version-cata@` | Flavor `cata` |
-| `@version-mists@` | Flavor `mists` |
+| `@version-mists@` | Flavor `mists` (decision T509) |
 | `@version-forever@` | Flavor `camelot` |
+| `@version-wrath@`, `@version-titan@`, `@version-cata@` | Never: their games have no flavor (decision T507), so the code is left out of every build |
 
 The `non-` prefixed forms invert a block. Inactive blocks are commented out in
 the packager's style, so line numbers stay correct; `@do-not-package@` blocks
@@ -440,7 +441,7 @@ and the target is not already inside one, unless `--no-git` is given.
 the templates check clean in every mode. `--world-profile` (`addon` and
 `library`, which have tests) adds `tests/profiles/default.json`, a Human
 Warrior named Player at the level cap of the package's first flavor (60
-for `camelot` and `vanilla`, 70 `tbc`, 80 `wrath`, 85 `cata`, 90 `mists`;
+for `camelot` and `vanilla`, 70 `tbc`, 90 `mists`;
 `standard`, whose cap moves with every expansion, gets the client's
 default level), and sets `test.profile` to it, so every test starts there
 (decision T476).

@@ -837,6 +837,59 @@ fn global_names(s: wowlua_syntax::view::Stmt<'_>, out: &mut Vec<String>) {
     }
 }
 
+/// What a completion in module `i` can import (T506): the values,
+/// functions, classes and enums other modules export, which `i` imports
+/// nothing of yet. Types need `import type`, and are left out.
+fn importable(ctx: &FileCtx, i: usize) -> Vec<complete::Importable> {
+    use complete::{Importable, Kind};
+    let importer = &ctx.files[i].src_rel;
+    let imported: FxHashSet<usize> = ctx.analysis.modules[i]
+        .as_ref()
+        .map(|m| {
+            m.imports
+                .iter()
+                .filter_map(|imp| match imp.target {
+                    crate::Target::Module(m) => Some(m),
+                    _ => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut out = Vec::new();
+    for (m, info) in ctx.analysis.modules.iter().enumerate() {
+        let Some(info) = info else { continue };
+        let file = &ctx.files[m];
+        if m == i
+            || imported.contains(&m)
+            || !info.is_module
+            || file.kind != crate::FileKind::Wowlua
+            || crate::is_test_file(&file.src_rel)
+        {
+            continue;
+        }
+        let Some(from) = crate::specifier_of(&file.src_rel, importer, file.main_of.as_deref())
+        else {
+            continue;
+        };
+        for (name, export) in &info.exports {
+            let kind = match export {
+                crate::Export::Type => continue,
+                crate::Export::Function => Kind::Function,
+                crate::Export::Class(_) => Kind::Class,
+                crate::Export::Enum(_) => Kind::Enum,
+                crate::Export::Const(_) => Kind::Constant,
+                crate::Export::Value => Kind::Variable,
+            };
+            out.push(Importable {
+                name: name.as_str().into(),
+                from: from.as_str().into(),
+                kind,
+            });
+        }
+    }
+    out
+}
+
 /// What checking one file needs besides the environment.
 struct FileCtx<'a> {
     files: &'a [FileInput<'a>],
@@ -1020,6 +1073,11 @@ fn check_file_in(
     };
     let import_caps = import_caps(ctx, i);
     let info = FileInfo {
+        importable: if env.completing.is_some() {
+            importable(ctx, i)
+        } else {
+            Vec::new()
+        },
         intrinsics: crate::stdlib::Intrinsics::of(ctx.analysis, i, parse),
         std_imports: std_imports(parse),
         static_branches: ctx.analysis.modules[i]
@@ -2168,22 +2226,22 @@ mod tests {
     fn flavor_guards() {
         let decl = "declare namespace C_X\n    function A(): number\n    function B(): number\nend\ndeclare global WOW_PROJECT_ID: number\n";
         let shared = flavors::SharedFlavors {
-            flavors: ["standard".to_string(), "vanilla".into(), "mists".into()].into(),
+            flavors: ["standard".to_string(), "vanilla".into(), "tbc".into()].into(),
             project_ids: [
                 (1, "standard".to_string()),
                 (2, "vanilla".into()),
-                (19, "mists".into()),
+                (5, "tbc".into()),
             ]
             .into(),
             project_constants: HashMap::new(),
             availability: [
                 (
                     "C_X".to_string(),
-                    ["standard".to_string(), "mists".into()].into(),
+                    ["standard".to_string(), "tbc".into()].into(),
                 ),
                 (
                     "C_X.A".to_string(),
-                    ["standard".to_string(), "mists".into()].into(),
+                    ["standard".to_string(), "tbc".into()].into(),
                 ),
                 ("C_X.B".to_string(), ["standard".to_string()].into()),
             ]
@@ -2202,16 +2260,16 @@ mod tests {
             ),
             Vec::<String>::new()
         );
-        // The namespace exists in `mists`, which lacks `B`.
+        // The namespace exists in `tbc`, which lacks `B`.
         assert_eq!(run("if C_X then print(C_X.B()) end\n").len(), 1);
         let unguarded = run("print(C_X.A())\n");
         assert!(
             unguarded
                 .iter()
-                .all(|m| m.contains("`vanilla`") && !m.contains("mists")),
+                .all(|m| m.contains("`vanilla`") && !m.contains("tbc")),
             "{unguarded:?}"
         );
-        assert!(run("if WOW_PROJECT_ID ~= 2 then print(C_X.B()) end\n")[0].contains("`mists`"));
+        assert!(run("if WOW_PROJECT_ID ~= 2 then print(C_X.B()) end\n")[0].contains("`tbc`"));
         // Single-flavor builds: feature detection of what the flavor lacks.
         let d = check_with(
             "if C_X.Missing then C_X.Missing(1) end\nlocal _f = C_X.Gone and C_X.Gone()\nif not OldApi then return end\nOldApi(1)\n",

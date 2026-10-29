@@ -12,6 +12,7 @@ authors.workspace = true
 wowlua-span.workspace = true
 wowlua-diagnostics.workspace = true
 wowlua-flavors.workspace = true
+wowlua-toc.workspace = true
 globset.workspace = true
 indexmap.workspace = true
 regex.workspace = true

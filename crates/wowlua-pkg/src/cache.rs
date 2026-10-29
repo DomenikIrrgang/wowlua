@@ -122,6 +122,31 @@ impl Cache {
         let _ = std::fs::write(stamp(entry), b"");
     }
 
+    /// A part of the cache (`check`, `compile`, `git`, …): its bytes and
+    /// entries (T505).
+    pub fn part(&self, group: &str) -> (u64, usize) {
+        let dir = self.root.join(group);
+        let entries = std::fs::read_dir(&dir)
+            .map(|r| {
+                r.flatten()
+                    .filter(|e| !e.file_name().to_string_lossy().starts_with('.'))
+                    .count()
+            })
+            .unwrap_or(0);
+        (size(&dir), entries)
+    }
+
+    /// Removes one part of the cache (T505); the bytes freed.
+    pub fn clear_part(&self, group: &str) -> io::Result<u64> {
+        let dir = self.root.join(group);
+        if !dir.exists() {
+            return Ok(0);
+        }
+        let freed = size(&dir);
+        remove(&dir)?;
+        Ok(freed)
+    }
+
     /// Removes entries not used for `older_than` (everything with `None`).
     /// Returns the removed entries and the bytes freed.
     pub fn clean(&self, older_than: Option<Duration>) -> io::Result<(Vec<PathBuf>, u64)> {
@@ -293,6 +318,25 @@ pub(crate) fn commit(staged: &Path, target: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One part of the cache is measured and cleared alone (T505).
+    #[test]
+    #[allow(clippy::disallowed_methods)] // (a cache on the disk)
+    fn a_part_is_measured_and_cleared_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::at(dir.path());
+        std::fs::create_dir_all(dir.path().join("check")).unwrap();
+        std::fs::write(dir.path().join("check/aaa"), [0u8; 100]).unwrap();
+        std::fs::write(dir.path().join("check/bbb"), [0u8; 50]).unwrap();
+        std::fs::create_dir_all(dir.path().join("compile")).unwrap();
+        std::fs::write(dir.path().join("compile/ccc"), [0u8; 10]).unwrap();
+        assert_eq!(cache.part("check"), (150, 2));
+        assert_eq!(cache.part("missing"), (0, 0));
+        assert_eq!(cache.clear_part("check").unwrap(), 150);
+        assert_eq!(cache.part("check"), (0, 0));
+        assert_eq!(cache.part("compile"), (10, 1), "left alone");
+        assert_eq!(cache.clear_part("check").unwrap(), 0);
+    }
 
     /// Compile results and module caches unused for longer than the limit
     /// go; `--all` takes the whole directories.

@@ -95,7 +95,8 @@ if list then frames.keepAway(list, { fade = true }) end     -- out of sight, sti
 ### Edit Mode
 
 With `editMode = { label = … }` the frame joins the client's Edit Mode, which
-every active client has but Cata Classic's (decision S36):
+every flavor's client has (decision S36; Cataclysm Classic's, which had none,
+is no flavor since decision T507):
 
 ```wowlua
 frames.movable(bar, { store = db, key = "bar", editMode = { label = "MyAddon Bar" } })
@@ -121,8 +122,8 @@ frames.movable(bar, { store = db, key = "bar", editMode = { label = "MyAddon Bar
   ordinary movable frame. A client has Edit Mode when its
   `EditModeManagerFrame` has the manager's methods (`IsEditModeActive`,
   `GetActiveLayoutInfo`, `ClearSelectedSystem`, `SelectSystem`,
-  `UpdateLayoutInfo`) and `EventRegistry` exists; Cata Classic's client
-  has only a stub of the manager (`IsEditModeActive`). The compiler warns
+  `UpdateLayoutInfo`) and `EventRegistry` exists; Cataclysm Classic's client
+  had only a stub of the manager (`IsEditModeActive`). The compiler warns
   (W8301) where a targeted flavor's declarations lack
   `EditModeManagerFrame.GetActiveLayoutInfo` and the call passes `editMode`
   (decision S59).

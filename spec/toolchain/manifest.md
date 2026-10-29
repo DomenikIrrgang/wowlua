@@ -42,7 +42,7 @@ and indentation. Unknown keys are error E4002, so typos are caught. Keys are
   },
   "flavors": {
     "standard": {},
-    "mists": {},
+    "tbc": {},
     "vanilla": { "interface": [11509] }
   },
   "dependencies": {
@@ -132,7 +132,7 @@ Only for `kind: "addon"`. Every key maps to a TOC directive and/or `wowlua:meta`
 | `allow-table-access` | bool | `false` | `AllowAddOnTableAccess` | Lets other addons read this addon's table through `C_AddOns.GetAddOnLocalTable` (and so `__wowlua.meta` and module exports) |
 | `only-beta-and-ptr` | bool | `false` | `OnlyBetaAndPTR` | |
 | `expose-meta` | string | none | (none) | Also store `wowlua:meta` runtime tables in this global (an explicit `@global`-style write, see [Code generation §14.1.1](codegen.md#1411-global-writes)) |
-| `toc-extra` | `{string: string}` | `{}` | verbatim | Extra directives. Keys must start with `X-` unless they are known directives (W4001). |
+| `toc-extra` | `{string: string}` | `{}` | verbatim | Extra directives. Keys must start with `X-` unless they are known directives (W4001): `AddonCompartmentFunc`, `AddonCompartmentFuncOnEnter`, `AddonCompartmentFuncOnLeave`, `AllowLoadGameType`, `ExcludeLoadGameType`. A directive wowlua writes from another key (`Interface`, `Title`, `Notes`, `Author`, `Version`, `Category`, `Group`, `IconTexture`, `IconAtlas`, `LoadOnDemand`, `DefaultState`, `SavedVariables`, `SavedVariablesPerCharacter`, `LoadSavedVariablesFirst`, `AllowAddOnTableAccess`, `OnlyBetaAndPTR`, `Dependencies`, `RequiredDeps`, `OptionalDeps`, `LoadWith`, `LoadManagers`, `X-Wowlua-Build`, and the localized `Title-`, `Notes-`, `Category-`) is E4002. Crate `wowlua-toc` lists both (`extra_directives`, `generated_directives`; decision T508). |
 | `meta` | `{string: string\|number\|bool}` | `{}` | (none) | Custom values in `addon.meta` of `wowlua:meta` |
 | `flavor-overrides` | `{flavor: Override}` | `{}` | per-flavor directives | Metadata that differs per flavor (§9.3.1) |
 | `toc-data` | `{flavor: path[]}` | `{}` | verbatim, per flavor | Files of bulk `## Key: Value` lines (§9.3.2) |
@@ -153,8 +153,8 @@ the field for that flavor.
   "icon-texture": "Interface\\AddOns\\ElvUI\\Media\\LogoAddon",
   "group": "ElvUI",
   "flavor-overrides": {
-    "mists": { "title": "|cff1784d1ElvUI|r Mists" },
-    "wrath": { "title": "|cff1784d1ElvUI|r Wrath", "icon-texture": null, "group": null },
+    "tbc": { "title": "|cff1784d1ElvUI|r TBC" },
+    "vanilla": { "title": "|cff1784d1ElvUI|r Classic", "icon-texture": null, "group": null },
     "standard": { "toc-extra": { "AddonCompartmentFunc": "ElvUI_AddonCompartmentFunc" } }
   }
 }
@@ -189,7 +189,7 @@ that flavor's TOC (decision T54):
 "addon": {
   "toc-data": {
     "standard": ["tocdata/standard.tocdata"],
-    "mists": ["tocdata/mists.tocdata"]
+    "vanilla": ["tocdata/vanilla.tocdata"]
   }
 }
 ```
@@ -230,20 +230,43 @@ Flavor IDs are **Blizzard's game types**, as used by TOC load directives. They
 name the ruleset, not the client. The table is data shipped with the compiler
 (crate `wowlua-flavors`). `wowlua types sync` updates it, and the version in use
 is pinned in `wowlua.lock` ([Package manager §10.6](package-manager.md#106-lockfile)),
-so every machine builds identical TOCs. The values below are as of 2026-10-11.
+so every machine builds identical TOCs. The values below are as of 2026-10-29
+(table version `2026.10.29`).
 
-| Flavor ID | Aliases | Family | Current client(s) | Interface | `WOW_PROJECT_ID` | Client folder(s) | Game suffix (family suffix) |
-|-----------|---------|--------|-------------------|-----------|------------------|------------------|-----------------------------|
-| `standard` | `retail`, `mainline` | Mainline | Retail (Midnight) 12.1.0 | 120100 | 1 | `_retail_`, `_ptr_`, `_xptr_`, `_beta_` | `_Standard`, 12.1.5+ only (`_Mainline`) |
-| `camelot` | `forever` | Mainline | WoW: Forever (launch 2026-11-04) | 16001 (beta) | 18 | `_forever_` (decision T499; the beta's `_classic_beta_` too) | `_Camelot` / `_Forever` (`_Mainline`) |
-| `mists` | | Classic | MoP Classic 5.5.4 | 50504 | 19 | `_classic_`, `_classic_ptr_` | `_Mists` (`_Classic`) |
-| `cata` | | Classic | Cataclysm Classic 4.4.2 (closed) | 40402 | 14 | — | `_Cata` (`_Classic`) |
-| `wrath` | `titan` | Classic | Titan Reforged 3.80.2 (China); Wrath Classic 3.4.5 (closed) | 38002 | 11 | pending | `_Wrath` (`_Classic`) |
-| `tbc` | `anniversary` | Classic | TBC Anniversary 2.5.6 | 20506 | 5 | `_anniversary_`, `_classic_era_ptr_` | `_TBC` (`_Classic`) |
-| `vanilla` | `classic-era` | Classic | Classic Era 1.15.9 | 11509 | 2 | `_classic_era_` | `_Vanilla` (`_Classic`) |
+The table is the one list of flavors every tool reads: the compiler and the
+CLI, wowlua Studio and the registry (its flavor filter). Its order is the order
+pickers list the flavors in, the supported ones first. Each flavor has a
+display **name** and a **support** state (decisions T507, T509):
+
+- **Supported**: the toolchain runs it fully: the emulated client, the test
+  runner, the debugger and Blizzard's UI.
+- **Coming soon**: named and checked (manifests, types, TOCs, builds,
+  packages), but not run yet.
+
+| Flavor ID | Name | Support | Max level | Aliases | Family | Current client(s) | Interface | `WOW_PROJECT_ID` | Client folder(s) | Game suffix (family suffix) |
+|-----------|------|---------|-----------|---------|--------|-------------------|-----------|------------------|------------------|-----------------------------|
+| `camelot` | WoW Forever | supported | 60 (recorded) | `forever` | Mainline | WoW: Forever (launch 2026-11-04) | 16001 (beta) | 18 | `_forever_` (decision T499; the beta's `_classic_beta_` too) | `_Camelot` / `_Forever` (`_Mainline`) |
+| `standard` | Retail | coming soon | 90 | `retail`, `mainline` | Mainline | Retail (Midnight) 12.1.0 | 120100 | 1 | `_retail_`, `_ptr_`, `_xptr_`, `_beta_` | `_Standard`, 12.1.5+ only (`_Mainline`) |
+| `vanilla` | Classic Era | coming soon | 60 | `classic-era` | Classic | Classic Era 1.15.9 | 11509 | 2 | `_classic_era_` | `_Vanilla` (`_Classic`) |
+| `tbc` | TBC Anniversary | coming soon | 70 | `anniversary` | Classic | TBC Anniversary 2.5.6 | 20506 | 5 | `_anniversary_`, `_classic_era_ptr_` | `_TBC` (`_Classic`) |
+| `mists` | MoP Classic | coming soon | 90 | | Classic | MoP Classic 5.5.4 | 50504 | 19 | `_classic_`, `_classic_ptr_` | `_Mists` (`_Classic`) |
+
+Each flavor records its **max level**, the highest level a character reaches
+(`max-level`; decision T508): the bound of a level picker and of a world
+profile's character ([Tooling §16.1.4](tooling.md#1614-wowluamock)),
+and `GetMaxLevelForLatestExpansion`'s answer in the emulated client. Only
+camelot's is recorded (`GetMaxPlayerLevel()` answers 60 in WoW Forever); the
+others are the games' level caps, not recorded (MoP Classic's 90 among them).
+
+Mists of Pandaria Classic, still in live service, is the flavor `mists`
+(decision T509). Wrath of the Lich King Classic and Titan Reforged, and
+Cataclysm Classic have no flavor (decision T507): `wrath`, `titan` and `cata`
+are unknown flavors (E4004), their TOC suffixes (`_Wrath`, `_Cata`, the legacy
+`-WOTLKC`) mean nothing, and interface numbers from 30000 to 49999 belong to
+no flavor.
 
 **Aliases.** Aliases that name a ruleset (`retail`, `mainline`,
-`classic-era`) are permanent. Aliases that name a client (`forever`, `titan`,
+`classic-era`) are permanent. Aliases that name a client (`forever`,
 `anniversary`) resolve to the ruleset that client runs **in the pinned flavor
 table**. When `wowlua types sync` moves such an alias to another ruleset (for
 example when Anniversary realms progress), it reports warning W4313 and the
@@ -259,12 +282,6 @@ site-specific identifiers used when publishing
 ([Publishing §11.3](publishing.md#113-game-version-mapping)). A flavor without
 a types package or pinned interface is error E4318.
 
-Closed clients such as Cataclysm Classic 4.4.2 and Wrath Classic 3.4.5 have no
-client folders. They stay in the table so the TOC features of their last build
-are known to `auto` layout decisions. Both support every TOC feature listed
-above, including file variables, and recognize the game types of their own
-expansion and all older ones (decision T56). The evidence is that BigWigs and
-DBM ship single TOCs with these features for them.
 
 ## 9.5 Dependencies
 
@@ -358,7 +375,7 @@ lines (decision T55):
   "variable-files": [
     { "path": "src/Init_[Game].lua" },
     { "path": "src/Locales/[TextLocale].lua", "locales": ["deDE", "frFR"] },
-    { "path": "src/Classic_[Family].lua", "flavors": ["mists", "vanilla"] }
+    { "path": "src/Classic_[Family].lua", "flavors": ["tbc", "vanilla"] }
   ]
 }
 ```
@@ -552,7 +569,7 @@ Target objects:
 
 | Key | Type | Default |
 |-----|------|---------|
-| `indent` | `"tab"` \| 2 \| 4 | `"tab"` |
+| `indent` | `"tab"` \| number of spaces (2, 4, 8, …) | `"tab"` |
 | `line-width` | number | `100` |
 | `quote-style` | `"double"` `"single"` `"preserve"` | `"double"` |
 | `lua` | bool | `false` (also format `.lua` files) |
@@ -618,7 +635,7 @@ used.
 
 | Key | Type | Default | Meaning |
 |-----|------|---------|---------|
-| `log.history-size` | integer | `500` | Size of the `wowlua:log` ring buffer ([Standard library: log](../stdlib/advanced.md#log)) |
+| `log.history-size` | integer, at least 1 (0 is E4002) | `500` | Size of the `wowlua:log` ring buffer ([Standard library: log](../stdlib/advanced.md#log)) |
 
 ```json
 "stdlib": { "log": { "history-size": 1000 } }
@@ -633,8 +650,8 @@ Since M9 S4 (`blizzard-ui`, `profile`, `addons`) and S5 (`coverage`, `reporters`
 | `blizzard-ui` | bool | `false` | Load the flavor's FrameXML as secure code before the addon ([WoW client emulation §17.7](emulator.md#177-blizzards-ui-code)); for now it loads without errors on camelot alone, the one client recorded |
 | `profile` | string | none | The world profile (`tests/profiles/<name>.json`) of test files that name none ([Tooling §16.1.4](tooling.md#1614-wowluamock)) |
 | `platform` | `"mac"` \| `"windows"` | `"mac"` | The machine the emulated client runs on for test files that name none: the recorded answers that differ by machine (key names, graphics, sound, colours' last digits) and `IsMacClient`, `IsWindowsClient` (decision T236; a file's `config({ platform })` over it) |
-| `screen` | `{ width, height, dpiScale?, uiScale? }` | `{ width: 1920, height: 1080 }` | The screen the emulated client draws on for test files that name none (a world profile's `screen` over it, decision T482), in pixels: UIParent's size and scale, `GetScreenWidth`, `GetPhysicalScreenSize`, and the size of text in UI units. `dpiScale` is the system's (`GetScreenDPIScale`, 1 by default); `uiScale` the UI scale with "Use UI Scale" on (without one, the client's own: 768 over the height, times the DPI scale, at most 1). Decision T237; a file's `config({ screen })` over it |
-| `coverage.lines`, `.statements`, `.branches`, `.functions`, `.conditions` | number (percent) | none | Minimum coverage; a run of the whole suite below it fails, a run with filters is not checked ([Tooling §16.1.6](tooling.md#1616-coverage)) |
+| `screen` | `{ width, height, dpiScale?, uiScale? }` | `{ width: 1920, height: 1080 }` | The screen the emulated client draws on for test files that name none (a world profile's `screen` over it, decision T482), in pixels: UIParent's size and scale, `GetScreenWidth`, `GetPhysicalScreenSize`, and the size of text in UI units. `dpiScale` is the system's (`GetScreenDPIScale`, 1 by default); `uiScale` the UI scale with "Use UI Scale" on (without one, the client's own: 768 over the height, times the DPI scale, at most 1), a value of the game's UI Scale slider: 0.65 to 1.15 in steps of 0.01 (65% to 115%; another is E4002, decision T508). Decision T237; a file's `config({ screen })` over it |
+| `coverage.lines`, `.statements`, `.branches`, `.functions`, `.conditions` | number (percent, 0 to 100; another is E4002) | none | Minimum coverage; a run of the whole suite below it fails, a run with filters is not checked ([Tooling §16.1.6](tooling.md#1616-coverage)) |
 | `coverage.exclude` | string[] | `[]` | Files excluded from coverage (glob patterns) |
 | `reporters` | string[] | `["pretty"]` | Default test and coverage reporters (`pretty`, `junit`, `tap`, `json`, `github`, `lcov`, `cobertura`, `coverage-json`, `html`) |
 | `addons` | string[] | `[]` | Other addons' folders (relative to the package root, or absolute) loaded before the addon, each as its own addon: its TOC's files, namespace, SavedVariables and `ADDON_LOADED` ([Tooling §16.1.2](tooling.md#1612-what-a-test-run-loads)). No two may share a folder name (E4002) |

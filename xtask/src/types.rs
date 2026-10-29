@@ -45,16 +45,6 @@ const STRINGS: &[(&str, &str, &str)] = &[
         "877c67e9e0a64b5daae348a7b72b7a64bfaab90f",
     ),
     (
-        "cata",
-        "classic",
-        "877c67e9e0a64b5daae348a7b72b7a64bfaab90f",
-    ),
-    (
-        "wrath",
-        "classic",
-        "877c67e9e0a64b5daae348a7b72b7a64bfaab90f",
-    ),
-    (
         "tbc",
         "classic_anniversary",
         "d6d4a8f445f198c5c73ff5f8f5002ad8f04451e4",
@@ -690,8 +680,8 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
         let strings_text = fs::read_to_string(dir.join("strings").join(format!("{commit}.lua")))
             .context("global strings missing: run `cargo xtask types fetch`")?;
         // The engine's inventory of the client's C functions, where the
-        // dump is the flavor's own client (cata and wrath take Mists') and
-        // `/stdtest inventory` has not recorded it (camelot's).
+        // dump is the flavor's own client and `/stdtest inventory` has not
+        // recorded it (camelot's).
         if CLIENT_DUMPS.contains(&flavor.as_str()) {
             let api = fs::read_to_string(dir.join("api").join(format!("{commit}.lua")))
                 .context("global API names missing: run `cargo xtask types fetch`")?;

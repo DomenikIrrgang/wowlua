@@ -206,6 +206,19 @@ pub struct Item {
     pub at: Option<Span>,
     /// What it does, where no doc comment says (a core decorator).
     pub doc: Option<String>,
+    /// An export of another module the file does not import yet: the
+    /// specifier its import names (auto-import, T506).
+    pub import: Option<Box<str>>,
+}
+
+/// An export of another module a name completion can offer with its
+/// import (T506).
+#[derive(Clone, Debug)]
+pub struct Importable {
+    pub name: Box<str>,
+    /// The module's specifier, as the file would import it.
+    pub from: Box<str>,
+    pub kind: Kind,
 }
 
 /// What a completion check found.
@@ -353,6 +366,7 @@ impl Env<'_> {
 
     fn type_item(&self, label: &str, d: DefId, rank: u8) -> Item {
         Item {
+            import: None,
             label: label.to_string(),
             kind: self.def_kind(d),
             detail: String::new(),
@@ -377,6 +391,7 @@ impl Env<'_> {
         if path.len() == 1 {
             for (name, _) in &scope.params {
                 items.push(Item {
+                    import: None,
                     label: name.to_string(),
                     kind: Kind::TypeParameter,
                     detail: String::new(),
@@ -388,6 +403,7 @@ impl Env<'_> {
             }
             if scope.self_ty.is_some() {
                 items.push(Item {
+                    import: None,
                     label: "Self".into(),
                     kind: Kind::TypeParameter,
                     detail: String::new(),
@@ -399,6 +415,7 @@ impl Env<'_> {
             }
             for b in BUILTIN_TYPES {
                 items.push(Item {
+                    import: None,
                     label: b.to_string(),
                     kind: Kind::Builtin,
                     detail: String::new(),
@@ -429,6 +446,7 @@ impl Env<'_> {
                     .collect();
                 for n in namespaces {
                     items.push(Item {
+                        import: None,
                         label: n.to_string(),
                         kind: Kind::Module,
                         detail: String::new(),
@@ -593,6 +611,7 @@ impl Checker<'_, '_> {
                 continue;
             }
             items.push(Item {
+                import: None,
                 label: n,
                 kind: Kind::Literal,
                 detail: String::new(),
@@ -618,6 +637,7 @@ impl Checker<'_, '_> {
         let items = events
             .into_iter()
             .map(|(n, pack)| Item {
+                import: None,
                 label: n.to_string(),
                 kind: Kind::Literal,
                 detail: self.env.display_pack(&pack, 0),
@@ -685,6 +705,7 @@ impl Checker<'_, '_> {
             .iter()
             .filter(|(n, _, _)| applies(n, on))
             .map(|(n, written, doc)| Item {
+                import: None,
                 label: n.to_string(),
                 kind: Kind::Decorator,
                 detail: written.to_string(),
@@ -717,6 +738,7 @@ impl Checker<'_, '_> {
                     _ => None,
                 };
                 items.push(Item {
+                    import: None,
                     label: name.to_string(),
                     kind,
                     detail: self.env.display(t),
@@ -771,6 +793,7 @@ impl Checker<'_, '_> {
                 }),
             };
             items.push(Item {
+                import: None,
                 label: name.to_string(),
                 kind,
                 detail: self.env.display(t),
@@ -800,6 +823,7 @@ impl Checker<'_, '_> {
                 .unwrap_or(Types::ANY);
             seen.insert(name.as_str().into());
             items.push(Item {
+                import: None,
                 kind: self.env.value_kind(t, false),
                 detail: self.env.display(t),
                 rank: 1,
@@ -820,6 +844,7 @@ impl Checker<'_, '_> {
                 .collect();
             for (name, t) in game {
                 items.push(Item {
+                    import: None,
                     label: name.to_string(),
                     kind: self.env.value_kind(t, false),
                     detail: self.env.display(t),
@@ -828,6 +853,24 @@ impl Checker<'_, '_> {
                     at: None,
                     doc: None,
                 });
+            }
+        }
+        // the exports of the package's other modules, each with its
+        // import (auto-import, T506)
+        if !prefix.is_empty() {
+            for imp in &self.importable {
+                if matches(&prefix, &imp.name) && !seen.contains(&*imp.name) {
+                    items.push(Item {
+                        label: imp.name.to_string(),
+                        kind: imp.kind,
+                        detail: format!("import from \"{}\"", imp.from),
+                        rank: 1,
+                        target: None,
+                        at: None,
+                        doc: None,
+                        import: Some(imp.from.clone()),
+                    });
+                }
             }
         }
         self.env.found(Context::Names, items, incomplete, at.file);
@@ -871,6 +914,7 @@ impl Checker<'_, '_> {
         }
         let shown = if method { self.drop_first(t) } else { t };
         Some(Item {
+            import: None,
             label: label.to_string(),
             kind,
             detail: self.env.display(shown),
@@ -1027,6 +1071,7 @@ impl Checker<'_, '_> {
                 for (i, (n, _)) in members.iter().enumerate() {
                     let t = self.env.types.intern(Ty::EnumMember(d, i as u32));
                     out.push(Item {
+                        import: None,
                         label: n.to_string(),
                         kind: Kind::EnumMember,
                         detail: self.env.display(t),

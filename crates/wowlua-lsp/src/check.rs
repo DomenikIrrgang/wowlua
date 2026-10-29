@@ -53,6 +53,8 @@ pub struct Completion {
     pub declared: Option<(String, u32)>,
     /// What it does, where no doc comment says (a core decorator).
     pub doc: Option<String>,
+    /// The module to import it from (auto-import, T506).
+    pub import: Option<String>,
 }
 
 /// A place in a file: its URI (shared by every name that leads there) and
@@ -132,7 +134,10 @@ pub fn check(
     focus: Option<&HashSet<PathBuf>>,
     complete: Option<&str>,
 ) -> Vec<Checked> {
-    check_and(manifest, whole, open, focus, complete, None, None, drop)
+    let settings = Settings::default();
+    check_and(
+        manifest, whole, open, focus, complete, None, &settings, None, drop,
+    )
 }
 
 /// A references or rename check (`find`) of the whole workspace of
@@ -144,6 +149,7 @@ pub fn find(
     manifest: &Path,
     open: &HashSet<PathBuf>,
     find: &crate::refs::Find,
+    settings: &Settings,
     mut warm: Option<&mut Warm>,
     done: fn(Session),
 ) -> Vec<Checked> {
@@ -154,6 +160,7 @@ pub fn find(
         None,
         None,
         Some(find),
+        settings,
         warm.as_deref_mut(),
         done,
     );
@@ -170,7 +177,7 @@ pub fn find(
     let verdict = if edits.is_empty() {
         Err("wowlua found nothing here to rename".to_string())
     } else {
-        verify(manifest, open, &out, find, new, &edits, warm)
+        verify(manifest, open, &out, find, new, &edits, settings, warm)
     };
     if let Err(why) = verdict
         && let Some(found) = out.first_mut().and_then(|c| c.found.as_mut())
@@ -183,6 +190,7 @@ pub fn find(
 /// Checks the workspace with `edits` given the name `new` (over the texts
 /// the first check read, put back after): no new errors, and the renamed
 /// names, and no others, spelled as `new` and referring to the same.
+#[allow(clippy::too_many_arguments)]
 fn verify(
     manifest: &Path,
     open: &HashSet<PathBuf>,
@@ -190,6 +198,7 @@ fn verify(
     find: &crate::refs::Find,
     new: &str,
     edits: &[crate::refs::Place],
+    settings: &Settings,
     mut warm: Option<&mut Warm>,
 ) -> Result<(), String> {
     let mut by_file: BTreeMap<&Path, Vec<&crate::refs::Place>> = BTreeMap::new();
@@ -250,6 +259,7 @@ fn verify(
         None,
         None,
         Some(&again),
+        settings,
         warm.as_deref_mut(),
         drop,
     );
@@ -340,6 +350,41 @@ fn renamed_text(bytes: &[u8], moved: &[(u32, u32, i64)], new: &str) -> Vec<u8> {
     out
 }
 
+/// What the editor asks of checks (its settings, T504): the build profile
+/// diagnostics follow, and the threads for per-file work.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Settings {
+    pub profile: String,
+    /// `None`: `WOWLUA_JOBS`, the global config, every core.
+    pub threads: Option<usize>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            profile: "dev".into(),
+            threads: None,
+        }
+    }
+}
+
+impl Settings {
+    /// Reads `profile` and `threads` from the editor's settings, keeping
+    /// what they do not name.
+    pub fn read(&mut self, json: &Json) {
+        if let Some(p) = json["profile"].as_str().filter(|p| !p.is_empty()) {
+            self.profile = p.to_string();
+        }
+        if let Some(n) = json["threads"].as_u64() {
+            self.threads = (n > 0).then_some(n as usize);
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        serde_json::json!({ "profile": self.profile, "threads": self.threads })
+    }
+}
+
 /// What a long-lived checker keeps between checks: each package's build
 /// cache (by its manifest), so a check repeats only the work of what
 /// changed.
@@ -401,7 +446,30 @@ pub fn check_warm(
     complete: Option<&str>,
     warm: Option<&mut Warm>,
 ) -> Vec<Checked> {
-    check_and(manifest, whole, open, focus, complete, None, warm, drop)
+    check_with(
+        manifest,
+        whole,
+        open,
+        focus,
+        complete,
+        &Settings::default(),
+        warm,
+    )
+}
+
+/// [`check_warm`] with the editor's settings (T504).
+pub fn check_with(
+    manifest: &Path,
+    whole: bool,
+    open: &HashSet<PathBuf>,
+    focus: Option<&HashSet<PathBuf>>,
+    complete: Option<&str>,
+    settings: &Settings,
+    warm: Option<&mut Warm>,
+) -> Vec<Checked> {
+    check_and(
+        manifest, whole, open, focus, complete, None, settings, warm, drop,
+    )
 }
 
 /// [`check`], handing the session to `done` (a process about to end
@@ -414,6 +482,7 @@ fn check_and(
     focus: Option<&HashSet<PathBuf>>,
     complete: Option<&str>,
     find: Option<&crate::refs::Find>,
+    settings: &Settings,
     mut warm: Option<&mut Warm>,
     done: fn(Session),
 ) -> Vec<Checked> {
@@ -485,7 +554,7 @@ fn check_and(
                 continue;
             }
             let request = BuildRequest {
-                profile: "dev".into(),
+                profile: settings.profile.clone(),
                 flavors: None,
                 out_dir: None,
                 write: false,
@@ -493,7 +562,7 @@ fn check_and(
                 minify: None,
                 bundle: None,
                 only: None,
-                jobs: wowlua_driver::parallel::Jobs::resolve(None),
+                jobs: wowlua_driver::parallel::Jobs::resolve(settings.threads),
                 keep_code: false,
                 tests: true,
                 left_out: Vec::new(),
@@ -717,6 +786,7 @@ fn completions_of(
                 rank: item.rank,
                 declared,
                 doc: item.doc,
+                import: item.import.map(String::from),
             }
         })
         .collect();
@@ -1055,8 +1125,10 @@ pub fn worker(warm: &mut Warm, request: &Json) -> Json {
     let free: fn(Session) = |s| {
         std::thread::spawn(move || drop(s));
     };
+    let mut settings = Settings::default();
+    settings.read(&request["settings"]);
     let packages = match crate::refs::Find::from_json(&request["find"]) {
-        Some(f) => find(&manifest, &open, &f, Some(warm), free),
+        Some(f) => find(&manifest, &open, &f, &settings, Some(warm), free),
         None => check_and(
             &manifest,
             whole,
@@ -1064,6 +1136,7 @@ pub fn worker(warm: &mut Warm, request: &Json) -> Json {
             focus.as_ref(),
             complete,
             None,
+            &settings,
             Some(warm),
             free,
         ),
@@ -1116,7 +1189,7 @@ impl Checked {
             "completions": self.completions.as_ref().map(|c| json!({
                 "context": c.context,
                 "incomplete": c.incomplete,
-                "items": c.items.iter().map(|i| json!([i.label, i.kind, i.detail, i.rank, i.declared, i.doc])).collect::<Vec<_>>(),
+                "items": c.items.iter().map(|i| json!([i.label, i.kind, i.detail, i.rank, i.declared, i.doc, i.import])).collect::<Vec<_>>(),
             })),
         })
     }
@@ -1219,6 +1292,7 @@ fn completions_from(json: &Json) -> Option<Completions> {
                     Some((d.get(0)?.as_str()?.to_string(), d.get(1)?.as_u64()? as u32))
                 }),
                 doc: row.get(5).and_then(Json::as_str).map(str::to_string),
+                import: row.get(6).and_then(Json::as_str).map(str::to_string),
             })
         })
         .collect::<Option<Vec<_>>>()?;

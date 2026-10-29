@@ -44,8 +44,10 @@ The manifest is valid JSON but does not match the schema: an unknown key
 (often a typo, so the help suggests the closest key), a value of the wrong
 type, a missing `package` section, or a value the schema does not allow, such
 as a SavedVariable that is no Lua identifier, a TOC directive in `toc-extra`
-that wowlua writes itself, or a `flavor-overrides` key for a flavor the
-package does not target. Unknown keys are errors so that a misspelled setting
+that wowlua writes itself, a `flavor-overrides` key for a flavor the
+package does not target, a `test.screen.uiScale` off the game's UI Scale
+slider (0.65 to 1.15 in steps of 0.01), a coverage minimum outside 0 to 100,
+or a `stdlib.log.history-size` of 0. Unknown keys are errors so that a misspelled setting
 is never ignored without a word.
 
 Fix the key or the value the message points at. If the key belongs to a newer
@@ -126,13 +128,14 @@ capitals.
 
 A flavor name is not in wowlua's flavor table: in `flavors`, in a dependency's
 or publish target's `flavors`, in `addon.flavor-overrides` or `addon.toc-data`,
-or given with `--flavor`. Flavors are Blizzard's game types: `standard`,
-`camelot`, `mists`, `cata`, `wrath`, `tbc` and `vanilla`, with aliases such as
-`retail`, `forever`, `anniversary` and `classic-era`. The message lists the
-known flavors.
+or given with `--flavor`. Flavors are Blizzard's game types: `camelot`,
+`standard`, `vanilla`, `tbc` and `mists`, with aliases such as `forever`,
+`retail`, `classic-era` and `anniversary`. The message lists the known
+flavors. Wrath and Cataclysm Classic (`wrath`, `cata`) are not flavors of
+wowlua.
 
 `classic` is not a flavor: name the Classic game the addon is for (`vanilla`
-for Classic Era, `mists` for Mists of Pandaria Classic, and so on).
+for Classic Era, `tbc` for TBC Anniversary, `mists` for MoP Classic).
 
 ```json fails title=wowlua.json
 {
@@ -1468,7 +1471,10 @@ Related: E4401, E4402
 A world profile does not match its schema: an unknown part (the emulated world
 would ignore it), a part of the wrong type, or a key that should be an ID but
 is not (parts such as `items` and `spells` are keyed by IDs). Fields of a part
-beyond the schema's are allowed and passed on as they are.
+beyond the schema's are allowed and passed on as they are. Two values are
+checked against the game too: `screen.uiScale` is a value of the game's UI
+Scale slider (0.65 to 1.15 in steps of 0.01), and the character's `level` is
+1 to the max level of the package's flavors (60 on camelot).
 
 Fix the part's name or value. An editor completes the parts when the profile
 names `schema/world-profile-0.1.json` in `$schema`.
@@ -1678,7 +1684,7 @@ game at a time can set `compat.per-game`, which applies the blocks per flavor.
     },
     "flavors": {
         "camelot": {},
-        "mists": {}
+        "vanilla": {}
     },
     "compat": {
         "packager-keywords": true
@@ -1700,7 +1706,7 @@ print("Retail only")
     },
     "flavors": {
         "camelot": {},
-        "mists": {}
+        "vanilla": {}
     },
     "compat": {
         "packager-keywords": true
@@ -1747,7 +1753,7 @@ TOC per flavor without the warning, set `"toc-layout": "per-flavor"`.
     },
     "flavors": {
         "camelot": {},
-        "mists": {}
+        "vanilla": {}
     }
 }
 ```
@@ -1760,7 +1766,7 @@ print(a, flavor)
 ```
 ```wowlua fails title=src/b.wowlua
 import flavor from "wowlua:meta"
-@if(flavor == "mists")
+@if(flavor == "vanilla")
 import a from "./a"
 export local b = "b"
 print(b, flavor)
@@ -1775,7 +1781,7 @@ print(b, flavor)
     },
     "flavors": {
         "camelot": {},
-        "mists": {}
+        "vanilla": {}
     },
     "build": {
         "toc-layout": "per-flavor"
@@ -1791,7 +1797,7 @@ print(a, flavor)
 ```
 ```wowlua compiles title=src/b.wowlua
 import flavor from "wowlua:meta"
-@if(flavor == "mists")
+@if(flavor == "vanilla")
 import a from "./a"
 export local b = "b"
 print(b, flavor)
@@ -1860,14 +1866,14 @@ Related: E4308
 
 ## W4313
 
-`wowlua types sync` moved a client alias (`anniversary`, `titan` or `forever`)
+`wowlua types sync` moved a client alias (`anniversary` or `forever`)
 to another ruleset. These aliases name a client and stand for the ruleset that
 client runs in the pinned flavor table; when Anniversary realms move on to
 the next expansion, for example, `anniversary` names another flavor. The
 manifest gets the new meaning only once you accept the lockfile update.
 
 Check that your addon supports the new ruleset, or write the flavor ID
-(`tbc`, `wrath`, `camelot`) instead of the alias. The warning comes from
+(`tbc`, `camelot`) instead of the alias. The warning comes from
 `wowlua types sync`, so it has no example here.
 
 Related: E4004

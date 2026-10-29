@@ -759,7 +759,7 @@ mod tests {
             (false, None),
             (true, None),
         ];
-        let (planned, orders) = plan("A", &entries, &flavors(&["standard", "mists"]), None);
+        let (planned, orders) = plan("A", &entries, &flavors(&["standard", "tbc"]), None);
         assert_eq!(
             planned,
             [
@@ -784,12 +784,12 @@ mod tests {
         // Every file has a variant per flavor (split mode).
         let entries = vec![
             (true, Some(flavors(&["standard"]))),
-            (true, Some(flavors(&["mists"]))),
+            (true, Some(flavors(&["tbc"]))),
             (true, Some(flavors(&["standard"]))),
-            (true, Some(flavors(&["mists"]))),
+            (true, Some(flavors(&["tbc"]))),
             (true, None),
         ];
-        let (planned, _) = plan("A", &entries, &flavors(&["standard", "mists"]), None);
+        let (planned, _) = plan("A", &entries, &flavors(&["standard", "tbc"]), None);
         let members: Vec<(String, Vec<usize>)> = planned
             .iter()
             .filter_map(|p| match p {
@@ -801,7 +801,7 @@ mod tests {
             members,
             [
                 ("A.standard.lua".to_string(), vec![0, 2]),
-                ("A.mists.lua".to_string(), vec![1, 3]),
+                ("A.tbc.lua".to_string(), vec![1, 3]),
                 ("A.lua".to_string(), vec![4]),
             ]
         );
@@ -811,13 +811,13 @@ mod tests {
     fn flavors_with_different_files_get_bundles_of_their_own() {
         let entries = vec![
             (true, None),
-            (true, Some(flavors(&["mists"]))),
+            (true, Some(flavors(&["tbc"]))),
             (false, None),
             (true, None),
             (false, None),
             (true, Some(flavors(&["standard"]))),
         ];
-        let (planned, _) = plan("A", &entries, &flavors(&["standard", "mists"]), None);
+        let (planned, _) = plan("A", &entries, &flavors(&["standard", "tbc"]), None);
         let paths: Vec<String> = planned
             .iter()
             .map(|p| match p {
@@ -831,7 +831,7 @@ mod tests {
                 // Files every flavor loads are shared; the others go into
                 // bundles of their flavor.
                 "A.lua [0]",
-                "A.mists.lua [1]",
+                "A.tbc.lua [1]",
                 "keep 2",
                 "A.2.lua [3]",
                 "keep 4",

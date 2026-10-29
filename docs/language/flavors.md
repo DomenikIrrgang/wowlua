@@ -324,15 +324,19 @@ A flavor is one of WoW's rulesets. The flavors your addon supports are the
 keys of `flavors` in `wowlua.json`, and `wowlua new --flavors` fills it in.
 Without `flavors`, an addon builds for `standard` only.
 
-| Flavor | Also called | Game |
-|--------|-------------|------|
-| `standard` | `retail`, `mainline` | Retail |
-| `camelot` | `forever` | WoW: Forever |
-| `mists` | | Mists of Pandaria Classic |
-| `cata` | | Cataclysm Classic |
-| `wrath` | `titan` | Wrath of the Lich King Classic, Titan Reforged |
-| `tbc` | `anniversary` | The Burning Crusade Anniversary |
-| `vanilla` | `classic-era` | Classic Era |
+| Flavor | Also called | Game | Support |
+|--------|-------------|------|---------|
+| `camelot` | `forever` | WoW Forever | Supported |
+| `standard` | `retail`, `mainline` | Retail | Coming soon |
+| `vanilla` | `classic-era` | Classic Era | Coming soon |
+| `tbc` | `anniversary` | TBC Anniversary | Coming soon |
+| `mists` | | MoP Classic | Coming soon |
+
+A supported flavor runs in every part of wowlua: `wowlua test`, the emulated
+client, the debugger and Blizzard's UI. A flavor coming soon is checked and
+built like the others (types, TOCs, packages), but wowlua can't run it yet.
+Wrath of the Lich King Classic and Cataclysm Classic are not flavors of
+wowlua.
 
 Each flavor brings its own typed [WoW API](../reference/api.md), so your code
 is checked against the functions that client has. The TOC's interface number

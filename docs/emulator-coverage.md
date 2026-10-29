@@ -32,13 +32,11 @@ their clients answer differently is unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| standard | 4,871 | 4,520 (92.8%) | 0 | 1,438 | 1,430 (99.4%) | none |
 | camelot | 5,111 | 5,111 (100.0%) | 354 | 1,477 | 1,477 (100.0%) | all |
-| mists | 3,221 | 2,903 (90.1%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| cata | 1,927 | 1,675 (86.9%) | 0 | 1,008 | 995 (98.7%) | none |
-| wrath | 3,227 | 2,908 (90.1%) | 0 | 1,360 | 1,348 (99.1%) | none |
-| tbc | 3,220 | 2,906 (90.2%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| standard | 4,871 | 4,520 (92.8%) | 0 | 1,438 | 1,430 (99.4%) | none |
 | vanilla | 3,220 | 2,906 (90.2%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| tbc | 3,220 | 2,906 (90.2%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| mists | 3,221 | 2,903 (90.1%) | 0 | 1,360 | 1,348 (99.1%) | none |
 
 ## API behaviour
 
@@ -1359,7 +1357,7 @@ page changes only when a rule is added, removed or reworded.
 - [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `CalculateStringEditDistance(a, b)`: the Levenshtein distance between the two strings' characters (from the name; unv...
 - [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `CaseAccentInsensitiveParse(name)`: the name in lower case with the Latin accents taken off, a form searches compare...
 - [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `GetGameMessageInfo(index)`: the client's answer where recorded (26: `ERR_ITEM_MAX_COUNT`, no sound kit, voice 30); e...
-- [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `GetMaxLevelForLatestExpansion()`: the classic game's cap, 60, as `GetMaxLevelForPlayerExpansion` recorded (unverified).
+- [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `GetMaxLevelForLatestExpansion()`: the flavor's max level from the flavor table (camelot's 60, as `GetMaxPlayerLevel`...
 - [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `GetNumClasses()`: Classic's nine classes (warcraft.wiki.gg: on Classic it is not the highest class ID; unverified on...
 - [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `GetRealmID()`, `GetNativeRealmID()`: recorded 4618 (the native realm's unverified).
 - [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `GetWorldElapsedTime(timerID)`: no timer (recorded `"", 0, 0` for 0; unverified for other IDs).

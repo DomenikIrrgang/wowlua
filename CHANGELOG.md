@@ -9,11 +9,22 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - **World profiles from the game**: `/wl snapshot` records your character's world in a dev build (gear, bags, action bars, auras, target, settings), and `wowlua profile snapshot <name>` writes it as `tests/profiles/<name>.json`, without your character's name and realm.
 - A world profile's `trained` lists the spells your character has trained, by ID: they are known in the test (`IsSpellKnown`, `IsPlayerSpell`), and `/wl snapshot` records your spellbook into it. `mock.player:learn` and `mock.player:unlearn` change them in a test. A profile's `spells` is only for changing a spell's data now.
 - `unit:update(data)` changes a unit's data in place, any field `mock.spawnUnit` takes: its level, name, reaction, class, health, distance and so on. The unit stays the same unit, and each change fires the event the game fires for it (`UNIT_LEVEL`, `UNIT_FACTION`, `UNIT_NAME_UPDATE`, …).
+- Completion offers the functions, classes, values and enums your other files export, and adds their `import` when you pick one.
+- Editors can choose when the language server checks (while typing, when you pause, on save), which build profile its diagnostics follow, and how many threads it uses, in its initialization options or `workspace/didChangeConfiguration`.
+- Each flavor has its max level (WoW Forever 60, Classic Era 60, TBC Anniversary 70, Retail 90): a world profile's character above the max level of your flavors is E4401, and `GetMaxLevelForLatestExpansion` answers it in tests.
+- A world profile's unit can have `"level": -1`, a boss's "??" level: `UnitLevel` answers -1.
+- The world profile schema describes `position.world` (`{ y, x, z, instanceID }`, where `UnitPosition` places your character) and the fields of `channels` (`joined` channels, `groupChannels`, `regionalService`), so editors complete them.
+- `addon.toc-extra` documents the TOC directives you can add there (`AddonCompartmentFunc`, `AllowLoadGameType`, …) in its schema and the manifest reference.
 - A function breakpoint can name where a function is defined: `src/Threat.wowlua:560` stops in every call of the function defined on that line, local functions too.
 - `mock.setHardcore(true)` makes the test's realm a hardcore realm on `vanilla` (Classic Era): `C_GameRules.IsHardcoreActive()` answers true.
 
 ### Changed
 
+- `test.screen.uiScale` and a world profile's `screen.uiScale` take the game's UI Scale slider's values, 0.65 to 1.15 in steps of 0.01: another value is E4002 in `wowlua.json` and E4401 in a profile.
+- Coverage minimums in `test.coverage` are percentages from 0 to 100, and `stdlib.log.history-size` is at least 1: other values are E4002 (a history size of 0 made every log call fail).
+- wowlua's flavors are camelot (WoW Forever), standard (Retail), vanilla (Classic Era), tbc (TBC Anniversary) and mists (MoP Classic). camelot is supported everywhere: tests, the emulated client and the debugger run it. The others are coming soon: wowlua checks and builds them, but doesn't run them yet.
+- `mists` stays a flavor, now named MoP Classic: it is coming soon like Retail, Classic Era and TBC Anniversary, and a world profile's character on it goes up to level 90.
+- `cata` and `wrath` (and the alias `titan`) are no flavors anymore: a `wowlua.json` naming one gets E4004. `wowlua init` reads no `_Cata` or `_Wrath` TOC, and a packager project's `--@version-wrath@`, `--@version-titan@` and `--@version-cata@` blocks are left out of every build.
 - Watches and hovers in the debugger only read: they set nothing and call only functions that change nothing (the Lua library's, like `string.format`, and the game's queries, like `UnitHealth` or `frame:GetWidth()`). Anything else says so instead of running; the debug console still runs any code.
 - `wowlua test --profile-out` and the MCP server's `profile_stop` keep the whole profile in the speedscope file: each function's calls, the events and scripts, and the call trees of the last 600 game frames. speedscope still opens it.
 

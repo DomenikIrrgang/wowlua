@@ -174,7 +174,7 @@ as globals for the checker, and they are the names `saved.bind` from
 | `load-saved-variables-first` | bool | `false` | `LoadSavedVariablesFirst` |
 | `allow-table-access` | bool | `false` | `AllowAddOnTableAccess`: other addons may read your addon table with `C_AddOns.GetAddOnLocalTable` |
 | `only-beta-and-ptr` | bool | `false` | `OnlyBetaAndPTR` |
-| `toc-extra` | `{string: string}` | `{}` | Extra directives, written as they are. Unknown keys that don't start with `X-` are warning W4001 |
+| `toc-extra` | `{string: string}` | `{}` | Extra directives, written as they are: `AddonCompartmentFunc`, `AddonCompartmentFuncOnEnter`, `AddonCompartmentFuncOnLeave`, `AllowLoadGameType`, `ExcludeLoadGameType`, or your own `X-` fields. Other unknown keys are warning W4001; a directive wowlua writes from another key (`Title`, `SavedVariables`, …) is error E4002 |
 | `expose-meta` | string | none | No directive. Also stores `wowlua:meta`'s runtime tables in this global |
 | `meta` | `{string: string, number or bool}` | `{}` | No directive. Your own values, in `addon.meta` of `wowlua:meta` |
 | `flavor-overrides` | `{flavor: object}` | `{}` | Metadata that differs per flavor: `null` removes a field for that flavor ([§9.3.1](../../spec/toolchain/manifest.md#931-per-flavor-metadata)) |
@@ -194,18 +194,19 @@ alias, and its value an object, usually empty:
 Without `flavors`, an addon is built for `standard` only, and a library
 supports every flavor.
 
-| Flavor ID | Aliases | Client |
-|-----------|---------|--------|
-| `standard` | `retail`, `mainline` | Retail |
-| `camelot` | `forever` | WoW Forever |
-| `mists` | | Mists of Pandaria Classic |
-| `cata` | | Cataclysm Classic |
-| `wrath` | `titan` | Wrath of the Lich King Classic, Titan Reforged |
-| `tbc` | `anniversary` | The Burning Crusade Anniversary |
-| `vanilla` | `classic-era` | Classic Era |
+| Flavor ID | Aliases | Client | Support |
+|-----------|---------|--------|---------|
+| `camelot` | `forever` | WoW Forever | Supported |
+| `standard` | `retail`, `mainline` | Retail | Coming soon |
+| `vanilla` | `classic-era` | Classic Era | Coming soon |
+| `tbc` | `anniversary` | TBC Anniversary | Coming soon |
+| `mists` | | MoP Classic | Coming soon |
 
-An unknown flavor is error E4004. How code differs per flavor is in
-[Build info and profiles](../language/flavors.md).
+wowlua runs a supported flavor everywhere (tests, the emulated client, the
+debugger); a flavor coming soon is checked and built, but not run yet. An
+unknown flavor is error E4004, and so are `cata` and `wrath`: wowlua has no
+Wrath of the Lich King Classic or Cataclysm Classic flavor. How code differs
+per flavor is in [Build info and profiles](../language/flavors.md).
 
 ### `flavors.<flavor>.interface`
 
@@ -629,7 +630,7 @@ How `wowlua fmt` and the editor's Format Document lay out your code. See
 
 | Key | Type | Default | Meaning |
 |-----|------|---------|---------|
-| `indent` | `"tab"` or a number | `"tab"` | A tab, or that many spaces |
+| `indent` | `"tab"` or a number | `"tab"` | A tab, or that many spaces (2, 4, 8) |
 | `line-width` | number | `100` | The width lines are wrapped at |
 | `quote-style` | `"double"`, `"single"`, `"preserve"` | `"double"` | Quotes of string literals |
 | `lua` | bool | `false` | Format `.lua` files too |
@@ -662,7 +663,8 @@ world around it. A name with no such file is error E4402.
 ### `test.coverage`
 
 An object with `lines`, `statements`, `branches`, `functions` and
-`conditions` (numbers, in percent) and `exclude` (globs). Default: no minimum.
+`conditions` (numbers, in percent: 0 to 100) and `exclude` (globs). Default:
+no minimum.
 
 The minimum coverage. A run of the whole suite below one of them fails; a run
 of only some tests is not checked. `exclude` leaves files out of the coverage.
@@ -679,7 +681,7 @@ of only some tests is not checked. `exclude` leaves files out of the coverage.
 | Key | Type | Default | Meaning |
 |-----|------|---------|---------|
 | `platform` | `"mac"`, `"windows"` | `"mac"` | The machine the emulated client runs on, for answers that differ by machine and `IsMacClient` |
-| `screen` | `{ width, height, dpiScale?, uiScale? }` | `{ "width": 1920, "height": 1080 }` | The emulated screen, in pixels |
+| `screen` | `{ width, height, dpiScale?, uiScale? }` | `{ "width": 1920, "height": 1080 }` | The emulated screen, in pixels. `uiScale` is the game's UI Scale slider with "Use UI Scale" on: 0.65 to 1.15 in steps of 0.01 (65% to 115%); without it, the game scales the UI itself |
 | `reporters` | string[] | `["pretty"]` | Default reporters: `pretty`, `junit`, `tap`, `json`, `github`, `lcov`, `cobertura`, `coverage-json`, `html` |
 | `addons` | path[] | `[]` | Other addons' folders, each loaded before yours as its own addon |
 
@@ -693,8 +695,8 @@ fields your code reads at run time, or `"full"` to write all of them.
 ### `stdlib`
 
 Settings of standard-library modules, read only when the module is used.
-`stdlib.log.history-size` (default `500`) is the size of `wowlua:log`'s
-history.
+`stdlib.log.history-size` (default `500`, at least 1) is the size of
+`wowlua:log`'s history.
 
 ### `compat`
 

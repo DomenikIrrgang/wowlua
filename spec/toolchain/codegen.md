@@ -285,7 +285,7 @@ and are listed for every flavor. Files that differ are stored per flavor under
 dist/release/MyAddon/
 ├── MyAddon.toc                  # single TOC (auto layout, all targets support it)
 ├── MyAddon.standard.lua
-├── MyAddon.mists.lua
+├── MyAddon.tbc.lua
 ├── MyAddon.vanilla.lua
 ├── LICENSES.txt
 ├── wowlua/locales/…
@@ -399,22 +399,22 @@ runtime `GetLocale()` guard ([Standard library: locale](../stdlib/ui.md#locale))
 Example of a single TOC (bundled, split flavors):
 
 ```
-## Interface: 120100, 50504, 11509
+## Interface: 120100, 20506, 11509
 ## Title: |cff33ff99My|r Addon
 ## Version: 1.4.2
 ## SavedVariables: MyAddonDB
 ## X-Wowlua-Build: release 9f3a1c2e
 wowlua\locales\enUS.lua
 wowlua\locales\deDE.lua [AllowLoadTextLocale deDE]
-MyAddon.standard.lua [AllowLoadGameType standard]
-MyAddon.mists.lua [AllowLoadGameType mists]
+MyAddon.standard.lua [AllowLoadGameType mainline]
+MyAddon.tbc.lua [AllowLoadGameType tbc]
 MyAddon.vanilla.lua [AllowLoadGameType vanilla]
 src\ui\frames.xml
 ```
 
 **Directive names.** A flavor that is the only targeted flavor of its family is
 written as the **family name** (`mainline` or `classic`), which every client
-with inline directives recognizes. Game-type names (`standard`, `mists`, …) are
+with inline directives recognizes. Game-type names (`tbc`, `vanilla`, …) are
 used only when several targeted flavors share a family (decision T44). This
 mirrors rule 1 of the suffix algorithm (§14.9.3).
 

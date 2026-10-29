@@ -480,19 +480,19 @@ mod tests {
 
     /// E4302 (§14.9.3): two flavors of a family whose clients know no game
     /// suffix of theirs would both need the family suffix. The shipped
-    /// table has none such, so this one takes `_Mists` and `_Cata` away.
+    /// table has none such, so this one takes `_Vanilla` and `_TBC` away.
     #[test]
     fn flavors_without_a_name_of_their_own_are_indistinguishable() {
         let json = include_str!("../../wowlua-flavors/data/flavors.json")
-            .replace(r#""game-suffixes": ["_Mists"]"#, r#""game-suffixes": []"#)
-            .replace(r#""game-suffixes": ["_Cata"]"#, r#""game-suffixes": []"#);
+            .replace(r#""game-suffixes": ["_Vanilla"]"#, r#""game-suffixes": []"#)
+            .replace(r#""game-suffixes": ["_TBC"]"#, r#""game-suffixes": []"#);
         let table: FlavorTable = serde_json::from_str(&json).unwrap();
-        let both = input(&["standard", "mists", "cata"]);
+        let both = input(&["standard", "tbc", "vanilla"]);
         match per_flavor_names(&table, &both) {
             Err(errors) => assert!(
                 matches!(
                     errors.as_slice(),
-                    [TocError::Indistinguishable { flavors }] if flavors == &["mists", "cata"]
+                    [TocError::Indistinguishable { flavors }] if flavors == &["tbc", "vanilla"]
                 ),
                 "{errors:?}"
             ),
@@ -500,7 +500,7 @@ mod tests {
         }
         // One of them alone takes the family suffix.
         assert_eq!(
-            per_flavor_names(&table, &input(&["standard", "mists"])).unwrap(),
+            per_flavor_names(&table, &input(&["standard", "tbc"])).unwrap(),
             ["MyAddon_Mainline.toc", "MyAddon_Classic.toc"]
         );
         // The shipped table names them apart.
@@ -520,12 +520,12 @@ mod tests {
 
     #[test]
     fn shared_files_use_a_single_toc_with_all_interfaces() {
-        let generated = generate(&input(&["standard", "mists", "vanilla"])).unwrap();
+        let generated = generate(&input(&["standard", "tbc", "vanilla"])).unwrap();
         assert_eq!(generated.layout, Layout::Single);
         assert!(
             generated.files[0]
                 .content
-                .starts_with("## Interface: 120100, 50504, 11509\n")
+                .starts_with("## Interface: 120100, 20506, 11509\n")
         );
     }
 
@@ -548,10 +548,10 @@ mod tests {
 
     #[test]
     fn game_types_and_family_coverage() {
-        let mut i = input(&["standard", "mists", "vanilla"]);
+        let mut i = input(&["standard", "tbc", "vanilla"]);
         i.files.push(FileEntry {
             path: "src/classic.lua".into(),
-            flavors: Some(vec!["mists".into(), "vanilla".into()]),
+            flavors: Some(vec!["tbc".into(), "vanilla".into()]),
             locales: None,
         });
         i.files.push(FileEntry {
@@ -629,7 +629,7 @@ mod tests {
 
     #[test]
     fn per_flavor_suffixes_for_one_flavor_per_family() {
-        let mut i = input(&["standard", "mists"]);
+        let mut i = input(&["standard", "tbc"]);
         i.layout = Layout::PerFlavor;
         let names: Vec<String> = generate(&i)
             .unwrap()
@@ -661,11 +661,11 @@ mod tests {
     }
 
     #[test]
-    fn cata_supports_single_tocs_with_flavor_files() {
-        let mut i = input(&["standard", "cata"]);
+    fn classic_supports_single_tocs_with_flavor_files() {
+        let mut i = input(&["standard", "tbc"]);
         i.files.push(FileEntry {
-            path: "src/cata.lua".into(),
-            flavors: Some(vec!["cata".into()]),
+            path: "src/tbc.lua".into(),
+            flavors: Some(vec!["tbc".into()]),
             locales: None,
         });
         let generated = generate(&i).unwrap();
@@ -673,7 +673,7 @@ mod tests {
         assert!(
             generated.files[0]
                 .content
-                .contains("src\\cata.lua [AllowLoadGameType classic]\n")
+                .contains("src\\tbc.lua [AllowLoadGameType classic]\n")
         );
     }
 

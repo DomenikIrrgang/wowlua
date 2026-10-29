@@ -236,8 +236,17 @@ mod tests {
             Some(("MyAddon".into(), Some("-BCC".into())))
         );
         assert_eq!(
+            split_file_name("MyAddon_TBC.toc"),
+            Some(("MyAddon".into(), Some("_TBC".into())))
+        );
+        assert_eq!(
             split_file_name("MyAddon_Mists.toc"),
             Some(("MyAddon".into(), Some("_Mists".into())))
+        );
+        // Suffixes of games without a flavor are part of the name.
+        assert_eq!(
+            split_file_name("MyAddon_Cata.toc"),
+            Some(("MyAddon_Cata".into(), None))
         );
         assert_eq!(split_file_name("readme.md"), None);
     }

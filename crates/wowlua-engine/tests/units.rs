@@ -762,3 +762,28 @@ return tostring(IsInGroup()), tostring(IsInGroup(1)), tostring(IsInGroup(2)), to
     );
     assert_eq!(r, ["true", "true", "false", "false", "2", "0"]);
 }
+
+/// A boss's level shows as "??": `UnitLevel` answers -1, as a unit's data
+/// gives it (a world profile's unit with `"level": -1`).
+#[test]
+fn a_boss_s_level_is_minus_one() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local boss = mock.spawnUnit({ name = 'Onyxia', level = -1, classification = 'worldboss', reaction = 'hostile' })
+mock.player:target(boss)
+return UnitLevel('target'), UnitClassification('target')",
+    );
+    assert_eq!(r, ["-1", "worldboss"]);
+}
+
+/// The max level is the flavor table's (camelot's recorded 60).
+#[test]
+fn the_max_level_is_the_flavor_s() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "return GetMaxPlayerLevel(), GetMaxLevelForLatestExpansion(), GetMaxLevelForPlayerExpansion()",
+    );
+    assert_eq!(r, ["60", "60", "60"]);
+}

@@ -101,8 +101,9 @@ frames.movable(bar, { store = db, key = "bar", editMode = { label = "MyAddon Bar
 A drag in Edit Mode is saved when it ends, not when the player presses Edit
 Mode's Save button. Outside Edit Mode the frame is locked, so the player
 arranges everything in one place. Add `lock = false` to `editMode` to keep it
-movable there as well. On a client without Edit Mode (Cata Classic) the option
-is ignored, and the compiler warns with W8301 when you build for it.
+movable there as well. On a client without Edit Mode the option is ignored,
+and the compiler warns with W8301 when you build for it. Every flavor's client
+has Edit Mode today.
 
 ## Reuse frames with pools
 

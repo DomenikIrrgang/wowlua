@@ -339,12 +339,12 @@ The WoW API the VM's code calls, per flavor.
   on standard, mists, tbc and vanilla, whose clients StdTest does not record yet,
   the client's C functions are those of Ketho's dump of it (the one the
   flavor's declarations take, `data/<flavor>-functions.txt`), so a
-  function only some clients have exists on theirs alone (decision T504).
+  function only some clients have exists on theirs alone (decision T510).
   What every client answers with nothing there (no vehicle bar, pet
   battle, ready check or raid target; the flavor's expansion) answers on
   every flavor, and `C_CombatLog.GetCurrentEventInfo`, which only the
   classic clients give addons, answers the payload of the combat log
-  event last fired. As recorded on those clients (decision T505), each
+  event last fired. As recorded on those clients (decision T511), each
   class's colour is Retail's (Classic Era's Shaman the Paladin's pink,
   a class the client lacks none), and the classic clients refuse
   `GetTalentGroupRole` with "Script_<name>: API unsupported in this version

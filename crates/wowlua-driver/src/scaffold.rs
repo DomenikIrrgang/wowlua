@@ -289,8 +289,6 @@ fn default_world_profile(flavor: Option<&str>) -> String {
     let level = match flavor.unwrap_or("standard") {
         "camelot" | "vanilla" => Some(60),
         "tbc" => Some(70),
-        "wrath" => Some(80),
-        "cata" => Some(85),
         "mists" => Some(90),
         _ => None,
     };
@@ -2296,8 +2294,7 @@ fn toc_views(
             let name = s.trim_start_matches(['_', '-']).to_ascii_lowercase();
             (s.starts_with('_') || s.starts_with('-'))
                 && [
-                    "mainline", "classic", "vanilla", "bcc", "tbc", "wrath", "wotlkc", "cata",
-                    "mists", "camelot",
+                    "mainline", "classic", "vanilla", "bcc", "tbc", "mists", "camelot",
                 ]
                 .contains(&name.as_str())
         });
@@ -2305,11 +2302,9 @@ fn toc_views(
             out.push((entry.clone(), text));
             continue;
         }
-        // `Some(true)`: single-game builds; `Some(false)`: split builds,
-        // which make no TOC for `Interface-Titan`.
-        let typed: Vec<(&'static str, String)> = if suffix.is_none()
-            && let Some(single) = per_game
-        {
+        // `Some(true)`: single-game builds; `Some(false)`: split builds.
+        // Game types without a flavor (`Interface-Cata`) make no TOC.
+        let typed: Vec<(&'static str, String)> = if suffix.is_none() && per_game.is_some() {
             wowlua_toc::parse(&text)
                 .directives
                 .iter()
@@ -2319,9 +2314,6 @@ fn toc_views(
                         .get(..10)
                         .filter(|k| k.eq_ignore_ascii_case("Interface-"))
                         .map(|_| &d.key[10..])?;
-                    if !single && kind.eq_ignore_ascii_case("titan") {
-                        return None;
-                    }
                     Some((
                         crate::keywords::interface_type_flavor(kind)?,
                         d.value.trim().to_string(),

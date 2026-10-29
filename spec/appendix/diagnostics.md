@@ -198,7 +198,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W4306 | Embedded library without a recognizable license file or header |
 | W4309 | `--link` could not create a symlink/junction; copying instead |
 | W4310 | XML reference differs in case from the referenced file (the client resolves it case-insensitively) |
-| W4313 | `types sync` moved a client alias (`anniversary`, `titan`, `forever`) to another ruleset |
+| W4313 | `types sync` moved a client alias (`anniversary`, `forever`) to another ruleset |
 | W4322 | Locked version has been yanked |
 | W4326 | No OS credential store; token stored in `config.json` (mode 0600) |
 | W4328 | Site does not know the exact game version; fell back to a lower/highest version |
@@ -206,7 +206,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W4332 | `.pkgmeta` `move-folders` use that cannot be converted |
 | E4334 | Both a hand-written `Bindings.xml` and `wowlua:bindings` declarations |
 | E4400 | World profile is not valid JSON, or not a JSON object |
-| E4401 | World profile does not match its schema (unknown part, wrong type, a key that is no ID) |
+| E4401 | World profile does not match its schema (unknown part, wrong type, a key that is no ID, a UI scale off the game's slider, a character's level outside the flavors' range) |
 | E4402 | `test.profile` or a test file's `config({ profile })` names no world profile of the package |
 | E4335 | Packager `@version-â€¦@` blocks in a multi-version build |
 | W4333 | `.pkgmeta` hg external cannot be converted |

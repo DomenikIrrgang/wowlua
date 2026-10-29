@@ -14,6 +14,7 @@ name = "wowlua-registry"
 path = "src/main.rs"
 
 [dependencies]
+wowlua-flavors.workspace = true
 wowlua-manifest.workspace = true
 wowlua-pkg.workspace = true
 wowlua-span.workspace = true

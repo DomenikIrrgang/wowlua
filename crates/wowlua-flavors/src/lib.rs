@@ -1,11 +1,16 @@
 //! The flavor table (spec §9.4.1).
 //!
 //! A *flavor* is a WoW ruleset, identified by Blizzard's game type
-//! (`standard`, `mists`, `vanilla`, …). A *client* is one installable game
-//! client that runs a flavor (Retail, Retail PTR, MoP Classic, …). The table
-//! records interface numbers, TOC suffixes, install folders and which TOC
-//! features each client supports. It is data shipped with the compiler; the
-//! version in use is pinned in `wowlua.lock`.
+//! (`camelot`, `standard`, `vanilla`, `tbc`, `mists`). A *client* is one installable
+//! game client that runs a flavor (Retail, Retail PTR, WoW Forever, …). The
+//! table records each flavor's display name and how far wowlua supports it,
+//! interface numbers, TOC suffixes, install folders and which TOC features
+//! each client supports. It is data shipped with the compiler; the version
+//! in use is pinned in `wowlua.lock`.
+//!
+//! It is the one list of flavors every tool reads (the CLI, Studio, the
+//! registry): [`FlavorTable::flavors`] is in the order pickers show them,
+//! the supported flavors first.
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -26,6 +31,8 @@ pub fn table() -> &'static FlavorTable {
 #[serde(rename_all = "kebab-case")]
 pub struct FlavorTable {
     pub version: String,
+    /// Every flavor wowlua knows, in the order a picker lists them: the
+    /// supported ones first, then those coming soon.
     pub flavors: Vec<Flavor>,
     pub clients: Vec<Client>,
     legacy_toc_suffixes: BTreeMap<String, String>,
@@ -87,6 +94,17 @@ pub enum AliasKind {
     Client,
 }
 
+/// How far wowlua supports a flavor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Support {
+    /// The toolchain runs it fully: the emulated client, the debugger,
+    /// Blizzard's UI.
+    Supported,
+    /// Named and checked (manifests, types, TOCs), but not run yet.
+    ComingSoon,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Alias {
     pub name: String,
@@ -97,6 +115,13 @@ pub struct Alias {
 #[serde(rename_all = "kebab-case")]
 pub struct Flavor {
     pub id: String,
+    /// The name people know the game by (`Retail`, `WoW Forever`).
+    pub name: String,
+    pub support: Support,
+    /// The highest level a character reaches in this flavor
+    /// (`GetMaxPlayerLevel`): the bound of a level picker and of a world
+    /// profile's character.
+    pub max_level: u32,
     pub family: Family,
     pub aliases: Vec<Alias>,
     pub project_id: u32,
@@ -116,6 +141,10 @@ impl PartialEq for Flavor {
 impl Eq for Flavor {}
 
 impl Flavor {
+    pub fn is_supported(&self) -> bool {
+        self.support == Support::Supported
+    }
+
     pub fn contains_interface(&self, interface: u32) -> bool {
         (self.interface_range[0]..=self.interface_range[1]).contains(&interface)
     }
@@ -207,7 +236,7 @@ impl FlavorTable {
         self.clients.iter().filter(move |c| c.flavor == flavor)
     }
 
-    /// Interprets a TOC file-name suffix such as `_Mists`, `_Classic`, `-BCC`.
+    /// Interprets a TOC file-name suffix such as `_TBC`, `_Classic`, `-BCC`.
     pub fn suffix_meaning(&self, suffix: &str) -> Option<SuffixMeaning<'_>> {
         let lower = suffix.to_ascii_lowercase();
         if lower == Family::Mainline.suffix().to_ascii_lowercase() {
@@ -296,8 +325,17 @@ mod tests {
             matches!(t.suffix_meaning("-BCC"), Some(SuffixMeaning::Flavor(f)) if f.id == "tbc")
         );
         assert!(
-            matches!(t.suffix_meaning("-Mists"), Some(SuffixMeaning::Flavor(f)) if f.id == "mists")
+            matches!(t.suffix_meaning("-Forever"), Some(SuffixMeaning::Flavor(f)) if f.id == "camelot")
         );
+        assert!(
+            matches!(t.suffix_meaning("_Mists"), Some(SuffixMeaning::Flavor(f)) if f.id == "mists")
+        );
+        assert_eq!(t.by_interface(50504).unwrap().id, "mists");
+        // Wrath and Cataclysm are no flavors (decisions T507, T509).
+        for suffix in ["_Cata", "_Wrath", "-WOTLKC"] {
+            assert_eq!(t.suffix_meaning(suffix), None, "{suffix}");
+        }
+        assert!(t.by_interface(40402).is_none() && t.by_interface(38002).is_none());
         assert_eq!(interface_to_version(120100), "12.1.0");
         assert_eq!(interface_to_version(11509), "1.15.9");
     }
@@ -309,10 +347,71 @@ mod tests {
         assert!(era.recognizes_game_type("mainline"));
         assert!(era.recognizes_game_type("vanilla"));
         assert!(!era.recognizes_game_type("standard"));
-        // BigWigs and DBM rely on inline directives and file variables in
-        // Cata Classic 4.4.2 (decision T56).
-        let cata = t.clients.iter().find(|c| c.name == "cata-classic").unwrap();
-        assert!(cata.recognizes_game_type("classic"));
-        assert!(cata.features.file_variables);
+        let mists = t
+            .clients
+            .iter()
+            .find(|c| c.name == "mists-classic")
+            .unwrap();
+        assert!(mists.recognizes_game_type("classic"));
+        assert!(mists.recognizes_game_type("mists"));
+        assert!(mists.features.file_variables);
+    }
+
+    /// The flavors, their names and support (decisions T507, T509): camelot
+    /// is supported and listed first; the others are coming soon.
+    #[test]
+    fn names_and_support_in_picker_order() {
+        let t = table();
+        let listed: Vec<(&str, &str, Support)> = t
+            .flavors
+            .iter()
+            .map(|f| (f.id.as_str(), f.name.as_str(), f.support))
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                ("camelot", "WoW Forever", Support::Supported),
+                ("standard", "Retail", Support::ComingSoon),
+                ("vanilla", "Classic Era", Support::ComingSoon),
+                ("tbc", "TBC Anniversary", Support::ComingSoon),
+                ("mists", "MoP Classic", Support::ComingSoon),
+            ]
+        );
+        assert!(t.flavor("camelot").unwrap().is_supported());
+        for gone in ["cata", "wrath", "titan"] {
+            assert!(t.resolve(gone).is_none(), "{gone}");
+        }
+        // Clients name only flavors of the table.
+        for client in &t.clients {
+            for game_type in &client.game_types {
+                assert!(
+                    t.flavor(game_type).is_some(),
+                    "{}: {game_type}",
+                    client.name
+                );
+            }
+        }
+    }
+
+    /// Each flavor's max level (camelot's recorded: `GetMaxPlayerLevel()`
+    /// answers 60; the others are the games' caps).
+    #[test]
+    fn max_levels() {
+        let t = table();
+        let levels: Vec<(&str, u32)> = t
+            .flavors
+            .iter()
+            .map(|f| (f.id.as_str(), f.max_level))
+            .collect();
+        assert_eq!(
+            levels,
+            [
+                ("camelot", 60),
+                ("standard", 90),
+                ("vanilla", 60),
+                ("tbc", 70),
+                ("mists", 90)
+            ]
+        );
     }
 }

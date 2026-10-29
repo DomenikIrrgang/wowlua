@@ -401,3 +401,33 @@ fn signature_help_shows_the_parameters_and_the_one_at_the_cursor() {
     assert!(h.is_null(), "{h}");
     assert!(c.finish());
 }
+
+/// Auto-import (T506): a name another module exports comes with its
+/// import; one of a module the file imports already is its own name.
+#[test]
+fn completion_offers_other_modules_exports_with_their_import() {
+    let (_dir, uri) = project();
+    let mut c = Client::start();
+    c.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "wowlua", "version": 1, "text": "print(1)\n" } }),
+    );
+    let list = complete(&mut c, &uri, "-- main\nlocal said = gre|\n");
+    let greet = item(&list, "greet");
+    assert_eq!(greet["detail"], "import from \"/util\"", "{greet:#?}");
+    let edit = &greet["additionalTextEdits"][0];
+    assert_eq!(
+        edit["newText"], "import greet from \"/util\"\n",
+        "{greet:#?}"
+    );
+    assert_eq!(edit["range"]["start"]["line"], 0, "{greet:#?}");
+    let list = complete(&mut c, &uri, "local n = Coun|\n");
+    assert_eq!(item(&list, "Counter")["detail"], "import from \"/util\"");
+
+    let list = complete(&mut c, &uri, &format!("{MAIN}local said = gre|\n"));
+    assert!(
+        item(&list, "greet")["additionalTextEdits"].is_null(),
+        "imported already"
+    );
+    assert!(c.finish());
+}

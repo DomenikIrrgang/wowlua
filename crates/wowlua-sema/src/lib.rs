@@ -195,6 +195,33 @@ pub fn package_of(src_rel: &str) -> Option<&str> {
         .map(|(name, _)| name)
 }
 
+/// The specifier a module at `importer` imports `target` with (T506), as
+/// `resolve` reads it: `wowlua:<name>`, `/<path>` in the same package,
+/// `<package>` (its main module) or `<package>/<path>` of a library.
+pub fn specifier_of(target: &str, importer: &str, main_of: Option<&str>) -> Option<String> {
+    if let Some(name) = target
+        .strip_prefix(STDLIB_PREFIX)
+        .and_then(|n| n.strip_suffix(".wowlua"))
+    {
+        return Some(format!("wowlua:{name}"));
+    }
+    let stem = target.strip_suffix(".wowlua")?;
+    let package = package_of(target);
+    if package == package_of(importer) {
+        let own = match package {
+            Some(p) => stem.strip_prefix(&format!("{PACKAGE_PREFIX}{p}/"))?,
+            None => stem,
+        };
+        return Some(format!("/{own}"));
+    }
+    let package = package?;
+    if main_of == Some(package) {
+        return Some(package.to_string());
+    }
+    let rest = stem.strip_prefix(PACKAGE_PREFIX)?;
+    Some(rest.to_string())
+}
+
 /// The module ID of a source path: `core/cache.wowlua` → `core/cache`;
 /// standard-library modules are `wowlua:<name>`.
 pub fn module_id(src_rel: &str) -> String {
