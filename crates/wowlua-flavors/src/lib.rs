@@ -14,9 +14,13 @@
 //!
 //! It also records what each flavor's game has (decision T512): its
 //! classes ([`Flavor::classes`], each with the powers it has, the first
-//! the one it shows), its races ([`Flavor::races`]) and its powers'
-//! defaults ([`Flavor::power_defaults`]), and the power types' tokens and
-//! `Enum.PowerType` values ([`FlavorTable::power_types`]).
+//! the one it shows), its races ([`Flavor::races`], each with its faction:
+//! decision T513) and its powers' defaults ([`Flavor::power_defaults`]),
+//! and the power types' tokens and `Enum.PowerType` values
+//! ([`FlavorTable::power_types`]). Each flavor's racial spells and its
+//! client's race records ([`Flavor::racials`], [`Flavor::race_records`])
+//! are read from the game's tables by `cargo xtask racials` into
+//! `data/racials.txt`.
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -88,6 +92,168 @@ impl Class {
             .map(String::as_str)
             .or_else(|| self.shown_power())
     }
+}
+
+/// A faction: a race's (`Either` for one whose player picks it: the
+/// Pandaren, the Skyborne) or a character's (`UnitFactionGroup`'s
+/// `Alliance`, `Horde`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Faction {
+    Alliance,
+    Horde,
+    Either,
+}
+
+impl Faction {
+    /// The name as the client gives it (`UnitFactionGroup`: `Alliance`,
+    /// `Horde`); `Either` for a race of either.
+    pub fn name(self) -> &'static str {
+        match self {
+            Faction::Alliance => "Alliance",
+            Faction::Horde => "Horde",
+            Faction::Either => "Either",
+        }
+    }
+
+    /// A character's faction by its name (`Alliance`, `horde`: any case);
+    /// `Either` is no character's.
+    pub fn parse(name: &str) -> Option<Faction> {
+        if name.eq_ignore_ascii_case("Alliance") {
+            Some(Faction::Alliance)
+        } else if name.eq_ignore_ascii_case("Horde") {
+            Some(Faction::Horde)
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Display for Faction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+/// A race of a flavor: its file name (`UnitRace`'s second result:
+/// `Scourge`) and faction (`Either`: the player picks it).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct Race {
+    pub file: String,
+    pub faction: Faction,
+}
+
+impl Race {
+    /// Whether the player picks the faction (the Pandaren, the Skyborne).
+    pub fn is_either(&self) -> bool {
+        self.faction == Faction::Either
+    }
+}
+
+/// A race's record in the flavor's client (`ChrRaces`): its race ID and
+/// name for a faction (`None`: neither, a Pandaren yet to choose one).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RaceRecord {
+    pub file: String,
+    pub faction: Option<Faction>,
+    pub id: u32,
+    pub name: String,
+}
+
+/// A racial spell: a spell of a race's racial skill line in the flavor's
+/// client (`SkillLineAbility`), for the factions and classes it names.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Racial {
+    /// The race's file name.
+    pub race: String,
+    /// The factions of the race it is for (empty: every one; the
+    /// Skyborne's differ by faction; `None`: a character of none, a
+    /// Pandaren yet to choose).
+    pub factions: Vec<Option<Faction>>,
+    /// The class files it is for (empty: every class).
+    pub classes: Vec<String>,
+    pub spell: u32,
+    /// Its name in the client (enUS).
+    pub name: String,
+}
+
+impl Racial {
+    /// Whether a character of the race with this faction (`None`: none)
+    /// and class (`None`: unknown, then only one for every class) has it.
+    pub fn applies_to(&self, faction: Option<Faction>, class: Option<&str>) -> bool {
+        let faction_ok = self.factions.is_empty() || self.factions.contains(&faction);
+        let class_ok = self.classes.is_empty()
+            || class.is_some_and(|c| self.classes.iter().any(|k| k.eq_ignore_ascii_case(c)));
+        faction_ok && class_ok
+    }
+}
+
+/// One flavor's section of `data/racials.txt`.
+struct FlavorRacials {
+    build: String,
+    races: Vec<RaceRecord>,
+    spells: Vec<Racial>,
+}
+
+static RACIALS: LazyLock<BTreeMap<String, FlavorRacials>> =
+    LazyLock::new(|| parse_racials(include_str!("../data/racials.txt")));
+
+fn racials_of(flavor: &str) -> Option<&'static FlavorRacials> {
+    RACIALS.get(flavor)
+}
+
+/// Parses `data/racials.txt` (written by `cargo xtask racials`): a
+/// section per flavor, `[flavor] build`, then its `race` and `spell` lines
+/// (tab-separated; `-` every faction or class; `Neutral` no faction).
+fn parse_racials(text: &str) -> BTreeMap<String, FlavorRacials> {
+    let mut out: BTreeMap<String, FlavorRacials> = BTreeMap::new();
+    let mut current: Option<String> = None;
+    let list = |text: &str| -> Vec<String> {
+        if text == "-" {
+            Vec::new()
+        } else {
+            text.split(',').map(str::to_string).collect()
+        }
+    };
+    for line in text.lines() {
+        if line.starts_with('#') || line.trim().is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('[') {
+            let (id, build) = rest.split_once(']').unwrap_or((rest, ""));
+            out.insert(
+                id.to_string(),
+                FlavorRacials {
+                    build: build.trim().to_string(),
+                    races: Vec::new(),
+                    spells: Vec::new(),
+                },
+            );
+            current = Some(id.to_string());
+            continue;
+        }
+        let Some(section) = current.as_ref().and_then(|id| out.get_mut(id)) else {
+            continue;
+        };
+        let cols: Vec<&str> = line.split('\t').collect();
+        match cols.as_slice() {
+            ["race", file, faction, id, name] => section.races.push(RaceRecord {
+                file: file.to_string(),
+                faction: Faction::parse(faction),
+                id: id.parse().unwrap_or(0),
+                name: name.to_string(),
+            }),
+            ["spell", race, factions, classes, spell, name] => section.spells.push(Racial {
+                race: race.to_string(),
+                factions: list(factions).iter().map(|f| Faction::parse(f)).collect(),
+                classes: list(classes),
+                spell: spell.parse().unwrap_or(0),
+                name: name.to_string(),
+            }),
+            _ => {}
+        }
+    }
+    out
 }
 
 /// A power's amount: how much there is (`UnitPower`) of how much at most
@@ -191,9 +357,10 @@ pub struct Flavor {
     #[serde(default)]
     pub classes: Vec<Class>,
     /// The races a character can be, by file name (`UnitRace`'s second
-    /// result: `Scourge`, `NightElf`), in race ID order.
+    /// result: `Scourge`, `NightElf`), in race ID order, each with its
+    /// faction (decision T513).
     #[serde(default)]
-    pub races: Vec<String>,
+    pub races: Vec<Race>,
     /// What a unit has of each power, by token, when nothing says (the
     /// emulated client's units; a slider's start).
     #[serde(default)]
@@ -226,7 +393,81 @@ impl Flavor {
 
     /// Whether a character can be of this race (its file name, `Scourge`).
     pub fn has_race(&self, race: &str) -> bool {
-        self.races.iter().any(|r| r == race)
+        self.race(race).is_some()
+    }
+
+    /// The race with this file name (`Scourge`).
+    pub fn race(&self, file: &str) -> Option<&Race> {
+        self.races.iter().find(|r| r.file == file)
+    }
+
+    /// The races' file names, in the table's order.
+    pub fn race_files(&self) -> impl Iterator<Item = &str> {
+        self.races.iter().map(|r| r.file.as_str())
+    }
+
+    /// The faction a character of this race has: the race's own, or for a
+    /// race of either faction the one `chosen` (`None`: none chosen, or a
+    /// race the flavor lacks).
+    pub fn faction_of(&self, race: &str, chosen: Option<Faction>) -> Option<Faction> {
+        match self.race(race)?.faction {
+            Faction::Either => chosen.filter(|f| *f != Faction::Either),
+            fixed => Some(fixed),
+        }
+    }
+
+    /// The client's records of a race: its race IDs and names by faction
+    /// (the Skyborne's two), as `cargo xtask racials` read them from the
+    /// flavor's client; none where it was not read.
+    pub fn race_records<'a>(&'a self, race: &'a str) -> impl Iterator<Item = &'a RaceRecord> {
+        racials_of(&self.id)
+            .map(|r| r.races.as_slice())
+            .unwrap_or_default()
+            .iter()
+            .filter(move |r| r.file == race)
+    }
+
+    /// The client's record of a race for a faction (`None`: the race's
+    /// first record).
+    pub fn race_record<'a>(
+        &'a self,
+        race: &'a str,
+        faction: Option<Faction>,
+    ) -> Option<&'a RaceRecord> {
+        let mut records = self.race_records(race);
+        match faction {
+            Some(f) => records.find(|r| r.faction == Some(f)),
+            None => records.next(),
+        }
+    }
+
+    /// The racial spells a character of `race` knows without learning
+    /// them (decision T513), for its faction (`None`: none, then those of
+    /// every faction of the race and a factionless one's) and class file
+    /// (`None`: only those of every class), in the data's order. None
+    /// where the flavor's client was not read.
+    pub fn racials<'a>(
+        &'a self,
+        race: &'a str,
+        faction: Option<Faction>,
+        class: Option<&'a str>,
+    ) -> impl Iterator<Item = &'a Racial> + 'a {
+        self.racial_spells()
+            .iter()
+            .filter(move |r| r.race == race && r.applies_to(faction, class))
+    }
+
+    /// Every racial spell of the flavor's races (`cargo xtask racials`).
+    pub fn racial_spells(&self) -> &[Racial] {
+        racials_of(&self.id)
+            .map(|r| r.spells.as_slice())
+            .unwrap_or_default()
+    }
+
+    /// The client build the races and racial spells were read from
+    /// (`wowf 1.60.1.70658`), if any.
+    pub fn racials_build(&self) -> Option<&str> {
+        racials_of(&self.id).map(|r| r.build.as_str())
     }
 
     /// What a unit has of a power (its token) when nothing says.
@@ -608,6 +849,185 @@ mod tests {
         assert_eq!(t.power_token(28), Some("SHADOW_ORBS"));
         assert_eq!(t.power_token(30), None);
         assert_eq!(t.power_types.len(), 30);
+    }
+
+    /// Each race's faction (decision T513): the client's records agree
+    /// (`ChrRaces`, read by `cargo xtask racials`): a race of one faction
+    /// has records of it only, one of either both.
+    #[test]
+    fn races_have_their_factions() {
+        let t = table();
+        let alliance = [
+            "Human",
+            "Dwarf",
+            "NightElf",
+            "Gnome",
+            "Draenei",
+            "Worgen",
+            "VoidElf",
+            "LightforgedDraenei",
+            "DarkIronDwarf",
+            "KulTiran",
+            "Mechagnome",
+        ];
+        let horde = [
+            "Orc",
+            "Scourge",
+            "Tauren",
+            "Troll",
+            "BloodElf",
+            "Goblin",
+            "Nightborne",
+            "HighmountainTauren",
+            "MagharOrc",
+            "ZandalariTroll",
+            "Vulpera",
+        ];
+        let either = [
+            "Pandaren",
+            "Dracthyr",
+            "EarthenDwarf",
+            "Harronir",
+            "Skyborne",
+        ];
+        for flavor in &t.flavors {
+            for race in &flavor.races {
+                let expected = if alliance.contains(&race.file.as_str()) {
+                    Faction::Alliance
+                } else if horde.contains(&race.file.as_str()) {
+                    Faction::Horde
+                } else {
+                    assert!(either.contains(&race.file.as_str()), "{}", race.file);
+                    Faction::Either
+                };
+                assert_eq!(race.faction, expected, "{} {}", flavor.id, race.file);
+                let records: Vec<Option<Faction>> =
+                    flavor.race_records(&race.file).map(|r| r.faction).collect();
+                if flavor.racials_build().is_none() {
+                    continue;
+                }
+                match race.faction {
+                    Faction::Either => {
+                        assert!(records.contains(&Some(Faction::Alliance)), "{}", race.file);
+                        assert!(records.contains(&Some(Faction::Horde)), "{}", race.file);
+                    }
+                    fixed => assert_eq!(records, [Some(fixed)], "{} {}", flavor.id, race.file),
+                }
+            }
+        }
+        let camelot = t.flavor("camelot").unwrap();
+        assert!(camelot.race("Skyborne").unwrap().is_either());
+        assert_eq!(camelot.faction_of("Skyborne", None), None);
+        assert_eq!(
+            camelot.faction_of("Skyborne", Some(Faction::Alliance)),
+            Some(Faction::Alliance)
+        );
+        assert_eq!(
+            camelot.faction_of("Orc", Some(Faction::Alliance)),
+            Some(Faction::Horde)
+        );
+        assert_eq!(camelot.faction_of("BloodElf", None), None);
+        assert_eq!(Faction::parse("horde"), Some(Faction::Horde));
+        assert_eq!(Faction::parse("Either"), None);
+        assert_eq!(
+            camelot.race_files().collect::<Vec<_>>(),
+            [
+                "Human", "Orc", "Dwarf", "NightElf", "Scourge", "Tauren", "Gnome", "Troll",
+                "Skyborne"
+            ]
+        );
+        // The Skyborne's two records (camelot's client).
+        let high_order = camelot
+            .race_record("Skyborne", Some(Faction::Alliance))
+            .unwrap();
+        assert_eq!(
+            (high_order.id, high_order.name.as_str()),
+            (95, "High Order Skyborne")
+        );
+        let windshaper = camelot
+            .race_record("Skyborne", Some(Faction::Horde))
+            .unwrap();
+        assert_eq!(
+            (windshaper.id, windshaper.name.as_str()),
+            (96, "Windshaper Skyborne")
+        );
+    }
+
+    /// The racial spells (decision T513), read from each flavor's client
+    /// (`cargo xtask racials`): every flavor but standard (no retail client
+    /// was installed); each of its races has some; they name the flavor's
+    /// races and classes.
+    #[test]
+    fn racial_spells() {
+        let t = table();
+        for flavor in &t.flavors {
+            if flavor.id == "standard" {
+                assert!(flavor.racials_build().is_none());
+                continue;
+            }
+            assert!(flavor.racials_build().is_some(), "{}", flavor.id);
+            for race in flavor.race_files() {
+                assert!(
+                    flavor.racial_spells().iter().any(|r| r.race == race),
+                    "{} {race}",
+                    flavor.id
+                );
+            }
+            for r in flavor.racial_spells() {
+                assert!(flavor.has_race(&r.race), "{} {}", flavor.id, r.race);
+                assert!(r.spell > 0);
+                for class in &r.classes {
+                    assert!(flavor.class(class).is_some(), "{} {class}", flavor.id);
+                }
+            }
+        }
+        let camelot = t.flavor("camelot").unwrap();
+        let ids = |race: &str, faction: Option<Faction>, class: Option<&str>| -> Vec<u32> {
+            camelot
+                .racials(race, faction, class)
+                .map(|r| r.spell)
+                .collect()
+        };
+        // The Skyborne: three of either faction, a fourth of each.
+        assert_eq!(
+            ids("Skyborne", Some(Faction::Alliance), Some("MAGE")),
+            [1259416, 1259707, 1259710, 1259705]
+        );
+        assert_eq!(
+            ids("Skyborne", Some(Faction::Horde), Some("DRUID")),
+            [1259416, 1259707, 1259710, 1259686]
+        );
+        assert_eq!(ids("Skyborne", None, None), [1259416, 1259707, 1259710]);
+        let names: Vec<&str> = camelot
+            .racials("Skyborne", Some(Faction::Alliance), None)
+            .map(|r| r.name.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "Walk on Air",
+                "Elemental Insight",
+                "Wind Blessed",
+                "Read Leyline"
+            ]
+        );
+        // An Undead's Touch of the Grave by class.
+        assert!(ids("Scourge", Some(Faction::Horde), Some("WARRIOR")).contains(&1260189));
+        assert!(!ids("Scourge", Some(Faction::Horde), Some("WARRIOR")).contains(&1260201));
+        assert!(ids("Scourge", Some(Faction::Horde), Some("MAGE")).contains(&1260201));
+        assert!(ids("Human", Some(Faction::Alliance), Some("WARRIOR")).contains(&20600));
+        // Mists' Pandaren: their language by faction, none chosen too.
+        let mists = t.flavor("mists").unwrap();
+        let langs = |faction| -> Vec<u32> {
+            mists
+                .racials("Pandaren", faction, Some("MONK"))
+                .filter(|r| r.name == "Languages")
+                .map(|r| r.spell)
+                .collect()
+        };
+        assert_eq!(langs(Some(Faction::Alliance)), [143368]);
+        assert_eq!(langs(Some(Faction::Horde)), [143369]);
+        assert_eq!(langs(None), [131701]);
     }
 
     /// Each flavor's max level (camelot's recorded: `GetMaxPlayerLevel()`

@@ -392,6 +392,14 @@ A unit's `level` of -1 is a boss's "??" level: `UnitLevel` answers -1, as in
 the game. Your character's level goes up to your flavors' max level (60 on
 WoW Forever).
 
+Your character's faction follows its race: an Orc is of the Horde, so
+`"faction"` is only for a race of either faction, like the Pandaren or WoW
+Forever's Skyborne (`"race": "Skyborne", "faction": "Alliance"` is a High
+Order Skyborne). Your character also knows its race's racial spells without
+listing them in `trained`: `IsPlayerSpell(20572)` is true for an Orc (Blood
+Fury), and a Skyborne knows Walk on Air, Elemental Insight and Wind Blessed,
+plus Read Leyline of the Alliance or Skysight of the Horde.
+
 A unit has every power its class has: a druid mana, rage, energy and combo
 points, a rogue energy and combo points. Each starts at a default (mana and
 rage 0 of 100, energy 100 of 100, combo points 0 of 5); `powers` sets any of
@@ -420,8 +428,9 @@ Proudmoore")` does the same through the chat. Everything a profile sets can
 still be changed during the test.
 
 `wowlua check` checks the profiles too: an unknown part, a UI scale the
-game's slider doesn't have, a character above the max level or a `powers`
-key that isn't a power token is E4401, and
+game's slider doesn't have, a character above the max level, a `powers`
+key that isn't a power token or a faction that isn't the race's is E4401,
+and
 a profile that `config` names but that doesn't exist is E4402. The same
 profiles start
 [debug sessions in VS Code](vscode.md#debug-in-the-emulated-client).

@@ -1,0 +1,294 @@
+# Each flavor's races and racial spells, from the game's own tables
+# (`cargo xtask racials <WoW installation>`, decision T513): a section per
+# flavor, `[flavor]` and the client build it was read from, then
+#   race   <file> <faction> <race ID> <name>       (ChrRaces' playable records)
+#   spell  <race file> <factions> <classes> <spell ID> <name>
+# a spell of the race's racial skill lines (SkillLineAbility's race and
+# class masks); `-` every faction of the race / every class.
+[camelot]	wowf 1.60.1.70658
+race	Human	Alliance	1	Human
+race	Orc	Horde	2	Orc
+race	Dwarf	Alliance	3	Dwarf
+race	NightElf	Alliance	4	Night Elf
+race	Scourge	Horde	5	Undead
+race	Tauren	Horde	6	Tauren
+race	Gnome	Alliance	7	Gnome
+race	Troll	Horde	8	Troll
+race	Skyborne	Alliance	95	High Order Skyborne
+race	Skyborne	Horde	96	Windshaper Skyborne
+spell	Human	-	-	20597	Ruthless
+spell	Human	-	-	20598	The Human Spirit
+spell	Human	-	-	20600	Perception
+spell	Human	-	-	1259718	Will to Survive
+spell	Orc	-	-	20572	Blood Fury
+spell	Orc	-	-	20573	Hardiness
+spell	Orc	-	-	20574	Savage
+spell	Orc	-	-	1299026	Shatter Curse
+spell	Dwarf	-	-	2481	Find Treasure
+spell	Dwarf	-	-	20594	Stoneform
+spell	Dwarf	-	-	1259719	Earth Fury
+spell	Dwarf	-	-	1259721	Big Game Hunter
+spell	NightElf	-	-	20580	Shadowmeld
+spell	NightElf	-	-	20582	Quickness
+spell	NightElf	-	-	20585	Wisp Spirit
+spell	NightElf	-	-	21009	Quickness Passive
+spell	NightElf	-	-	1259799	Elune's Light
+spell	Scourge	-	-	5227	Underwater Breathing
+spell	Scourge	-	-	7744	Will of the Forsaken
+spell	Scourge	-	-	20577	Cannibalize
+spell	Scourge	-	WARRIOR,PALADIN,ROGUE	1260189	Touch of the Grave
+spell	Scourge	-	PRIEST,MAGE,WARLOCK	1260201	Touch of the Grave
+spell	Tauren	-	-	20549	War Stomp
+spell	Tauren	-	-	20550	Endurance
+spell	Tauren	-	-	20552	Cultivation
+spell	Tauren	-	-	1259918	Plainsrunning
+spell	Gnome	-	-	20589	Escape Artist
+spell	Gnome	-	PRIEST,MAGE,WARLOCK	20591	Expansive Mind
+spell	Gnome	-	-	20593	Engineering Specialization
+spell	Gnome	-	WARRIOR	1259802	Expansive Mind
+spell	Gnome	-	ROGUE	1259803	Expansive Mind
+spell	Gnome	-	ROGUE	1259812	Eureka!
+spell	Gnome	-	WARRIOR	1259813	Eureka!
+spell	Gnome	-	MAGE	1259817	Eureka!
+spell	Gnome	-	WARLOCK	1259821	Eureka!
+spell	Gnome	-	PRIEST	1259823	Eureka!
+spell	Troll	-	-	20554	Berserking
+spell	Troll	-	-	20555	Regeneration
+spell	Troll	-	-	20557	Beast Slaying
+spell	Troll	-	-	1260270	Rapid Regeneration
+spell	Skyborne	-	-	1259416	Walk on Air
+spell	Skyborne	-	-	1259707	Elemental Insight
+spell	Skyborne	-	-	1259710	Wind Blessed
+spell	Skyborne	Alliance	-	1259705	Read Leyline
+spell	Skyborne	Horde	-	1259686	Skysight
+[vanilla]	wow_classic_era 1.15.9.70576
+race	Human	Alliance	1	Human
+race	Orc	Horde	2	Orc
+race	Dwarf	Alliance	3	Dwarf
+race	NightElf	Alliance	4	Night Elf
+race	Scourge	Horde	5	Undead
+race	Tauren	Horde	6	Tauren
+race	Gnome	Alliance	7	Gnome
+race	Troll	Horde	8	Troll
+spell	Human	-	-	20597	Sword Specialization
+spell	Human	-	-	20598	The Human Spirit
+spell	Human	-	-	20599	Diplomacy
+spell	Human	-	-	20600	Perception
+spell	Human	-	-	20864	Mace Specialization
+spell	Orc	-	-	20572	Blood Fury
+spell	Orc	-	-	20573	Hardiness
+spell	Orc	-	-	20574	Axe Specialization
+spell	Orc	-	WARLOCK	20575	Command
+spell	Orc	-	HUNTER	20576	Command
+spell	Orc	-	WARRIOR,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE	21563	Command
+spell	Dwarf	-	-	2481	Find Treasure
+spell	Dwarf	-	-	20594	Stoneform
+spell	Dwarf	-	-	20595	Gun Specialization
+spell	Dwarf	-	-	20596	Frost Resistance
+spell	NightElf	-	-	20580	Shadowmeld
+spell	NightElf	-	-	20582	Quickness
+spell	NightElf	-	-	20583	Nature Resistance
+spell	NightElf	-	-	20585	Wisp Spirit
+spell	NightElf	-	-	21009	Shadowmeld Passive
+spell	Scourge	-	-	5227	Underwater Breathing
+spell	Scourge	-	-	7744	Will of the Forsaken
+spell	Scourge	-	-	20577	Cannibalize
+spell	Scourge	-	-	20579	Shadow Resistance
+spell	Tauren	-	-	20549	War Stomp
+spell	Tauren	-	-	20550	Endurance
+spell	Tauren	-	-	20551	Nature Resistance
+spell	Tauren	-	-	20552	Cultivation
+spell	Gnome	-	-	20589	Escape Artist
+spell	Gnome	-	-	20591	Expansive Mind
+spell	Gnome	-	-	20592	Arcane Resistance
+spell	Gnome	-	-	20593	Engineering Specialization
+spell	Troll	-	PALADIN,PRIEST,SHAMAN,DRUID,MAGE,WARLOCK,HUNTER	20554	Berserking
+spell	Troll	-	-	20555	Regeneration
+spell	Troll	-	-	20557	Beast Slaying
+spell	Troll	-	-	20558	Throwing Specialization
+spell	Troll	-	-	23301	Berserking
+spell	Troll	-	-	26290	Bow Specialization
+spell	Troll	-	WARRIOR	26296	Berserking
+spell	Troll	-	ROGUE	26297	Berserking
+[tbc]	wow_anniversary 2.5.6.70577
+race	Human	Alliance	1	Human
+race	Orc	Horde	2	Orc
+race	Dwarf	Alliance	3	Dwarf
+race	NightElf	Alliance	4	Night Elf
+race	Scourge	Horde	5	Undead
+race	Tauren	Horde	6	Tauren
+race	Gnome	Alliance	7	Gnome
+race	Troll	Horde	8	Troll
+race	BloodElf	Horde	10	Blood Elf
+race	Draenei	Alliance	11	Draenei
+spell	Human	-	-	20597	Sword Specialization
+spell	Human	-	-	20598	The Human Spirit
+spell	Human	-	-	20599	Diplomacy
+spell	Human	-	-	20600	Perception
+spell	Human	-	-	20864	Mace Specialization
+spell	Orc	-	WARRIOR,ROGUE,HUNTER	20572	Blood Fury
+spell	Orc	-	-	20573	Hardiness
+spell	Orc	-	-	20574	Axe Specialization
+spell	Orc	-	WARLOCK	20575	Command
+spell	Orc	-	HUNTER	20576	Command
+spell	Orc	-	WARRIOR,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE	21563	Command
+spell	Orc	-	SHAMAN	33697	Blood Fury
+spell	Orc	-	WARLOCK	33702	Blood Fury
+spell	Dwarf	-	-	2481	Find Treasure
+spell	Dwarf	-	-	20594	Stoneform
+spell	Dwarf	-	-	20595	Gun Specialization
+spell	Dwarf	-	-	20596	Frost Resistance
+spell	NightElf	-	-	20580	Shadowmeld
+spell	NightElf	-	-	20582	Quickness
+spell	NightElf	-	-	20583	Nature Resistance
+spell	NightElf	-	-	20585	Wisp Spirit
+spell	NightElf	-	-	21009	Shadowmeld Passive
+spell	Scourge	-	-	5227	Underwater Breathing
+spell	Scourge	-	-	7744	Will of the Forsaken
+spell	Scourge	-	-	20577	Cannibalize
+spell	Scourge	-	-	20579	Shadow Resistance
+spell	Tauren	-	-	20549	War Stomp
+spell	Tauren	-	-	20550	Endurance
+spell	Tauren	-	-	20551	Nature Resistance
+spell	Tauren	-	-	20552	Cultivation
+spell	Gnome	-	-	20589	Escape Artist
+spell	Gnome	-	-	20591	Expansive Mind
+spell	Gnome	-	-	20592	Arcane Resistance
+spell	Gnome	-	-	20593	Engineering Specialization
+spell	Troll	-	PALADIN,PRIEST,SHAMAN,DRUID,MAGE,WARLOCK,HUNTER	20554	Berserking
+spell	Troll	-	-	20555	Regeneration
+spell	Troll	-	-	20557	Beast Slaying
+spell	Troll	-	-	20558	Throwing Specialization
+spell	Troll	-	-	26290	Bow Specialization
+spell	Troll	-	WARRIOR	26296	Berserking
+spell	Troll	-	ROGUE	26297	Berserking
+spell	BloodElf	-	-	822	Magic Resistance
+spell	BloodElf	-	ROGUE	25046	Arcane Torrent
+spell	BloodElf	-	PALADIN,PRIEST,MAGE,WARLOCK,HUNTER	28730	Arcane Torrent
+spell	BloodElf	-	-	28734	Mana Tap
+spell	BloodElf	-	-	28877	Arcane Affinity
+spell	Draenei	-	WARRIOR,PALADIN,HUNTER	6562	Heroic Presence
+spell	Draenei	-	-	20579	Shadow Resistance
+spell	Draenei	-	-	28875	Gemcutting
+spell	Draenei	-	PRIEST,SHAMAN,MAGE	28878	Inspiring Presence
+spell	Draenei	-	-	28880	Gift of the Naaru
+[mists]	wow_classic 5.5.4.70631
+race	Human	Alliance	1	Human
+race	Orc	Horde	2	Orc
+race	Dwarf	Alliance	3	Dwarf
+race	NightElf	Alliance	4	Night Elf
+race	Scourge	Horde	5	Undead
+race	Tauren	Horde	6	Tauren
+race	Gnome	Alliance	7	Gnome
+race	Troll	Horde	8	Troll
+race	Goblin	Horde	9	Goblin
+race	BloodElf	Horde	10	Blood Elf
+race	Draenei	Alliance	11	Draenei
+race	Worgen	Alliance	22	Worgen
+race	Pandaren	Neutral	24	Pandaren
+race	Pandaren	Alliance	25	Pandaren
+race	Pandaren	Horde	26	Pandaren
+spell	Human	-	-	20597	Sword Specialization
+spell	Human	-	-	20598	The Human Spirit
+spell	Human	-	-	20599	Diplomacy
+spell	Human	-	-	20864	Mace Specialization
+spell	Human	-	-	59752	Will to Survive
+spell	Human	-	-	79738	Languages
+spell	Orc	-	WARRIOR,DEATHKNIGHT,ROGUE,HUNTER	20572	Blood Fury
+spell	Orc	-	-	20573	Hardiness
+spell	Orc	-	-	20574	Axe Specialization
+spell	Orc	-	WARLOCK	20575	Command
+spell	Orc	-	HUNTER	20576	Command
+spell	Orc	-	WARRIOR,PALADIN,MONK,PRIEST,DRUID,ROGUE,MAGE	21563	Command
+spell	Orc	-	MONK,SHAMAN	33697	Blood Fury
+spell	Orc	-	MAGE,WARLOCK	33702	Blood Fury
+spell	Orc	-	DEATHKNIGHT	54562	Command
+spell	Orc	-	SHAMAN	65222	Command
+spell	Orc	-	-	79743	Languages
+spell	Dwarf	-	-	20594	Stoneform
+spell	Dwarf	-	-	20595	Crack Shot
+spell	Dwarf	-	-	20596	Frost Resistance
+spell	Dwarf	-	-	59224	Mace Specialization
+spell	Dwarf	-	-	79739	Languages
+spell	Dwarf	-	-	92682	Explorer
+spell	NightElf	-	-	20582	Quickness
+spell	NightElf	-	-	20583	Nature Resistance
+spell	NightElf	-	-	20585	Wisp Spirit
+spell	NightElf	-	WARRIOR,DEATHKNIGHT,MONK,PRIEST,DRUID,ROGUE,MAGE,HUNTER	21009	Elusiveness
+spell	NightElf	-	-	58984	Shadowmeld
+spell	NightElf	-	-	76252	Languages
+spell	Scourge	-	-	5227	Touch of the Grave
+spell	Scourge	-	-	7744	Will of the Forsaken
+spell	Scourge	-	-	20577	Cannibalize
+spell	Scourge	-	-	20579	Shadow Resistance
+spell	Scourge	-	-	79747	Languages
+spell	Tauren	-	-	20549	War Stomp
+spell	Tauren	-	-	20550	Endurance
+spell	Tauren	-	-	20551	Nature Resistance
+spell	Tauren	-	-	20552	Cultivation
+spell	Tauren	-	-	79746	Languages
+spell	Gnome	-	-	20589	Escape Artist
+spell	Gnome	-	-	20591	Expansive Mind
+spell	Gnome	-	-	20592	Arcane Resistance
+spell	Gnome	-	-	20593	Engineering Specialization
+spell	Gnome	-	-	79740	Languages
+spell	Gnome	-	-	92680	Shortblade Specialization
+spell	Troll	-	-	20555	Regeneration
+spell	Troll	-	-	20557	Beast Slaying
+spell	Troll	-	-	26290	Dead Eye
+spell	Troll	-	-	26297	Berserking
+spell	Troll	-	-	58943	Da Voodoo Shuffle
+spell	Troll	-	-	79744	Languages
+spell	Goblin	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	69041	Rocket Barrage
+spell	Goblin	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	69042	Time is Money
+spell	Goblin	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	69044	Best Deals Anywhere
+spell	Goblin	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	69045	Better Living Through Chemistry
+spell	Goblin	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	69046	Pack Hobgoblin
+spell	Goblin	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	69070	Rocket Jump
+spell	Goblin	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	79749	Languages
+spell	BloodElf	-	-	822	Arcane Resistance
+spell	BloodElf	-	ROGUE	25046	Arcane Torrent
+spell	BloodElf	-	PALADIN,PRIEST,MAGE,WARLOCK	28730	Arcane Torrent
+spell	BloodElf	-	-	28877	Arcane Affinity
+spell	BloodElf	-	DEATHKNIGHT	50613	Arcane Torrent
+spell	BloodElf	-	WARRIOR	69179	Arcane Torrent
+spell	BloodElf	-	-	79748	Languages
+spell	BloodElf	-	HUNTER	80483	Arcane Torrent
+spell	BloodElf	-	MONK	129597	Arcane Torrent
+spell	Draenei	-	WARRIOR,DEATHKNIGHT,PALADIN,MONK,HUNTER	6562	Heroic Presence
+spell	Draenei	-	-	28875	Gemcutting
+spell	Draenei	-	PRIEST,SHAMAN,MAGE	28878	Heroic Presence
+spell	Draenei	-	WARRIOR	28880	Gift of the Naaru
+spell	Draenei	-	WARRIOR	59221	Shadow Resistance
+spell	Draenei	-	PALADIN	59535	Shadow Resistance
+spell	Draenei	-	HUNTER	59536	Shadow Resistance
+spell	Draenei	-	PRIEST	59538	Shadow Resistance
+spell	Draenei	-	DEATHKNIGHT	59539	Shadow Resistance
+spell	Draenei	-	SHAMAN	59540	Shadow Resistance
+spell	Draenei	-	MAGE	59541	Shadow Resistance
+spell	Draenei	-	PALADIN	59542	Gift of the Naaru
+spell	Draenei	-	HUNTER	59543	Gift of the Naaru
+spell	Draenei	-	PRIEST	59544	Gift of the Naaru
+spell	Draenei	-	DEATHKNIGHT	59545	Gift of the Naaru
+spell	Draenei	-	SHAMAN	59547	Gift of the Naaru
+spell	Draenei	-	MAGE	59548	Gift of the Naaru
+spell	Draenei	-	-	79741	Languages
+spell	Draenei	-	MONK	121093	Gift of the Naaru
+spell	Draenei	-	MONK	132295	Shadow Resistance
+spell	Worgen	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	68975	Viciousness
+spell	Worgen	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	68976	Aberration
+spell	Worgen	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	68978	Flayer
+spell	Worgen	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	68992	Darkflight
+spell	Worgen	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	68996	Two Forms
+spell	Worgen	-	WARRIOR,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	69001	
+spell	Worgen	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	79742	Languages
+spell	Worgen	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	87840	Running Wild
+spell	Worgen	-	WARRIOR,DEATHKNIGHT,PALADIN,PRIEST,SHAMAN,DRUID,ROGUE,MAGE,WARLOCK,HUNTER	94293	Enable Worgen Altered Form
+spell	Pandaren	-	-	107072	Epicurean
+spell	Pandaren	-	-	107073	Gourmand
+spell	Pandaren	-	-	107074	Inner Peace
+spell	Pandaren	-	-	107076	Bouncy
+spell	Pandaren	-	-	107079	Quaking Palm
+spell	Pandaren	Alliance	-	143368	Languages
+spell	Pandaren	Horde	-	143369	Languages
+spell	Pandaren	Neutral	-	131701	Languages

@@ -23,7 +23,17 @@
         { "file": "WARLOCK", "powers": ["MANA"] },
         { "file": "HUNTER", "powers": ["MANA"] }
       ],
-      "races": ["Human", "Orc", "Dwarf", "NightElf", "Scourge", "Tauren", "Gnome", "Troll", "Skyborne"],
+      "races": [
+        { "file": "Human", "faction": "alliance" },
+        { "file": "Orc", "faction": "horde" },
+        { "file": "Dwarf", "faction": "alliance" },
+        { "file": "NightElf", "faction": "alliance" },
+        { "file": "Scourge", "faction": "horde" },
+        { "file": "Tauren", "faction": "horde" },
+        { "file": "Gnome", "faction": "alliance" },
+        { "file": "Troll", "faction": "horde" },
+        { "file": "Skyborne", "faction": "either" }
+      ],
       "power-defaults": {
         "MANA": { "current": 0, "max": 100 },
         "RAGE": { "current": 0, "max": 100 },
@@ -60,7 +70,34 @@
         { "file": "DEMONHUNTER", "powers": ["FURY"] },
         { "file": "EVOKER", "powers": ["MANA", "ESSENCE"] }
       ],
-      "races": ["Human", "Orc", "Dwarf", "NightElf", "Scourge", "Tauren", "Gnome", "Troll", "Goblin", "BloodElf", "Draenei", "Worgen", "Pandaren", "Nightborne", "HighmountainTauren", "VoidElf", "LightforgedDraenei", "ZandalariTroll", "KulTiran", "DarkIronDwarf", "Vulpera", "MagharOrc", "Mechagnome", "Dracthyr", "EarthenDwarf", "Harronir"],
+      "races": [
+        { "file": "Human", "faction": "alliance" },
+        { "file": "Orc", "faction": "horde" },
+        { "file": "Dwarf", "faction": "alliance" },
+        { "file": "NightElf", "faction": "alliance" },
+        { "file": "Scourge", "faction": "horde" },
+        { "file": "Tauren", "faction": "horde" },
+        { "file": "Gnome", "faction": "alliance" },
+        { "file": "Troll", "faction": "horde" },
+        { "file": "Goblin", "faction": "horde" },
+        { "file": "BloodElf", "faction": "horde" },
+        { "file": "Draenei", "faction": "alliance" },
+        { "file": "Worgen", "faction": "alliance" },
+        { "file": "Pandaren", "faction": "either" },
+        { "file": "Nightborne", "faction": "horde" },
+        { "file": "HighmountainTauren", "faction": "horde" },
+        { "file": "VoidElf", "faction": "alliance" },
+        { "file": "LightforgedDraenei", "faction": "alliance" },
+        { "file": "ZandalariTroll", "faction": "horde" },
+        { "file": "KulTiran", "faction": "alliance" },
+        { "file": "DarkIronDwarf", "faction": "alliance" },
+        { "file": "Vulpera", "faction": "horde" },
+        { "file": "MagharOrc", "faction": "horde" },
+        { "file": "Mechagnome", "faction": "alliance" },
+        { "file": "Dracthyr", "faction": "either" },
+        { "file": "EarthenDwarf", "faction": "either" },
+        { "file": "Harronir", "faction": "either" }
+      ],
       "power-defaults": {
         "MANA": { "current": 0, "max": 100 },
         "RAGE": { "current": 0, "max": 100 },
@@ -102,7 +139,16 @@
         { "file": "WARLOCK", "powers": ["MANA"] },
         { "file": "HUNTER", "powers": ["MANA"] }
       ],
-      "races": ["Human", "Orc", "Dwarf", "NightElf", "Scourge", "Tauren", "Gnome", "Troll"],
+      "races": [
+        { "file": "Human", "faction": "alliance" },
+        { "file": "Orc", "faction": "horde" },
+        { "file": "Dwarf", "faction": "alliance" },
+        { "file": "NightElf", "faction": "alliance" },
+        { "file": "Scourge", "faction": "horde" },
+        { "file": "Tauren", "faction": "horde" },
+        { "file": "Gnome", "faction": "alliance" },
+        { "file": "Troll", "faction": "horde" }
+      ],
       "power-defaults": {
         "MANA": { "current": 0, "max": 100 },
         "RAGE": { "current": 0, "max": 100 },
@@ -132,7 +178,18 @@
         { "file": "WARLOCK", "powers": ["MANA"] },
         { "file": "HUNTER", "powers": ["MANA"] }
       ],
-      "races": ["Human", "Orc", "Dwarf", "NightElf", "Scourge", "Tauren", "Gnome", "Troll", "BloodElf", "Draenei"],
+      "races": [
+        { "file": "Human", "faction": "alliance" },
+        { "file": "Orc", "faction": "horde" },
+        { "file": "Dwarf", "faction": "alliance" },
+        { "file": "NightElf", "faction": "alliance" },
+        { "file": "Scourge", "faction": "horde" },
+        { "file": "Tauren", "faction": "horde" },
+        { "file": "Gnome", "faction": "alliance" },
+        { "file": "Troll", "faction": "horde" },
+        { "file": "BloodElf", "faction": "horde" },
+        { "file": "Draenei", "faction": "alliance" }
+      ],
       "power-defaults": {
         "MANA": { "current": 0, "max": 100 },
         "RAGE": { "current": 0, "max": 100 },
@@ -164,7 +221,21 @@
         { "file": "WARLOCK", "powers": ["MANA", "SOUL_SHARDS", "BURNING_EMBERS", "DEMONIC_FURY"] },
         { "file": "HUNTER", "powers": ["FOCUS"] }
       ],
-      "races": ["Human", "Orc", "Dwarf", "NightElf", "Scourge", "Tauren", "Gnome", "Troll", "Goblin", "BloodElf", "Draenei", "Worgen", "Pandaren"],
+      "races": [
+        { "file": "Human", "faction": "alliance" },
+        { "file": "Orc", "faction": "horde" },
+        { "file": "Dwarf", "faction": "alliance" },
+        { "file": "NightElf", "faction": "alliance" },
+        { "file": "Scourge", "faction": "horde" },
+        { "file": "Tauren", "faction": "horde" },
+        { "file": "Gnome", "faction": "alliance" },
+        { "file": "Troll", "faction": "horde" },
+        { "file": "Goblin", "faction": "horde" },
+        { "file": "BloodElf", "faction": "horde" },
+        { "file": "Draenei", "faction": "alliance" },
+        { "file": "Worgen", "faction": "alliance" },
+        { "file": "Pandaren", "faction": "either" }
+      ],
       "power-defaults": {
         "MANA": { "current": 0, "max": 100 },
         "RAGE": { "current": 0, "max": 100 },

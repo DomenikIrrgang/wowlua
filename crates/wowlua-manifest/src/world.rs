@@ -130,7 +130,8 @@ pub struct UnitData {
     /// The class by file name (`WARRIOR`).
     pub class: Option<String>,
     pub class_id: Option<f64>,
-    /// The race by file name (`Human`).
+    /// The race by file name (`Human`). Its faction follows it, and the
+    /// character knows its racial spells (decision T513).
     pub race: Option<String>,
     /// 1 unknown, 2 male, 3 female.
     pub sex: Option<f64>,
@@ -158,6 +159,9 @@ pub struct UnitData {
     pub dead: Option<bool>,
     /// Yards from the player.
     pub distance: Option<f64>,
+    /// `Alliance` or `Horde`: the one a race of either picked (the
+    /// Pandaren, the Skyborne), or a creature's. A race of one faction has
+    /// its own (decision T513): another is an error.
     pub faction: Option<String>,
     pub npc_id: Option<f64>,
     pub classification: Option<String>,
@@ -577,6 +581,37 @@ pub fn check_for(
         None => {}
     }
     let table = wowlua_flavors::table();
+    // A race of one faction decides the unit's (decision T513): a faction
+    // given that is not it is an error.
+    for (at, unit) in &with_powers {
+        let Some(race) = unit
+            .race
+            .as_deref()
+            .and_then(|r| table.flavors.iter().find_map(|f| f.race(r)))
+        else {
+            continue;
+        };
+        if race.is_either() {
+            continue;
+        }
+        let given = match (&unit.faction, unit.other.get("factionGroup")) {
+            (Some(f), _) => Some(("faction", f.as_str())),
+            (None, Some(Value::String(f))) => Some(("factionGroup", f.as_str())),
+            _ => None,
+        };
+        if let Some((key, faction)) = given
+            && wowlua_flavors::Faction::parse(faction) != Some(race.faction)
+        {
+            wrong(
+                at.clone().key(key),
+                format!(
+                    "the race `{}` is of the {}: its faction follows its race, not `{faction}`",
+                    race.file, race.faction
+                ),
+                "not the race's faction",
+            );
+        }
+    }
     for (at, unit) in with_powers {
         for token in unit.powers.iter().flat_map(|p| p.keys()) {
             if table.power_type(token).is_none() {
@@ -784,6 +819,37 @@ mod tests {
         ] {
             assert_eq!(codes(wrong)[0].0, "E4401", "{wrong}");
         }
+    }
+
+    /// A race of one faction decides it (decision T513): another faction
+    /// is E4401; a race of either takes either, a creature any.
+    #[test]
+    fn a_faction_follows_a_fixed_race() {
+        for good in [
+            r#"{ "character": { "race": "Orc", "faction": "Horde" } }"#,
+            r#"{ "character": { "race": "Orc" } }"#,
+            r#"{ "character": { "race": "Skyborne", "faction": "Alliance" } }"#,
+            r#"{ "character": { "race": "Pandaren", "faction": "Horde" } }"#,
+            r#"{ "units": [ { "name": "Guard", "faction": "Alliance" } ] }"#,
+            r#"{ "units": [ { "name": "Jaina", "player": true, "race": "Human", "factionGroup": "Alliance" } ] }"#,
+        ] {
+            assert!(codes(good).is_empty(), "{good}: {:?}", codes(good));
+        }
+        let found = codes(r#"{ "character": { "race": "Orc", "faction": "Alliance" } }"#);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, "E4401");
+        assert_eq!(
+            found[0].1,
+            "the race `Orc` is of the Horde: its faction follows its race, not `Alliance`"
+        );
+        let found = codes(
+            r#"{ "units": [ { "name": "Thrall", "race": "Orc", "factionGroup": "Alliance" } ] }"#,
+        );
+        assert_eq!(found[0].0, "E4401", "{found:?}");
+        assert_eq!(
+            codes(r#"{ "character": { "race": "Human", "faction": "Neutral" } }"#)[0].0,
+            "E4401"
+        );
     }
 
     #[test]

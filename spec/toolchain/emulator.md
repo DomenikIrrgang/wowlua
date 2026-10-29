@@ -386,6 +386,17 @@ The WoW API the VM's code calls, per flavor.
   (none for a character without it). Unverified: the answers for powers
   not shown, `UnitPowerType(unit, 1)` of a unit with several powers (none,
   as recorded for one with one).
+- **Races and factions.** A unit's faction (`UnitFactionGroup`) follows
+  its race's in the flavor table ([Manifest §9.4.1](manifest.md#941-flavor-table);
+  decision T513), whatever its data says; a race of either faction (the
+  Pandaren, the Skyborne) has the one given (`faction`, `factionGroup`),
+  none when none is given; a creature its own. `UnitRace` of a race of
+  either answers its faction's race ID and name (camelot's Skyborne: 95
+  High Order Skyborne, 96 Windshaper Skyborne; with none, 96). A player
+  given no race is a Human, an Orc when given the Horde. The player knows
+  its race's racial spells for its faction and class, from the table,
+  without learning them (`IsPlayerSpell`, `C_SpellBook.IsSpellKnown`);
+  unverified: the recorded spellbook does not list them.
 - **Layout.** A region's rectangle comes from its points as the client
   lays it out: each edge from the points that set it (a `LEFT` and a
   `RIGHT` point give the width, a `TOP` and a `BOTTOM` the height),

@@ -206,7 +206,7 @@ is reported as the warning with the same number (`E2001` → `W2001`, `E2030` �
 | W4332 | `.pkgmeta` `move-folders` use that cannot be converted |
 | E4334 | Both a hand-written `Bindings.xml` and `wowlua:bindings` declarations |
 | E4400 | World profile is not valid JSON, or not a JSON object |
-| E4401 | World profile does not match its schema (unknown part, wrong type, a key that is no ID, a UI scale off the game's slider, a character's level outside the flavors' range, a `powers` key that is no power token) |
+| E4401 | World profile does not match its schema (unknown part, wrong type, a key that is no ID, a UI scale off the game's slider, a character's level outside the flavors' range, a `powers` key that is no power token, a faction that is not the race's) |
 | E4402 | `test.profile` or a test file's `config({ profile })` names no world profile of the package |
 | E4335 | Packager `@version-…@` blocks in a multi-version build |
 | W4333 | `.pkgmeta` hg external cannot be converted |

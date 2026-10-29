@@ -296,7 +296,7 @@
           "format": "double"
         },
         "race": {
-          "description": "The race by file name (`Human`).",
+          "description": "The race by file name (`Human`). Its faction follows it, and the\ncharacter knows its racial spells (decision T513).",
           "type": [
             "string",
             "null"
@@ -401,6 +401,7 @@
           "format": "double"
         },
         "faction": {
+          "description": "`Alliance` or `Horde`: the one a race of either picked (the\nPandaren, the Skyborne), or a creature's. A race of one faction has\nits own (decision T513): another is an error.",
           "type": [
             "string",
             "null"
@@ -1509,7 +1510,7 @@
           "format": "double"
         },
         "race": {
-          "description": "The race by file name (`Human`).",
+          "description": "The race by file name (`Human`). Its faction follows it, and the\ncharacter knows its racial spells (decision T513).",
           "type": [
             "string",
             "null"
@@ -1614,6 +1615,7 @@
           "format": "double"
         },
         "faction": {
+          "description": "`Alliance` or `Horde`: the one a race of either picked (the\nPandaren, the Skyborne), or a creature's. A race of one faction has\nits own (decision T513): another is an error.",
           "type": [
             "string",
             "null"

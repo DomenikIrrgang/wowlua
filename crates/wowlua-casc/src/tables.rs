@@ -54,6 +54,7 @@ const FILES: &[(&str, u32)] = &[
     ("SharedString", 4620073),
     ("SkillLine", 1240935),
     ("SkillLineAbility", 1266278),
+    ("SkillRaceClassInfo", 1240406),
     ("Spell", 1140089),
     ("SpellAuraOptions", 1139952),
     ("SpellCastTimes", 1134089),

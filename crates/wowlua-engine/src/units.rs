@@ -14,6 +14,7 @@
 //! before the regen event, the restriction then active; which restrictions
 //! besides a restricted map make identities secret.
 
+use wowlua_flavors::Faction;
 use wowlua_vm::heap::Userdata;
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, TableRef, Value, Vm};
@@ -929,13 +930,28 @@ fn unit_class_base(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `UnitRace`: the race's name, file name and ID (recorded: "Undead",
 /// "Scourge", 5); a creature has none (`/stdtest engine scenario combat`).
+/// A race of either faction has a record per faction in the client
+/// (decision T513: camelot's Skyborne, 95 "High Order Skyborne" of the
+/// Alliance, 96 "Windshaper Skyborne" of the Horde): its faction's, else
+/// the one recorded (the Windshaper's).
 fn unit_race(vm: &mut Vm, c: NativeCall) -> Ret {
+    let flavor = engine(vm).flavor.clone();
     with_unit(vm, &c, |vm, u| {
         if u.race.is_empty() {
             return vec![];
         }
-        let (file, id) = race_file_and_id(&u.race);
-        let name = race_name(&u.race);
+        let (file, mut id) = race_file_and_id(&u.race);
+        let mut name = race_name(&u.race);
+        let faction = faction_of(u).and_then(|f| Faction::parse(&f));
+        if race_faction(&file).is_none()
+            && let Some(f) = faction
+            && let Some(record) = wowlua_flavors::table()
+                .flavor(&flavor)
+                .and_then(|fl| fl.race_record(&file, Some(f)))
+        {
+            id = Some(f64::from(record.id));
+            name.clone_from(&record.name);
+        }
         vec![
             vm.str(&name),
             vm.str(&file),
@@ -2205,6 +2221,22 @@ fn unit_from(
     };
     let mut powers: Vec<Power> = kinds.iter().map(|k| default_power(&flavor, *k)).collect();
     apply_power_data(&flavor, &mut powers, power_type, &powers_given);
+    // Its faction (`factionGroup`, a world profile's `faction`): a race of
+    // either's (the Skyborne, recorded Horde) or a creature's; a race of
+    // one has its own (decision T513, `faction_of`).
+    let faction_group = match (get(vm, "factionGroup"), get(vm, "faction")) {
+        (Value::Str(s), _) | (_, Value::Str(s)) => {
+            Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned())
+        }
+        _ => None,
+    };
+    // A player of no race given is a Human, an Orc when of the Horde (its
+    // faction follows its race).
+    let default_race = match (player, faction_group.as_deref()) {
+        (false, _) => "",
+        (true, Some(f)) if f.eq_ignore_ascii_case("Horde") => "Orc",
+        (true, _) => "Human",
+    };
     Ok(Unit {
         guid: text(vm, "guid", &default_guid),
         name: text(vm, "name", "Unit"),
@@ -2220,15 +2252,8 @@ fn unit_from(
         class_id: num(vm, "classID", class_id(&class)),
         class,
         class_name,
-        race: text(vm, "race", if player { "Human" } else { "" }),
-        // Its faction, else a world profile's character's (`faction`: a
-        // race of either, the Skyborne, recorded Horde).
-        faction_group: match (get(vm, "factionGroup"), get(vm, "faction")) {
-            (Value::Str(s), _) | (_, Value::Str(s)) => {
-                Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned())
-            }
-            _ => None,
-        },
+        race: text(vm, "race", default_race),
+        faction_group,
         sex: num(vm, "sex", 1.0),
         reaction,
         player_reaction,
@@ -2963,12 +2988,7 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
     let old = &engine(vm).units.list[me.0];
     let before = Before::of(old);
     let named_before = (old.realm.clone(), old.last_name.clone());
-    let faction_before = (
-        old.reaction,
-        old.player_reaction,
-        old.faction_group.clone(),
-        old.pvp,
-    );
+    let faction_before = (old.reaction, old.player_reaction, faction_of(old), old.pvp);
     let looks_before = (old.class.clone(), old.race.clone(), old.sex);
     let (classification, power_type) = (old.classification.clone(), old.power_type);
 
@@ -3086,12 +3106,7 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
         tell_power_changes(vm, me, &before.powers);
     }
     let now = &engine(vm).units.list[me.0];
-    let faction_now = (
-        now.reaction,
-        now.player_reaction,
-        now.faction_group.clone(),
-        now.pvp,
-    );
+    let faction_now = (now.reaction, now.player_reaction, faction_of(now), now.pvp);
     let looks_now = (now.class.clone(), now.race.clone(), now.sex);
     let power_type_changed = now.power_type != power_type;
     let faction_changed = faction_now != faction_before;
@@ -4769,69 +4784,62 @@ fn unit_power_percent(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![crate::curves::apply(vm, c.arg(4), pct)?])
 }
 
-/// More of this module's behaviours.
-/// The faction of a race (`UnitFactionGroup`); a race neither lists is
-/// neutral (unverified for races the list lacks).
-fn faction(race: &str) -> Option<&'static str> {
-    const ALLIANCE: &[&str] = &[
-        "Human",
-        "Dwarf",
-        "NightElf",
-        "Gnome",
-        "Draenei",
-        "Worgen",
-        "VoidElf",
-        "LightforgedDraenei",
-        "DarkIronDwarf",
-        "KulTiran",
-        "Mechagnome",
-    ];
-    const HORDE: &[&str] = &[
-        "Orc",
-        "Scourge",
-        "Tauren",
-        "Troll",
-        "BloodElf",
-        "Goblin",
-        "Nightborne",
-        "HighmountainTauren",
-        "MagharOrc",
-        "ZandalariTroll",
-        "Vulpera",
-    ];
-    if ALLIANCE.contains(&race) {
-        Some("Alliance")
-    } else if HORDE.contains(&race) {
-        Some("Horde")
-    } else {
-        None
-    }
+// More of this module's behaviours.
+
+/// The faction of a race (`UnitFactionGroup`), by its file name, from the
+/// flavor table (decision T513; every flavor that has a race gives it one
+/// faction): none for a race of either (its player picks one: the
+/// Pandaren, the Skyborne) or one the table lacks (unverified).
+pub(crate) fn race_faction(race: &str) -> Option<Faction> {
+    wowlua_flavors::table()
+        .flavors
+        .iter()
+        .find_map(|f| f.race(race))
+        .and_then(|r| match r.faction {
+            Faction::Either => None,
+            fixed => Some(fixed),
+        })
 }
 
-/// `UnitFactionGroup`: a race's faction; a creature its own (a city's
-/// NPC: "Alliance", recorded) or none; no such unit two empty strings
-/// (recorded, scenario combat).
+/// `UnitFactionGroup`: the unit's faction ([`faction_of`]); none for a
+/// creature without one; no such unit two empty strings (recorded,
+/// scenario combat).
 fn unit_faction_group(vm: &mut Vm, c: NativeCall) -> Ret {
     if unit_arg(vm, &c, 1).is_none() {
         return Ok(vec![vm.str(""), vm.str("")]);
     }
-    with_unit(vm, &c, |vm, u| {
-        let f = u
-            .faction_group
-            .clone()
-            .or_else(|| faction(&race_file_and_id(&u.race).0).map(str::to_string));
-        match f {
-            Some(f) => vec![vm.str(&f), vm.str(&f)],
-            None => vec![],
-        }
+    with_unit(vm, &c, |vm, u| match faction_of(u) {
+        Some(f) => vec![vm.str(&f), vm.str(&f)],
+        None => vec![],
     })
 }
 
-/// A unit's faction (its own, else its race's).
-fn faction_of(u: &Unit) -> Option<String> {
-    u.faction_group
-        .clone()
-        .or_else(|| faction(&race_file_and_id(&u.race).0).map(str::to_string))
+/// A unit's faction (decision T513): its race's, for a race of one
+/// faction, whatever the unit's data says; else its own (a creature's, a
+/// city's NPC: "Alliance", recorded; the one a player of a race of either
+/// picked; none when none was given).
+pub(crate) fn faction_of(u: &Unit) -> Option<String> {
+    race_faction(&race_file_and_id(&u.race).0)
+        .map(|f| f.name().to_string())
+        .or_else(|| u.faction_group.clone())
+}
+
+/// Whether the player knows a spell as its race's (decision T513): one of
+/// the flavor's racial spells for its race, faction and class (the flavor
+/// table's, read from the client's tables), known without learning it.
+pub(crate) fn knows_racial(vm: &Vm, spell: f64) -> bool {
+    let e = engine(vm);
+    let Some(flavor) = wowlua_flavors::table().flavor(&e.flavor) else {
+        return false;
+    };
+    let Some(u) = e.units.list.get(PLAYER.0) else {
+        return false;
+    };
+    let race = race_file_and_id(&u.race).0;
+    let faction = faction_of(u).and_then(|f| Faction::parse(&f));
+    flavor
+        .racials(&race, faction, Some(&u.class))
+        .any(|r| f64::from(r.spell) == spell)
 }
 
 /// `UnitCanCooperate(a, b)`: two players of one faction (unverified: not

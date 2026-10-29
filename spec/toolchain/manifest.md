@@ -265,10 +265,13 @@ checks, wowlua Studio's pickers and sliders). In the crate:
 `wowlua_flavors::table().flavor(id)` gives the `Flavor`, whose `classes`
 (`Vec<Class>`: `file`, the class's file name, `UnitClass`'s second result;
 `powers`, its power tokens, the first the one it shows; `specs`, the power
-each specialization shows where they differ), `races` (`Vec<String>`, file
-names, `UnitRace`'s second result) and `power_defaults` (token to
+each specialization shows where they differ), `races` (`Vec<Race>`: `file`,
+the file name, `UnitRace`'s second result; `faction`, `Faction::Alliance`,
+`Faction::Horde` or `Faction::Either` for a race whose player picks one,
+decision T513) and `power_defaults` (token to
 `PowerAmount { current, max }`) are the data; `Flavor::class(file)`,
-`Flavor::has_race(race)`, `Flavor::power_default(token)`,
+`Flavor::has_race(race)`, `Flavor::race(file)`, `Flavor::race_files()`,
+`Flavor::faction_of(race, chosen)`, `Flavor::power_default(token)`,
 `Class::shown_power()` and `Class::shown_power_for_spec(index)` look them
 up. The table's `power_types` give each power token its `Enum.PowerType`
 value (`FlavorTable::power_type(token)`, `FlavorTable::power_token(id)`),
@@ -324,6 +327,31 @@ and `Goblin`, `Worgen`, `Pandaren`; standard those and `Nightborne`,
 `Dracthyr`, `EarthenDwarf`, `Harronir` (the file names of retail's UI code;
 the Haranir's is `Harronir`). Only camelot's three recorded ones are
 recorded; the others are the games', unverified.
+
+Each race has its faction (decision T513): `alliance` the Human, Dwarf,
+Night Elf, Gnome, Draenei, Worgen, Void Elf, Lightforged Draenei, Dark Iron
+Dwarf, Kul Tiran and Mechagnome; `horde` the Orc, Undead, Tauren, Troll,
+Blood Elf, Goblin, Nightborne, Highmountain Tauren, Mag'har Orc, Zandalari
+Troll and Vulpera; `either` (the player picks one) the Pandaren, Dracthyr,
+Earthen, Haranir and Skyborne. The clients' `ChrRaces` agree where read
+(camelot, vanilla, tbc, mists; standard's from camelot's, which carries
+Retail's races, but for the Haranir, whose one playable record there is
+the Alliance's).
+
+Each flavor's **racial spells** and its client's **race records** come from
+the game (decision T513): `cargo xtask racials` reads them from each flavor's
+installed client (`ChrRaces`' playable records; the spells of the skill lines
+named `Racial` in `SkillLineAbility`, for the races and classes of their
+masks, a mask of 0 the line's own in `SkillRaceClassInfo`) into
+`crates/wowlua-flavors/data/racials.txt`, which the crate embeds.
+`Flavor::racials(race, faction, class)` gives a character's
+(`Racial { race, factions, classes, spell, name }`; empty `factions` or
+`classes` every one, a `None` faction a character of none),
+`Flavor::racial_spells()` all of them, `Flavor::race_records(race)` and
+`Flavor::race_record(race, faction)` a race's race IDs and names (camelot's
+Skyborne: 95 High Order Skyborne of the Alliance, 96 Windshaper Skyborne of
+the Horde, each with a racial of its own) and `Flavor::racials_build()` the
+client build read. Standard has none yet (no Retail client was read).
 
 The power defaults, what a unit has of a power nothing names (unverified:
 amounts a fresh character could have): mana 0 of 100 (as the emulated

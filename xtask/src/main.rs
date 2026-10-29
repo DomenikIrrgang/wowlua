@@ -17,6 +17,9 @@
 //!   file below a directory hold, and the heap they take (#19).
 //! - `cargo xtask trainer-levels <SuuUI>/src/Data/Trainer`: the recorded
 //!   class trainer services' levels from SuuUI's trainer data.
+//! - `cargo xtask racials [<WoW installation>]`: each flavor's races and
+//!   racial spells from its installed client's tables
+//!   (`crates/wowlua-flavors/data/racials.txt`).
 //! - `cargo xtask ingest [--unstamped] [--account <n>] [--client <folder>] [<StdTest.lua>...]`:
 //!   StdTest's recordings into the fixtures and data, each part only when
 //!   newer than the repository's; without files, every account's in the
@@ -50,6 +53,7 @@ mod methodprobe;
 mod packager_diff;
 mod parse_stats;
 mod profile;
+mod racials;
 mod runtime;
 mod trainer_levels;
 mod types;
@@ -86,6 +90,7 @@ fn main() -> Result<()> {
             };
             trainer_levels::run(&root, Path::new(&dir))
         }
+        "racials" => racials::run(&root, std::env::args().nth(2).as_deref()),
         "ingest" => {
             let args: Vec<String> = std::env::args().skip(2).collect();
             ingest::run_all(&root, &args)

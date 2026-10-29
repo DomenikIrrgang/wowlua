@@ -1473,8 +1473,10 @@ would ignore it), a part of the wrong type, or a key that should be an ID but
 is not (parts such as `items` and `spells` are keyed by IDs). Fields of a part
 beyond the schema's are allowed and passed on as they are. Two values are
 checked against the game too: `screen.uiScale` is a value of the game's UI
-Scale slider (0.65 to 1.15 in steps of 0.01), and the character's `level` is
-1 to the max level of the package's flavors (60 on camelot).
+Scale slider (0.65 to 1.15 in steps of 0.01), the character's `level` is
+1 to the max level of the package's flavors (60 on camelot), and a unit's
+`faction` is its race's: an Orc is of the Horde, and only a race of either
+faction (the Pandaren, the Skyborne) takes the one given.
 
 Fix the part's name or value. An editor completes the parts when the profile
 names `schema/world-profile-0.1.json` in `$schema`.
