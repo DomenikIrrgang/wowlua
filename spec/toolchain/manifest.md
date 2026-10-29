@@ -236,7 +236,7 @@ so every machine builds identical TOCs. The values below are as of 2026-10-29
 The table is the one list of flavors every tool reads: the compiler and the
 CLI, wowlua Studio and the registry (its flavor filter). Its order is the order
 pickers list the flavors in, the supported ones first. Each flavor has a
-display **name** and a **support** state (decision T507):
+display **name** and a **support** state (decisions T507, T509):
 
 - **Supported**: the toolchain runs it fully: the emulated client, the test
   runner, the debugger and Blizzard's UI.
@@ -249,19 +249,21 @@ display **name** and a **support** state (decision T507):
 | `standard` | Retail | coming soon | 90 | `retail`, `mainline` | Mainline | Retail (Midnight) 12.1.0 | 120100 | 1 | `_retail_`, `_ptr_`, `_xptr_`, `_beta_` | `_Standard`, 12.1.5+ only (`_Mainline`) |
 | `vanilla` | Classic Era | coming soon | 60 | `classic-era` | Classic | Classic Era 1.15.9 | 11509 | 2 | `_classic_era_` | `_Vanilla` (`_Classic`) |
 | `tbc` | TBC Anniversary | coming soon | 70 | `anniversary` | Classic | TBC Anniversary 2.5.6 | 20506 | 5 | `_anniversary_`, `_classic_era_ptr_` | `_TBC` (`_Classic`) |
+| `mists` | MoP Classic | coming soon | 90 | | Classic | MoP Classic 5.5.4 | 50504 | 19 | `_classic_`, `_classic_ptr_` | `_Mists` (`_Classic`) |
 
 Each flavor records its **max level**, the highest level a character reaches
 (`max-level`; decision T508): the bound of a level picker and of a world
 profile's character ([Tooling §16.1.4](tooling.md#1614-wowluamock)),
 and `GetMaxLevelForLatestExpansion`'s answer in the emulated client. Only
 camelot's is recorded (`GetMaxPlayerLevel()` answers 60 in WoW Forever); the
-others are the games' level caps.
+others are the games' level caps, not recorded (MoP Classic's 90 among them).
 
-Wrath of the Lich King Classic and Titan Reforged, Cataclysm Classic and Mists
-of Pandaria Classic have no flavor (decision T507): `wrath`, `titan`, `cata`
-and `mists` are unknown flavors (E4004), their TOC suffixes (`_Wrath`,
-`_Cata`, `_Mists`, the legacy `-WOTLKC`) mean nothing, and interface numbers
-from 30000 to 59999 belong to no flavor.
+Mists of Pandaria Classic, still in live service, is the flavor `mists`
+(decision T509). Wrath of the Lich King Classic and Titan Reforged, and
+Cataclysm Classic have no flavor (decision T507): `wrath`, `titan` and `cata`
+are unknown flavors (E4004), their TOC suffixes (`_Wrath`, `_Cata`, the legacy
+`-WOTLKC`) mean nothing, and interface numbers from 30000 to 49999 belong to
+no flavor.
 
 **Aliases.** Aliases that name a ruleset (`retail`, `mainline`,
 `classic-era`) are permanent. Aliases that name a client (`forever`,

@@ -4,7 +4,7 @@
 //! of that game type; game types a site does not know are left out.
 //!
 //! Interface numbers are grouped by the packager's game types of wowlua's
-//! flavors (`retail`, `classic`, `bcc`, `forever`).
+//! flavors (`retail`, `classic`, `bcc`, `mists`, `forever`).
 
 use std::collections::BTreeMap;
 
@@ -40,6 +40,15 @@ pub const GAME_TYPES: &[GameType] = &[
         wago: "bc",
         wowinterface: Some("TBC-Classic"),
         release_json: "bcc",
+    },
+    // WoWInterface has no game of MoP Classic: the packager files it under
+    // Cata Classic's, and so does wowlua.
+    GameType {
+        packager: "mists",
+        curseforge: 79434,
+        wago: "mop",
+        wowinterface: Some("Cata-Classic"),
+        release_json: "mists",
     },
     GameType {
         packager: "forever",
@@ -142,7 +151,8 @@ pub fn wago(game_data: &serde_json::Value, game: &GameType, version: &str) -> Ch
     }
 }
 
-/// WoWInterface: `GET /addons/compatible.json` → `{id, game}` entries.
+/// WoWInterface: `GET /addons/compatible.json` → `{id, game}` entries; Mists
+/// takes Cata Classic's versions like the packager's.
 pub fn wowinterface(list: &serde_json::Value, game: &GameType, version: &str) -> Choice<String> {
     let Some(name) = game.wowinterface else {
         return Choice::Unknown(version.into());
@@ -212,7 +222,21 @@ mod tests {
         assert!(
             matches!(wowinterface(&wowi, bcc, "2.5.6"), Choice::Fallback { ref chosen, .. } if chosen == "2.5.4")
         );
-        for gone in ["wrath", "titan", "cata", "mists"] {
+        let mists = game_type("mists").unwrap();
+        assert!(matches!(
+            curseforge(&cf, mists, "5.5.4"),
+            Choice::Unknown(_)
+        ));
+        let wago_data =
+            serde_json::json!({ "patches": { "mop": ["5.5.3"], "retail": ["12.1.0"] } });
+        assert!(
+            matches!(wago(&wago_data, mists, "5.5.4"), Choice::Fallback { ref chosen, .. } if chosen == "5.5.3")
+        );
+        let wowi = serde_json::json!([{ "id": "4.4.2", "game": "Cata-Classic" }]);
+        assert!(
+            matches!(wowinterface(&wowi, mists, "5.5.4"), Choice::Fallback { ref chosen, .. } if chosen == "4.4.2")
+        );
+        for gone in ["wrath", "titan", "cata"] {
             assert!(game_type(gone).is_none(), "{gone}");
         }
         let mut v = vec![

@@ -330,11 +330,13 @@ Without `flavors`, an addon builds for `standard` only.
 | `standard` | `retail`, `mainline` | Retail | Coming soon |
 | `vanilla` | `classic-era` | Classic Era | Coming soon |
 | `tbc` | `anniversary` | TBC Anniversary | Coming soon |
+| `mists` | | MoP Classic | Coming soon |
 
 A supported flavor runs in every part of wowlua: `wowlua test`, the emulated
 client, the debugger and Blizzard's UI. A flavor coming soon is checked and
 built like the others (types, TOCs, packages), but wowlua can't run it yet.
-Wrath, Cataclysm and Mists of Pandaria Classic are not flavors of wowlua.
+Wrath of the Lich King Classic and Cataclysm Classic are not flavors of
+wowlua.
 
 Each flavor brings its own typed [WoW API](../reference/api.md), so your code
 is checked against the functions that client has. The TOC's interface number

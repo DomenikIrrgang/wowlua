@@ -104,6 +104,7 @@ pub fn own(flavor: &str) -> Option<File> {
         "standard" => api_file!("standard"),
         "camelot" => api_file!("camelot"),
         "tbc" => api_file!("tbc"),
+        "mists" => api_file!("mists"),
         "vanilla" => api_file!("vanilla"),
         _ => return None,
     })
@@ -328,6 +329,7 @@ pub fn documentation(flavor: &str) -> Option<&'static [u8]> {
         "standard" => include_bytes!("../data/standard.api.json.gz"),
         "camelot" => include_bytes!("../data/camelot.api.json.gz"),
         "tbc" => include_bytes!("../data/tbc.api.json.gz"),
+        "mists" => include_bytes!("../data/mists.api.json.gz"),
         "vanilla" => include_bytes!("../data/vanilla.api.json.gz"),
         _ => return None,
     })
@@ -340,7 +342,7 @@ mod tests {
     /// (and their `@onDemand` lines) replaced by spaces, and nothing else.
     #[test]
     fn padded_texts_keep_every_other_byte() {
-        let names = ["shared", "camelot", "standard", "vanilla", "tbc"];
+        let names = ["shared", "camelot", "standard", "vanilla", "tbc", "mists"];
         for name in names {
             let file = if name == "shared" {
                 super::shared()
@@ -442,10 +444,12 @@ mod tests {
     fn flavor_names() {
         let standard = super::flavor_names("standard").unwrap();
         let tbc = super::flavor_names("tbc").unwrap();
+        let mists = super::flavor_names("mists").unwrap();
         assert!(super::has_api(tbc, "ChatFrameUtil.ForEachChatFrame"));
         assert!(!super::has_api(tbc, "ChatFrameUtil.NoSuchFunction"));
         assert!(super::has_api(standard, "AddonCompartmentFrame"));
         assert!(!super::has_api(tbc, "AddonCompartmentFrame"));
+        assert!(super::has_api(mists, "ChatFrameUtil.SendTell"));
         assert!(super::has_api(
             tbc,
             "EditModeManagerFrame.GetActiveLayoutInfo"
@@ -453,8 +457,13 @@ mod tests {
         // a global of a primitive type (taken out of the parsed text)
         assert!(super::has_api(tbc, "CurveConstants"));
         assert!(super::has_api(tbc, "CurveConstants.ScaleTo100"));
+        assert!(super::has_api(mists, "CurveConstants.ScaleTo100"));
+        assert!(super::has_api(
+            mists,
+            "EditModeManagerFrame.GetActiveLayoutInfo"
+        ));
         assert!(super::flavor_names("nope").is_none());
-        assert!(super::flavor_names("mists").is_none());
+        assert!(super::flavor_names("cata").is_none());
     }
 
     /// Every flavor of the flavor table has declarations and documentation,
@@ -466,7 +475,7 @@ mod tests {
             assert!(super::own(&flavor.id).is_some(), "{}", flavor.id);
             assert!(super::documentation(&flavor.id).is_some(), "{}", flavor.id);
         }
-        for gone in ["mists", "cata", "wrath"] {
+        for gone in ["cata", "wrath"] {
             assert!(super::own(gone).is_none() && super::documentation(gone).is_none());
         }
     }

@@ -181,7 +181,7 @@ Libraries support all flavors unless their manifest restricts `flavors`.
 
 A **flavor** is a WoW ruleset, identified by Blizzard's *game type* as used in
 TOC load directives: `camelot` (WoW Forever), `standard` (Retail), `vanilla`
-(Classic Era) and `tbc` (TBC Anniversary). The manifest
+(Classic Era), `tbc` (TBC Anniversary) and `mists` (MoP Classic). The manifest
 lists the flavors a package supports (see
 [Manifest §9.4](../toolchain/manifest.md#94-flavors), which also has the flavor
 table). `Flavor` is the string literal union of the flavor IDs known to the

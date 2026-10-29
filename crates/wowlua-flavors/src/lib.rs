@@ -1,7 +1,7 @@
 //! The flavor table (spec §9.4.1).
 //!
 //! A *flavor* is a WoW ruleset, identified by Blizzard's game type
-//! (`camelot`, `standard`, `vanilla`, `tbc`). A *client* is one installable
+//! (`camelot`, `standard`, `vanilla`, `tbc`, `mists`). A *client* is one installable
 //! game client that runs a flavor (Retail, Retail PTR, WoW Forever, …). The
 //! table records each flavor's display name and how far wowlua supports it,
 //! interface numbers, TOC suffixes, install folders and which TOC features
@@ -327,11 +327,15 @@ mod tests {
         assert!(
             matches!(t.suffix_meaning("-Forever"), Some(SuffixMeaning::Flavor(f)) if f.id == "camelot")
         );
-        // Wrath, Cataclysm and Mists of Pandaria are no flavors (decision T507).
-        for suffix in ["_Mists", "_Cata", "_Wrath", "-WOTLKC"] {
+        assert!(
+            matches!(t.suffix_meaning("_Mists"), Some(SuffixMeaning::Flavor(f)) if f.id == "mists")
+        );
+        assert_eq!(t.by_interface(50504).unwrap().id, "mists");
+        // Wrath and Cataclysm are no flavors (decisions T507, T509).
+        for suffix in ["_Cata", "_Wrath", "-WOTLKC"] {
             assert_eq!(t.suffix_meaning(suffix), None, "{suffix}");
         }
-        assert!(t.by_interface(50504).is_none());
+        assert!(t.by_interface(40402).is_none() && t.by_interface(38002).is_none());
         assert_eq!(interface_to_version(120100), "12.1.0");
         assert_eq!(interface_to_version(11509), "1.15.9");
     }
@@ -343,10 +347,18 @@ mod tests {
         assert!(era.recognizes_game_type("mainline"));
         assert!(era.recognizes_game_type("vanilla"));
         assert!(!era.recognizes_game_type("standard"));
+        let mists = t
+            .clients
+            .iter()
+            .find(|c| c.name == "mists-classic")
+            .unwrap();
+        assert!(mists.recognizes_game_type("classic"));
+        assert!(mists.recognizes_game_type("mists"));
+        assert!(mists.features.file_variables);
     }
 
-    /// The flavors, their names and support (decision T507): camelot is
-    /// supported and listed first; the others are coming soon.
+    /// The flavors, their names and support (decisions T507, T509): camelot
+    /// is supported and listed first; the others are coming soon.
     #[test]
     fn names_and_support_in_picker_order() {
         let t = table();
@@ -362,10 +374,11 @@ mod tests {
                 ("standard", "Retail", Support::ComingSoon),
                 ("vanilla", "Classic Era", Support::ComingSoon),
                 ("tbc", "TBC Anniversary", Support::ComingSoon),
+                ("mists", "MoP Classic", Support::ComingSoon),
             ]
         );
         assert!(t.flavor("camelot").unwrap().is_supported());
-        for gone in ["mists", "cata", "wrath", "titan"] {
+        for gone in ["cata", "wrath", "titan"] {
             assert!(t.resolve(gone).is_none(), "{gone}");
         }
         // Clients name only flavors of the table.
@@ -396,7 +409,8 @@ mod tests {
                 ("camelot", 60),
                 ("standard", 90),
                 ("vanilla", 60),
-                ("tbc", 70)
+                ("tbc", 70),
+                ("mists", 90)
             ]
         );
     }

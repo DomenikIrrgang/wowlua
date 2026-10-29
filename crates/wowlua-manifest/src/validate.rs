@@ -1059,8 +1059,8 @@ mod tests {
             codes(&format!(r#"{{ {PKG}, "flavors": {{ "wotlk": {{}} }} }}"#)),
             vec!["E4004"]
         );
-        // Wrath, Cataclysm and Mists of Pandaria are no flavors (decision T507).
-        for gone in ["mists", "cata", "wrath", "titan"] {
+        // Wrath and Cataclysm are no flavors (decisions T507, T509).
+        for gone in ["cata", "wrath", "titan"] {
             let out = run(&format!(
                 r#"{{ {PKG}, "flavors": {{ "camelot": {{}}, "{gone}": {{}} }} }}"#
             ));
@@ -1071,7 +1071,7 @@ mod tests {
                 first
                     .notes
                     .iter()
-                    .any(|n| n == "known flavors: camelot, standard, vanilla, tbc"),
+                    .any(|n| n == "known flavors: camelot, standard, vanilla, tbc, mists"),
                 "{first:?}"
             );
         }

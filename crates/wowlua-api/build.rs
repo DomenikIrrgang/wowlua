@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 /// `shared` and every flavor of the flavor table (a test checks the list).
-const FILES: &[&str] = &["shared", "camelot", "standard", "vanilla", "tbc"];
+const FILES: &[&str] = &["shared", "camelot", "standard", "vanilla", "tbc", "mists"];
 const PRIMS: &[&str] = &["any", "boolean", "number", "string", "table"];
 
 fn ident(s: &str) -> Option<&str> {

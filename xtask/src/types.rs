@@ -40,6 +40,11 @@ const STRINGS: &[(&str, &str, &str)] = &[
         "c5a49d394564f20c508c71014d6f60d9cd240c71",
     ),
     (
+        "mists",
+        "classic",
+        "877c67e9e0a64b5daae348a7b72b7a64bfaab90f",
+    ),
+    (
         "tbc",
         "classic_anniversary",
         "d6d4a8f445f198c5c73ff5f8f5002ad8f04451e4",

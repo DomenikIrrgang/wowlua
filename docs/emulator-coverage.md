@@ -36,6 +36,7 @@ their clients answer differently is unverified.
 | standard | 4,871 | 4,507 (92.5%) | 0 | 1,438 | 1,430 (99.4%) | none |
 | vanilla | 3,220 | 2,892 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
 | tbc | 3,220 | 2,892 (89.8%) | 0 | 1,360 | 1,348 (99.1%) | none |
+| mists | 3,221 | 2,889 (89.7%) | 0 | 1,360 | 1,348 (99.1%) | none |
 
 ## API behaviour
 

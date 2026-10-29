@@ -129,13 +129,13 @@ capitals.
 A flavor name is not in wowlua's flavor table: in `flavors`, in a dependency's
 or publish target's `flavors`, in `addon.flavor-overrides` or `addon.toc-data`,
 or given with `--flavor`. Flavors are Blizzard's game types: `camelot`,
-`standard`, `vanilla` and `tbc`, with aliases such as `forever`, `retail`,
-`classic-era` and `anniversary`. The message lists the known flavors. Wrath,
-Cataclysm and Mists of Pandaria Classic (`wrath`, `cata`, `mists`) are not
-flavors of wowlua.
+`standard`, `vanilla`, `tbc` and `mists`, with aliases such as `forever`,
+`retail`, `classic-era` and `anniversary`. The message lists the known
+flavors. Wrath and Cataclysm Classic (`wrath`, `cata`) are not flavors of
+wowlua.
 
 `classic` is not a flavor: name the Classic game the addon is for (`vanilla`
-for Classic Era, `tbc` for TBC Anniversary).
+for Classic Era, `tbc` for TBC Anniversary, `mists` for MoP Classic).
 
 ```json fails title=wowlua.json
 {
@@ -1382,7 +1382,7 @@ end
 ## E4335
 
 A Lua or XML file of a converted packager project (`compat.packager-keywords`)
-uses a game version block such as `--@version-bcc@` in a build for several
+uses a game version block such as `--@version-mists@` in a build for several
 flavors. The BigWigs packager refuses these blocks in a build for several game
 versions, and wowlua does the same.
 
@@ -1400,7 +1400,7 @@ flavor.
     },
     "flavors": {
         "camelot": {},
-        "tbc": {}
+        "mists": {}
     },
     "compat": {
         "packager-keywords": true
@@ -1408,9 +1408,9 @@ flavor.
 }
 ```
 ```lua fails title=src/main.lua
---@version-bcc@
-print("TBC only")
---@end-version-bcc@
+--@version-mists@
+print("Mists only")
+--@end-version-mists@
 ```
 
 ```json compiles title=wowlua.json
@@ -1422,7 +1422,7 @@ print("TBC only")
     },
     "flavors": {
         "camelot": {},
-        "tbc": {}
+        "mists": {}
     },
     "compat": {
         "packager-keywords": true
@@ -1430,8 +1430,8 @@ print("TBC only")
 }
 ```
 ```lua compiles title=src/main.lua
-if WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC then
-    print("TBC only")
+if WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC then
+    print("Mists only")
 end
 ```
 

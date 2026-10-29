@@ -173,7 +173,7 @@ end
 | **AddOn** | A folder WoW loads from `Interface/AddOns/`, described by a `.toc` file. |
 | **Package** | A unit managed by the package manager, described by a `wowlua.json`. Kinds: `addon`, `library`, `lua-library`, `types`. |
 | **Module** | A single `.wowlua` source file with its own scope, imports and exports. |
-| **Flavor** | A WoW ruleset, identified by Blizzard's game type (`camelot` = WoW Forever, `standard` = Retail, `vanilla`, `tbc`). Each has its own API surface and interface version. |
+| **Flavor** | A WoW ruleset, identified by Blizzard's game type (`camelot` = WoW Forever, `standard` = Retail, `vanilla`, `tbc`, `mists`). Each has its own API surface and interface version. |
 | **Profile** | A named set of build settings (`dev`, `release`, `test`, or custom). |
 | **Publish target** | A configured upload destination (CurseForge, Wago, WoWInterface, GitHub Releases, wowlua registry), each with its own packaging and minification settings. |
 | **Lowering** | Translating wowlua constructs into equivalent Lua 5.1. |

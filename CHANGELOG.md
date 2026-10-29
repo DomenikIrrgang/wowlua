@@ -21,8 +21,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 - `test.screen.uiScale` and a world profile's `screen.uiScale` take the game's UI Scale slider's values, 0.65 to 1.15 in steps of 0.01: another value is E4002 in `wowlua.json` and E4401 in a profile.
 - Coverage minimums in `test.coverage` are percentages from 0 to 100, and `stdlib.log.history-size` is at least 1: other values are E4002 (a history size of 0 made every log call fail).
-- wowlua's flavors are camelot (WoW Forever), standard (Retail), vanilla (Classic Era) and tbc (TBC Anniversary). camelot is supported everywhere: tests, the emulated client and the debugger run it. The others are coming soon: wowlua checks and builds them, but doesn't run them yet.
-- `mists`, `cata` and `wrath` (and the alias `titan`) are no flavors anymore: a `wowlua.json` naming one gets E4004. `wowlua init` reads no `_Mists`, `_Cata` or `_Wrath` TOC, and a packager project's `--@version-wrath@`, `--@version-titan@`, `--@version-cata@` and `--@version-mists@` blocks are left out of every build.
+- wowlua's flavors are camelot (WoW Forever), standard (Retail), vanilla (Classic Era), tbc (TBC Anniversary) and mists (MoP Classic). camelot is supported everywhere: tests, the emulated client and the debugger run it. The others are coming soon: wowlua checks and builds them, but doesn't run them yet.
+- `mists` stays a flavor, now named MoP Classic: it is coming soon like Retail, Classic Era and TBC Anniversary, and a world profile's character on it goes up to level 90.
+- `cata` and `wrath` (and the alias `titan`) are no flavors anymore: a `wowlua.json` naming one gets E4004. `wowlua init` reads no `_Cata` or `_Wrath` TOC, and a packager project's `--@version-wrath@`, `--@version-titan@` and `--@version-cata@` blocks are left out of every build.
 - Watches and hovers in the debugger only read: they set nothing and call only functions that change nothing (the Lua library's, like `string.format`, and the game's queries, like `UnitHealth` or `frame:GetWidth()`). Anything else says so instead of running; the debug console still runs any code.
 - `wowlua test --profile-out` and the MCP server's `profile_stop` keep the whole profile in the speedscope file: each function's calls, the events and scripts, and the call trees of the last 600 game frames. speedscope still opens it.
 
