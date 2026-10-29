@@ -1,7 +1,13 @@
 //! TOC files: generation (spec §14.9) and parsing (for `wowlua init`).
 
+mod directives;
 mod generate;
 mod parse;
+
+pub use directives::{
+    EXTRA_DIRECTIVES, GENERATED_DIRECTIVES, KnownDirective, extra_directives, generated_directives,
+    is_generated_directive, is_known_extra_directive,
+};
 
 pub use generate::{
     Directive, FileEntry, FlavorTarget, Layout, TocError, TocFile, TocInput, generate,

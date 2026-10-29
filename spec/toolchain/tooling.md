@@ -358,7 +358,21 @@ addon loads:
 
 `screen` is the screen the client draws on, as the manifest's `test.screen`
 gives it and over it; a file's `config({ screen })` is over both (decision
-T482). Its UI scale turns "Use UI Scale" on, as the client's CVars read.
+T482). Its UI scale turns "Use UI Scale" on, as the client's CVars read; it
+is a value of the game's UI Scale slider, 0.65 to 1.15 in steps of 0.01
+(decision T508).
+
+A unit's `level` is `UnitLevel`'s answer; -1 is a boss's "??" level, as the
+client answers it. The character's level is 1 to the highest max level of
+the package's flavors ([Manifest §9.4.1](manifest.md#941-flavor-table): 60 on
+camelot). `position.world` is where `UnitPosition` places the character,
+`{ y, x, z?, instanceID? }` (yards north, west and up, the continent's
+instance ID; `z` and `instanceID` 0 by default). `channels` is
+`mock.setChannels`'s data: `joined`, the channels (`{ name, fullName?,
+category?, disabled?, shortcut?, instanceID?, zoneChannelID?, channelType?,
+regional?, number? }`), `groupChannels`, a number (`GetNumGroupChannels`),
+and `regionalService`, a boolean (`C_ChatInfo.IsRegionalServiceAvailable`;
+decision T508).
 
 A `units` entry with `"player": true` and no `group` is another player of the
 world, online and accepting the player's invitations (`acceptsInvites`,
@@ -394,8 +408,9 @@ name it in `$schema`, and the VS Code extension applies it to
 `tests/profiles/*.json`). A check of the package (`wowlua check`, the
 language server, `wowlua test`) checks every profile: E4400 when it is
 no JSON object, E4401 when a part is unknown (the world would ignore
-it), has the wrong type, or is keyed by something other than IDs where
-the schema says so; a part's fields beyond the schema's pass to the
+it), has the wrong type, is keyed by something other than IDs where
+the schema says so, or has a UI scale off the game's slider or a
+character's level outside 1 to the flavors' max level; a part's fields beyond the schema's pass to the
 controls as they are. A profile `test.profile` or a test file's
 `config({ profile })` names must be there (E4402). A debugging session
 or a playground run starts in a profile by name too, or in one given as

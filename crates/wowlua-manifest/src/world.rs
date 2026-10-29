@@ -123,6 +123,9 @@ pub struct UnitData {
     pub last_name: Option<String>,
     pub realm: Option<String>,
     pub guid: Option<String>,
+    /// The level (`UnitLevel`); -1: a boss's ?? level. The character's is
+    /// 1 to the flavor's max level (the flavor table's `max-level`: 60 on
+    /// camelot, 60 on vanilla, 70 on tbc, 90 on standard).
     pub level: Option<f64>,
     /// The class by file name (`WARRIOR`).
     pub class: Option<String>,
@@ -335,12 +338,45 @@ pub struct Appearances {
     pub favorites: Option<List<f64>>,
 }
 
+/// The chat channels the character is in (`mock.setChannels`).
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Channels {
-    pub joined: Option<List<Rest>>,
-    pub group_channels: Option<Value>,
-    pub regional_service: Option<Value>,
+    /// The channels, numbered in order.
+    pub joined: Option<List<Channel>>,
+    /// How many group channels the character is in
+    /// (`GetNumGroupChannels`).
+    pub group_channels: Option<f64>,
+    /// Whether the regional chat service is up
+    /// (`C_ChatInfo.IsRegionalServiceAvailable`).
+    pub regional_service: Option<bool>,
+}
+
+/// A chat channel the character is in.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Channel {
+    pub name: String,
+    /// With its zone (`General - Elwynn Forest`); by default the name.
+    pub full_name: Option<String>,
+    /// `CHANNEL_CATEGORY_WORLD`, `CHANNEL_CATEGORY_CUSTOM` (the default) or
+    /// `CHANNEL_CATEGORY_GROUP`.
+    pub category: Option<String>,
+    pub disabled: Option<bool>,
+    /// By default the name.
+    pub shortcut: Option<String>,
+    #[serde(rename = "instanceID")]
+    pub instance_id: Option<f64>,
+    #[serde(rename = "zoneChannelID")]
+    pub zone_channel_id: Option<f64>,
+    pub channel_type: Option<f64>,
+    /// `C_ChatInfo.IsChannelRegional`.
+    pub regional: Option<bool>,
+    /// Its number when higher than the one after the channel before (a
+    /// channel left keeps its number free).
+    pub number: Option<f64>,
+    #[serde(flatten)]
+    pub other: Rest,
 }
 
 /// Where the character is.
@@ -355,11 +391,26 @@ pub struct Position {
     pub x: Option<f64>,
     pub y: Option<f64>,
     /// `UnitPosition`'s world coordinates.
-    pub world: Option<Value>,
+    pub world: Option<WorldPosition>,
     /// Radians counter-clockwise from north.
     pub facing: Option<f64>,
     #[serde(flatten)]
     pub other: Rest,
+}
+
+/// A place in the world, as `UnitPosition` answers it.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WorldPosition {
+    /// North, in yards.
+    pub y: f64,
+    /// West, in yards.
+    pub x: f64,
+    /// Up, in yards (0 by default).
+    pub z: Option<f64>,
+    /// The continent's instance ID (0 by default).
+    #[serde(rename = "instanceID")]
+    pub instance_id: Option<f64>,
 }
 
 /// An aura (`applyAura`'s data).
@@ -401,8 +452,20 @@ const ID_KEYS: &[(&str, &str)] = &[
 ];
 
 /// Checks a world profile's text (`path` names it): E4400 when it is no
-/// JSON object, E4401 when a part does not match the schema.
+/// JSON object, E4401 when a part does not match the schema. The
+/// character's level may be up to the highest max level of any flavor.
 pub fn check(db: &mut SourceDb, path: &Path, text: String) -> (FileId, Diagnostics) {
+    check_for(db, path, text, &[])
+}
+
+/// [`check`] for a package of `flavors` (flavor IDs; none: every flavor):
+/// the character's level is 1 to the highest of their max levels.
+pub fn check_for(
+    db: &mut SourceDb,
+    path: &Path,
+    text: String,
+    flavors: &[String],
+) -> (FileId, Diagnostics) {
     let file = db.add(path, text);
     let text = db.get(file).text();
     let mut diagnostics = Diagnostics::new();
@@ -427,9 +490,52 @@ pub fn check(db: &mut SourceDb, path: &Path, text: String) -> (FileId, Diagnosti
         return (file, diagnostics);
     }
     let mut deserializer = serde_json::Deserializer::from_str(text);
-    if let Err(error) = serde_path_to_error::deserialize::<_, WorldProfile>(&mut deserializer) {
-        diagnostics.push(schema_error(text, file, &error, "E4401"));
-        return (file, diagnostics);
+    let profile = match serde_path_to_error::deserialize::<_, WorldProfile>(&mut deserializer) {
+        Ok(profile) => profile,
+        Err(error) => {
+            diagnostics.push(schema_error(text, file, &error, "E4401"));
+            return (file, diagnostics);
+        }
+    };
+    let mut wrong = |at: JsonPath, message: String, label: &str| {
+        diagnostics.push(
+            Diagnostic::error("E4401", message).with_label(span_of(text, file, &at, false), label),
+        );
+    };
+    if let Some(problem) = profile.screen.as_ref().and_then(|s| s.ui_scale_problem()) {
+        wrong(
+            JsonPath::root().key("screen").key("uiScale"),
+            problem,
+            "not a UI scale",
+        );
+    }
+    if let Some(level) = profile.character.as_ref().and_then(|c| c.level) {
+        let at = JsonPath::root().key("character").key("level");
+        let table = wowlua_flavors::table();
+        let caps: Vec<(&str, u32)> = table
+            .flavors
+            .iter()
+            .filter(|f| flavors.is_empty() || flavors.contains(&f.id))
+            .map(|f| (f.id.as_str(), f.max_level))
+            .collect();
+        let highest = caps.iter().map(|(_, cap)| *cap).max().unwrap_or(u32::MAX);
+        if level < 1.0 {
+            wrong(
+                at,
+                format!("the character's level is at least 1, not {level}"),
+                "below level 1",
+            );
+        } else if level > f64::from(highest) {
+            let named: Vec<String> = caps.iter().map(|(id, cap)| format!("{id} {cap}")).collect();
+            wrong(
+                at,
+                format!(
+                    "the character's level {level} is above the flavors' max level ({})",
+                    named.join(", ")
+                ),
+                "above the max level",
+            );
+        }
     }
     for (part, what) in ID_KEYS {
         let Some(map) = raw.get(*part).and_then(Value::as_object) else {
@@ -542,6 +648,70 @@ mod tests {
             let (_, found) = check(&mut db, &file, text);
             let found: Vec<String> = found.into_vec().into_iter().map(|d| d.message).collect();
             assert!(found.is_empty(), "{}: {found:?}", file.display());
+        }
+    }
+
+    /// A profile's `screen.uiScale` is a value of the game's UI Scale
+    /// slider; the character's level is within the flavors' max level; a
+    /// unit's may be -1 (a boss's ??).
+    #[test]
+    fn ui_scale_and_levels() {
+        assert_eq!(
+            codes(r#"{ "screen": { "width": 1920, "height": 1080, "uiScale": 0.8 } }"#),
+            Vec::<(String, String)>::new()
+        );
+        let found = codes(r#"{ "screen": { "width": 1920, "height": 1080, "uiScale": 0.5 } }"#);
+        assert_eq!(found[0].0, "E4401");
+        assert!(found[0].1.contains("UI Scale slider"), "{found:?}");
+        assert_eq!(
+            codes(
+                r#"{ "units": [ { "name": "Onyxia", "level": -1, "classification": "worldboss" } ] }"#
+            ),
+            Vec::<(String, String)>::new()
+        );
+        assert!(codes(r#"{ "character": { "level": 90 } }"#).is_empty());
+        assert_eq!(codes(r#"{ "character": { "level": 91 } }"#)[0].0, "E4401");
+        assert_eq!(codes(r#"{ "character": { "level": -1 } }"#)[0].0, "E4401");
+        let camelot = |text: &str| {
+            let mut db = SourceDb::new();
+            let (_, found) = check_for(
+                &mut db,
+                Path::new("tests/profiles/p.json"),
+                text.to_string(),
+                &["camelot".to_string()],
+            );
+            found
+                .into_vec()
+                .into_iter()
+                .map(|d| d.message)
+                .collect::<Vec<_>>()
+        };
+        assert!(camelot(r#"{ "character": { "level": 60 } }"#).is_empty());
+        assert_eq!(
+            camelot(r#"{ "character": { "level": 70 } }"#),
+            ["the character's level 70 is above the flavors' max level (camelot 60)"]
+        );
+    }
+
+    /// `position.world` and the channels' fields are typed as the engine
+    /// reads them.
+    #[test]
+    fn world_positions_and_channels_are_typed() {
+        assert!(
+            codes(
+                r#"{ "position": { "world": { "y": -8913.2, "x": 554.6, "z": 93.1, "instanceID": 0 } },
+                     "channels": { "joined": [ { "name": "General", "zoneChannelID": 1 } ], "groupChannels": 2, "regionalService": true } }"#
+            )
+            .is_empty()
+        );
+        for wrong in [
+            r#"{ "position": { "world": [1, 2] } }"#,
+            r#"{ "position": { "world": { "y": 1 } } }"#,
+            r#"{ "channels": { "groupChannels": "2" } }"#,
+            r#"{ "channels": { "regionalService": 1 } }"#,
+            r#"{ "channels": { "joined": [ { "fullName": "General" } ] } }"#,
+        ] {
+            assert_eq!(codes(wrong)[0].0, "E4401", "{wrong}");
         }
     }
 

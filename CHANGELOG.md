@@ -11,10 +11,16 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `unit:update(data)` changes a unit's data in place, any field `mock.spawnUnit` takes: its level, name, reaction, class, health, distance and so on. The unit stays the same unit, and each change fires the event the game fires for it (`UNIT_LEVEL`, `UNIT_FACTION`, `UNIT_NAME_UPDATE`, …).
 - Completion offers the functions, classes, values and enums your other files export, and adds their `import` when you pick one.
 - Editors can choose when the language server checks (while typing, when you pause, on save), which build profile its diagnostics follow, and how many threads it uses, in its initialization options or `workspace/didChangeConfiguration`.
+- Each flavor has its max level (WoW Forever 60, Classic Era 60, TBC Anniversary 70, Retail 90): a world profile's character above the max level of your flavors is E4401, and `GetMaxLevelForLatestExpansion` answers it in tests.
+- A world profile's unit can have `"level": -1`, a boss's "??" level: `UnitLevel` answers -1.
+- The world profile schema describes `position.world` (`{ y, x, z, instanceID }`, where `UnitPosition` places your character) and the fields of `channels` (`joined` channels, `groupChannels`, `regionalService`), so editors complete them.
+- `addon.toc-extra` documents the TOC directives you can add there (`AddonCompartmentFunc`, `AllowLoadGameType`, …) in its schema and the manifest reference.
 - A function breakpoint can name where a function is defined: `src/Threat.wowlua:560` stops in every call of the function defined on that line, local functions too.
 
 ### Changed
 
+- `test.screen.uiScale` and a world profile's `screen.uiScale` take the game's UI Scale slider's values, 0.65 to 1.15 in steps of 0.01: another value is E4002 in `wowlua.json` and E4401 in a profile.
+- Coverage minimums in `test.coverage` are percentages from 0 to 100, and `stdlib.log.history-size` is at least 1: other values are E4002 (a history size of 0 made every log call fail).
 - wowlua's flavors are camelot (WoW Forever), standard (Retail), vanilla (Classic Era) and tbc (TBC Anniversary). camelot is supported everywhere: tests, the emulated client and the debugger run it. The others are coming soon: wowlua checks and builds them, but doesn't run them yet.
 - `mists`, `cata` and `wrath` (and the alias `titan`) are no flavors anymore: a `wowlua.json` naming one gets E4004. `wowlua init` reads no `_Mists`, `_Cata` or `_Wrath` TOC, and a packager project's `--@version-wrath@`, `--@version-titan@`, `--@version-cata@` and `--@version-mists@` blocks are left out of every build.
 - Watches and hovers in the debugger only read: they set nothing and call only functions that change nothing (the Lua library's, like `string.format`, and the game's queries, like `UnitHealth` or `frame:GetWidth()`). Anything else says so instead of running; the debug console still runs any code.

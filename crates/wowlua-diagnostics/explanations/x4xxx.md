@@ -44,8 +44,10 @@ The manifest is valid JSON but does not match the schema: an unknown key
 (often a typo, so the help suggests the closest key), a value of the wrong
 type, a missing `package` section, or a value the schema does not allow, such
 as a SavedVariable that is no Lua identifier, a TOC directive in `toc-extra`
-that wowlua writes itself, or a `flavor-overrides` key for a flavor the
-package does not target. Unknown keys are errors so that a misspelled setting
+that wowlua writes itself, a `flavor-overrides` key for a flavor the
+package does not target, a `test.screen.uiScale` off the game's UI Scale
+slider (0.65 to 1.15 in steps of 0.01), a coverage minimum outside 0 to 100,
+or a `stdlib.log.history-size` of 0. Unknown keys are errors so that a misspelled setting
 is never ignored without a word.
 
 Fix the key or the value the message points at. If the key belongs to a newer
@@ -1469,7 +1471,10 @@ Related: E4401, E4402
 A world profile does not match its schema: an unknown part (the emulated world
 would ignore it), a part of the wrong type, or a key that should be an ID but
 is not (parts such as `items` and `spells` are keyed by IDs). Fields of a part
-beyond the schema's are allowed and passed on as they are.
+beyond the schema's are allowed and passed on as they are. Two values are
+checked against the game too: `screen.uiScale` is a value of the game's UI
+Scale slider (0.65 to 1.15 in steps of 0.01), and the character's `level` is
+1 to the max level of the package's flavors (60 on camelot).
 
 Fix the part's name or value. An editor completes the parts when the profile
 names `schema/world-profile-0.1.json` in `$schema`.

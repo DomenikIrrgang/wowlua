@@ -79,7 +79,12 @@ pub(crate) fn check<'a>(
                 .map(|e| e.to_string_lossy())
                 .unwrap_or_default()
         ));
-        let (_, found) = wowlua_manifest::world::check(&mut session.db, &rel, text);
+        let (_, found) = wowlua_manifest::world::check_for(
+            &mut session.db,
+            &rel,
+            text,
+            &project.manifest.flavors,
+        );
         for d in found.into_vec() {
             session.push(d);
         }

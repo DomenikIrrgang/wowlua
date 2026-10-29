@@ -632,10 +632,14 @@ fn get_max_level_for_expansion_level(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(level)])
 }
 
-/// `GetMaxLevelForLatestExpansion()`: the classic game's cap, 60, as
-/// `GetMaxLevelForPlayerExpansion` recorded (unverified).
-fn sixty(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(60.0)])
+/// `GetMaxLevelForLatestExpansion()`: the flavor's max level from the
+/// flavor table (camelot's 60, as `GetMaxPlayerLevel` and
+/// `GetMaxLevelForPlayerExpansion` recorded; this one unverified).
+fn max_level_for_latest_expansion(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let level = wowlua_flavors::table()
+        .flavor(&crate::engine(vm).flavor)
+        .map_or(60, |f| f.max_level);
+    Ok(vec![Value::Num(f64::from(level))])
 }
 
 /// `GetNumClasses()`: Classic's nine classes (warcraft.wiki.gg: on
@@ -1615,7 +1619,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "GetMaxLevelForExpansionLevel",
             get_max_level_for_expansion_level,
         ),
-        ("GetMaxLevelForLatestExpansion", sixty),
+        (
+            "GetMaxLevelForLatestExpansion",
+            max_level_for_latest_expansion,
+        ),
         ("GetNumClasses", get_num_classes),
         ("GetRealmID", get_realm_id),
         ("GetNativeRealmID", get_realm_id),

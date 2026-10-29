@@ -274,6 +274,7 @@
           ]
         },
         "level": {
+          "description": "The level (`UnitLevel`); -1: a boss's ?? level. The character's is\n1 to the flavor's max level (the flavor table's `max-level`: 60 on\ncamelot, 60 on vanilla, 70 on tbc, 90 on standard).",
           "type": [
             "number",
             "null"
@@ -1097,9 +1098,11 @@
       }
     },
     "Channels": {
+      "description": "The chat channels the character is in (`mock.setChannels`).",
       "type": "object",
       "properties": {
         "joined": {
+          "description": "The channels, numbered in order.",
           "anyOf": [
             {
               "$ref": "#/$defs/List10"
@@ -1109,8 +1112,21 @@
             }
           ]
         },
-        "groupChannels": true,
-        "regionalService": true
+        "groupChannels": {
+          "description": "How many group channels the character is in\n(`GetNumGroupChannels`).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "regionalService": {
+          "description": "Whether the regional chat service is up\n(`C_ChatInfo.IsRegionalServiceAvailable`).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
       }
     },
     "List10": {
@@ -1119,18 +1135,92 @@
         {
           "type": "array",
           "items": {
-            "type": "object",
-            "additionalProperties": true
+            "$ref": "#/$defs/Channel"
           }
         },
         {
           "type": "object",
           "additionalProperties": {
-            "type": "object",
-            "additionalProperties": true
+            "$ref": "#/$defs/Channel"
           }
         }
       ]
+    },
+    "Channel": {
+      "description": "A chat channel the character is in.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "fullName": {
+          "description": "With its zone (`General - Elwynn Forest`); by default the name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "description": "`CHANNEL_CATEGORY_WORLD`, `CHANNEL_CATEGORY_CUSTOM` (the default) or\n`CHANNEL_CATEGORY_GROUP`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "disabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "shortcut": {
+          "description": "By default the name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "instanceID": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "zoneChannelID": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "channelType": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "regional": {
+          "description": "`C_ChatInfo.IsChannelRegional`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "number": {
+          "description": "Its number when higher than the one after the channel before (a\nchannel left keeps its number free).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": true
     },
     "Position": {
       "description": "Where the character is.",
@@ -1171,7 +1261,15 @@
           "format": "double"
         },
         "world": {
-          "description": "`UnitPosition`'s world coordinates."
+          "description": "`UnitPosition`'s world coordinates.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorldPosition"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "facing": {
           "description": "Radians counter-clockwise from north.",
@@ -1183,6 +1281,42 @@
         }
       },
       "additionalProperties": true
+    },
+    "WorldPosition": {
+      "description": "A place in the world, as `UnitPosition` answers it.",
+      "type": "object",
+      "properties": {
+        "y": {
+          "description": "North, in yards.",
+          "type": "number",
+          "format": "double"
+        },
+        "x": {
+          "description": "West, in yards.",
+          "type": "number",
+          "format": "double"
+        },
+        "z": {
+          "description": "Up, in yards (0 by default).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "instanceID": {
+          "description": "The continent's instance ID (0 by default).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "required": [
+        "y",
+        "x"
+      ]
     },
     "List11": {
       "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
@@ -1317,6 +1451,7 @@
           ]
         },
         "level": {
+          "description": "The level (`UnitLevel`); -1: a boss's ?? level. The character's is\n1 to the flavor's max level (the flavor table's `max-level`: 60 on\ncamelot, 60 on vanilla, 70 on tbc, 90 on standard).",
           "type": [
             "number",
             "null"
@@ -1560,12 +1695,15 @@
           "format": "double"
         },
         "uiScale": {
-          "description": "The UI scale with \"Use UI Scale\" on; without, the client's own.",
+          "description": "The game's UI Scale slider (Graphics settings, shown as 65% to\n115% in steps of 1%), with \"Use UI Scale\" on; absent, \"Use UI\nScale\" is off and the client scales the UI itself (768 over the\nscreen's height).",
           "type": [
             "number",
             "null"
           ],
-          "format": "double"
+          "format": "double",
+          "minimum": 0.65,
+          "maximum": 1.15,
+          "multipleOf": 0.01
         }
       },
       "additionalProperties": false,

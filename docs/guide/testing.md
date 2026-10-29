@@ -383,7 +383,12 @@ the game and turn it into one.
 
 A profile can also set the screen: `"screen": { "width": 2560, "height":
 1440, "uiScale": 0.8 }` draws at 2560 by 1440 with "Use UI Scale" at 80%,
-over `test.screen` in `wowlua.json`.
+over `test.screen` in `wowlua.json`. The UI scale takes the game's slider's
+values: 0.65 to 1.15 in steps of 0.01.
+
+A unit's `level` of -1 is a boss's "??" level: `UnitLevel` answers -1, as in
+the game. Your character's level goes up to your flavors' max level (60 on
+WoW Forever).
 
 The profile is applied before your addon loads, so the addon finds the
 target already there, as after a login. A unit with `"player": true` is
@@ -393,8 +398,9 @@ Blizzard's UI loaded (`test.blizzard-ui`), `mock.slash("/invite Jaina
 Proudmoore")` does the same through the chat. Everything a profile sets can
 still be changed during the test.
 
-`wowlua check` checks the profiles too: an unknown part is E4401, and a
-profile that `config` names but that doesn't exist is E4402. The same
+`wowlua check` checks the profiles too: an unknown part, a UI scale the
+game's slider doesn't have or a character above the max level is E4401, and
+a profile that `config` names but that doesn't exist is E4402. The same
 profiles start
 [debug sessions in VS Code](vscode.md#debug-in-the-emulated-client).
 

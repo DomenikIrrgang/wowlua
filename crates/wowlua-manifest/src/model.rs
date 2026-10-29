@@ -176,7 +176,11 @@ pub struct Addon {
     pub only_beta_and_ptr: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expose_meta: Option<String>,
-    /// Extra TOC directives, emitted verbatim.
+    /// Extra TOC directives, written as they are: the client's directives
+    /// wowlua does not write itself (`AddonCompartmentFunc`,
+    /// `AllowLoadGameType`, `ExcludeLoadGameType`, …) and custom
+    /// `X-` fields. A directive wowlua writes from another key (`Title`,
+    /// `SavedVariables`, …) is E4002; any other name is W4001.
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub toc_extra: IndexMap<String, String>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
@@ -753,7 +757,10 @@ pub struct ProfileSettings {
     pub source_maps: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bundle: Option<bool>,
+    /// The minification level: a built-in one (`none`, `strip`,
+    /// `compact`, `rename`, `max`) or one of `minify-levels`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(extend("examples" = ["none", "strip", "compact", "rename", "max"]))]
     pub minify: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minify_libraries: Option<bool>,
@@ -878,7 +885,10 @@ pub struct Target {
     pub enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
+    /// The minification level of this target's build (see the profiles'
+    /// `minify`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(extend("examples" = ["none", "strip", "compact", "rename", "max"]))]
     pub minify: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bundle: Option<bool>,
@@ -971,9 +981,40 @@ pub struct TestScreen {
     /// The system's DPI scale (`GetScreenDPIScale`), 1 by default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dpi_scale: Option<f64>,
-    /// The UI scale with "Use UI Scale" on; without, the client's own.
+    /// The game's UI Scale slider (Graphics settings, shown as 65% to
+    /// 115% in steps of 1%), with "Use UI Scale" on; absent, "Use UI
+    /// Scale" is off and the client scales the UI itself (768 over the
+    /// screen's height).
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0.65, max = 1.15), extend("multipleOf" = 0.01))]
     pub ui_scale: Option<f64>,
+}
+
+impl TestScreen {
+    /// The game's UI Scale slider: its lowest value, …
+    pub const UI_SCALE_MIN: f64 = 0.65;
+    /// … its highest …
+    pub const UI_SCALE_MAX: f64 = 1.15;
+    /// … and its step (Blizzard's Graphics settings).
+    pub const UI_SCALE_STEP: f64 = 0.01;
+
+    /// Whether `scale` is a value of the game's UI Scale slider: 0.65 to
+    /// 1.15 in steps of 0.01.
+    pub fn is_ui_scale(scale: f64) -> bool {
+        let steps = scale / Self::UI_SCALE_STEP;
+        (Self::UI_SCALE_MIN - 1e-9..=Self::UI_SCALE_MAX + 1e-9).contains(&scale)
+            && (steps - steps.round()).abs() < 1e-6
+    }
+
+    /// Why `uiScale` is no value of the slider, if it is not.
+    pub fn ui_scale_problem(&self) -> Option<String> {
+        let scale = self.ui_scale?;
+        (!Self::is_ui_scale(scale)).then(|| {
+            format!(
+                "`uiScale` {scale} is not a value of the game's UI Scale slider: 0.65 to 1.15 in steps of 0.01"
+            )
+        })
+    }
 }
 
 /// The machine the emulated client runs on in tests (decision T236).
@@ -1026,15 +1067,25 @@ pub struct TestSettings {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CoverageSettings {
+    /// Minimum percentage (0 to 100) of lines covered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0, max = 100))]
     pub lines: Option<f64>,
+    /// Minimum percentage (0 to 100) of statements covered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0, max = 100))]
     pub statements: Option<f64>,
+    /// Minimum percentage (0 to 100) of branches covered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0, max = 100))]
     pub branches: Option<f64>,
+    /// Minimum percentage (0 to 100) of functions covered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0, max = 100))]
     pub functions: Option<f64>,
+    /// Minimum percentage (0 to 100) of conditions covered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0, max = 100))]
     pub conditions: Option<f64>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude: Vec<String>,
@@ -1043,8 +1094,10 @@ pub struct CoverageSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct Fmt {
+    /// `"tab"`, or the number of spaces of an indentation level (2, 4, 8).
     #[serde(default = "Fmt::default_indent")]
     pub indent: Indent,
+    /// The width `wowlua fmt` keeps lines within, in characters.
     #[serde(default = "Fmt::default_line_width")]
     pub line_width: u32,
     #[serde(default = "Fmt::default_quote_style")]
@@ -1213,7 +1266,9 @@ pub struct Stdlib {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct StdlibLog {
+    /// How many entries `wowlua:log`'s history keeps (at least 1).
     #[serde(default = "StdlibLog::default_history_size")]
+    #[schemars(range(min = 1))]
     pub history_size: u32,
 }
 
