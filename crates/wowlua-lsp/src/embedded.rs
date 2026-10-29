@@ -63,6 +63,14 @@ impl Embedded {
         }
     }
 
+    /// Keeps each package's checked modules on the disk too
+    /// (`$WOWLUA_HOME/cache/check/`, as `wowlua lsp --worker` does): a
+    /// program that starts the server again checks unchanged modules
+    /// from there (T505).
+    pub fn keep_on_disk(&mut self) {
+        self.warm.store = Some(check::Store::Home);
+    }
+
     /// The time on the program's clock, from any start that stays put (a
     /// page's `performance.now()`); it must not go back.
     pub fn set_time(&mut self, now: Duration) {

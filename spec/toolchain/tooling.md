@@ -630,6 +630,32 @@ are stored in the editor's settings. The server never accesses the network
 unless the editor setting `wowlua.lsp.fetch` allows it. Missing dependencies
 produce a diagnostic suggesting `wowlua fetch`.
 
+**The editor's settings (decision T504).** `initialize`'s
+`initializationOptions`, and `workspace/didChangeConfiguration`'s
+`settings.wowlua`, may set:
+- `check`: `typing` checks 100 ms after the last edit (the default),
+  `pause` 600 ms after, and `save` only when a file is saved (or changed on
+  disk);
+- `profile`: the build profile the diagnostics follow (default `dev`);
+- `threads`: the threads for per-file work (default as `--jobs`).
+
+A changed `profile` or `threads` checks the open files' packages again.
+
+**Auto-import (decision T506).** A name's completion offers the values,
+functions, classes and enums the package's other modules (and the
+libraries and standard-library modules it builds with) export, which the
+file does not import yet, each with its import as an
+`additionalTextEdits` edit. The edit adds the name to an import of that
+module (not an `import type` or `* as` one), or else adds an
+`import <name> from "<module>"` line after the file's first imports. The
+module is written as an import resolves it: `/<path>` in the same
+package, `<library>/<path>`, `wowlua:<name>`. Types are left out, as they
+need `import type`.
+
+`Embedded::keep_on_disk` keeps a program's embedded server's checked
+modules in `$WOWLUA_HOME/cache/check/`, as `wowlua lsp --worker` does
+(decision T505).
+
 A VS Code extension (TextMate grammar plus LSP client) is part of the project.
 Other editors use the LSP directly.
 

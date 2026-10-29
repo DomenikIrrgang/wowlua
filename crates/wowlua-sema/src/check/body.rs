@@ -121,6 +121,9 @@ pub struct FileInfo<'a> {
     /// Record what the names and expressions are, for the language
     /// server's hover (the file is open in the editor).
     pub hover: bool,
+    /// A completion check's: the exports of modules the file does not
+    /// import (T506).
+    pub importable: Vec<super::complete::Importable>,
 }
 
 /// The locals in scope: every name's variables, innermost last, and the
@@ -286,6 +289,8 @@ pub struct Checker<'e, 'p> {
     pub(crate) hovers: Option<Vec<(Span, TypeId)>>,
     /// `FileInfo::import_targets`.
     pub(crate) import_targets: FxHashMap<Box<str>, super::env::DefTarget>,
+    /// See [`FileInfo::importable`].
+    pub(crate) importable: Vec<super::complete::Importable>,
     /// The handler type the decorators of the statement being checked give
     /// its function (`@event("X")`): (type, what it handles).
     next_handler: Option<(Func, String)>,
@@ -490,6 +495,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             const_imports: info.const_imports.clone(),
             hovers: info.hover.then(Vec::new),
             import_targets: info.import_targets.clone(),
+            importable: info.importable.clone(),
             next_handler: None,
             next_decorators: Vec::new(),
             export_decorators: Vec::new(),
