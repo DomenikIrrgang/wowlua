@@ -788,6 +788,54 @@ bars and a target.
 
    Send `stdtest-world.json`.
 
+## Owed from #103 (the other clients' answers, decisions T510, T511)
+
+Pull request #103 recorded these on Retail 12.1.5, MoP Classic 5.5.4, TBC
+Anniversary 2.5.6 and Classic Era 1.15.9 (alone, no target, out of combat),
+but its probe is not in the repository: it was merged with its decisions
+as proposals, to be verified. Run each step on each of those clients, with
+a character alone, no target and out of combat, and note what it prints.
+"wowlua:" is what the engine answers now.
+
+1. **Functions the documentation lacks**:
+   1. `/dump type(GetQuestLogTitle), type(GetGlyphSocketInfo), type(GetReadyCheckStatus)`
+
+   wowlua: Retail `nil nil function`; MoP Classic `function function
+   function`; TBC and Classic Era `function nil function`.
+2. **Nothing there**:
+   1. `/dump IsTargetLoose(), C_ActionBar.GetBonusBarOffset(), UnitIsTapDenied("target"), GetRaidTargetIndex("target")`
+   2. `/dump select("#", GetReadyCheckStatus("player")), C_TTSSettings.GetSpeechRate(), C_TTSSettings.GetSpeechVolume()`
+
+   wowlua: `false 0 false nil` and `0 0 100` on every client.
+3. **Expansions** (after the login, as the server's is 0 before):
+   1. `/dump GetExpansionLevel(), GetServerExpansionLevel(), GetAccountExpansionLevel(), GetMaximumExpansionLevel(), GetMinimumExpansionLevel()`
+   2. `/dump GetClassicExpansionLevel and GetClassicExpansionLevel()`
+
+   wowlua: Retail `11 11 11 11 10`; MoP Classic `4 4 0 4 3`; TBC `1 1 0 1
+   5`; Classic Era `0 0 0 0 5`.
+4. **Class colours**:
+   1. `/run for _, c in ipairs({"WARRIOR", "SHAMAN", "MONK", "DEATHKNIGHT", "EVOKER"}) do local x = C_ClassColor.GetClassColor(c) print(c, x and x.r, x and x.g, x and x.b) end`
+
+   wowlua: Retail's colours where the client has the class (Classic Era's
+   Shaman the Paladin's pink), nothing for a class it lacks.
+5. **Refused functions**:
+   1. `/run for _, n in ipairs({"GetTalentGroupRole", "GetNumTalentTabs", "GetNumTalentGroups", "GetUnspentTalentPoints", "GetNumSpecGroups", "GetTalentTierInfo"}) do print(n, pcall(_G[n], 1)) end`
+
+   wowlua: on MoP Classic the first four `false Script_<name>: API
+   unsupported in this version of World of Warcraft.`; on TBC and Classic
+   Era `GetTalentGroupRole`, `GetNumSpecGroups` and `GetTalentTierInfo`.
+6. **Runes and weapon enchants** (the classic clients):
+   1. `/run for i = 1, 7 do print(i, GetRuneType(i)) end`
+   2. `/run print(select("#", GetWeaponEnchantInfo()))`
+
+   wowlua: `1 1 3 3 2 2 nil`; 8 values on MoP Classic, 12 on TBC and
+   Classic Era.
+7. **Hardcore** (the classic clients):
+   1. `/dump C_GameRules.IsHardcoreActive()`
+
+   wowlua: `false` (a test sets a Classic Era hardcore realm with
+   `mock.setHardcore(true)`).
+
 ## Answered on the beta's last day (2026-10-24)
 
 - PvP ranks (major faction 2800): `GetMajorFactionProgressionInfo` gives

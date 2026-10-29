@@ -189,6 +189,8 @@ pub struct World {
     pub hidden_group_buffs: Option<Vec<f64>>,
     /// The player rests (an inn, a city: `setResting`).
     pub resting: bool,
+    /// The realm is a Classic Era hardcore realm (`setHardcore`).
+    pub hardcore: bool,
     /// The session ended (`ReloadUI`, logging out).
     pub logged_out: bool,
     /// A loading screen up, the world not entered yet: no map.
@@ -1625,6 +1627,9 @@ pub fn fire_event(vm: &mut Vm, event: &str, args: &[Value]) {
 /// Fires `event` now, batched or not (`fire_event`).
 pub fn fire_now(vm: &mut Vm, event: &str, args: &[Value]) {
     crate::batch::run_before(vm, event);
+    if restricted_event(event) {
+        crate::classic::note_combat_log_event(vm, args);
+    }
     let unit = match args.first() {
         Some(Value::Str(s)) => Some(String::from_utf8_lossy(vm.str_bytes(*s)).into_owned()),
         _ => None,

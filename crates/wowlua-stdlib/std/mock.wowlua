@@ -818,6 +818,13 @@ export function setResting(resting: boolean)
     engine().setResting(resting)
 end
 
+--- The realm has the hardcore rules (permanent death) or not:
+--- `C_GameRules.IsHardcoreActive`. On `vanilla` only (Classic Era's
+--- hardcore realms); off by default.
+export function setHardcore(active: boolean)
+    engine().setHardcore(active)
+end
+
 --- The area's updates without a zone's event (the mount journal's
 --- usability, the map's points of interest and fog).
 export function areaChanged()

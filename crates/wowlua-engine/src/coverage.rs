@@ -30,8 +30,8 @@ pub enum Source {
 pub enum Group {
     /// The flavor's API documentation.
     Documented,
-    /// The client's C functions the documentation lacks (camelot's
-    /// inventory, `data/camelot-functions.txt`).
+    /// The client's C functions the documentation lacks (its inventory,
+    /// `data/<flavor>-functions.txt`).
     Undocumented,
     /// Functions the engine gives behaviour that neither the documentation
     /// nor the client's inventory lists.
@@ -127,14 +127,11 @@ pub fn functions(flavor: &str) -> Result<Vec<Entry>, String> {
             module,
         });
     }
-    let inventory: BTreeSet<&'static str> = if flavor == "camelot" {
-        include_str!("../data/camelot-functions.txt")
-            .lines()
-            .filter(|l| !l.starts_with('#') && !l.is_empty())
-            .collect()
-    } else {
-        BTreeSet::new()
-    };
+    let inventory: BTreeSet<&'static str> = crate::inventory(flavor)
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .collect();
     for &name in &inventory {
         if !seen.insert(name) {
             continue;

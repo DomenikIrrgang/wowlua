@@ -26,6 +26,7 @@ pub mod channels;
 pub mod character;
 pub mod chat;
 pub mod chatwindows;
+pub mod classic;
 pub mod clientdata;
 pub mod clock;
 pub mod collected;
@@ -670,10 +671,10 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             vm.heap.table_mut(vm.globals).set_str(k, Value::Nil);
         }
     }
-    // The client's undocumented C functions (camelot's inventory): they
-    // exist, without behaviour.
-    if flavor == "camelot" {
-        for line in include_str!("../data/camelot-functions.txt").lines() {
+    // The client's undocumented C functions (its inventory): they exist,
+    // without behaviour.
+    if let Some(inventory) = inventory(flavor) {
+        for line in inventory.lines() {
             if line.starts_with('#') || line.is_empty() {
                 continue;
             }
@@ -1146,6 +1147,23 @@ const OVER_RECORDED: &[&str] = &[
     "GetTotemInfo",
 ];
 
+/// The C functions of a flavor's client, one per line: camelot's recorded
+/// (`/stdtest inventory`), standard's, mists', tbc's and vanilla's from
+/// Ketho's client dumps (`cargo xtask types gen`), checked against the
+/// clients (Retail 12.1.5, Mists 5.5.4, TBC 2.5.6, Classic Era 1.15.9):
+/// wowlua lacks only `Kiosk.GetCharacterTemplateSetIndex` of their C
+/// functions (and Retail's `C_SocialRestrictions.IsAgeVerificationRestricted`).
+pub(crate) fn inventory(flavor: &str) -> Option<&'static str> {
+    Some(match flavor {
+        "camelot" => include_str!("../data/camelot-functions.txt"),
+        "standard" => include_str!("../data/standard-functions.txt"),
+        "mists" => include_str!("../data/mists-functions.txt"),
+        "tbc" => include_str!("../data/tbc-functions.txt"),
+        "vanilla" => include_str!("../data/vanilla-functions.txt"),
+        _ => return None,
+    })
+}
+
 /// The fill-in modules' behaviours: answers for functions no recording
 /// or model of the engine answers, from Blizzard's documentation and UI
 /// code, warcraft.wiki.gg and the functions' names (unverified).
@@ -1245,6 +1263,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("party", party::behaviours()),
         Behaviours::new("inspect", inspect::behaviours()),
         Behaviours::new("traits", traits::behaviours(flavor)),
+        Behaviours::new("classic", classic::behaviours(flavor)),
         Behaviours::new("achievements", achievements::behaviours()),
         Behaviours::new("tradeskill", tradeskill::behaviours(flavor)),
         Behaviours::new("tooltip", tooltip::behaviours()),
