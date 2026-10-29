@@ -394,6 +394,55 @@ pub fn set_platform(vm: &mut Vm, platform: Platform) {
     engine_mut(vm).platform = platform;
 }
 
+/// A CVar of a flavor's client: its name, default and flags.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CVar {
+    pub name: String,
+    pub default: String,
+    /// Addons may not set it.
+    pub secure: bool,
+    pub read_only: bool,
+    /// Locked from the user.
+    pub locked: bool,
+}
+
+/// The CVars a flavor's client has, with their defaults and flags, in the
+/// recorded order: camelot's recorded by `/stdtest engine`; other flavors
+/// only the deprecation fallbacks, which the client has.
+pub fn cvars(flavor: &str) -> Vec<CVar> {
+    if flavor != "camelot" {
+        return vec![CVar {
+            name: "loadDeprecationFallbacks".into(),
+            default: "1".into(),
+            secure: false,
+            read_only: false,
+            locked: false,
+        }];
+    }
+    let flags: Vec<(&str, &str)> = include_str!("../data/camelot-cvar-flags.txt")
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|l| l.split_once('\t'))
+        .collect();
+    let has = |kind: &str, name: &str| {
+        flags
+            .iter()
+            .any(|(k, n)| *k == kind && n.eq_ignore_ascii_case(name))
+    };
+    include_str!("../data/camelot-cvars.txt")
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|l| l.split_once('\t'))
+        .map(|(name, default)| CVar {
+            name: name.to_owned(),
+            default: default.to_owned(),
+            secure: has("secure", name),
+            read_only: has("readOnly", name),
+            locked: has("locked", name),
+        })
+        .collect()
+}
+
 /// Installs a flavor's engine into a VM made with `Vm::wow`: every
 /// documented global and namespaced function (those the VM's runtime does
 /// not already define), and the `Enum` and `Constants` tables.
@@ -711,18 +760,11 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     if flavor == "camelot" {
         engine_mut(vm).world.chat.guild = Some(guild::Guild::recorded());
     }
-    // The CVars' defaults (camelot's, recorded by `/stdtest engine`; other
-    // flavors: the deprecation fallbacks, which the client has).
-    let cvars: Vec<(String, String)> = if flavor == "camelot" {
-        include_str!("../data/camelot-cvars.txt")
-            .lines()
-            .filter(|l| !l.starts_with('#'))
-            .filter_map(|l| l.split_once('\t'))
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect()
-    } else {
-        vec![("loadDeprecationFallbacks".into(), "1".into())]
-    };
+    // The CVars' defaults.
+    let cvars: Vec<(String, String)> = self::cvars(flavor)
+        .into_iter()
+        .map(|c| (c.name, c.default))
+        .collect();
     engine_mut(vm).world.cvar_defaults = cvars.clone();
     engine_mut(vm).world.cvars.extend(cvars);
     // Undocumented C functions with behaviour.
