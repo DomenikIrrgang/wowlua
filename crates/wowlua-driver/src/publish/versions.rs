@@ -3,10 +3,8 @@
 //! the exact version, else the highest one below it, else the highest one
 //! of that game type; game types a site does not know are left out.
 //!
-//! Interface numbers are grouped by the packager's game types
-//! (`retail`, `classic`, `bcc`, `wrath`, `titan`, `cata`, `mists`,
-//! `forever`), so `wrath` builds for Titan Reforged clients map like the
-//! packager maps them.
+//! Interface numbers are grouped by the packager's game types of wowlua's
+//! flavors (`retail`, `classic`, `bcc`, `forever`).
 
 use std::collections::BTreeMap;
 
@@ -42,34 +40,6 @@ pub const GAME_TYPES: &[GameType] = &[
         wago: "bc",
         wowinterface: Some("TBC-Classic"),
         release_json: "bcc",
-    },
-    GameType {
-        packager: "wrath",
-        curseforge: 73713,
-        wago: "wotlk",
-        wowinterface: Some("WOTLK-Classic"),
-        release_json: "wrath",
-    },
-    GameType {
-        packager: "cata",
-        curseforge: 77522,
-        wago: "cata",
-        wowinterface: Some("Cata-Classic"),
-        release_json: "cata",
-    },
-    GameType {
-        packager: "mists",
-        curseforge: 79434,
-        wago: "mop",
-        wowinterface: Some("Cata-Classic"),
-        release_json: "mists",
-    },
-    GameType {
-        packager: "titan",
-        curseforge: 81212,
-        wago: "titan",
-        wowinterface: None,
-        release_json: "titan",
     },
     GameType {
         packager: "forever",
@@ -172,10 +142,9 @@ pub fn wago(game_data: &serde_json::Value, game: &GameType, version: &str) -> Ch
     }
 }
 
-/// WoWInterface: `GET /addons/compatible.json` → `{id, game}` entries; Mists
-/// falls back to Cata Classic like the packager's.
+/// WoWInterface: `GET /addons/compatible.json` → `{id, game}` entries.
 pub fn wowinterface(list: &serde_json::Value, game: &GameType, version: &str) -> Choice<String> {
-    let Some(mut name) = game.wowinterface else {
+    let Some(name) = game.wowinterface else {
         return Choice::Unknown(version.into());
     };
     let entries: Vec<(String, String)> = list
@@ -199,13 +168,7 @@ pub fn wowinterface(list: &serde_json::Value, game: &GameType, version: &str) ->
             .map(|(id, _)| id.clone())
             .max()
     };
-    let mut pick = max_of(name, Some(version));
-    if pick.is_none() {
-        if game.packager == "mists" {
-            name = "Cata-Classic";
-        }
-        pick = max_of(name, None);
-    }
+    let pick = max_of(name, Some(version)).or_else(|| max_of(name, None));
     match pick {
         Some(v) => Choice::Fallback {
             wanted: version.into(),
@@ -239,26 +202,25 @@ mod tests {
             curseforge(&cf, retail, "12.1.0"),
             Choice::Fallback { chosen: 2, .. }
         ));
-        let mists = game_type("mists").unwrap();
-        assert!(matches!(
-            curseforge(&cf, mists, "5.5.4"),
-            Choice::Unknown(_)
-        ));
-        let wago_data =
-            serde_json::json!({ "patches": { "mop": ["5.5.3"], "retail": ["12.1.0"] } });
+        let bcc = game_type("bcc").unwrap();
+        assert!(matches!(curseforge(&cf, bcc, "2.5.6"), Choice::Unknown(_)));
+        let wago_data = serde_json::json!({ "patches": { "bc": ["2.5.5"], "retail": ["12.1.0"] } });
         assert!(
-            matches!(wago(&wago_data, mists, "5.5.4"), Choice::Fallback { ref chosen, .. } if chosen == "5.5.3")
+            matches!(wago(&wago_data, bcc, "2.5.6"), Choice::Fallback { ref chosen, .. } if chosen == "2.5.5")
         );
-        let wowi = serde_json::json!([{ "id": "4.4.2", "game": "Cata-Classic" }]);
+        let wowi = serde_json::json!([{ "id": "2.5.4", "game": "TBC-Classic" }]);
         assert!(
-            matches!(wowinterface(&wowi, mists, "5.5.4"), Choice::Fallback { ref chosen, .. } if chosen == "4.4.2")
+            matches!(wowinterface(&wowi, bcc, "2.5.6"), Choice::Fallback { ref chosen, .. } if chosen == "2.5.4")
         );
+        for gone in ["wrath", "titan", "cata", "mists"] {
+            assert!(game_type(gone).is_none(), "{gone}");
+        }
         let mut v = vec![
             "1.15.9".to_string(),
             "12.1.0".to_string(),
-            "5.5.4".to_string(),
+            "2.5.6".to_string(),
         ];
         sort_desc(&mut v);
-        assert_eq!(v, ["12.1.0", "5.5.4", "1.15.9"]);
+        assert_eq!(v, ["12.1.0", "2.5.6", "1.15.9"]);
     }
 }

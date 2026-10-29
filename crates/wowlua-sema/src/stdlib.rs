@@ -63,14 +63,15 @@ pub const NEEDS: &[Needs] = &[
         option: Some((0, "compartment", true)),
         help: Some("pass `compartment = false` where you don't want the entry"),
     },
-    // Cata Classic's `EditModeManagerFrame` is a stub without the layouts.
+    // A client without Edit Mode lacks the manager's layouts (Cataclysm
+    // Classic's was a stub; every flavor of the table has them now).
     Needs {
         id: "frames.movable",
         apis: &["EditModeManagerFrame.GetActiveLayoutInfo"],
         reduced: Some("`editMode` is ignored (the frame is an ordinary movable frame)"),
         option: Some((1, "editMode", false)),
         help: Some(
-            "pass `editMode` only in an `if flavor ~= \"cata\"` branch, or accept the ordinary movable frame there",
+            "pass `editMode` only in a branch for the flavors with Edit Mode, or accept the ordinary movable frame there",
         ),
     },
 ];

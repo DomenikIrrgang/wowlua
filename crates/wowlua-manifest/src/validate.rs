@@ -1024,7 +1024,7 @@ mod tests {
                      "saved-variables": ["MyAddonDB"], "saved-variables-per-character": ["MyAddonCharDB"],
                      "toc-extra": { "X-Discord": "https://discord.gg/example" },
                      "meta": { "discord": "https://discord.gg/example" } },
-          "flavors": { "standard": {}, "mists": {}, "vanilla": { "interface": [11509] } },
+          "flavors": { "standard": {}, "tbc": {}, "vanilla": { "interface": [11509] } },
           "dependencies": {
             "libstub": { "git": "https://github.com/example/LibStub", "tag": "1.0.3", "kind": "lua-library" },
             "wowlua-ui": { "version": "^0.4", "optional": true } },
@@ -1041,7 +1041,7 @@ mod tests {
         let out = run(text);
         assert!(out.diagnostics.is_empty(), "{:?}", out.diagnostics);
         let m = out.manifest.unwrap();
-        assert_eq!(m.flavors, vec!["standard", "mists", "vanilla"]);
+        assert_eq!(m.flavors, vec!["standard", "tbc", "vanilla"]);
         assert_eq!(m.author().as_deref(), Some("Jane Doe"));
     }
 
@@ -1055,6 +1055,22 @@ mod tests {
             codes(&format!(r#"{{ {PKG}, "flavors": {{ "wotlk": {{}} }} }}"#)),
             vec!["E4004"]
         );
+        // Wrath, Cataclysm and Mists of Pandaria are no flavors (decision T507).
+        for gone in ["mists", "cata", "wrath", "titan"] {
+            let out = run(&format!(
+                r#"{{ {PKG}, "flavors": {{ "camelot": {{}}, "{gone}": {{}} }} }}"#
+            ));
+            let codes: Vec<_> = out.diagnostics.iter().filter_map(|d| d.code).collect();
+            assert_eq!(codes, vec!["E4004"], "{gone}");
+            let first = out.diagnostics.iter().next().unwrap();
+            assert!(
+                first
+                    .notes
+                    .iter()
+                    .any(|n| n == "known flavors: camelot, standard, vanilla, tbc"),
+                "{first:?}"
+            );
+        }
         assert_eq!(
             codes(&format!(
                 r#"{{ {PKG}, "flavors": {{ "retail": {{}}, "standard": {{}} }} }}"#

@@ -4383,16 +4383,16 @@ fn reduced_fallbacks_are_warned_per_flavor() {
     assert!(!out.contains("W8301"), "{out}");
 }
 
-/// `frames.movable` with `editMode` on Cata Classic, whose Edit Mode
-/// manager is a stub, is W8301 (the option is ignored there); without the
-/// option, or in a branch the guard keeps from cata, it is not.
+/// `frames.movable` with `editMode` is W8301 on a flavor whose client lacks
+/// Edit Mode; every flavor of the flavor table has it (Cataclysm Classic,
+/// whose manager was a stub, is no flavor; decision T507), so it is not.
 #[test]
-fn edit_mode_is_reduced_on_cata() {
+fn edit_mode_is_not_reduced_on_any_flavor() {
     let check_in = |mode: &str, body: &str| {
         let dir = project(&[("src/main.wowlua", body)]);
         fs::write(
             dir.path().join("wowlua.json"),
-            format!(r#"{{ "package": {{ "name": "std", "version": "1.0.0" }}, "flavors": {{ "mists": {{}}, "cata": {{}} }}, "build": {{ "flavor-mode": "{mode}" }} }}"#),
+            format!(r#"{{ "package": {{ "name": "std", "version": "1.0.0" }}, "flavors": {{ "camelot": {{}}, "standard": {{}}, "vanilla": {{}}, "tbc": {{}} }}, "build": {{ "flavor-mode": "{mode}" }} }}"#),
         )
         .unwrap();
         let assert = wowlua(dir.path())
@@ -4400,27 +4400,10 @@ fn edit_mode_is_reduced_on_cata() {
             .assert();
         String::from_utf8_lossy(&assert.get_output().stderr).into_owned()
     };
-    let head = "import * as frames from \"wowlua:frames\"\nimport flavor from \"wowlua:meta\"\nlocal store: any = {}\nlocal f = CreateFrame(\"Frame\", nil, UIParent)\n";
+    let head = "import * as frames from \"wowlua:frames\"\nlocal store: any = {}\nlocal f = CreateFrame(\"Frame\", nil, UIParent)\n";
     let edit = "frames.movable(f, { store = store, key = \"f\", editMode = { label = \"F\" } })\n";
     for mode in ["split", "shared"] {
         let out = check_in(mode, &format!("{head}{edit}"));
-        assert!(
-            out.contains("warning[W8301]")
-                && out.contains("`frames.movable`")
-                && out.contains("on cata")
-                && out.contains("`editMode` is ignored")
-                && !out.contains("on mists"),
-            "{mode}: {out}"
-        );
-        let out = check_in(
-            mode,
-            &format!("{head}frames.movable(f, {{ store = store, key = \"f\" }})\n"),
-        );
-        assert!(!out.contains("W8301"), "{mode}: {out}");
-        let out = check_in(
-            mode,
-            &format!("{head}if flavor ~= \"cata\" then\n    {edit}end\n"),
-        );
         assert!(!out.contains("W8301"), "{mode}: {out}");
     }
 }
@@ -4748,9 +4731,9 @@ print("locked again", at(box))
     );
 }
 
-/// A client whose `EditModeManagerFrame` is only a stub (cata's has
-/// `IsEditModeActive` alone) has no Edit Mode: `editMode` is ignored and
-/// the frame is an ordinary movable frame.
+/// A client whose `EditModeManagerFrame` is only a stub (Cataclysm
+/// Classic's had `IsEditModeActive` alone) has no Edit Mode: `editMode` is
+/// ignored and the frame is an ordinary movable frame.
 #[test]
 fn frames_edit_mode_ignored_on_a_stub() {
     let out = modes(
@@ -5016,9 +4999,9 @@ UnitHealthPercent = function(u, predicted, curve) print("native", u, curve) retu
     assert_eq!(plain(&out), ["native player scale", "true"]);
 }
 
-/// A client with `UnitHealthPercent` but without `CurveConstants` (cata's
-/// declarations) would answer 0 to 1: `unit.healthPercent` computes 0 to
-/// 100 from the health there.
+/// A client with `UnitHealthPercent` but without `CurveConstants` would
+/// answer 0 to 1: `unit.healthPercent` computes 0 to 100 from the health
+/// there.
 #[test]
 fn unit_health_percent_without_the_curve() {
     let out = modes(

@@ -198,7 +198,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W4306 | Embedded library without a recognizable license file or header |
 | W4309 | `--link` could not create a symlink/junction; copying instead |
 | W4310 | XML reference differs in case from the referenced file (the client resolves it case-insensitively) |
-| W4313 | `types sync` moved a client alias (`anniversary`, `titan`, `forever`) to another ruleset |
+| W4313 | `types sync` moved a client alias (`anniversary`, `forever`) to another ruleset |
 | W4322 | Locked version has been yanked |
 | W4326 | No OS credential store; token stored in `config.json` (mode 0600) |
 | W4328 | Site does not know the exact game version; fell back to a lower/highest version |

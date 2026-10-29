@@ -123,9 +123,6 @@ jobs:
           - addon: QuickQuest
             repo: https://github.com/p3lim-wow/QuickQuest
             rev: 4a54a41979aca05a6c831a7855dd5b6f1ceaf5e7
-          - addon: BigWigs_WrathOfTheLichKing
-            repo: https://github.com/BigWigsMods/BigWigs_WrathOfTheLichKing
-            rev: ed03412159debb490f9c9e573e4e63df9429f7c7
           - addon: Tukui
             repo: https://github.com/tukui-org/Tukui
             rev: 22a852dcf2e206a4a30a48181d7ef8fd6ad63f46

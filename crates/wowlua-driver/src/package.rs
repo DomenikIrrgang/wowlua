@@ -293,10 +293,6 @@ pub fn packager_type(interface: u32) -> &'static str {
         11000..=11999 => "classic",
         16000..=16999 => "forever",
         20000..=20999 => "bcc",
-        38000..=38099 => "titan",
-        30000..=30999 => "wrath",
-        40000..=40999 => "cata",
-        50000..=50999 => "mists",
         _ => "retail",
     }
 }
@@ -988,7 +984,8 @@ mod tests {
             release_type(None, Some("v1.0"), true, true),
             Release::Release
         );
-        assert_eq!(packager_type(38002), "titan");
+        assert_eq!(packager_type(20506), "bcc");
+        assert_eq!(packager_type(16001), "forever");
         assert_eq!(packager_type(120100), "retail");
     }
 }

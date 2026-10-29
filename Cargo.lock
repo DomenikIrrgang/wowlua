@@ -3656,6 +3656,9 @@ dependencies = [
 [[package]]
 name = "wowlua-api"
 version = "0.13.6"
+dependencies = [
+ "wowlua-flavors",
+]
 
 [[package]]
 name = "wowlua-casc"
@@ -3899,6 +3902,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "ureq",
+ "wowlua-flavors",
  "wowlua-manifest",
  "wowlua-pkg",
  "wowlua-span",

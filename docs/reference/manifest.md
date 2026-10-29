@@ -194,18 +194,18 @@ alias, and its value an object, usually empty:
 Without `flavors`, an addon is built for `standard` only, and a library
 supports every flavor.
 
-| Flavor ID | Aliases | Client |
-|-----------|---------|--------|
-| `standard` | `retail`, `mainline` | Retail |
-| `camelot` | `forever` | WoW Forever |
-| `mists` | | Mists of Pandaria Classic |
-| `cata` | | Cataclysm Classic |
-| `wrath` | `titan` | Wrath of the Lich King Classic, Titan Reforged |
-| `tbc` | `anniversary` | The Burning Crusade Anniversary |
-| `vanilla` | `classic-era` | Classic Era |
+| Flavor ID | Aliases | Client | Support |
+|-----------|---------|--------|---------|
+| `camelot` | `forever` | WoW Forever | Supported |
+| `standard` | `retail`, `mainline` | Retail | Coming soon |
+| `vanilla` | `classic-era` | Classic Era | Coming soon |
+| `tbc` | `anniversary` | TBC Anniversary | Coming soon |
 
-An unknown flavor is error E4004. How code differs per flavor is in
-[Build info and profiles](../language/flavors.md).
+wowlua runs a supported flavor everywhere (tests, the emulated client, the
+debugger); a flavor coming soon is checked and built, but not run yet. An
+unknown flavor is error E4004, and so are `mists`, `cata` and `wrath`:
+wowlua has no Wrath, Cataclysm or Mists of Pandaria Classic flavor. How code
+differs per flavor is in [Build info and profiles](../language/flavors.md).
 
 ### `flavors.<flavor>.interface`
 

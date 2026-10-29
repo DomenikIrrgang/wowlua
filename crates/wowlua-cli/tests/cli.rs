@@ -85,7 +85,12 @@ fn legacy_addon(root: &Path) {
 fn new_package_builds_for_several_flavors() {
     let dir = tempfile::tempdir().unwrap();
     wowlua(dir.path())
-        .args(["new", "kill-tracker", "--flavors", "retail,mists,vanilla"])
+        .args([
+            "new",
+            "kill-tracker",
+            "--flavors",
+            "retail,anniversary,vanilla",
+        ])
         .assert()
         .success();
     let project = dir.path().join("kill-tracker");
@@ -93,7 +98,7 @@ fn new_package_builds_for_several_flavors() {
 
     let toc = fs::read_to_string(project.join("dist/dev/KillTracker/KillTracker.toc")).unwrap();
     assert!(
-        toc.starts_with("## Interface: 120100, 50504, 11509\n"),
+        toc.starts_with("## Interface: 120100, 20506, 11509\n"),
         "{toc}"
     );
     assert!(toc.contains("## X-Wowlua-Build: dev "));
@@ -108,11 +113,12 @@ fn new_package_builds_for_several_flavors() {
 #[test]
 fn every_template_checks_clean() {
     let dir = tempfile::tempdir().unwrap();
-    let flavors = [
-        "standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla",
-    ];
+    let flavors = wowlua_flavors::table()
+        .flavors
+        .iter()
+        .map(|f| f.id.as_str());
     for kind in ["addon", "library", "lua-library", "types"] {
-        for flavor in flavors {
+        for flavor in flavors.clone() {
             let name = format!("{kind}-{flavor}");
             wowlua(dir.path())
                 .args([
@@ -542,7 +548,7 @@ fn init_handles_unusual_layouts() {
         &[
             (
                 "!pack_classic.toc",
-                "## Interface: 120100, 11509, 50504\n## AllowLoadGameType: classic\n## Title: Pack\n## Version: 1.0\n## LoadOnDemand: true\nsrc\\Core.lua\ndata.xml\nEra.lua [AllowLoadGameType: vanilla]\n",
+                "## Interface: 120100, 11509, 20506\n## AllowLoadGameType: classic\n## Title: Pack\n## Version: 1.0\n## LoadOnDemand: true\nsrc\\Core.lua\ndata.xml\nEra.lua [AllowLoadGameType: vanilla]\n",
             ),
             ("src/Core.lua", "print('core')\n"),
             ("src/Unused.lua", "error('never loaded')\n"),
@@ -584,7 +590,7 @@ fn init_handles_unusual_layouts() {
         .stderr(predicate::str::contains("W4310"));
     let dist = addon.join("dist/dev/!Pack_Classic");
     let toc = fs::read_to_string(dist.join("!Pack_Classic.toc")).unwrap();
-    assert!(toc.contains("## Interface: 11509, 50504\n"), "{toc}");
+    assert!(toc.contains("## Interface: 11509, 20506\n"), "{toc}");
     // The output layout is always `src/…`.
     assert!(toc.contains("src\\src\\Core.lua\n"), "{toc}");
     assert!(
@@ -1504,7 +1510,7 @@ fn types_sync_moves_the_pins_to_the_flavor_table() {
                 "wowlua.lock",
                 r#"{ "version": 1, "flavor-table": { "version": "2026.01.01",
   "interfaces": { "standard": [110200], "tbc": [20505] },
-  "aliases": { "anniversary": "wrath" } } }
+  "aliases": { "anniversary": "vanilla" } } }
 "#,
             ),
         ],
@@ -1529,7 +1535,7 @@ fn types_sync_moves_the_pins_to_the_flavor_table() {
         .success()
         .stderr(predicate::str::contains("warning[W4313]"))
         .stderr(predicate::str::contains(
-            "`anniversary` now names `tbc`, not `wrath`",
+            "`anniversary` now names `tbc`, not `vanilla`",
         ))
         .stderr(predicate::str::contains(
             "Updating standard interface 110200 -> 120100",
@@ -4730,14 +4736,14 @@ print(GetTime())
 #[test]
 fn flavor_guards_for_class_members() {
     let dir = tempfile::tempdir().unwrap();
-    let manifest = "{ \"package\": { \"name\": \"guards\", \"version\": \"1.0.0\" }, \"flavors\": { \"mists\": {}, \"cata\": {} }, \"build\": { \"flavor-mode\": \"shared\" } }\n";
+    let manifest = "{ \"package\": { \"name\": \"guards\", \"version\": \"1.0.0\" }, \"flavors\": { \"standard\": {}, \"tbc\": {} }, \"build\": { \"flavor-mode\": \"shared\" } }\n";
     write(
         dir.path(),
         &[
             ("wowlua.json", manifest),
             (
                 "src/main.wowlua",
-                "import flavor from \"wowlua:meta\"\nprint(ChatFrameUtil.ForEachChatFrame)\nif flavor == \"mists\" then\n    print(ChatFrameUtil.SendTell)\nend\n",
+                "import flavor from \"wowlua:meta\"\nprint(ChatFrameUtil.ForEachChatFrame)\nif flavor == \"standard\" then\n    print(ChatFrameUtil.FormatDiscordMessage)\nend\n",
             ),
         ],
     );
@@ -4749,7 +4755,7 @@ fn flavor_guards_for_class_members() {
     assert!(!stderr.contains("E2030"), "{stderr}");
     fs::write(
         dir.path().join("src/main.wowlua"),
-        "print(ChatFrameUtil.SendTell)\n",
+        "print(ChatFrameUtil.FormatDiscordMessage)\n",
     )
     .unwrap();
     // (a warning in basic mode)
@@ -4758,8 +4764,10 @@ fn flavor_guards_for_class_members() {
         .assert()
         .stderr(
             predicate::str::contains("2030]")
-                .and(predicate::str::contains("`ChatFrameUtil.SendTell`"))
-                .and(predicate::str::contains("`cata`")),
+                .and(predicate::str::contains(
+                    "`ChatFrameUtil.FormatDiscordMessage`",
+                ))
+                .and(predicate::str::contains("`tbc`")),
         );
 }
 

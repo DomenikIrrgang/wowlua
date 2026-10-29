@@ -172,7 +172,7 @@ type EditModeManager = {
 }
 -- What Edit Mode is used through: the manager's methods called and hooked
 -- here. A client without Edit Mode lacks the manager, or has a stub of it
--- (cata's answers only `IsEditModeActive`).
+-- (Cataclysm Classic's answered only `IsEditModeActive`).
 const EDIT_MODE_METHODS = { "IsEditModeActive", "GetActiveLayoutInfo", "ClearSelectedSystem", "SelectSystem", "UpdateLayoutInfo" }
 local function editModeManager(): EditModeManager?
     const manager = _G.EditModeManagerFrame :: unknown

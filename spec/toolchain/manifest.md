@@ -42,7 +42,7 @@ and indentation. Unknown keys are error E4002, so typos are caught. Keys are
   },
   "flavors": {
     "standard": {},
-    "mists": {},
+    "tbc": {},
     "vanilla": { "interface": [11509] }
   },
   "dependencies": {
@@ -153,8 +153,8 @@ the field for that flavor.
   "icon-texture": "Interface\\AddOns\\ElvUI\\Media\\LogoAddon",
   "group": "ElvUI",
   "flavor-overrides": {
-    "mists": { "title": "|cff1784d1ElvUI|r Mists" },
-    "wrath": { "title": "|cff1784d1ElvUI|r Wrath", "icon-texture": null, "group": null },
+    "tbc": { "title": "|cff1784d1ElvUI|r TBC" },
+    "vanilla": { "title": "|cff1784d1ElvUI|r Classic", "icon-texture": null, "group": null },
     "standard": { "toc-extra": { "AddonCompartmentFunc": "ElvUI_AddonCompartmentFunc" } }
   }
 }
@@ -189,7 +189,7 @@ that flavor's TOC (decision T54):
 "addon": {
   "toc-data": {
     "standard": ["tocdata/standard.tocdata"],
-    "mists": ["tocdata/mists.tocdata"]
+    "vanilla": ["tocdata/vanilla.tocdata"]
   }
 }
 ```
@@ -230,20 +230,34 @@ Flavor IDs are **Blizzard's game types**, as used by TOC load directives. They
 name the ruleset, not the client. The table is data shipped with the compiler
 (crate `wowlua-flavors`). `wowlua types sync` updates it, and the version in use
 is pinned in `wowlua.lock` ([Package manager §10.6](package-manager.md#106-lockfile)),
-so every machine builds identical TOCs. The values below are as of 2026-10-11.
+so every machine builds identical TOCs. The values below are as of 2026-10-29
+(table version `2026.10.29`).
 
-| Flavor ID | Aliases | Family | Current client(s) | Interface | `WOW_PROJECT_ID` | Client folder(s) | Game suffix (family suffix) |
-|-----------|---------|--------|-------------------|-----------|------------------|------------------|-----------------------------|
-| `standard` | `retail`, `mainline` | Mainline | Retail (Midnight) 12.1.0 | 120100 | 1 | `_retail_`, `_ptr_`, `_xptr_`, `_beta_` | `_Standard`, 12.1.5+ only (`_Mainline`) |
-| `camelot` | `forever` | Mainline | WoW: Forever (launch 2026-11-04) | 16001 (beta) | 18 | `_forever_` (decision T499; the beta's `_classic_beta_` too) | `_Camelot` / `_Forever` (`_Mainline`) |
-| `mists` | | Classic | MoP Classic 5.5.4 | 50504 | 19 | `_classic_`, `_classic_ptr_` | `_Mists` (`_Classic`) |
-| `cata` | | Classic | Cataclysm Classic 4.4.2 (closed) | 40402 | 14 | — | `_Cata` (`_Classic`) |
-| `wrath` | `titan` | Classic | Titan Reforged 3.80.2 (China); Wrath Classic 3.4.5 (closed) | 38002 | 11 | pending | `_Wrath` (`_Classic`) |
-| `tbc` | `anniversary` | Classic | TBC Anniversary 2.5.6 | 20506 | 5 | `_anniversary_`, `_classic_era_ptr_` | `_TBC` (`_Classic`) |
-| `vanilla` | `classic-era` | Classic | Classic Era 1.15.9 | 11509 | 2 | `_classic_era_` | `_Vanilla` (`_Classic`) |
+The table is the one list of flavors every tool reads: the compiler and the
+CLI, wowlua Studio and the registry (its flavor filter). Its order is the order
+pickers list the flavors in, the supported ones first. Each flavor has a
+display **name** and a **support** state (decision T507):
+
+- **Supported**: the toolchain runs it fully: the emulated client, the test
+  runner, the debugger and Blizzard's UI.
+- **Coming soon**: named and checked (manifests, types, TOCs, builds,
+  packages), but not run yet.
+
+| Flavor ID | Name | Support | Aliases | Family | Current client(s) | Interface | `WOW_PROJECT_ID` | Client folder(s) | Game suffix (family suffix) |
+|-----------|------|---------|---------|--------|-------------------|-----------|------------------|------------------|-----------------------------|
+| `camelot` | WoW Forever | supported | `forever` | Mainline | WoW: Forever (launch 2026-11-04) | 16001 (beta) | 18 | `_forever_` (decision T499; the beta's `_classic_beta_` too) | `_Camelot` / `_Forever` (`_Mainline`) |
+| `standard` | Retail | coming soon | `retail`, `mainline` | Mainline | Retail (Midnight) 12.1.0 | 120100 | 1 | `_retail_`, `_ptr_`, `_xptr_`, `_beta_` | `_Standard`, 12.1.5+ only (`_Mainline`) |
+| `vanilla` | Classic Era | coming soon | `classic-era` | Classic | Classic Era 1.15.9 | 11509 | 2 | `_classic_era_` | `_Vanilla` (`_Classic`) |
+| `tbc` | TBC Anniversary | coming soon | `anniversary` | Classic | TBC Anniversary 2.5.6 | 20506 | 5 | `_anniversary_`, `_classic_era_ptr_` | `_TBC` (`_Classic`) |
+
+Wrath of the Lich King Classic and Titan Reforged, Cataclysm Classic and Mists
+of Pandaria Classic have no flavor (decision T507): `wrath`, `titan`, `cata`
+and `mists` are unknown flavors (E4004), their TOC suffixes (`_Wrath`,
+`_Cata`, `_Mists`, the legacy `-WOTLKC`) mean nothing, and interface numbers
+from 30000 to 59999 belong to no flavor.
 
 **Aliases.** Aliases that name a ruleset (`retail`, `mainline`,
-`classic-era`) are permanent. Aliases that name a client (`forever`, `titan`,
+`classic-era`) are permanent. Aliases that name a client (`forever`,
 `anniversary`) resolve to the ruleset that client runs **in the pinned flavor
 table**. When `wowlua types sync` moves such an alias to another ruleset (for
 example when Anniversary realms progress), it reports warning W4313 and the
@@ -259,12 +273,6 @@ site-specific identifiers used when publishing
 ([Publishing §11.3](publishing.md#113-game-version-mapping)). A flavor without
 a types package or pinned interface is error E4318.
 
-Closed clients such as Cataclysm Classic 4.4.2 and Wrath Classic 3.4.5 have no
-client folders. They stay in the table so the TOC features of their last build
-are known to `auto` layout decisions. Both support every TOC feature listed
-above, including file variables, and recognize the game types of their own
-expansion and all older ones (decision T56). The evidence is that BigWigs and
-DBM ship single TOCs with these features for them.
 
 ## 9.5 Dependencies
 
@@ -358,7 +366,7 @@ lines (decision T55):
   "variable-files": [
     { "path": "src/Init_[Game].lua" },
     { "path": "src/Locales/[TextLocale].lua", "locales": ["deDE", "frFR"] },
-    { "path": "src/Classic_[Family].lua", "flavors": ["mists", "vanilla"] }
+    { "path": "src/Classic_[Family].lua", "flavors": ["tbc", "vanilla"] }
   ]
 }
 ```

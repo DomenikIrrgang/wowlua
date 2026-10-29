@@ -24,7 +24,7 @@ pub struct Lockfile {
 pub struct FlavorPins {
     pub version: String,
     pub interfaces: BTreeMap<String, Vec<u32>>,
-    /// The client aliases the manifest uses (`anniversary`, `titan`,
+    /// The client aliases the manifest uses (`anniversary`,
     /// `forever`) and the ruleset each named when it was pinned (spec
     /// Manifest §9.4.1): `wowlua types sync` reports W4313 when the flavor
     /// table moves one.
@@ -74,7 +74,7 @@ impl Lockfile {
     }
 }
 
-/// The client aliases (`anniversary`, `titan`, `forever`) among the keys of
+/// The client aliases (`anniversary`, `forever`) among the keys of
 /// the manifest's `flavors`, lowercase.
 pub fn client_aliases(manifest: &wowlua_manifest::LoadedManifest) -> Vec<String> {
     let table = wowlua_flavors::table();
@@ -234,7 +234,7 @@ mod tests {
         ));
     }
 
-    /// A flavor table of another date, where `anniversary` names `wrath`.
+    /// A flavor table of another date, where `anniversary` names `vanilla`.
     fn moved_table() -> wowlua_flavors::FlavorTable {
         let mut table: serde_json::Value =
             serde_json::from_str(include_str!("../../wowlua-flavors/data/flavors.json")).unwrap();
@@ -242,9 +242,11 @@ mod tests {
         for flavor in table["flavors"].as_array_mut().unwrap() {
             match flavor["id"].as_str().unwrap() {
                 "tbc" => flavor["aliases"] = serde_json::json!([]),
-                "wrath" => {
-                    flavor["aliases"] =
-                        serde_json::json!([{ "name": "anniversary", "kind": "client" }]);
+                "vanilla" => {
+                    flavor["aliases"] = serde_json::json!([
+                        { "name": "classic-era", "kind": "ruleset" },
+                        { "name": "anniversary", "kind": "client" }
+                    ]);
                 }
                 "standard" => flavor["interface"] = serde_json::json!([120200]),
                 _ => {}
@@ -272,13 +274,13 @@ mod tests {
         assert_eq!(new.flavor_table.version, "2027.01.01");
         assert_eq!(new.flavor_table.interfaces["standard"], vec![120200]);
         assert_eq!(new.flavor_table.interfaces["vanilla"], vec![11509]);
-        assert_eq!(new.flavor_table.aliases["anniversary"], "wrath");
+        assert_eq!(new.flavor_table.aliases["anniversary"], "vanilla");
         assert_eq!(
             moved,
             [AliasMove {
                 alias: "anniversary".into(),
                 from: "tbc".into(),
-                to: "wrath".into()
+                to: "vanilla".into()
             }]
         );
         // `--flavor` moves only those pins; an alias that stays is no move.

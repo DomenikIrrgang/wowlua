@@ -204,8 +204,8 @@ libraries.
 {
   "version": 1,
   "flavor-table": {
-    "version": "2026.10.11",
-    "interfaces": { "standard": [120100], "mists": [50504], "vanilla": [11509] },
+    "version": "2026.10.29",
+    "interfaces": { "standard": [120100], "tbc": [20506], "vanilla": [11509] },
     "aliases": { "anniversary": "tbc" }
   },
   "packages": [
@@ -232,7 +232,7 @@ libraries.
 - **Flavor table.** The lockfile pins the flavor-table version and the
   resolved interface numbers of every targeted flavor, so every machine
   generates identical TOCs. `aliases` records the ruleset each client alias
-  the manifest uses (`anniversary`, `titan`, `forever`) named when the
+  the manifest uses (`anniversary`, `forever`) named when the
   lockfile was made; it is left out when the manifest uses none. `wowlua
   types sync` updates them deliberately (W4313 for an alias that now names
   another ruleset, [Manifest §9.4.1](manifest.md#941-flavor-table)); the
@@ -343,7 +343,7 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
 
 | Package | Content |
 |---------|---------|
-| `wow-api-<flavor>` (e.g. `wow-api-standard`, `wow-api-mists`) | Global API functions, `C_*` namespaces, enums, structures, events with typed payloads, widget classes, FrameXML globals and mixins, and WoW's Lua environment additions, as `.d.wowlua` |
+| `wow-api-<flavor>` (e.g. `wow-api-standard`, `wow-api-camelot`) | Global API functions, `C_*` namespaces, enums, structures, events with typed payloads, widget classes, FrameXML globals and mixins, and WoW's Lua environment additions, as `.d.wowlua` |
 
 **Generation.** The packages are produced in the wowlua project's CI by
 `wowlua-types-gen`:

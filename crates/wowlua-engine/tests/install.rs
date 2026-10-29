@@ -23,8 +23,8 @@ fn documented_functions_exist_and_are_not_mocked() {
     // Every camelot function has behaviour (decision T295); a flavor with
     // gaps shows the stand-in: a function without behaviour fails for
     // addon code, and gives its documented empty values to Blizzard's.
-    let gap = wowlua_engine::coverage::functions("mists")
-        .expect("mists")
+    let gap = wowlua_engine::coverage::functions("vanilla")
+        .expect("vanilla")
         .into_iter()
         .find(|e| {
             e.source == wowlua_engine::coverage::Source::Generated
@@ -32,10 +32,10 @@ fn documented_functions_exist_and_are_not_mocked() {
                 && !e.name.contains('.')
                 && !wowlua_engine::protection::is_protected(&e.name, None)
         })
-        .expect("a function without behaviour on mists")
+        .expect("a function without behaviour on vanilla")
         .name;
     let mut vm = Vm::wow();
-    wowlua_engine::install(&mut vm, "mists").expect("installs");
+    wowlua_engine::install(&mut vm, "vanilla").expect("installs");
     let src =
         format!("return type({gap}), select(2, pcall({gap})), type(GetTime), type(secretwrap)");
     let f = vm
@@ -79,11 +79,9 @@ fn enums_and_constants() {
 
 #[test]
 fn every_flavor_installs() {
-    for flavor in [
-        "standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla",
-    ] {
+    for flavor in &wowlua_flavors::table().flavors {
         let mut vm = Vm::wow();
-        wowlua_engine::install(&mut vm, flavor).expect("installs");
+        wowlua_engine::install(&mut vm, &flavor.id).expect("installs");
     }
 }
 

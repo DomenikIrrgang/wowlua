@@ -5,10 +5,6 @@
 use wowlua_sema::check::env::{Env, Source};
 use wowlua_span::SourceDb;
 
-const FLAVORS: &[&str] = &[
-    "standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla",
-];
-
 fn pristine(name: &str) -> String {
     let path = format!(
         "{}/../wowlua-api/data/{name}.d.wowlua",
@@ -85,7 +81,11 @@ fn primitive_globals_build_the_same_env() {
         };
         (name, text.to_string(), wowlua_api::Globals::default())
     }
-    for flavor in FLAVORS {
+    for flavor in wowlua_flavors::table()
+        .flavors
+        .iter()
+        .map(|f| f.id.as_str())
+    {
         let [shared, own] = wowlua_api::declarations(flavor).unwrap();
         let tabled = vec![
             builtin("lua"),
