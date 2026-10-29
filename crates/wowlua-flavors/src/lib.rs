@@ -11,6 +11,12 @@
 //! It is the one list of flavors every tool reads (the CLI, Studio, the
 //! registry): [`FlavorTable::flavors`] is in the order pickers show them,
 //! the supported flavors first.
+//!
+//! It also records what each flavor's game has (decision T512): its
+//! classes ([`Flavor::classes`], each with the powers it has, the first
+//! the one it shows), its races ([`Flavor::races`]) and its powers'
+//! defaults ([`Flavor::power_defaults`]), and the power types' tokens and
+//! `Enum.PowerType` values ([`FlavorTable::power_types`]).
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -40,6 +46,56 @@ pub struct FlavorTable {
     /// (immediate), for load-order analysis (spec §5.4.3).
     #[serde(default)]
     pub load_order_markers: LoadOrderMarkers,
+    /// The power types by token (`MANA`, `RAGE`, …: `UnitPowerType`'s
+    /// second result, the token of `UNIT_POWER_UPDATE`) and
+    /// `Enum.PowerType` value, the same in every flavor.
+    #[serde(default)]
+    pub power_types: Vec<PowerType>,
+}
+
+/// A power type: its token and its `Enum.PowerType` value.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct PowerType {
+    pub token: String,
+    pub id: u32,
+}
+
+/// A class of a flavor: its file name (`UnitClass`'s second result:
+/// `DRUID`) and the powers it has by token, the first the one it shows
+/// unless a form or specialization shows another (`UnitPowerType`).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct Class {
+    pub file: String,
+    pub powers: Vec<String>,
+    /// The power each specialization shows, by token, in specialization
+    /// order (`GetSpecialization`'s 1, 2, …), where they differ (a shadow
+    /// priest's insanity); empty when every one shows the first power.
+    #[serde(default)]
+    pub specs: Vec<String>,
+}
+
+impl Class {
+    /// The power the class shows by default (`MANA` for a druid).
+    pub fn shown_power(&self) -> Option<&str> {
+        self.powers.first().map(String::as_str)
+    }
+
+    /// The power a specialization (`GetSpecialization`'s index, from 1)
+    /// shows: its own where the table names one, else the class's first.
+    pub fn shown_power_for_spec(&self, spec: usize) -> Option<&str> {
+        spec.checked_sub(1)
+            .and_then(|i| self.specs.get(i))
+            .map(String::as_str)
+            .or_else(|| self.shown_power())
+    }
+}
+
+/// A power's amount: how much there is (`UnitPower`) of how much at most
+/// (`UnitPowerMax`).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
+pub struct PowerAmount {
+    pub current: f64,
+    pub max: f64,
 }
 
 /// Load-order markers (decision M2: curated in the flavor table until the
@@ -130,6 +186,18 @@ pub struct Flavor {
     /// Inclusive range of interface numbers that belong to this flavor.
     pub interface_range: [u32; 2],
     pub game_suffixes: Vec<String>,
+    /// The classes a character can be, in the client's order
+    /// (`CLASS_SORT_ORDER`), each with its powers.
+    #[serde(default)]
+    pub classes: Vec<Class>,
+    /// The races a character can be, by file name (`UnitRace`'s second
+    /// result: `Scourge`, `NightElf`), in race ID order.
+    #[serde(default)]
+    pub races: Vec<String>,
+    /// What a unit has of each power, by token, when nothing says (the
+    /// emulated client's units; a slider's start).
+    #[serde(default)]
+    pub power_defaults: BTreeMap<String, PowerAmount>,
 }
 
 impl PartialEq for Flavor {
@@ -147,6 +215,23 @@ impl Flavor {
 
     pub fn contains_interface(&self, interface: u32) -> bool {
         (self.interface_range[0]..=self.interface_range[1]).contains(&interface)
+    }
+
+    /// The class with this file name (any case: `druid`, `DRUID`).
+    pub fn class(&self, file: &str) -> Option<&Class> {
+        self.classes
+            .iter()
+            .find(|c| c.file.eq_ignore_ascii_case(file))
+    }
+
+    /// Whether a character can be of this race (its file name, `Scourge`).
+    pub fn has_race(&self, race: &str) -> bool {
+        self.races.iter().any(|r| r == race)
+    }
+
+    /// What a unit has of a power (its token) when nothing says.
+    pub fn power_default(&self, token: &str) -> Option<PowerAmount> {
+        self.power_defaults.get(token).copied()
     }
 }
 
@@ -230,6 +315,22 @@ impl FlavorTable {
         self.flavors
             .iter()
             .find(|f| f.contains_interface(interface))
+    }
+
+    /// A power type's `Enum.PowerType` value by its token (`RAGE`: 1).
+    pub fn power_type(&self, token: &str) -> Option<u32> {
+        self.power_types
+            .iter()
+            .find(|p| p.token == token)
+            .map(|p| p.id)
+    }
+
+    /// A power type's token by its `Enum.PowerType` value (1: `RAGE`).
+    pub fn power_token(&self, id: u32) -> Option<&str> {
+        self.power_types
+            .iter()
+            .find(|p| p.id == id)
+            .map(|p| p.token.as_str())
     }
 
     pub fn clients_of<'a>(&'a self, flavor: &'a str) -> impl Iterator<Item = &'a Client> + 'a {
@@ -391,6 +492,122 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The classes each flavor has, in `CLASS_SORT_ORDER` (Blizzard's UI of
+    /// each), with their powers; every power has a token and a default
+    /// (decision T512).
+    #[test]
+    fn classes_powers_and_races() {
+        let t = table();
+        let files = |id: &str| -> Vec<&str> {
+            t.flavor(id)
+                .unwrap()
+                .classes
+                .iter()
+                .map(|c| c.file.as_str())
+                .collect()
+        };
+        let classic = [
+            "WARRIOR", "PALADIN", "PRIEST", "SHAMAN", "DRUID", "ROGUE", "MAGE", "WARLOCK", "HUNTER",
+        ];
+        for id in ["camelot", "vanilla", "tbc"] {
+            assert_eq!(files(id), classic, "{id}");
+        }
+        assert_eq!(
+            files("mists"),
+            [
+                "WARRIOR",
+                "DEATHKNIGHT",
+                "PALADIN",
+                "MONK",
+                "PRIEST",
+                "SHAMAN",
+                "DRUID",
+                "ROGUE",
+                "MAGE",
+                "WARLOCK",
+                "HUNTER"
+            ]
+        );
+        assert_eq!(files("standard").len(), 13);
+        let powers = |id: &str, class: &str| -> Vec<&str> {
+            let class = t.flavor(id).unwrap().class(class).unwrap();
+            class.powers.iter().map(String::as_str).collect()
+        };
+        // Recorded on camelot: a warrior's rage, a paladin's, a druid's and
+        // a shaman's mana shown; a paladin has no other power.
+        assert_eq!(powers("camelot", "WARRIOR"), ["RAGE"]);
+        assert_eq!(powers("camelot", "paladin"), ["MANA"]);
+        assert_eq!(
+            powers("camelot", "DRUID"),
+            ["MANA", "RAGE", "ENERGY", "COMBO_POINTS"]
+        );
+        assert_eq!(
+            t.flavor("camelot")
+                .unwrap()
+                .class("DRUID")
+                .unwrap()
+                .shown_power(),
+            Some("MANA")
+        );
+        // Hunters use mana until Cataclysm, focus from then on.
+        assert_eq!(powers("vanilla", "HUNTER"), ["MANA"]);
+        assert_eq!(powers("tbc", "HUNTER"), ["MANA"]);
+        assert_eq!(powers("mists", "HUNTER"), ["FOCUS"]);
+        assert_eq!(powers("standard", "HUNTER"), ["FOCUS"]);
+        assert_eq!(powers("standard", "DEMONHUNTER"), ["FURY"]);
+        assert_eq!(powers("mists", "PALADIN"), ["MANA", "HOLY_POWER"]);
+        assert_eq!(powers("standard", "DEATHKNIGHT"), ["RUNIC_POWER", "RUNES"]);
+        // A specialization's shown power: a shadow priest's insanity, a
+        // mistweaver's mana; without a list, the class's first.
+        let priest = t.flavor("standard").unwrap().class("PRIEST").unwrap();
+        assert_eq!(priest.shown_power_for_spec(3), Some("INSANITY"));
+        assert_eq!(priest.shown_power_for_spec(1), Some("MANA"));
+        let monk = t.flavor("mists").unwrap().class("MONK").unwrap();
+        assert_eq!(monk.shown_power_for_spec(2), Some("MANA"));
+        let rogue = t.flavor("camelot").unwrap().class("ROGUE").unwrap();
+        assert_eq!(rogue.shown_power_for_spec(2), Some("ENERGY"));
+        for flavor in &t.flavors {
+            for class in &flavor.classes {
+                for shown in &class.specs {
+                    assert!(class.powers.contains(shown), "{} {}", flavor.id, class.file);
+                }
+            }
+        }
+        assert!(t.flavor("vanilla").unwrap().class("MONK").is_none());
+        for flavor in &t.flavors {
+            assert!(!flavor.races.is_empty(), "{}", flavor.id);
+            for class in &flavor.classes {
+                assert!(!class.powers.is_empty(), "{} {}", flavor.id, class.file);
+                for power in &class.powers {
+                    assert!(t.power_type(power).is_some(), "{power}");
+                    let d = flavor.power_default(power);
+                    assert!(
+                        d.is_some_and(|d| d.current <= d.max),
+                        "{} {power}",
+                        flavor.id
+                    );
+                }
+            }
+            for token in flavor.power_defaults.keys() {
+                assert!(t.power_type(token).is_some(), "{token}");
+            }
+        }
+        // The races by file name.
+        let camelot = t.flavor("camelot").unwrap();
+        assert!(camelot.has_race("Scourge") && camelot.has_race("Skyborne"));
+        assert!(!camelot.has_race("BloodElf") && !camelot.has_race("Undead"));
+        assert!(t.flavor("tbc").unwrap().has_race("Draenei"));
+        assert!(t.flavor("mists").unwrap().has_race("Pandaren"));
+        assert_eq!(t.flavor("vanilla").unwrap().races.len(), 8);
+        // Enum.PowerType's values, both ways.
+        assert_eq!(t.power_type("MANA"), Some(0));
+        assert_eq!(t.power_type("ESSENCE"), Some(19));
+        assert_eq!(t.power_token(13), Some("INSANITY"));
+        assert_eq!(t.power_token(28), Some("SHADOW_ORBS"));
+        assert_eq!(t.power_token(30), None);
+        assert_eq!(t.power_types.len(), 30);
     }
 
     /// Each flavor's max level (camelot's recorded: `GetMaxPlayerLevel()`

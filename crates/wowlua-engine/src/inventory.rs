@@ -383,15 +383,22 @@ fn worn_stats(vm: &mut Vm, id: i64) -> Option<Worn> {
 fn stats_changed(vm: &mut Vm, on: Worn, off: Worn) {
     let health = on.max_health - off.max_health;
     let mana = on.max_mana - off.max_mana;
-    let cut = {
+    let (cut, has_mana) = {
         let u = &mut engine_mut(vm).units.list[PLAYER.0];
         // The health follows its maximum (recorded: no regeneration after).
         u.health_max += health;
         u.health = (u.health + health).clamp(0.0, u.health_max.max(0.0));
-        u.power_max += mana;
-        let cut = u.power > u.power_max;
-        u.power = u.power.min(u.power_max.max(0.0));
-        cut
+        // The mana's maximum (the player's mana, shown or not: decision
+        // T512; a character without mana has none to change).
+        match u.power_of_mut(0.0) {
+            Some(p) => {
+                p.max += mana;
+                let cut = p.current > p.max;
+                p.current = p.current.min(p.max.max(0.0));
+                (cut, true)
+            }
+            None => (false, false),
+        }
     };
     if health != 0.0 {
         units::fire_unit(vm, "UNIT_MAXHEALTH", PLAYER, &[]);
@@ -403,7 +410,7 @@ fn stats_changed(vm: &mut Vm, on: Worn, off: Worn) {
         }
         units::fire_unit(vm, "UNIT_ATTACK_POWER", PLAYER, &[]);
     }
-    if mana != 0.0 {
+    if mana != 0.0 && has_mana {
         let token = vm.str("MANA");
         if cut {
             units::fire_unit(vm, "UNIT_POWER_UPDATE", PLAYER, &[token]);

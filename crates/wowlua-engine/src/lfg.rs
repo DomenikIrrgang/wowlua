@@ -57,12 +57,6 @@ use crate::{engine, engine_mut, protection, widgets};
 /// thirty minutes (unverified).
 const LISTING_SECONDS: f64 = 1800.0;
 
-/// The classes a search result's member counts name (recorded: the nine of
-/// classic, each with 0 when none).
-const CLASSES: [&str; 9] = [
-    "DRUID", "HUNTER", "MAGE", "PALADIN", "PRIEST", "ROGUE", "SHAMAN", "WARLOCK", "WARRIOR",
-];
-
 /// `GroupFinderActivityInfo`'s fields, as `GetActivityInfoTable` has them.
 const ACTIVITY_FIELDS: [&str; 26] = [
     "fullName",
@@ -1198,7 +1192,10 @@ fn get_search_result_member_counts(vm: &mut Vm, c: NativeCall) -> Ret {
     for role in ["TANK", "HEALER", "DAMAGER", "NOROLE"] {
         set(vm, t, role, Value::Num(count(role, None)));
     }
-    let mut classes: Vec<String> = CLASSES.iter().map(|c| c.to_string()).collect();
+    // The flavor's classes, each with 0 when none (recorded: camelot's
+    // nine), in name order; then any other a member has.
+    let mut classes = crate::units::flavor_class_files(vm);
+    classes.sort();
     for m in &r.members {
         if !m.class_filename.is_empty() && !classes.contains(&m.class_filename) {
             classes.push(m.class_filename.clone());

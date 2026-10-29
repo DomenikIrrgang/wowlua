@@ -728,6 +728,54 @@ end
     }
 }
 
+/// A profile's `powers` (decision T512): every power of the class, each
+/// by token, the shown one by `powerType` or the class's.
+#[test]
+fn world_profile_powers() {
+    let profile = r#"{
+  "character": { "class": "DRUID", "race": "NightElf", "level": 60, "powerType": 0, "maxPower": 2000,
+                 "powers": { "COMBO_POINTS": { "current": 2 }, "ENERGY": { "current": 40 } } },
+  "units": [ { "name": "Rogue", "player": true, "class": "ROGUE", "reaction": "friendly", "target": true,
+               "powers": { "COMBO_POINTS": { "current": 3, "max": 6 } } } ]
+}"#;
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "\n"),
+            ("tests/profiles/druid.json", profile),
+            (
+                "tests/powers.test.wowlua",
+                r#"import test, expect, config from "wowlua:test"
+import * as mock from "wowlua:mock"
+config({ profile = "druid" })
+
+@test("every power of the class")
+local function powers()
+    local kind, token = UnitPowerType("player")
+    expect(kind).toBe(0)
+    expect(token).toBe("MANA")
+    expect(UnitPowerMax("player")).toBe(2000)
+    expect(UnitPower("player", Enum.PowerType.ComboPoints)).toBe(2)
+    expect(UnitPowerMax("player", Enum.PowerType.ComboPoints)).toBe(5)
+    expect(UnitPower("player", Enum.PowerType.Energy)).toBeSecret()
+    expect(UnitHasPowerType("player", Enum.PowerType.Rage)).toBe(true)
+    expect(UnitPower("player", Enum.PowerType.HolyPower)).toBe(0)
+    local _, rogue = UnitPowerType("target")
+    expect(rogue).toBe("ENERGY")
+    expect(UnitPower("target", Enum.PowerType.ComboPoints)).toBe(3)
+    expect(UnitPowerMax("target", Enum.PowerType.ComboPoints)).toBe(6)
+    mock.player:update({ powers = { COMBO_POINTS = { current = 4 } } })
+    expect(UnitPower("player", Enum.PowerType.ComboPoints)).toBe(4)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("1 passed, 0 failed"), "{out}");
+}
+
 /// World profiles (decision T213): the character, gear, bags, money,
 /// place, the units around, CVars, bindings and saved variables, loaded
 /// before the addon; changes fire the client's events.

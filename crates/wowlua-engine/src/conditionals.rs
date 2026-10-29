@@ -68,7 +68,7 @@ fn yes(vm: &mut Vm, name: &'static str, args: &[Value]) -> bool {
 }
 
 /// The first answer as a number.
-fn number(vm: &mut Vm, name: &'static str, args: &[Value]) -> Option<f64> {
+pub(crate) fn number(vm: &mut Vm, name: &'static str, args: &[Value]) -> Option<f64> {
     match ask(vm, name, args).first() {
         Some(Value::Num(n)) => Some(*n),
         _ => None,

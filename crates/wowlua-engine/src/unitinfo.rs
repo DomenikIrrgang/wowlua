@@ -188,8 +188,9 @@ fn unit_selection_type(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(t)])
 }
 
-/// `UnitHasPowerType(unit, powerType)`: its own power, or a druid's mana
-/// besides its form's (unverified: the client's secondary powers).
+/// `UnitHasPowerType(unit, powerType)`: one of its powers, shown or not (a
+/// druid's mana besides its form's; decision T512, unverified: the
+/// client's secondary powers).
 fn unit_has_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = units::unit_arg(vm, &c, 1) else {
         return Ok(vec![Value::Bool(false)]);
@@ -198,20 +199,22 @@ fn unit_has_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
     // A power type not a number: the unit's own (the full probe:
     // `UnitHasPowerType("player", "x")` true).
     let pt = num(vm, c.arg(2)).unwrap_or(u.power_type);
-    let has = u.power_type == pt || (u.class == "DRUID" && pt == 0.0);
+    let has = u.power_of(pt).is_some();
     Ok(vec![Value::Bool(has)])
 }
 
 /// `UnitPowerMissing(unit [, powerType])`: its maximum less its power, as
-/// `UnitPower` and `UnitPowerMax` give them; a power type the unit lacks
-/// a plain 0 (`units::other_power_type`); no unit 0.
+/// `UnitPower` and `UnitPowerMax` give them (of that power, else the shown
+/// one); a power type the unit lacks a plain 0
+/// (`units::other_power_type`); no unit 0.
 fn unit_power_missing(vm: &mut Vm, c: NativeCall) -> Ret {
     if units::other_power_type(vm, &c) {
         return Ok(vec![Value::Num(0.0)]);
     }
+    let asked = units::asked_power_type(vm, &c);
     let missing = units::unit_arg(vm, &c, 1).map_or(0.0, |id| {
-        let u = &engine(vm).units.list[id.0];
-        (u.power_max - u.power).max(0.0)
+        let p = units::asked_power(&engine(vm).units.list[id.0], asked);
+        (p.max - p.current).max(0.0)
     });
     Ok(vec![Value::Num(missing)])
 }

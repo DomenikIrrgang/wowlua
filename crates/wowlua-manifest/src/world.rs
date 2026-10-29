@@ -137,10 +137,20 @@ pub struct UnitData {
     pub health: Option<f64>,
     pub health_max: Option<f64>,
     pub max_health: Option<f64>,
+    /// The shown power's amount (`UnitPower(unit)`).
     pub power: Option<f64>,
+    /// The shown power's maximum (`UnitPowerMax(unit)`); `maxPower` the
+    /// same.
     pub power_max: Option<f64>,
     pub max_power: Option<f64>,
+    /// The power it shows (`Enum.PowerType`: 0 mana, 1 rage, 3 energy, …);
+    /// by default its class's (a druid's mana).
     pub power_type: Option<f64>,
+    /// Any of its powers by token (`MANA`, `RAGE`, `ENERGY`,
+    /// `COMBO_POINTS`, …): how much it has and the most it can have. A
+    /// unit has every power its class has (the flavor table's), each at
+    /// the flavor's default unless named here (decision T512).
+    pub powers: Option<BTreeMap<String, PowerAmount>>,
     /// `hostile`, `neutral` or `friendly`.
     pub reaction: Option<String>,
     /// A player character (not a creature).
@@ -158,6 +168,17 @@ pub struct UnitData {
     pub pvp: Option<bool>,
     #[serde(flatten)]
     pub other: Rest,
+}
+
+/// One of a unit's powers: how much it has (`UnitPower(unit, type)`) and
+/// the most it can have (`UnitPowerMax(unit, type)`).
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PowerAmount {
+    /// How much it has (`UnitPower(unit, type)`).
+    pub current: Option<f64>,
+    /// The most it can have (`UnitPowerMax(unit, type)`).
+    pub max: Option<f64>,
 }
 
 /// A unit around the player, and how it relates to them.
@@ -537,6 +558,38 @@ pub fn check_for(
             );
         }
     }
+    // A unit's `powers` are keyed by power tokens (decision T512).
+    let mut with_powers: Vec<(JsonPath, &UnitData)> = Vec::new();
+    if let Some(c) = &profile.character {
+        with_powers.push((JsonPath::root().key("character"), c));
+    }
+    match &profile.units {
+        Some(List::Items(units)) => {
+            for (i, u) in units.iter().enumerate() {
+                with_powers.push((JsonPath::root().key("units").index(i), &u.data));
+            }
+        }
+        Some(List::Keyed(units)) => {
+            for (k, u) in units {
+                with_powers.push((JsonPath::root().key("units").key(k), &u.data));
+            }
+        }
+        None => {}
+    }
+    let table = wowlua_flavors::table();
+    for (at, unit) in with_powers {
+        for token in unit.powers.iter().flat_map(|p| p.keys()) {
+            if table.power_type(token).is_none() {
+                wrong(
+                    at.clone().key("powers").key(token),
+                    format!(
+                        "`powers` is keyed by power tokens (`MANA`, `RAGE`, `ENERGY`, `COMBO_POINTS`, …), not `{token}`"
+                    ),
+                    "not a power token",
+                );
+            }
+        }
+    }
     for (part, what) in ID_KEYS {
         let Some(map) = raw.get(*part).and_then(Value::as_object) else {
             continue;
@@ -695,6 +748,24 @@ mod tests {
 
     /// `position.world` and the channels' fields are typed as the engine
     /// reads them.
+    #[test]
+    fn powers_are_keyed_by_token_with_current_and_max() {
+        let good = r#"{ "character": { "class": "DRUID", "powerType": 0,
+            "powers": { "MANA": { "current": 300, "max": 900 }, "RAGE": { "current": 20 } } },
+            "units": [ { "name": "Rogue", "powers": { "COMBO_POINTS": { "current": 3, "max": 5 } } } ] }"#;
+        assert!(codes(good).is_empty(), "{:?}", codes(good));
+        for wrong in [
+            r#"{ "character": { "powers": { "MAGIC": { "current": 1 } } } }"#,
+            r#"{ "units": [ { "powers": { "mana": { "current": 1 } } } ] }"#,
+            r#"{ "character": { "powers": { "MANA": { "now": 1 } } } }"#,
+            r#"{ "character": { "powers": { "MANA": 5 } } }"#,
+        ] {
+            assert_eq!(codes(wrong)[0].0, "E4401", "{wrong}");
+        }
+        let found = codes(r#"{ "character": { "powers": { "MAGIC": {} } } }"#);
+        assert!(found[0].1.contains("not `MAGIC`"), "{found:?}");
+    }
+
     #[test]
     fn world_positions_and_channels_are_typed() {
         assert!(

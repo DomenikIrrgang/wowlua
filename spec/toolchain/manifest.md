@@ -258,6 +258,82 @@ and `GetMaxLevelForLatestExpansion`'s answer in the emulated client. Only
 camelot's is recorded (`GetMaxPlayerLevel()` answers 60 in WoW Forever); the
 others are the games' level caps, not recorded (MoP Classic's 90 among them).
 
+Each flavor also records its **classes**, each with the **powers** it has,
+its **races**, and its **power defaults** (decision T512): the one list of
+them every tool reads (the emulated client's units, a world profile's
+checks, wowlua Studio's pickers and sliders). In the crate:
+`wowlua_flavors::table().flavor(id)` gives the `Flavor`, whose `classes`
+(`Vec<Class>`: `file`, the class's file name, `UnitClass`'s second result;
+`powers`, its power tokens, the first the one it shows; `specs`, the power
+each specialization shows where they differ), `races` (`Vec<String>`, file
+names, `UnitRace`'s second result) and `power_defaults` (token to
+`PowerAmount { current, max }`) are the data; `Flavor::class(file)`,
+`Flavor::has_race(race)`, `Flavor::power_default(token)`,
+`Class::shown_power()` and `Class::shown_power_for_spec(index)` look them
+up. The table's `power_types` give each power token its `Enum.PowerType`
+value (`FlavorTable::power_type(token)`, `FlavorTable::power_token(id)`),
+the same in every flavor's declarations: `MANA` 0, `RAGE` 1, `FOCUS` 2,
+`ENERGY` 3, `COMBO_POINTS` 4, `RUNES` 5, `RUNIC_POWER` 6, `SOUL_SHARDS` 7,
+`LUNAR_POWER` 8, `HOLY_POWER` 9, `ALTERNATE` 10, `MAELSTROM` 11, `CHI` 12,
+`INSANITY` 13, `BURNING_EMBERS` 14, `DEMONIC_FURY` 15, `ARCANE_CHARGES` 16,
+`FURY` 17, `PAIN` 18, `ESSENCE` 19, `RUNE_BLOOD` 20, `RUNE_FROST` 21,
+`RUNE_UNHOLY` 22, `ALTERNATE_QUEST` 23, `ALTERNATE_ENCOUNTER` 24,
+`ALTERNATE_MOUNT` 25, `BALANCE` 26, `HAPPINESS` 27, `SHADOW_ORBS` 28,
+`RUNE_CHROMATIC` 29. The values are the declarations' `Enum.PowerType`;
+`MANA` is recorded (`UnitPowerType`), the tokens through `ESSENCE` and
+`SHADOW_ORBS` are the ones Blizzard's UI code names (`PowerBarColor`, the
+power bars' `UNIT_POWER_UPDATE` checks), the others are `Enum.PowerType`'s
+names spelt as tokens (unverified).
+
+The classes are in each flavor's `CLASS_SORT_ORDER` (Blizzard's UI code of
+the flavor), which is recorded for every flavor. The powers:
+
+| Class | camelot, vanilla, tbc | mists | standard |
+|-------|-----------------------|-------|----------|
+| Warrior | rage | rage | rage |
+| Paladin | mana | mana, holy power | mana, holy power |
+| Hunter | mana | focus | focus |
+| Rogue | energy, combo points | energy, combo points | energy, combo points |
+| Priest | mana | mana, shadow orbs | mana, insanity (shadow shows insanity) |
+| Death Knight | — | runic power, runes | runic power, runes |
+| Shaman | mana | mana | mana, maelstrom (elemental shows maelstrom) |
+| Mage | mana | mana | mana, arcane charges |
+| Warlock | mana | mana, soul shards, burning embers, demonic fury | mana, soul shards |
+| Monk | — | energy, mana, chi (mistweaver shows mana) | energy, mana, chi (mistweaver shows mana) |
+| Druid | mana, rage, energy, combo points | mana, rage, energy, combo points, balance | mana, rage, energy, combo points, lunar power |
+| Demon Hunter | — | — | fury |
+| Evoker | — | — | mana, essence |
+
+Recorded (WoW Forever 1.60.1): the warrior's rage, the paladin's, the
+druid's and the shaman's mana as the power they show, and that a paladin
+has no other (`UnitPower("player", 1..29)` a plain 0). The rest is the
+games' and their UI code's (the classic flavors' paladins have no holy
+power; mists' paladin, monk, priest and warlock bars read holy power, chi,
+shadow orbs, soul shards, burning embers and demonic fury, its eclipse bar
+`Enum.PowerType.Balance`), unverified in the clients. A unit has every power
+its class has: the ones a specialization uses (insanity, maelstrom, arcane
+charges, chi, …) whichever it has.
+
+The races, by file name, in race ID order: camelot `Human`, `Orc`, `Dwarf`,
+`NightElf`, `Scourge`, `Tauren`, `Gnome`, `Troll`, `Skyborne` (WoW
+Forever's own; `Human`, `Scourge` and `Skyborne` characters recorded);
+vanilla the first eight; tbc those and `BloodElf`, `Draenei`; mists those
+and `Goblin`, `Worgen`, `Pandaren`; standard those and `Nightborne`,
+`HighmountainTauren`, `VoidElf`, `LightforgedDraenei`, `ZandalariTroll`,
+`KulTiran`, `DarkIronDwarf`, `Vulpera`, `MagharOrc`, `Mechagnome`,
+`Dracthyr`, `EarthenDwarf`, `Harronir` (the file names of retail's UI code;
+the Haranir's is `Harronir`). Only camelot's three recorded ones are
+recorded; the others are the games', unverified.
+
+The power defaults, what a unit has of a power nothing names (unverified:
+amounts a fresh character could have): mana 0 of 100 (as the emulated
+client's units had), rage 0 of 100, focus 100 of 100, energy 100 of 100,
+combo points 0 of 5, runes 6 of 6, runic power 0 of 100, soul shards 3 of 5
+(mists 3 of 4), holy power 0 of 5, chi 0 of 5 (mists 0 of 4), lunar power,
+maelstrom and insanity 0 of 100, arcane charges 0 of 4, fury 0 of 100,
+essence 5 of 5, and in mists burning embers 1 of 4, demonic fury 200 of
+1000, balance 0 of 100 and shadow orbs 0 of 3.
+
 Mists of Pandaria Classic, still in live service, is the flavor `mists`
 (decision T509). Wrath of the Lich King Classic and Titan Reforged, and
 Cataclysm Classic have no flavor (decision T507): `wrath`, `titan` and `cata`
