@@ -103,9 +103,6 @@ pub fn own(flavor: &str) -> Option<File> {
     Some(match flavor {
         "standard" => api_file!("standard"),
         "camelot" => api_file!("camelot"),
-        "mists" => api_file!("mists"),
-        "cata" => api_file!("cata"),
-        "wrath" => api_file!("wrath"),
         "tbc" => api_file!("tbc"),
         "vanilla" => api_file!("vanilla"),
         _ => return None,
@@ -230,14 +227,18 @@ pub fn has_api(names: &HashSet<String>, api: &str) -> bool {
 /// declarations, with their globals of a primitive type (`any` and `table`
 /// ones may have any member). Computed once: the declarations are embedded.
 pub fn flavor_names(flavor: &str) -> Option<&'static HashSet<String>> {
-    use std::sync::OnceLock;
-    const FLAVORS: [&str; 7] = [
-        "standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla",
-    ];
-    static NAMES: [OnceLock<HashSet<String>>; 7] = [const { OnceLock::new() }; 7];
-    let at = FLAVORS.iter().position(|f| *f == flavor)?;
+    use std::sync::{LazyLock, OnceLock};
+    // One cell per flavor of the flavor table, in its order.
+    static NAMES: LazyLock<Vec<OnceLock<HashSet<String>>>> = LazyLock::new(|| {
+        let flavors = &wowlua_flavors::table().flavors;
+        flavors.iter().map(|_| OnceLock::new()).collect()
+    });
+    let at = wowlua_flavors::table()
+        .flavors
+        .iter()
+        .position(|f| f.id == flavor)?;
     Some(NAMES[at].get_or_init(|| {
-        let files = declarations(flavor).expect("a flavor of FLAVORS");
+        let files = declarations(flavor).expect("every flavor of the table has declarations");
         let mut names = declared_names_of(&[files[0].text, files[1].text]);
         for g in files.iter().flat_map(|f| f.globals.iter()) {
             names.insert(g.name.to_string());
@@ -326,9 +327,6 @@ pub fn documentation(flavor: &str) -> Option<&'static [u8]> {
     Some(match flavor {
         "standard" => include_bytes!("../data/standard.api.json.gz"),
         "camelot" => include_bytes!("../data/camelot.api.json.gz"),
-        "mists" => include_bytes!("../data/mists.api.json.gz"),
-        "cata" => include_bytes!("../data/cata.api.json.gz"),
-        "wrath" => include_bytes!("../data/wrath.api.json.gz"),
         "tbc" => include_bytes!("../data/tbc.api.json.gz"),
         "vanilla" => include_bytes!("../data/vanilla.api.json.gz"),
         _ => return None,
@@ -342,9 +340,7 @@ mod tests {
     /// (and their `@onDemand` lines) replaced by spaces, and nothing else.
     #[test]
     fn padded_texts_keep_every_other_byte() {
-        let names = [
-            "shared", "standard", "camelot", "mists", "cata", "wrath", "tbc", "vanilla",
-        ];
+        let names = ["shared", "camelot", "standard", "vanilla", "tbc"];
         for name in names {
             let file = if name == "shared" {
                 super::shared()
@@ -444,27 +440,34 @@ mod tests {
     /// type.
     #[test]
     fn flavor_names() {
-        let cata = super::flavor_names("cata").unwrap();
-        let mists = super::flavor_names("mists").unwrap();
-        assert!(super::has_api(cata, "ChatFrameUtil.ForEachChatFrame"));
-        assert!(!super::has_api(cata, "ChatFrameUtil.SendTell"));
-        assert!(super::has_api(mists, "ChatFrameUtil.SendTell"));
-        // cata's Edit Mode manager is a stub
+        let standard = super::flavor_names("standard").unwrap();
+        let tbc = super::flavor_names("tbc").unwrap();
+        assert!(super::has_api(tbc, "ChatFrameUtil.ForEachChatFrame"));
+        assert!(!super::has_api(tbc, "ChatFrameUtil.NoSuchFunction"));
+        assert!(super::has_api(standard, "AddonCompartmentFrame"));
+        assert!(!super::has_api(tbc, "AddonCompartmentFrame"));
         assert!(super::has_api(
-            cata,
-            "EditModeManagerFrame.IsEditModeActive"
-        ));
-        assert!(!super::has_api(
-            cata,
-            "EditModeManagerFrame.GetActiveLayoutInfo"
-        ));
-        assert!(super::has_api(
-            mists,
+            tbc,
             "EditModeManagerFrame.GetActiveLayoutInfo"
         ));
         // a global of a primitive type (taken out of the parsed text)
-        assert!(super::has_api(mists, "CurveConstants") && !super::has_api(cata, "CurveConstants"));
-        assert!(super::has_api(mists, "CurveConstants.ScaleTo100"));
+        assert!(super::has_api(tbc, "CurveConstants"));
+        assert!(super::has_api(tbc, "CurveConstants.ScaleTo100"));
         assert!(super::flavor_names("nope").is_none());
+        assert!(super::flavor_names("mists").is_none());
+    }
+
+    /// Every flavor of the flavor table has declarations and documentation,
+    /// and only those (the build script's list and the matches agree).
+    #[test]
+    fn every_flavor_of_the_table() {
+        let table = wowlua_flavors::table();
+        for flavor in &table.flavors {
+            assert!(super::own(&flavor.id).is_some(), "{}", flavor.id);
+            assert!(super::documentation(&flavor.id).is_some(), "{}", flavor.id);
+        }
+        for gone in ["mists", "cata", "wrath"] {
+            assert!(super::own(gone).is_none() && super::documentation(gone).is_none());
+        }
     }
 }

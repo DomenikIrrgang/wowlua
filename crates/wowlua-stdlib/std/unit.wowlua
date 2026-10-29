@@ -132,8 +132,8 @@ const unitHealthPercent = _G.UnitHealthPercent :: ((unit: string, usePredicted: 
 --- it has one with the curve that scales it to 100, else computed when both
 --- values can be read, else nil.
 export function healthPercent(unit: UnitToken): (number | Secret<number>)?
-    -- Without `CurveConstants.ScaleTo100` (cata's client) the client's
-    -- answer is 0 to 1.
+    -- Without `CurveConstants.ScaleTo100` (Cataclysm Classic's client) the
+    -- client's answer is 0 to 1.
     const scale = (_G.CurveConstants :: { ScaleTo100?: any }?)?.ScaleTo100
     if unitHealthPercent and scale ~= nil then
         return unitHealthPercent(unit, false, scale)

@@ -3700,7 +3700,7 @@
     },
     "E4004": {
       "area": "manifest",
-      "text": "A flavor name is not in wowlua's flavor table: in `flavors`, in a dependency's\nor publish target's `flavors`, in `addon.flavor-overrides` or `addon.toc-data`,\nor given with `--flavor`. Flavors are Blizzard's game types: `standard`,\n`camelot`, `mists`, `cata`, `wrath`, `tbc` and `vanilla`, with aliases such as\n`retail`, `forever`, `anniversary` and `classic-era`. The message lists the\nknown flavors.\n\n`classic` is not a flavor: name the Classic game the addon is for (`vanilla`\nfor Classic Era, `mists` for Mists of Pandaria Classic, and so on).",
+      "text": "A flavor name is not in wowlua's flavor table: in `flavors`, in a dependency's\nor publish target's `flavors`, in `addon.flavor-overrides` or `addon.toc-data`,\nor given with `--flavor`. Flavors are Blizzard's game types: `camelot`,\n`standard`, `vanilla` and `tbc`, with aliases such as `forever`, `retail`,\n`classic-era` and `anniversary`. The message lists the known flavors. Wrath,\nCataclysm and Mists of Pandaria Classic (`wrath`, `cata`, `mists`) are not\nflavors of wowlua.\n\n`classic` is not a flavor: name the Classic game the addon is for (`vanilla`\nfor Classic Era, `tbc` for TBC Anniversary).",
       "examples": [
         {
           "compiles": false,
@@ -3711,7 +3711,7 @@
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"classic\": {}\n    }\n}\n"
             }
           ],
-          "output": "error[E4004]: unknown flavor `classic`\n  ┌─ wowlua.json:8:9\n  │\n8 │         \"classic\": {}\n  │         ^^^^^^^^^ unknown flavor\n  │\n  = note: known flavors: standard, camelot, mists, cata, wrath, tbc, vanilla"
+          "output": "error[E4004]: unknown flavor `classic`\n  ┌─ wowlua.json:8:9\n  │\n8 │         \"classic\": {}\n  │         ^^^^^^^^^ unknown flavor\n  │\n  = note: known flavors: camelot, standard, vanilla, tbc"
         },
         {
           "compiles": true,
@@ -3935,7 +3935,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"vanilla\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
             },
             {
               "path": "src/main.lua",
@@ -3951,7 +3951,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"vanilla\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
             },
             {
               "path": "src/main.lua",
@@ -4194,7 +4194,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"vanilla\": {}\n    }\n}\n"
             },
             {
               "path": "src/a.wowlua",
@@ -4204,7 +4204,7 @@
             {
               "path": "src/b.wowlua",
               "lang": "wowlua",
-              "text": "import flavor from \"wowlua:meta\"\n@if(flavor == \"mists\")\nimport a from \"./a\"\nexport local b = \"b\"\nprint(b, flavor)\n"
+              "text": "import flavor from \"wowlua:meta\"\n@if(flavor == \"vanilla\")\nimport a from \"./a\"\nexport local b = \"b\"\nprint(b, flavor)\n"
             }
           ],
           "output": "warning[W4304]: the flavors need different load orders; using per-flavor TOC files\n = in wowlua.json"
@@ -4215,7 +4215,7 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"build\": {\n        \"toc-layout\": \"per-flavor\"\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"vanilla\": {}\n    },\n    \"build\": {\n        \"toc-layout\": \"per-flavor\"\n    }\n}\n"
             },
             {
               "path": "src/a.wowlua",
@@ -4225,7 +4225,7 @@
             {
               "path": "src/b.wowlua",
               "lang": "wowlua",
-              "text": "import flavor from \"wowlua:meta\"\n@if(flavor == \"mists\")\nimport a from \"./a\"\nexport local b = \"b\"\nprint(b, flavor)\n"
+              "text": "import flavor from \"wowlua:meta\"\n@if(flavor == \"vanilla\")\nimport a from \"./a\"\nexport local b = \"b\"\nprint(b, flavor)\n"
             }
           ],
           "output": null
@@ -4413,7 +4413,7 @@
     },
     "W4313": {
       "area": "manifest",
-      "text": "`wowlua types sync` moved a client alias (`anniversary`, `titan` or `forever`)\nto another ruleset. These aliases name a client and stand for the ruleset that\nclient runs in the pinned flavor table; when Anniversary realms move on to\nthe next expansion, for example, `anniversary` names another flavor. The\nmanifest gets the new meaning only once you accept the lockfile update.\n\nCheck that your addon supports the new ruleset, or write the flavor ID\n(`tbc`, `wrath`, `camelot`) instead of the alias. The warning comes from\n`wowlua types sync`, so it has no example here.",
+      "text": "`wowlua types sync` moved a client alias (`anniversary` or `forever`)\nto another ruleset. These aliases name a client and stand for the ruleset that\nclient runs in the pinned flavor table; when Anniversary realms move on to\nthe next expansion, for example, `anniversary` names another flavor. The\nmanifest gets the new meaning only once you accept the lockfile update.\n\nCheck that your addon supports the new ruleset, or write the flavor ID\n(`tbc`, `camelot`) instead of the alias. The warning comes from\n`wowlua types sync`, so it has no example here.",
       "examples": [],
       "related": [
         "E4004"
@@ -4826,7 +4826,7 @@
     },
     "E4335": {
       "area": "manifest",
-      "text": "A Lua or XML file of a converted packager project (`compat.packager-keywords`)\nuses a game version block such as `--@version-mists@` in a build for several\nflavors. The BigWigs packager refuses these blocks in a build for several game\nversions, and wowlua does the same.\n\nCheck the game at run time with `WOW_PROJECT_ID`, or put the code in a file\nthat only some flavors load (`build.flavor-files`). A project that releases\none game at a time can set `compat.per-game`, which applies the blocks per\nflavor.",
+      "text": "A Lua or XML file of a converted packager project (`compat.packager-keywords`)\nuses a game version block such as `--@version-bcc@` in a build for several\nflavors. The BigWigs packager refuses these blocks in a build for several game\nversions, and wowlua does the same.\n\nCheck the game at run time with `WOW_PROJECT_ID`, or put the code in a file\nthat only some flavors load (`build.flavor-files`). A project that releases\none game at a time can set `compat.per-game`, which applies the blocks per\nflavor.",
       "examples": [
         {
           "compiles": false,
@@ -4834,12 +4834,12 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"tbc\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
             },
             {
               "path": "src/main.lua",
               "lang": "lua",
-              "text": "--@version-mists@\nprint(\"Mists only\")\n--@end-version-mists@\n"
+              "text": "--@version-bcc@\nprint(\"TBC only\")\n--@end-version-bcc@\n"
             }
           ],
           "output": "error[E4335]: build type version keywords (`@version-…@`) are not allowed in a multi-version build\n = in src/main.lua\n = help: use Lua conditions on `WOW_PROJECT_ID` or TOC load conditions, like the packager asks"
@@ -4850,12 +4850,12 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"tbc\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
             },
             {
               "path": "src/main.lua",
               "lang": "lua",
-              "text": "if WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC then\n    print(\"Mists only\")\nend\n"
+              "text": "if WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC then\n    print(\"TBC only\")\nend\n"
             }
           ],
           "output": null
@@ -6879,7 +6879,7 @@
     },
     "W8301": {
       "area": "stdlib",
-      "text": "A standard-library function falls back to a reduced version on one of the\nflavors you build for, because that client lacks an API it uses. It still\nworks there, with less, and the warning lists what is missing:\n\n- `tooltip.hook` and `@onTooltip` for `\"Item\"`, `\"Spell\"` and `\"Unit\"` on\n  clients without the tooltip data system (the classic flavors) hook only\n  `GameTooltip`, `ItemRefTooltip` and the shopping tooltips (and those given\n  to `tooltip.attach`); the data has no `raw`, no `guid` for items and spells\n  and no `link` for spells and units.\n- `launcher.register` on clients without the Addon Compartment adds no\n  compartment entry; the minimap button and the LDB launcher work.\n- `frames.movable` with `editMode` on clients without Edit Mode (Cata\n  Classic) ignores the option: the frame is an ordinary movable frame.\n\nKeep the call to the flavors that have the full version (an `if flavor == …`\nbranch or `@if`), turn the feature off where it has an option\n(`compartment = false`), or accept the warning. A function a flavor can't\noffer at all is E8300.",
+      "text": "A standard-library function falls back to a reduced version on one of the\nflavors you build for, because that client lacks an API it uses. It still\nworks there, with less, and the warning lists what is missing:\n\n- `tooltip.hook` and `@onTooltip` for `\"Item\"`, `\"Spell\"` and `\"Unit\"` on\n  clients without the tooltip data system (the classic flavors) hook only\n  `GameTooltip`, `ItemRefTooltip` and the shopping tooltips (and those given\n  to `tooltip.attach`); the data has no `raw`, no `guid` for items and spells\n  and no `link` for spells and units.\n- `launcher.register` on clients without the Addon Compartment adds no\n  compartment entry; the minimap button and the LDB launcher work.\n- `frames.movable` with `editMode` on clients without Edit Mode ignores the\n  option: the frame is an ordinary movable frame. Every flavor's client has\n  Edit Mode now.\n\nKeep the call to the flavors that have the full version (an `if flavor == …`\nbranch or `@if`), turn the feature off where it has an option\n(`compartment = false`), or accept the warning. A function a flavor can't\noffer at all is E8300.",
       "examples": [
         {
           "compiles": false,

@@ -148,7 +148,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "W4310", summary: "XML reference differs in case from the referenced file (the client resolves it case-insensitively)" },
     CodeInfo { code: "E4311", summary: "Output path collides with a reserved top-level name or another output file" },
     CodeInfo { code: "E4312", summary: "`addon.load-on-demand: false` together with `addon-dependencies.load-with`" },
-    CodeInfo { code: "W4313", summary: "`types sync` moved a client alias (`anniversary`, `titan`, `forever`) to another ruleset" },
+    CodeInfo { code: "W4313", summary: "`types sync` moved a client alias (`anniversary`, `forever`) to another ruleset" },
     CodeInfo { code: "E4314", summary: "Feature entry names an unknown feature, unknown dependency, or non-optional dependency" },
     CodeInfo { code: "E4315", summary: "Custom profile without `inherits`" },
     CodeInfo { code: "E4316", summary: "Workspace member sets its own `build.out`" },

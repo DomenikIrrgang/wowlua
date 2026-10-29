@@ -2226,22 +2226,22 @@ mod tests {
     fn flavor_guards() {
         let decl = "declare namespace C_X\n    function A(): number\n    function B(): number\nend\ndeclare global WOW_PROJECT_ID: number\n";
         let shared = flavors::SharedFlavors {
-            flavors: ["standard".to_string(), "vanilla".into(), "mists".into()].into(),
+            flavors: ["standard".to_string(), "vanilla".into(), "tbc".into()].into(),
             project_ids: [
                 (1, "standard".to_string()),
                 (2, "vanilla".into()),
-                (19, "mists".into()),
+                (5, "tbc".into()),
             ]
             .into(),
             project_constants: HashMap::new(),
             availability: [
                 (
                     "C_X".to_string(),
-                    ["standard".to_string(), "mists".into()].into(),
+                    ["standard".to_string(), "tbc".into()].into(),
                 ),
                 (
                     "C_X.A".to_string(),
-                    ["standard".to_string(), "mists".into()].into(),
+                    ["standard".to_string(), "tbc".into()].into(),
                 ),
                 ("C_X.B".to_string(), ["standard".to_string()].into()),
             ]
@@ -2260,16 +2260,16 @@ mod tests {
             ),
             Vec::<String>::new()
         );
-        // The namespace exists in `mists`, which lacks `B`.
+        // The namespace exists in `tbc`, which lacks `B`.
         assert_eq!(run("if C_X then print(C_X.B()) end\n").len(), 1);
         let unguarded = run("print(C_X.A())\n");
         assert!(
             unguarded
                 .iter()
-                .all(|m| m.contains("`vanilla`") && !m.contains("mists")),
+                .all(|m| m.contains("`vanilla`") && !m.contains("tbc")),
             "{unguarded:?}"
         );
-        assert!(run("if WOW_PROJECT_ID ~= 2 then print(C_X.B()) end\n")[0].contains("`mists`"));
+        assert!(run("if WOW_PROJECT_ID ~= 2 then print(C_X.B()) end\n")[0].contains("`tbc`"));
         // Single-flavor builds: feature detection of what the flavor lacks.
         let d = check_with(
             "if C_X.Missing then C_X.Missing(1) end\nlocal _f = C_X.Gone and C_X.Gone()\nif not OldApi then return end\nOldApi(1)\n",

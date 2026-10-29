@@ -15,6 +15,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- wowlua's flavors are camelot (WoW Forever), standard (Retail), vanilla (Classic Era) and tbc (TBC Anniversary). camelot is supported everywhere: tests, the emulated client and the debugger run it. The others are coming soon: wowlua checks and builds them, but doesn't run them yet.
+- `mists`, `cata` and `wrath` (and the alias `titan`) are no flavors anymore: a `wowlua.json` naming one gets E4004. `wowlua init` reads no `_Mists`, `_Cata` or `_Wrath` TOC, and a packager project's `--@version-wrath@`, `--@version-titan@`, `--@version-cata@` and `--@version-mists@` blocks are left out of every build.
 - Watches and hovers in the debugger only read: they set nothing and call only functions that change nothing (the Lua library's, like `string.format`, and the game's queries, like `UnitHealth` or `frame:GetWidth()`). Anything else says so instead of running; the debug console still runs any code.
 - `wowlua test --profile-out` and the MCP server's `profile_stop` keep the whole profile in the speedscope file: each function's calls, the events and scripts, and the call trees of the last 600 game frames. speedscope still opens it.
 

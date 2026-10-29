@@ -1656,8 +1656,9 @@ works there, with less, and the warning lists what is missing:
   and no `link` for spells and units.
 - `launcher.register` on clients without the Addon Compartment adds no
   compartment entry; the minimap button and the LDB launcher work.
-- `frames.movable` with `editMode` on clients without Edit Mode (Cata
-  Classic) ignores the option: the frame is an ordinary movable frame.
+- `frames.movable` with `editMode` on clients without Edit Mode ignores the
+  option: the frame is an ordinary movable frame. Every flavor's client has
+  Edit Mode now.
 
 Keep the call to the flavors that have the full version (an `if flavor == …`
 branch or `@if`), turn the feature off where it has an option

@@ -30,7 +30,6 @@ pub fn claim_url(name: &str) -> String {
 }
 
 const KINDS: &[&str] = &["library", "lua-library", "types"];
-const FLAVORS: &[&str] = &["standard", "camelot", "mists", "vanilla"];
 
 fn cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     headers
@@ -212,7 +211,12 @@ pub async fn home(
         KINDS.to_vec()
     };
     let flavors: Vec<&str> = get("flavor").collect();
-    let mut flavor_list: Vec<String> = FLAVORS.iter().map(|f| f.to_string()).collect();
+    // The flavor table's flavors, in its order, then any other a package names.
+    let mut flavor_list: Vec<String> = wowlua_flavors::table()
+        .flavors
+        .iter()
+        .map(|f| f.id.clone())
+        .collect();
     for p in &all {
         for f in &p.meta.flavors {
             if !flavor_list.contains(f) {
