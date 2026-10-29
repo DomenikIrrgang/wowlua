@@ -2003,7 +2003,7 @@ fn converted_projects_package_like_the_packager() {
             ),
             (
                 "MyAddon.toc",
-                "## Interface: 120100, 11509\n## Interface-Classic: 11509\n## Title: |cff00ff00My|r Addon\n## X-Curse-Project-ID: 123\nembeds.xml\ncore.lua\n",
+                "## Interface: 120100, 50504\n## Interface-Mists: 50504\n## Title: |cff00ff00My|r Addon\n## X-Curse-Project-ID: 123\nembeds.xml\ncore.lua\n",
             ),
             (
                 "embeds.xml",
@@ -2031,7 +2031,7 @@ fn converted_projects_package_like_the_packager() {
     let m: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(dir.join("wowlua.json")).unwrap()).unwrap();
     assert!(
-        m["addon"]["toc-extra"].get("Interface-Classic").is_none(),
+        m["addon"]["toc-extra"].get("Interface-Mists").is_none(),
         "{m}"
     );
     assert_eq!(

@@ -200,12 +200,13 @@ supports every flavor.
 | `standard` | `retail`, `mainline` | Retail | Coming soon |
 | `vanilla` | `classic-era` | Classic Era | Coming soon |
 | `tbc` | `anniversary` | TBC Anniversary | Coming soon |
+| `mists` | | MoP Classic | Coming soon |
 
 wowlua runs a supported flavor everywhere (tests, the emulated client, the
 debugger); a flavor coming soon is checked and built, but not run yet. An
-unknown flavor is error E4004, and so are `mists`, `cata` and `wrath`:
-wowlua has no Wrath, Cataclysm or Mists of Pandaria Classic flavor. How code
-differs per flavor is in [Build info and profiles](../language/flavors.md).
+unknown flavor is error E4004, and so are `cata` and `wrath`: wowlua has no
+Wrath of the Lich King Classic or Cataclysm Classic flavor. How code differs
+per flavor is in [Build info and profiles](../language/flavors.md).
 
 ### `flavors.<flavor>.interface`
 

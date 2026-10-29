@@ -177,8 +177,8 @@ each rebuild writes the same files and reports the same diagnostics as a fresh
    the folder name (`LittleWigs_Classic.toc` in `LittleWigs_Classic/` is the
    plain TOC, not a `_Classic` variant). Suffixes are the current ones and the
    legacy `-Classic`, `-BCC`, `_BCC`, `_TBC`, `_Vanilla` and `_Mainline`
-   forms. A TOC of a game without a flavor (`_Mists`, `_Cata`, `_Wrath`,
-   `-WOTLKC`; decision T507) belongs to another addon name and is not read,
+   forms. A TOC of a game without a flavor (`_Cata`, `_Wrath`, `-WOTLKC`;
+   decisions T507, T509) belongs to another addon name and is not read,
    and interface numbers of no flavor are left out. It takes the metadata (`Title`, `Notes`, `Author`,
    `Version`, `IconTexture`, `Category`, …), interface versions (giving the
    flavors), SavedVariables, dependencies and `X-` fields into `wowlua.json`.
@@ -348,8 +348,9 @@ generated, so TOC keywords do not apply.
 | `@retail@`, `@version-retail@` | Flavor `standard` |
 | `@version-classic@`, `@version-vanilla@` | Flavor `vanilla` |
 | `@version-bcc@` | Flavor `tbc` |
+| `@version-mists@` | Flavor `mists` (decision T509) |
 | `@version-forever@` | Flavor `camelot` |
-| `@version-wrath@`, `@version-titan@`, `@version-cata@`, `@version-mists@` | Never: their games have no flavor (decision T507), so the code is left out of every build |
+| `@version-wrath@`, `@version-titan@`, `@version-cata@` | Never: their games have no flavor (decision T507), so the code is left out of every build |
 
 The `non-` prefixed forms invert a block. Inactive blocks are commented out in
 the packager's style, so line numbers stay correct; `@do-not-package@` blocks
@@ -440,7 +441,7 @@ and the target is not already inside one, unless `--no-git` is given.
 the templates check clean in every mode. `--world-profile` (`addon` and
 `library`, which have tests) adds `tests/profiles/default.json`, a Human
 Warrior named Player at the level cap of the package's first flavor (60
-for `camelot` and `vanilla`, 70 `tbc`;
+for `camelot` and `vanilla`, 70 `tbc`, 90 `mists`;
 `standard`, whose cap moves with every expansion, gets the client's
 default level), and sets `test.profile` to it, so every test starts there
 (decision T476).

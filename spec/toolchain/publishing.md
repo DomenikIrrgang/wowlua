@@ -298,7 +298,7 @@ It is read by addon managers such as WowUp:
 ```
 
 - One `metadata` entry per interface number of every included flavor. The flavor
-  names are the packager's (`mainline`, `classic`, `bcc`, `forever`), taken
+  names are the packager's (`mainline`, `classic`, `bcc`, `mists`, `forever`), taken
   from the flavor table.
 - When a release is re-run, existing `release.json` entries are merged by
   `filename`.

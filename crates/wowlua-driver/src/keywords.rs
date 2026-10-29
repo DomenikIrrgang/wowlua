@@ -270,20 +270,20 @@ fn xml_filter(text: &str, keyword: &str, active: bool) -> String {
 }
 
 /// The flavor keywords and the flavor each names. The packager's keywords
-/// of games wowlua has no flavor for (Wrath, Titan Reforged, Cataclysm,
-/// Mists of Pandaria; decision T507) name none: their blocks are inactive
-/// in every build, so code for those games is never packaged.
+/// of games wowlua has no flavor for (Wrath, Titan Reforged, Cataclysm;
+/// decisions T507, T509) name none: their blocks are inactive in every
+/// build, so code for those games is never packaged.
 pub const FLAVOR_KEYWORDS: &[(&str, Option<&str>)] = &[
     ("retail", Some("standard")),
     ("version-retail", Some("standard")),
     ("version-classic", Some("vanilla")),
     ("version-vanilla", Some("vanilla")),
     ("version-bcc", Some("tbc")),
+    ("version-mists", Some("mists")),
     ("version-forever", Some("camelot")),
     ("version-wrath", None),
     ("version-titan", None),
     ("version-cata", None),
-    ("version-mists", None),
 ];
 
 /// An XML file of a nolib package: its `no-lib-strip` blocks commented out,
@@ -570,6 +570,7 @@ pub fn toc_version_placeholders(text: &str) -> String {
         ("retail", "standard"),
         ("camelot", "camelot"),
         ("forever", "camelot"),
+        ("mists", "mists"),
         ("bcc", "tbc"),
         ("classic", "vanilla"),
     ] {
@@ -581,10 +582,10 @@ pub fn toc_version_placeholders(text: &str) -> String {
 }
 
 /// The flavor of a packager `-g` value: a game type, or game versions
-/// (`1.15.9`, `2.5.6,1.15.9`) of one game type; `None` for several types,
+/// (`1.15.9`, `5.5.4,1.15.9`) of one game type; `None` for several types,
 /// which the packager builds as a multi-version package, and for games
-/// wowlua has no flavor for (Wrath, Titan Reforged, Cataclysm, Mists of
-/// Pandaria: `3.x`, `4.x`, `5.x`).
+/// wowlua has no flavor for (Wrath, Titan Reforged, Cataclysm: `3.x`,
+/// `4.x`).
 pub fn game_flavor(game: &str) -> Option<&'static str> {
     if let Some(f) = interface_type_flavor(game) {
         return Some(f);
@@ -599,7 +600,8 @@ pub fn game_flavor(game: &str) -> Option<&'static str> {
             ("1", m) if m.len() == 2 && m.starts_with('6') => "camelot",
             ("1", _) => "vanilla",
             ("2", _) => "tbc",
-            ("3" | "4" | "5", _) => return None,
+            ("3" | "4", _) => return None,
+            ("5", _) => "mists",
             _ => "standard",
         };
         if flavor.is_some_and(|x| x != f) {
@@ -611,12 +613,13 @@ pub fn game_flavor(game: &str) -> Option<&'static str> {
 }
 
 /// The game types of the packager's `## Interface-<Type>:` lines and the
-/// flavors they name (`Wrath`, `Titan`, `Cata` and `Mists` name none).
+/// flavors they name (`Wrath`, `Titan` and `Cata` name none).
 pub fn interface_type_flavor(kind: &str) -> Option<&'static str> {
     Some(match kind.to_ascii_lowercase().as_str() {
         "retail" | "mainline" => "standard",
         "classic" | "vanilla" => "vanilla",
         "bcc" | "tbc" => "tbc",
+        "mists" => "mists",
         "forever" | "camelot" => "camelot",
         _ => return None,
     })
@@ -794,8 +797,9 @@ mod tests {
             apply_flavor(flavored, "standard", false),
             "--[====[@version-classic@\nx()\n--@end-version-classic@]====]\n"
         );
-        // Blocks of games without a flavor are inactive in every build.
+        // `@version-mists@` blocks are active in mists builds only.
         let mists = "--@version-mists@\nx()\n--@end-version-mists@\n";
+        assert_eq!(apply_flavor(mists, "mists", false), mists);
         for flavor in ["standard", "camelot", "vanilla", "tbc"] {
             assert_eq!(
                 apply_flavor(mists, flavor, false),
@@ -803,6 +807,14 @@ mod tests {
             );
         }
         assert!(has_version_blocks(mists));
+        // Blocks of games without a flavor are inactive in every build.
+        let cata = "--@version-cata@\nx()\n--@end-version-cata@\n";
+        for flavor in ["standard", "camelot", "vanilla", "tbc", "mists"] {
+            assert_eq!(
+                apply_flavor(cata, flavor, false),
+                "--[====[@version-cata@\nx()\n--@end-version-cata@]====]\n"
+            );
+        }
         let dnp = "a\n--@do-not-package@\ntest()\n--@end-do-not-package@\nb\n";
         assert_eq!(
             apply(dnp, &info, Path::new("a.lua"), Path::new("a.lua"), false),
@@ -847,12 +859,14 @@ mod tests {
         assert_eq!(game_flavor("2.5.6"), Some("tbc"));
         assert_eq!(game_flavor("1.60.1"), Some("camelot"));
         assert_eq!(game_flavor("12.1.0"), Some("standard"));
-        for game in [
-            "wrath", "mists", "cata", "titan", "3.4.5", "3.80.2", "4.4.2", "5.5.4",
-        ] {
+        assert_eq!(game_flavor("5.5.4"), Some("mists"));
+        assert_eq!(game_flavor("mists"), Some("mists"));
+        assert_eq!(interface_type_flavor("Mists"), Some("mists"));
+        assert_eq!(game_flavor("5.5.4,1.15.9"), None);
+        for game in ["wrath", "cata", "titan", "3.4.5", "3.80.2", "4.4.2"] {
             assert_eq!(game_flavor(game), None, "{game}");
         }
-        for kind in ["Wrath", "WOTLKC", "Titan", "Cata", "Mists"] {
+        for kind in ["Wrath", "WOTLKC", "Titan", "Cata"] {
             assert_eq!(interface_type_flavor(kind), None, "{kind}");
         }
         let toc = "#@version-wrath@\nwrath.lua\n#@end-version-wrath@\nall.lua\n";

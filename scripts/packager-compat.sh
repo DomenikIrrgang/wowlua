@@ -35,7 +35,7 @@ if grep -rqs "NumyAddon/ToCVersions" "$WORK/addon/.github/workflows"; then
   find "$WORK/addon" -name '*.toc' -not -path '*/.git/*' -exec sed -i \
     -e "s/@toc-version-midnight@/$(n standard)/g" -e "s/@toc-version-retail@/$(n standard)/g" \
     -e "s/@toc-version-camelot@/$(n camelot)/g" -e "s/@toc-version-forever@/$(n camelot)/g" \
-    -e "s/@toc-version-bcc@/$(n tbc)/g" \
+    -e "s/@toc-version-mists@/$(n mists)/g" -e "s/@toc-version-bcc@/$(n tbc)/g" \
     -e "s/@toc-version-classic@/$(n vanilla)/g" {} +
 fi
 

@@ -289,6 +289,7 @@ fn default_world_profile(flavor: Option<&str>) -> String {
     let level = match flavor.unwrap_or("standard") {
         "camelot" | "vanilla" => Some(60),
         "tbc" => Some(70),
+        "mists" => Some(90),
         _ => None,
     };
     let mut character = Map::new();
@@ -2292,15 +2293,17 @@ fn toc_views(
         let project_toc = suffix.as_deref().is_none_or(|s| {
             let name = s.trim_start_matches(['_', '-']).to_ascii_lowercase();
             (s.starts_with('_') || s.starts_with('-'))
-                && ["mainline", "classic", "vanilla", "bcc", "tbc", "camelot"]
-                    .contains(&name.as_str())
+                && [
+                    "mainline", "classic", "vanilla", "bcc", "tbc", "mists", "camelot",
+                ]
+                .contains(&name.as_str())
         });
         if !packaged || !project_toc {
             out.push((entry.clone(), text));
             continue;
         }
         // `Some(true)`: single-game builds; `Some(false)`: split builds.
-        // Game types without a flavor (`Interface-Mists`) make no TOC.
+        // Game types without a flavor (`Interface-Cata`) make no TOC.
         let typed: Vec<(&'static str, String)> = if suffix.is_none() && per_game.is_some() {
             wowlua_toc::parse(&text)
                 .directives

@@ -3667,6 +3667,7 @@ fn game_name(flavor: &str) -> &'static str {
         "standard" => "Standard",
         "camelot" => "Camelot",
         "tbc" => "TBC",
+        "mists" => "Mists",
         _ => "Vanilla",
     }
 }

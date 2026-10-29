@@ -4385,14 +4385,15 @@ fn reduced_fallbacks_are_warned_per_flavor() {
 
 /// `frames.movable` with `editMode` is W8301 on a flavor whose client lacks
 /// Edit Mode; every flavor of the flavor table has it (Cataclysm Classic,
-/// whose manager was a stub, is no flavor; decision T507), so it is not.
+/// whose manager was a stub, is no flavor; decisions T507, T509), so it is
+/// not.
 #[test]
 fn edit_mode_is_not_reduced_on_any_flavor() {
     let check_in = |mode: &str, body: &str| {
         let dir = project(&[("src/main.wowlua", body)]);
         fs::write(
             dir.path().join("wowlua.json"),
-            format!(r#"{{ "package": {{ "name": "std", "version": "1.0.0" }}, "flavors": {{ "camelot": {{}}, "standard": {{}}, "vanilla": {{}}, "tbc": {{}} }}, "build": {{ "flavor-mode": "{mode}" }} }}"#),
+            format!(r#"{{ "package": {{ "name": "std", "version": "1.0.0" }}, "flavors": {{ "camelot": {{}}, "standard": {{}}, "vanilla": {{}}, "tbc": {{}}, "mists": {{}} }}, "build": {{ "flavor-mode": "{mode}" }} }}"#),
         )
         .unwrap();
         let assert = wowlua(dir.path())

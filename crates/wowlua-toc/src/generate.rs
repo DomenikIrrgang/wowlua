@@ -642,7 +642,7 @@ mod tests {
 
     #[test]
     fn classic_flavors_use_game_suffixes() {
-        let mut i = input(&["vanilla", "tbc"]);
+        let mut i = input(&["mists", "vanilla", "tbc"]);
         i.layout = Layout::PerFlavor;
         let names: Vec<String> = generate(&i)
             .unwrap()
@@ -650,7 +650,14 @@ mod tests {
             .into_iter()
             .map(|f| f.name)
             .collect();
-        assert_eq!(names, ["MyAddon_Vanilla.toc", "MyAddon_TBC.toc"]);
+        assert_eq!(
+            names,
+            [
+                "MyAddon_Mists.toc",
+                "MyAddon_Vanilla.toc",
+                "MyAddon_TBC.toc"
+            ]
+        );
     }
 
     #[test]

@@ -3700,7 +3700,7 @@
     },
     "E4004": {
       "area": "manifest",
-      "text": "A flavor name is not in wowlua's flavor table: in `flavors`, in a dependency's\nor publish target's `flavors`, in `addon.flavor-overrides` or `addon.toc-data`,\nor given with `--flavor`. Flavors are Blizzard's game types: `camelot`,\n`standard`, `vanilla` and `tbc`, with aliases such as `forever`, `retail`,\n`classic-era` and `anniversary`. The message lists the known flavors. Wrath,\nCataclysm and Mists of Pandaria Classic (`wrath`, `cata`, `mists`) are not\nflavors of wowlua.\n\n`classic` is not a flavor: name the Classic game the addon is for (`vanilla`\nfor Classic Era, `tbc` for TBC Anniversary).",
+      "text": "A flavor name is not in wowlua's flavor table: in `flavors`, in a dependency's\nor publish target's `flavors`, in `addon.flavor-overrides` or `addon.toc-data`,\nor given with `--flavor`. Flavors are Blizzard's game types: `camelot`,\n`standard`, `vanilla`, `tbc` and `mists`, with aliases such as `forever`,\n`retail`, `classic-era` and `anniversary`. The message lists the known\nflavors. Wrath and Cataclysm Classic (`wrath`, `cata`) are not flavors of\nwowlua.\n\n`classic` is not a flavor: name the Classic game the addon is for (`vanilla`\nfor Classic Era, `tbc` for TBC Anniversary, `mists` for MoP Classic).",
       "examples": [
         {
           "compiles": false,
@@ -3711,7 +3711,7 @@
               "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"classic\": {}\n    }\n}\n"
             }
           ],
-          "output": "error[E4004]: unknown flavor `classic`\n  ┌─ wowlua.json:8:9\n  │\n8 │         \"classic\": {}\n  │         ^^^^^^^^^ unknown flavor\n  │\n  = note: known flavors: camelot, standard, vanilla, tbc"
+          "output": "error[E4004]: unknown flavor `classic`\n  ┌─ wowlua.json:8:9\n  │\n8 │         \"classic\": {}\n  │         ^^^^^^^^^ unknown flavor\n  │\n  = note: known flavors: camelot, standard, vanilla, tbc, mists"
         },
         {
           "compiles": true,
@@ -4826,7 +4826,7 @@
     },
     "E4335": {
       "area": "manifest",
-      "text": "A Lua or XML file of a converted packager project (`compat.packager-keywords`)\nuses a game version block such as `--@version-bcc@` in a build for several\nflavors. The BigWigs packager refuses these blocks in a build for several game\nversions, and wowlua does the same.\n\nCheck the game at run time with `WOW_PROJECT_ID`, or put the code in a file\nthat only some flavors load (`build.flavor-files`). A project that releases\none game at a time can set `compat.per-game`, which applies the blocks per\nflavor.",
+      "text": "A Lua or XML file of a converted packager project (`compat.packager-keywords`)\nuses a game version block such as `--@version-mists@` in a build for several\nflavors. The BigWigs packager refuses these blocks in a build for several game\nversions, and wowlua does the same.\n\nCheck the game at run time with `WOW_PROJECT_ID`, or put the code in a file\nthat only some flavors load (`build.flavor-files`). A project that releases\none game at a time can set `compat.per-game`, which applies the blocks per\nflavor.",
       "examples": [
         {
           "compiles": false,
@@ -4834,12 +4834,12 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"tbc\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
             },
             {
               "path": "src/main.lua",
               "lang": "lua",
-              "text": "--@version-bcc@\nprint(\"TBC only\")\n--@end-version-bcc@\n"
+              "text": "--@version-mists@\nprint(\"Mists only\")\n--@end-version-mists@\n"
             }
           ],
           "output": "error[E4335]: build type version keywords (`@version-…@`) are not allowed in a multi-version build\n = in src/main.lua\n = help: use Lua conditions on `WOW_PROJECT_ID` or TOC load conditions, like the packager asks"
@@ -4850,12 +4850,12 @@
             {
               "path": "wowlua.json",
               "lang": "json",
-              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"tbc\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
+              "text": "{\n    \"package\": {\n        \"name\": \"playground\",\n        \"version\": \"0.1.0\",\n        \"wowlua\": \"^0.13\"\n    },\n    \"flavors\": {\n        \"camelot\": {},\n        \"mists\": {}\n    },\n    \"compat\": {\n        \"packager-keywords\": true\n    }\n}\n"
             },
             {
               "path": "src/main.lua",
               "lang": "lua",
-              "text": "if WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC then\n    print(\"TBC only\")\nend\n"
+              "text": "if WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC then\n    print(\"Mists only\")\nend\n"
             }
           ],
           "output": null
