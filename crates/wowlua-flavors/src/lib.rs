@@ -118,6 +118,10 @@ pub struct Flavor {
     /// The name people know the game by (`Retail`, `WoW Forever`).
     pub name: String,
     pub support: Support,
+    /// The highest level a character reaches in this flavor
+    /// (`GetMaxPlayerLevel`): the bound of a level picker and of a world
+    /// profile's character.
+    pub max_level: u32,
     pub family: Family,
     pub aliases: Vec<Alias>,
     pub project_id: u32,
@@ -374,5 +378,26 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Each flavor's max level (camelot's recorded: `GetMaxPlayerLevel()`
+    /// answers 60; the others are the games' caps).
+    #[test]
+    fn max_levels() {
+        let t = table();
+        let levels: Vec<(&str, u32)> = t
+            .flavors
+            .iter()
+            .map(|f| (f.id.as_str(), f.max_level))
+            .collect();
+        assert_eq!(
+            levels,
+            [
+                ("camelot", 60),
+                ("standard", 90),
+                ("vanilla", 60),
+                ("tbc", 70)
+            ]
+        );
     }
 }
