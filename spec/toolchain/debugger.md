@@ -739,7 +739,7 @@ tools: `start_session` (a test file or the addon, flavor, profile, screen),
 `frame_tree` (optionally under a frame, with hidden frames or not),
 `find_frames` (by name, type or text), `click` (a frame, or a point in the
 screenshot's pixels), `hover`, `drag`, `type_text`, `press_key`, `slash` (a
-slash command), `advance`, `fire_event`, `world` (as `wowlua/world`), `eval`, `set_breakpoints`, `continue`,
+slash command), `chat` (a message the player sends, decision T514), `advance`, `fire_event`, `world` (as `wowlua/world`), `eval`, `set_breakpoints`, `continue`,
 `step`, `stack`, `variables`, `profile_start`, `profile_stop`, `output`
 (what the session printed and the errors it raised). Sessions are `manual`
 clocked unless asked otherwise. A tool that runs code (`continue`, `step`,
