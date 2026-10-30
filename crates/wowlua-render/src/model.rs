@@ -756,6 +756,7 @@ impl Renderer {
     /// world's camera (`view`, `proj`), lit by `light` (its direction,
     /// ambient and diffuse), ready to draw in the world's pass; none for
     /// nothing to draw. Their particles are left out.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn world_models(
         &mut self,
         actors: &[scene::Actor],
