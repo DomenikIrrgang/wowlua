@@ -869,6 +869,30 @@ now; "Recorded:" what the clients printed.
 - Still owed: the skill bars' fill (item 19 of "Owed from the M12
   screenshots").
 
+## Moving and facing (decisions T516, T519)
+
+Unverified numbers and answers from M13's movement and ranges. A paladin
+(or any class with an instant harmful spell that needs facing, and a heal).
+
+1. **Speeds**: stand still and enter
+   `/run print(GetUnitSpeed("player"))`, then press the walk key (`/` on
+   the numpad by default) and enter it again while walking forward. Answers
+   the run and walk speeds (wowlua: 7 and 2.5).
+2. **A spell at a target behind you**: enter
+   `/run local f=CreateFrame("Frame") f:RegisterEvent("UI_ERROR_MESSAGE") f:SetScript("OnEvent",function(_,_,c,t) print(c,t) end)`,
+   target a hostile mob within 10 yards, turn your back to it and press
+   Judgement (or the class's instant attack spell). Answers the code and
+   text (wowlua: 57, "Target needs to be in front of you.").
+3. **A heal with a far hostile target**: with the frame from step 2, target
+   a hostile mob more than 45 yards away and press Flash of Light (or the
+   class's heal). Note whether it heals you or prints "Out of range."
+   (wowlua: it heals you).
+4. **The bars' range at login**: `/reload` with a hostile mob 10 yards away
+   targeted, then enter
+   `/run local f=CreateFrame("Frame") f:RegisterEvent("ACTION_RANGE_CHECK_UPDATE") f:SetScript("OnEvent",function(_,_,s,i,c) print(s,i,c) end)`
+   and walk away from it until a button's hotkey turns red. Answers the
+   slots told and their values (wowlua: each slot's `false true` once).
+
 ## The dev tools (0.12.1)
 
 The dev window's performance tab, hints, HUD and error toast are tested in

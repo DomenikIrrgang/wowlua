@@ -28,6 +28,7 @@ pub struct SpellTables {
     reagents: Option<Table>,
     equipped: Option<Table>,
     subclasses: Option<Table>,
+    requirements: Option<Table>,
 }
 
 /// A spell's power cost (`SpellPower`).
@@ -88,6 +89,9 @@ pub struct SpellInfo {
     pub next_swing: bool,
     /// It is passive (attributes 0, 0x40).
     pub passive: bool,
+    /// It needs its target in front of the caster
+    /// (`SpellCastingRequirements`' `FacingCasterFlags` 1).
+    pub facing: bool,
     /// The tools it needs (`SpellTotems`' kinds, `TotemCategory`).
     pub tools: Vec<String>,
     /// Its reagents: (item, count) (`SpellReagents`).
@@ -132,6 +136,7 @@ impl SpellTables {
             reagents: Table::open(casc, "SpellReagents"),
             equipped: Table::open(casc, "SpellEquippedItems"),
             subclasses: Table::open(casc, "ItemSubClass"),
+            requirements: Table::open(casc, "SpellCastingRequirements"),
         })
     }
 
@@ -175,6 +180,11 @@ impl SpellTables {
         // attributes 2, 0x80000: usable in them, recorded Moonfire's).
         info.passive =
             misc.is_some_and(|m| m.ints("Attributes").first().is_some_and(|a| a & 0x40 != 0));
+        info.facing = self
+            .requirements
+            .as_ref()
+            .and_then(|t| t.rows_where("SpellID", id).first().copied())
+            .is_some_and(|r| r.int("FacingCasterFlags") & 1 != 0);
         if let (Some(t), Some(kinds)) = (
             self.totems
                 .as_ref()

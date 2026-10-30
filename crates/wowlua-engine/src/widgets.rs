@@ -266,6 +266,9 @@ pub struct World {
     pub chat_log: std::collections::VecDeque<ChatLine>,
     /// The next chat log line's number.
     pub chat_log_next: u64,
+    /// The action slots whose range is told (`EnableActionRangeCheck`),
+    /// each with what was told last: in range, checks range (T519).
+    pub range_checks: std::collections::BTreeMap<i64, (bool, bool)>,
     /// Warnings for gaps that would make every test fail if they were errors
     /// (templates without Blizzard's UI code).
     pub warnings: Vec<String>,

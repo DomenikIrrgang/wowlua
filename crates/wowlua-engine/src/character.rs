@@ -1698,6 +1698,21 @@ pub fn unit_facing(vm: &mut Vm, id: units::UnitId) -> Option<f64> {
     Some(facing_toward(at, player))
 }
 
+/// Whether a unit is behind the player: outside the half circle the
+/// player faces (decision T519). False when either has no place.
+pub fn behind(vm: &mut Vm, id: units::UnitId) -> bool {
+    let (Some(me), Some(at)) = (place_of(vm, units::PLAYER), place_of(vm, id)) else {
+        return false;
+    };
+    if (at.0 - me.0).hypot(at.1 - me.1) < 1e-9 {
+        return false;
+    }
+    let off = facing_toward(me, at) - crate::unitinfo::player_facing(vm);
+    // (the turn between, -pi to pi)
+    let off = (off + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI;
+    off.abs() > std::f64::consts::FRAC_PI_2 + 1e-9
+}
+
 /// A unit's distance now `d`: gossip and the group's range told.
 fn store_distance(vm: &mut Vm, me: units::UnitId, d: Option<f64>) {
     let in_range = |d: Option<f64>| d.is_some_and(|d| d <= 38.0);
