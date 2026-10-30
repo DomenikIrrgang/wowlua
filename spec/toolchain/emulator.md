@@ -352,7 +352,7 @@ The WoW API the VM's code calls, per flavor.
   `GetNumTalentGroups` and `GetUnspentTalentPoints`, TBC and Classic Era
   the tiers' `GetNumSpecGroups` and `GetTalentTierInfo`), and their
   `GetRuneType` answers two runes of each type (1, 1, 3, 3, 2, 2) on every
-  class. The expansion
+  class, and no value for another rune. The expansion
   getters answer the client's (the server's only after login, as the
   client's does), and the classic clients' `GetWeaponEnchantInfo` answers
   no enchant on each hand (Mists: two hands, 8 values; TBC and Classic Era
