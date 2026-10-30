@@ -207,6 +207,22 @@ pub fn input(vm: &mut Vm, input: &Input) -> Result<(), String> {
             inp::as_user(vm, |vm| inp::key_down(vm, key));
             Ok(())
         }
+        Input::Look { dx, dy, turn } => {
+            wowlua_engine::camera::look(vm, *dx, *dy, *turn);
+            Ok(())
+        }
+        Input::Zoom { steps } => {
+            wowlua_engine::camera::wheel(vm, *steps);
+            Ok(())
+        }
+        Input::ClickWorld { x, y } => {
+            if let Some(unit) = wowlua_engine::camera::unit_at(vm, *x, *y) {
+                inp::as_user(vm, |vm| {
+                    wowlua_engine::units::set_player_target(vm, Some(unit));
+                });
+            }
+            Ok(())
+        }
         Input::KeyUp { key } => {
             inp::as_user(vm, |vm| inp::key_up(vm, key));
             Ok(())
