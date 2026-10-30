@@ -274,6 +274,8 @@ pub struct World {
     pub merchant: crate::merchant::Merchant,
     /// The mouse's and the keyboard's focus.
     pub input: crate::input::Input,
+    /// The directions the player holds (decision T516).
+    pub movement: crate::movement::Movement,
     /// The group finder: the player's listing, the searches (`lfg.rs`).
     pub lfg: crate::lfg::Lfg,
     /// The collections a test set (`collected.rs`).

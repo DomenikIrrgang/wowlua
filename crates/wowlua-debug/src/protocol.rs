@@ -175,6 +175,14 @@ pub enum Input {
     Key {
         key: String,
     },
+    /// A key held down until `keyUp` (decision T516): a movement key moves
+    /// the player while held.
+    KeyDown {
+        key: String,
+    },
+    KeyUp {
+        key: String,
+    },
     /// A chat line as the user types it: a slash command (`/wdemo`).
     Slash {
         text: String,
