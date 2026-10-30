@@ -11,7 +11,9 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use serde_json::Value as Json;
-use wowlua_debug::protocol::{Event, LineBreakpoint, Request, Response, StopDetail, StopReason};
+use wowlua_debug::protocol::{
+    Event, Input, LineBreakpoint, Request, Response, StopDetail, StopReason,
+};
 use wowlua_debug::session::{self, ChannelLink, ClockMode, Options, Outgoing, Target};
 use wowlua_driver::project::{LoadOptions, load_projects};
 use wowlua_test::runs::{self, Switches};
@@ -390,6 +392,79 @@ fn a_hosted_session_pauses_counts_and_explains_its_stops() {
         })
         .ok();
     front.event(|e| matches!(e, Event::Reloaded));
+
+    front.ask(Request::Terminate).ok();
+    drop(front);
+    thread.join().unwrap();
+}
+
+/// An addon with a chat window that also shows what is said.
+const CHAT: &str = r#"
+local chat = CreateFrame("MessageFrame", "ChatFrame1", UIParent)
+chat:SetFont("Fonts\\ARIALN.TTF", 14, "")
+chat:AddMessage("hello from the addon", 1, 1, 0)
+local said = CreateFrame("Frame")
+said:RegisterEvent("CHAT_MSG_SAY")
+said:SetScript("OnEvent", function(_, _, text)
+    chat:AddMessage("[Say] " .. tostring(text), 1, 1, 1)
+end)
+"#;
+
+#[test]
+fn a_hosted_session_keeps_its_chat_and_sends_what_the_player_types() {
+    let dir = package(CHAT);
+    let (mut front, thread) = start(dir.path().to_path_buf(), ClockMode::Manual, None, None);
+    front.ask(Request::ConfigurationDone).expect("configured");
+    // The chat window's lines, with their colour.
+    let chat = front.data(Request::ChatLines { since: 0 });
+    let first = chat["lines"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|l| l["text"] == "hello from the addon")
+        .cloned()
+        .unwrap_or_else(|| panic!("{chat:#}"));
+    assert_eq!(first["frame"], "ChatFrame1");
+    assert_eq!(first["color"], serde_json::json!([1.0, 1.0, 0.0]));
+    let next = chat["next"].as_u64().unwrap();
+
+    // What the player says: the addon hears it on the next frame.
+    front.ask(Request::LogEvents { on: true }).expect("logging");
+    front
+        .ask(Request::Input {
+            input: Input::Chat {
+                text: "hi there".into(),
+                chat_type: "SAY".into(),
+                target: None,
+            },
+        })
+        .expect("said");
+    front
+        .ask(Request::Advance {
+            seconds: None,
+            frames: Some(2),
+        })
+        .expect("advanced");
+    let chat = front.data(Request::ChatLines { since: next });
+    let lines = chat["lines"].as_array().unwrap();
+    assert!(
+        lines.iter().all(|l| l["seq"].as_u64().unwrap() >= next),
+        "{chat:#}"
+    );
+    assert!(
+        lines.iter().any(|l| l["text"] == "[Say] hi there"),
+        "{chat:#}"
+    );
+    // (the event the addon heard)
+    let events = front.data(Request::Events);
+    assert!(
+        events
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["event"] == "CHAT_MSG_SAY" && e["args"][0] == "\"hi there\""),
+        "{events:#}"
+    );
 
     front.ask(Request::Terminate).ok();
     drop(front);

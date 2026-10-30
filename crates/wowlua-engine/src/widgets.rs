@@ -112,6 +112,21 @@ pub struct Widget {
     pub created: Option<(std::rc::Rc<[u8]>, u32)>,
 }
 
+/// A line a chat window showed (decision T514).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChatLine {
+    /// Its number in the session, from 0.
+    pub seq: u64,
+    /// The chat window: `ChatFrame1`, ….
+    pub frame: String,
+    pub text: String,
+    /// Its colour, when `AddMessage` gave one.
+    pub color: Option<[f64; 3]>,
+}
+
+/// How many chat lines a session keeps.
+pub const CHAT_LOG_LINES: usize = 1000;
+
 /// The widgets, and each class's method table and metatable.
 #[derive(Default)]
 pub struct World {
@@ -246,6 +261,11 @@ pub struct World {
     /// A message frame's messages: its message ID (if given) and the font
     /// string showing it, oldest first.
     pub messages: HashMap<usize, Vec<(Option<f64>, Value)>>,
+    /// What the chat windows (`ChatFrame1`, …) showed, oldest first, the
+    /// last [`CHAT_LOG_LINES`] (a session's chat, decision T514).
+    pub chat_log: std::collections::VecDeque<ChatLine>,
+    /// The next chat log line's number.
+    pub chat_log_next: u64,
     /// Warnings for gaps that would make every test fail if they were errors
     /// (templates without Blizzard's UI code).
     pub warnings: Vec<String>,
@@ -2258,6 +2278,41 @@ fn add_message(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         .entry(id.0)
         .or_default()
         .push((message_id, fs));
+    // (a chat window's line: the session's chat, T514)
+    let chat_window = engine(vm).world.widgets[id.0]
+        .name
+        .as_deref()
+        .and_then(|n| n.strip_prefix("ChatFrame"))
+        .is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()));
+    if chat_window {
+        let frame = engine(vm).world.widgets[id.0]
+            .name
+            .clone()
+            .unwrap_or_default();
+        let text = match vm.hidden(c.arg(2)) {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            Value::Num(n) => wowlua_vm::number::fmt_num(n),
+            _ => String::new(),
+        };
+        let rgb: Vec<f64> = (3..=5)
+            .filter_map(|i| match c.arg(i) {
+                Value::Num(n) => Some(n),
+                _ => None,
+            })
+            .collect();
+        let world = &mut engine_mut(vm).world;
+        let seq = world.chat_log_next;
+        world.chat_log_next += 1;
+        world.chat_log.push_back(ChatLine {
+            seq,
+            frame,
+            text,
+            color: (rgb.len() == 3).then(|| [rgb[0], rgb[1], rgb[2]]),
+        });
+        while world.chat_log.len() > CHAT_LOG_LINES {
+            world.chat_log.pop_front();
+        }
+    }
     Ok(vec![])
 }
 

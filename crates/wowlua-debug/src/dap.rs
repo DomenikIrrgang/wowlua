@@ -429,6 +429,12 @@ fn to_request(
             },
             None,
         ),
+        "wowlua/chatLines" => (
+            Request::ChatLines {
+                since: args.get("since").and_then(Json::as_u64).unwrap_or(0),
+            },
+            None,
+        ),
         "wowlua/input" => (
             Request::Input {
                 input: serde_json::from_value(args.clone())

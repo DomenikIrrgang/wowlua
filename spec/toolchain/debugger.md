@@ -696,7 +696,12 @@ shown dimmed when one of the package's frames lies below it (the editor
 then shows that one), else not (a stop in Blizzard's UI as it loads shows
 there). Once a session ends, nothing more loads.
 Custom requests: `wowlua/screenshot` (PNG as base64), `wowlua/frameTree`,
-`wowlua/findFrames`, `wowlua/input` (click, hover, drag, type, key),
+`wowlua/findFrames`, `wowlua/input` (click, hover, drag, type, key, slash,
+and `chat`: a message as the player sends it from the chat box,
+`SendChatMessage(text, chatType, nil, target)`, so addons get its
+`CHAT_MSG_*`), `wowlua/chatLines` (what the chat windows, `ChatFrame1` and
+on, showed from line `since` on: each line's number, window, text and
+colour, the last 1000 kept, and the next line's number; decision T514),
 `wowlua/advance`, `wowlua/fireEvent`, `wowlua/world` (`script`: Lua with
 `mock` the engine's controls, run between frames as a world profile is
 applied, so the running world changes: `mock.player:setMoney(500)`;
