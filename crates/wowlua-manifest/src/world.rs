@@ -169,6 +169,8 @@ pub struct UnitData {
     pub facing: Option<f64>,
     /// How it moves on its own (decision T517).
     pub movement: Option<UnitMovement>,
+    /// What it does on its own (decision T518), each action when and what.
+    pub actions: Option<Vec<UnitAction>>,
     /// `Alliance` or `Horde`: the one a race of either picked (the
     /// Pandaren, the Skyborne), or a creature's. A race of one faction has
     /// its own (decision T513): another is an error.
@@ -228,6 +230,43 @@ pub enum MovementKind {
     Approach,
     /// Away from the player.
     Flee,
+}
+
+/// A unit's action (decision T518): when (one of `at`, `every`,
+/// `within`) and what (`do`).
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitAction {
+    /// Once, this many seconds after the unit appears.
+    pub at: Option<f64>,
+    /// Every so many seconds (the first after that long).
+    pub every: Option<f64>,
+    /// Each time the player comes within so many yards.
+    pub within: Option<f64>,
+    /// What it does.
+    #[serde(rename = "do")]
+    pub what: ActionKind,
+    /// An attack's damage a swing (10).
+    pub damage: Option<f64>,
+    /// An attack's seconds between swings (2).
+    pub speed: Option<f64>,
+    /// A cast's spell ID.
+    pub spell: Option<f64>,
+    /// A cast's time in seconds (the spell's own by default).
+    pub cast_time: Option<f64>,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ActionKind {
+    /// Swings at the player while within melee reach (5 yards), from then
+    /// on.
+    #[default]
+    Attack,
+    /// Casts `spell`.
+    Cast,
+    /// Turns to the player.
+    Face,
 }
 
 /// A unit around the player, and how it relates to them.

@@ -117,6 +117,10 @@ pub struct Unit {
     pub facing: Option<f64>,
     /// How it moves on its own (decision T517); none: it stands.
     pub walk: Option<crate::movement::Walk>,
+    /// What it does on its own (decision T518).
+    pub acts: Vec<crate::unitacts::Act>,
+    /// When it appeared, in seconds on the clock (its actions' `at`).
+    pub born: f64,
     /// A raid member's subgroup when not the one its place gives.
     pub subgroup: Option<f64>,
     /// A player character logged in (an offline group member not).
@@ -495,6 +499,8 @@ pub fn install(vm: &mut Vm) {
         z: 0.0,
         facing: None,
         walk: None,
+        acts: Vec::new(),
+        born: 0.0,
         subgroup: None,
         online: true,
         accepts_invites: false,
@@ -855,6 +861,7 @@ fn clone_unit(u: &Unit) -> Unit {
         zone: u.zone.clone(),
         powers: u.powers.clone(),
         walk: u.walk.clone(),
+        acts: u.acts.clone(),
         ..*u
     }
 }
@@ -2372,6 +2379,11 @@ fn unit_from(
             let m = get(vm, "movement");
             crate::movement::walk_of(vm, m)?
         },
+        acts: {
+            let a = get(vm, "actions");
+            crate::unitacts::acts_of(vm, a)?
+        },
+        born: vm.clock.elapsed_ms / 1000.0,
         subgroup: None,
         online: !matches!(get(vm, "online"), Value::Bool(false)),
         accepts_invites: get(vm, "acceptsInvites").truthy(),
@@ -3139,6 +3151,10 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     if has("movement") {
         u.walk = new.walk;
+    }
+    if has("actions") {
+        u.acts = new.acts;
+        u.born = new.born;
     }
     if has("acceptsInvites") {
         u.accepts_invites = new.accepts_invites;
