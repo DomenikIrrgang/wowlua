@@ -393,7 +393,26 @@
           ]
         },
         "distance": {
-          "description": "Yards from the player.",
+          "description": "Yards from the player. Without `world` the unit stands this far in\nfront of the player; with it, its distance follows the two places\n(decision T515).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "world": {
+          "description": "Where it stands, as `UnitPosition` answers it (the player's\ninstance): its distance from the player follows (decision T515).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorldPosition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "facing": {
+          "description": "Radians counter-clockwise from north; facing the player when not\ngiven.",
           "type": [
             "number",
             "null"
@@ -475,6 +494,42 @@
         }
       },
       "additionalProperties": false
+    },
+    "WorldPosition": {
+      "description": "A place in the world, as `UnitPosition` answers it.",
+      "type": "object",
+      "properties": {
+        "y": {
+          "description": "North, in yards.",
+          "type": "number",
+          "format": "double"
+        },
+        "x": {
+          "description": "West, in yards.",
+          "type": "number",
+          "format": "double"
+        },
+        "z": {
+          "description": "Up, in yards (0 by default).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "instanceID": {
+          "description": "The continent's instance ID (0 by default).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "required": [
+        "y",
+        "x"
+      ]
     },
     "List": {
       "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
@@ -1319,42 +1374,6 @@
       },
       "additionalProperties": true
     },
-    "WorldPosition": {
-      "description": "A place in the world, as `UnitPosition` answers it.",
-      "type": "object",
-      "properties": {
-        "y": {
-          "description": "North, in yards.",
-          "type": "number",
-          "format": "double"
-        },
-        "x": {
-          "description": "West, in yards.",
-          "type": "number",
-          "format": "double"
-        },
-        "z": {
-          "description": "Up, in yards (0 by default).",
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        },
-        "instanceID": {
-          "description": "The continent's instance ID (0 by default).",
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "double"
-        }
-      },
-      "required": [
-        "y",
-        "x"
-      ]
-    },
     "List11": {
       "description": "An object of items by key, or a list of them (recorded from Lua, a\ntable keyed 1, 2, 3 is a list and an empty one `{}`; the world reads\neither with `pairs`).",
       "anyOf": [
@@ -1607,7 +1626,26 @@
           ]
         },
         "distance": {
-          "description": "Yards from the player.",
+          "description": "Yards from the player. Without `world` the unit stands this far in\nfront of the player; with it, its distance follows the two places\n(decision T515).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "world": {
+          "description": "Where it stands, as `UnitPosition` answers it (the player's\ninstance): its distance from the player follows (decision T515).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorldPosition"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "facing": {
+          "description": "Radians counter-clockwise from north; facing the player when not\ngiven.",
           "type": [
             "number",
             "null"

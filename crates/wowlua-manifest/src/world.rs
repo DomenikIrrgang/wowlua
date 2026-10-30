@@ -157,8 +157,16 @@ pub struct UnitData {
     /// A player character (not a creature).
     pub player: Option<bool>,
     pub dead: Option<bool>,
-    /// Yards from the player.
+    /// Yards from the player. Without `world` the unit stands this far in
+    /// front of the player; with it, its distance follows the two places
+    /// (decision T515).
     pub distance: Option<f64>,
+    /// Where it stands, as `UnitPosition` answers it (the player's
+    /// instance): its distance from the player follows (decision T515).
+    pub world: Option<WorldPosition>,
+    /// Radians counter-clockwise from north; facing the player when not
+    /// given.
+    pub facing: Option<f64>,
     /// `Alliance` or `Horde`: the one a race of either picked (the
     /// Pandaren, the Skyborne), or a creature's. A race of one faction has
     /// its own (decision T513): another is an error.
