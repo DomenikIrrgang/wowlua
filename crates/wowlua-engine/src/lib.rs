@@ -72,6 +72,7 @@ pub mod methods2;
 pub mod methods3;
 pub mod misc;
 pub mod models;
+pub mod movement;
 pub mod objects2;
 pub mod party;
 pub mod pets;
@@ -1310,6 +1311,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("tradeskill", tradeskill::behaviours(flavor)),
         Behaviours::new("tooltip", tooltip::behaviours()),
         Behaviours::new("chat", chat::behaviours()),
+        Behaviours::new("movement", movement::behaviours()),
         Behaviours::new("replies", replies::behaviours()),
         Behaviours::new("bindings", bindings::behaviours()),
         Behaviours::new("facts", facts::behaviours()),

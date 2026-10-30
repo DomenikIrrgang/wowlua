@@ -108,8 +108,15 @@ pub struct Unit {
     /// zone; out of sight).
     pub zone: Option<String>,
     /// Where it is in the world (`world = { y, x }`: the north and west
-    /// coordinates, `UnitPosition`'s), when given.
+    /// coordinates, `UnitPosition`'s), when given or placed (decision
+    /// T515).
     pub world: Option<(f64, f64)>,
+    /// Its height in the world, in yards (`world.z`).
+    pub z: f64,
+    /// Radians counter-clockwise from north; none: it faces the player.
+    pub facing: Option<f64>,
+    /// How it moves on its own (decision T517); none: it stands.
+    pub walk: Option<crate::movement::Walk>,
     /// A raid member's subgroup when not the one its place gives.
     pub subgroup: Option<f64>,
     /// A player character logged in (an offline group member not).
@@ -485,6 +492,9 @@ pub fn install(vm: &mut Vm) {
         role: None,
         zone: None,
         world: None,
+        z: 0.0,
+        facing: None,
+        walk: None,
         subgroup: None,
         online: true,
         accepts_invites: false,
@@ -844,6 +854,7 @@ fn clone_unit(u: &Unit) -> Unit {
         role: u.role.clone(),
         zone: u.zone.clone(),
         powers: u.powers.clone(),
+        walk: u.walk.clone(),
         ..*u
     }
 }
@@ -1822,6 +1833,12 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ),
         ("setMoving", crate::casting::control_set_moving),
         ("setDistance", crate::character::control_set_distance),
+        ("patrol", crate::movement::control_patrol),
+        ("follow", crate::movement::control_follow),
+        ("approach", crate::movement::control_approach),
+        ("flee", crate::movement::control_flee),
+        ("moveTo", crate::movement::control_move_to),
+        ("stop", crate::movement::control_stop),
         ("setMoney", crate::character::control_set_money),
         ("setStats", crate::stats::control_set_stats),
         ("equip", crate::character::control_equip),
@@ -1914,6 +1931,7 @@ pub fn spawn(vm: &mut Vm, c: NativeCall) -> Ret {
     let units = &mut engine_mut(vm).units;
     units.list.push(unit);
     let id = UnitId(units.list.len() - 1);
+    crate::character::place_spawned(vm, id);
     Ok(vec![handle(vm, id)])
 }
 
@@ -2335,6 +2353,24 @@ fn unit_from(
                 k(vm, "y").zip(k(vm, "x"))
             }
             _ => None,
+        },
+        z: match get(vm, "world") {
+            Value::Table(w) => {
+                let key = vm.str("z");
+                match vm.heap.table(w).get(key) {
+                    Value::Num(n) => n,
+                    _ => 0.0,
+                }
+            }
+            _ => 0.0,
+        },
+        facing: match get(vm, "facing") {
+            Value::Num(f) => Some(f.rem_euclid(std::f64::consts::TAU)),
+            _ => None,
+        },
+        walk: {
+            let m = get(vm, "movement");
+            crate::movement::walk_of(vm, m)?
         },
         subgroup: None,
         online: !matches!(get(vm, "online"), Value::Bool(false)),
@@ -3096,6 +3132,13 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     if has("world") {
         u.world = new.world;
+        u.z = new.z;
+    }
+    if has("facing") {
+        u.facing = new.facing;
+    }
+    if has("movement") {
+        u.walk = new.walk;
     }
     if has("acceptsInvites") {
         u.accepts_invites = new.accepts_invites;
@@ -3149,6 +3192,8 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
 
     if let Value::Num(d) = field(vm, "distance") {
         crate::character::set_distance(vm, me, Some(d));
+    } else if !field(vm, "world").is_nil() {
+        crate::character::follow_places(vm);
     }
     if let Value::Str(s) = field(vm, "role") {
         let role = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();

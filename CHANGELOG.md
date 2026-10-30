@@ -6,6 +6,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- **Units have places**: a unit's `world = { y, x, z }` and `facing` in `mock.spawnUnit`, `unit:update` and world profiles. When your character has a place, a unit's distance follows the two places: a unit given only a distance stands that far in front of you, `mock.moveTo` and a unit's new `world` change the distances your range checks see (`CheckInteractDistance`, `UnitInRange`, spell ranges), and `unit:setDistance` moves the unit. `UnitPosition` answers a unit's height too.
+- **Your character moves**: the game's movement functions the key bindings call (`MoveForwardStart`, `TurnLeftStart`, `ToggleRun`, `ToggleAutoRun`, …) move and turn your character each frame at the game's speeds, telling `PLAYER_STARTED_MOVING` and `PLAYER_STOPPED_MOVING`; the units' distances follow. A debug session can hold a key down and let it go (`wowlua/input`'s `keyDown` and `keyUp`).
+- **Units walk**: `unit:patrol(path)`, `unit:follow()`, `unit:approach()`, `unit:flee()`, `unit:moveTo(place)` and `unit:stop()`, or a unit's `movement` in a world profile, make it walk on its own, its distance to you following.
 - A debug session tells what the game's chat windows show (`wowlua/chatLines`: each line's text and colour, your addon's prints too) and sends a chat message as the player would type it (`wowlua/input` with `chat`: your addons get its `CHAT_MSG_SAY`, `CHAT_MSG_PARTY`, …), for wowlua Studio's chat tab.
 
 ## 0.13.7 (2026-10-30)

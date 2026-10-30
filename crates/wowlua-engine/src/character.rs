@@ -1358,11 +1358,12 @@ fn unit_position(vm: &mut Vm, c: NativeCall) -> Ret {
             let Some((y, x)) = engine(vm).units.list[id.0].world else {
                 return Ok(vec![]);
             };
+            let z = engine(vm).units.list[id.0].z;
             let instance = player_world(vm).map_or(0.0, |w| w.3);
             return Ok(vec![
                 Value::Num(y),
                 Value::Num(x),
-                Value::Num(0.0),
+                Value::Num(z),
                 Value::Num(instance),
             ]);
         }
@@ -1465,6 +1466,8 @@ pub fn move_to(vm: &mut Vm, t: TableRef, told: bool) {
     let new_map = p.map_id != old.map_id;
     let changed = new_area || new_map || p.sub_zone != old.sub_zone;
     engine_mut(vm).world.character.position = p;
+    // (the units' distances follow the player's new place, T515)
+    follow_places(vm);
     if !told || !changed {
         return;
     }
@@ -1584,8 +1587,119 @@ pub fn control_set_distance(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// A unit's distance now `d`, told as `setDistance` tells it.
+/// A unit's distance now `d`, told as `setDistance` tells it. With places
+/// in the world (decision T515) the unit moves to that distance along its
+/// bearing from the player (in front of the player when it has no place).
 pub(crate) fn set_distance(vm: &mut Vm, me: units::UnitId, d: Option<f64>) {
+    if me != units::PLAYER
+        && let (Some(d), Some(from)) = (d, place_of(vm, units::PLAYER))
+    {
+        place_at(vm, me, from, d);
+    }
+    store_distance(vm, me, d);
+}
+
+// ------------------------------------------------------------ places --
+
+/// Where a unit stands, north, west and up in yards, when it has a place
+/// (decision T515): the player's is the character's.
+pub fn place_of(vm: &mut Vm, id: units::UnitId) -> Option<(f64, f64, f64)> {
+    if id == units::PLAYER {
+        return player_world(vm).map(|(y, x, z, _)| (y, x, z));
+    }
+    let u = &engine(vm).units.list[id.0];
+    u.world.map(|(y, x)| (y, x, u.z))
+}
+
+/// The straight distance between two places, to the thousandth of a yard.
+pub fn between(a: (f64, f64, f64), b: (f64, f64, f64)) -> f64 {
+    let d = ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2) + (a.2 - b.2).powi(2)).sqrt();
+    (d * 1000.0).round() / 1000.0
+}
+
+/// The facing (radians counter-clockwise from north) from `from` toward
+/// `to`.
+pub fn facing_toward(from: (f64, f64, f64), to: (f64, f64, f64)) -> f64 {
+    (to.1 - from.1)
+        .atan2(to.0 - from.0)
+        .rem_euclid(std::f64::consts::TAU)
+}
+
+/// Puts a unit `d` yards from `from` along its bearing (the player's
+/// facing when it has no place yet).
+fn place_at(vm: &mut Vm, me: units::UnitId, from: (f64, f64, f64), d: f64) {
+    let at = place_of(vm, me);
+    let (north, west) = match at {
+        Some(a) if (a.0 - from.0).hypot(a.1 - from.1) > 1e-9 => {
+            let l = (a.0 - from.0).hypot(a.1 - from.1);
+            ((a.0 - from.0) / l, (a.1 - from.1) / l)
+        }
+        _ => {
+            let f = crate::unitinfo::player_facing(vm);
+            (f.cos(), f.sin())
+        }
+    };
+    let u = &mut engine_mut(vm).units.list[me.0];
+    u.world = Some((from.0 + north * d, from.1 + west * d));
+    u.z = at.map_or(from.2, |a| a.2);
+}
+
+/// A unit just made (`mock.spawnUnit`, a profile's unit): one with a
+/// distance and no place stands that far in front of the player, one with
+/// a place gets its distance from it (decision T515).
+pub fn place_spawned(vm: &mut Vm, id: units::UnitId) {
+    let Some(from) = place_of(vm, units::PLAYER) else {
+        return;
+    };
+    let u = &engine(vm).units.list[id.0];
+    match (u.world, u.distance) {
+        (None, Some(d)) => place_at(vm, id, from, d),
+        (Some(_), _) => {
+            if let Some(at) = place_of(vm, id) {
+                engine_mut(vm).units.list[id.0].distance = Some(between(from, at));
+            }
+        }
+        (None, None) => {}
+    }
+}
+
+/// The units' distances follow their places and the player's (decision
+/// T515): a change told as `setDistance` tells it.
+pub fn follow_places(vm: &mut Vm) {
+    let Some(from) = place_of(vm, units::PLAYER) else {
+        return;
+    };
+    for i in 0..engine(vm).units.list.len() {
+        let id = units::UnitId(i);
+        if id == units::PLAYER {
+            continue;
+        }
+        let Some(at) = place_of(vm, id) else {
+            continue;
+        };
+        let d = between(from, at);
+        if engine(vm).units.list[i].distance != Some(d) {
+            store_distance(vm, id, Some(d));
+        }
+    }
+}
+
+/// Where a unit faces (radians counter-clockwise from north): its own, or
+/// toward the player.
+pub fn unit_facing(vm: &mut Vm, id: units::UnitId) -> Option<f64> {
+    if id == units::PLAYER {
+        return Some(crate::unitinfo::player_facing(vm));
+    }
+    if let Some(f) = engine(vm).units.list[id.0].facing {
+        return Some(f);
+    }
+    let at = place_of(vm, id)?;
+    let player = place_of(vm, units::PLAYER)?;
+    Some(facing_toward(at, player))
+}
+
+/// A unit's distance now `d`: gossip and the group's range told.
+fn store_distance(vm: &mut Vm, me: units::UnitId, d: Option<f64>) {
     let in_range = |d: Option<f64>| d.is_some_and(|d| d <= 38.0);
     let was = in_range(engine(vm).units.list[me.0].distance);
     engine_mut(vm).units.list[me.0].distance = d;

@@ -46,6 +46,8 @@ pub struct Input {
     /// The mouse button of the user's click running (`"LeftButton"`, …):
     /// a modified click's `BUTTONn` part (`IsModifiedClick`).
     pub clicking: Option<String>,
+    /// Keys held down (`key_down`): each with the binding it ran.
+    pub held: Vec<(String, String)>,
 }
 
 /// `setCursorPosition(x, y)`: the mouse moved there (screen units, as
@@ -531,6 +533,38 @@ pub fn press_key(vm: &mut Vm, key: &str) {
         crate::bindings::run_command(vm, command, "down");
         crate::bindings::run_command(vm, command, "up");
     }
+}
+
+/// A key held down (decision T516): its binding's down now, its up when
+/// `key_up` lets it go, as holding a movement key moves the player.
+pub fn key_down(vm: &mut Vm, key: &str) {
+    if edit_box_key(vm, key) {
+        return;
+    }
+    let chord = chord(vm, key);
+    let command = crate::bindings::action_for(vm, &chord).or_else(|| {
+        (chord != key)
+            .then(|| crate::bindings::action_for(vm, key))
+            .flatten()
+    });
+    if let Some(command) = command {
+        crate::bindings::run_command(vm, &command, "down");
+        engine_mut(vm)
+            .world
+            .input
+            .held
+            .push((key.to_owned(), command));
+    }
+}
+
+/// A key held down let go: its binding's up.
+pub fn key_up(vm: &mut Vm, key: &str) {
+    let held = &mut engine_mut(vm).world.input.held;
+    let Some(i) = held.iter().position(|(k, _)| k == key) else {
+        return;
+    };
+    let (_, command) = held.remove(i);
+    crate::bindings::run_command(vm, &command, "up");
 }
 
 /// The user clicks into an edit box: after its text (the engine's click

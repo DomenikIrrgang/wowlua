@@ -202,8 +202,26 @@ export interface MockUnit
     --- The spell focuses near the player (`{ "Forge" }`): a recipe needing
     --- one can be made.
     function setSpellFocus(names: string[])
-    --- How far from the player, in yards (`nil`: unknown).
+    --- How far from the player, in yards (`nil`: unknown); where the
+    --- player has a place, the unit moves that far along its bearing
+    --- (decision T515).
     function setDistance(yards: number?)
+    --- It walks its waypoints in order (2.5 yards a second unless `speed`
+    --- says), from the first again after the last unless `loop` is false
+    --- (decision T517).
+    function patrol(path: { y: number, x: number, z?: number }[], opts: { speed?: number, loop?: boolean }?)
+    --- It follows the player, keeping `keep` yards (2), running (7 a
+    --- second) unless `speed` says.
+    function follow(opts: { keep?: number, speed?: number }?)
+    --- It comes to the player, stopping `keep` yards away (2: melee
+    --- reach).
+    function approach(opts: { keep?: number, speed?: number }?)
+    --- It runs from the player.
+    function flee(opts: { speed?: number }?)
+    --- It goes to a place, then stands.
+    function moveTo(place: { y: number, x: number, z?: number }, opts: { speed?: number }?)
+    --- It stands where it is.
+    function stop()
     --- A worn item's durability (the player; `GetInventoryItemDurability`,
     --- a repair restores it).
     function setDurability(slot: number, current: number, max: number)
@@ -443,9 +461,18 @@ export type UnitData = {
     --- Where it is when not where the player is (a group member's roster
     --- zone; out of sight: `UnitIsVisible` false).
     zone?: string,
-    --- Where it is in the world: `UnitPosition`'s north `y` and west `x`
-    --- (a group member's blip on the minimap).
-    world?: { y: number, x: number },
+    --- Where it is in the world: `UnitPosition`'s north `y`, west `x` and
+    --- height `z` (a group member's blip on the minimap). Its distance from
+    --- the player follows it (decision T515); a unit with only a
+    --- `distance` stands that far in front of the player.
+    world?: { y: number, x: number, z?: number },
+    --- Radians counter-clockwise from north; it faces the player when not
+    --- given.
+    facing?: number,
+    --- How it moves on its own (decision T517): `kind` "stand", "patrol"
+    --- (along `path`), "follow" (the player, `keep` yards away), "approach"
+    --- (to the player, stopping `keep` yards away) or "flee".
+    movement?: { kind: string, path?: { y: number, x: number, z?: number }[], loop?: boolean, speed?: number, keep?: number },
     --- false: an offline player character (`UnitIsConnected` false; the
     --- roster's level 0, zone "Offline").
     online?: boolean,
