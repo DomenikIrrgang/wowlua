@@ -308,6 +308,12 @@ pub struct Units {
     pub waiting_plates: Vec<UnitId>,
     /// Each nameplate slot's frame, made the first time the slot is used.
     pub nameplate_frames: Vec<widgets::WidgetId>,
+    /// The units whose nameplate was shown (by a test or a world profile):
+    /// at a place, the camera shows and hides it (decision T521).
+    pub wanted_plates: Vec<UnitId>,
+    /// Where each nameplate frame sits (its widget's index): the spot
+    /// from the screen's center.
+    pub plate_spots: std::collections::HashMap<usize, (f64, f64)>,
     /// The group without the player, in order; a raid when `raid`.
     pub group: Vec<UnitId>,
     pub raid: bool,
@@ -4513,6 +4519,9 @@ fn control_show_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         _ => false,
     };
+    if !engine(vm).units.wanted_plates.contains(&me) {
+        engine_mut(vm).units.wanted_plates.push(me);
+    }
     if entering && !engine(vm).world.logged_in {
         let waiting = &mut engine_mut(vm).units.waiting_plates;
         if !waiting.contains(&me) {
@@ -4520,14 +4529,85 @@ fn control_show_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         return Ok(vec![]);
     }
+    // At a place out of the camera's sight: none yet.
+    if crate::character::place_of(vm, me).is_some() && plate_spot(vm, me).is_none() {
+        return Ok(vec![]);
+    }
     let slot = show_nameplate(vm, me)?;
     Ok(vec![Value::Num(slot as f64 + 1.0)])
+}
+
+/// A nameplate's height over its unit's feet (yards; unverified).
+const PLATE_HEIGHT: f64 = 2.5;
+
+/// Where a unit at a place shows its nameplate (the center's offset from
+/// the screen's, in WorldFrame's units), or none: no place, farther than
+/// `nameplateMaxDistance` (45, recorded) or out of the camera's sight
+/// (decision T521; recorded: the plates added and removed as the player
+/// turned).
+fn plate_spot(vm: &mut Vm, me: UnitId) -> Option<(f64, f64)> {
+    let at = crate::character::place_of(vm, me)?;
+    let u = &engine(vm).units.list[me.0];
+    if !u.alive_in_world {
+        return None;
+    }
+    let distance = u.distance;
+    let max = crate::framescript::cvar_get(vm, "nameplateMaxDistance")
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(45.0);
+    if distance.is_some_and(|d| d > max) {
+        return None;
+    }
+    let (w, h) = engine(vm).screen.world_frame_size();
+    crate::camera::project(vm, (at.0, at.1, at.2 + PLATE_HEIGHT), w, h)
+}
+
+/// Each frame, the nameplates of units at a place follow them: added as
+/// the camera comes to see them, moved with them, removed as it no longer
+/// does (decision T521).
+pub fn plates_tick(vm: &mut Vm) {
+    if engine(vm).units.wanted_plates.is_empty() {
+        return;
+    }
+    let wanted = engine(vm).units.wanted_plates.clone();
+    for me in wanted {
+        // (a world profile's waits for the player to enter the world)
+        if crate::character::place_of(vm, me).is_none()
+            || engine(vm).units.waiting_plates.contains(&me)
+        {
+            continue;
+        }
+        let slot = engine(vm)
+            .units
+            .nameplates
+            .iter()
+            .position(|n| *n == Some(me));
+        match (plate_spot(vm, me), slot) {
+            (Some(_), None) => {
+                let _ = show_nameplate(vm, me);
+            }
+            (Some(_), Some(i)) => {
+                let frame = engine(vm).units.nameplate_frames[i];
+                let _ = place_nameplate(vm, frame, me);
+            }
+            (None, Some(i)) => {
+                let token = vm.str(&format!("nameplate{}", i + 1));
+                fire(vm, "NAME_PLATE_UNIT_REMOVED", &[token]);
+                engine_mut(vm).units.nameplates[i] = None;
+            }
+            (None, None) => {}
+        }
+    }
 }
 
 /// The nameplates that waited for the player to enter the world, shown
 /// (after `PLAYER_ENTERING_WORLD`; unverified: the client's order).
 pub(crate) fn show_waiting_nameplates(vm: &mut Vm) {
     for me in std::mem::take(&mut engine_mut(vm).units.waiting_plates) {
+        // (at a place: the camera shows it, T521)
+        if crate::character::place_of(vm, me).is_some() {
+            continue;
+        }
         let _ = show_nameplate(vm, me);
     }
 }
@@ -4578,18 +4658,33 @@ fn show_nameplate(vm: &mut Vm, me: UnitId) -> Result<usize, wowlua_vm::LuaError>
     Ok(slot)
 }
 
-/// A nameplate shown sits where its unit would be: the client's size
-/// (`C_NamePlate.GetNamePlateSize`), at a spot of the screen's middle
-/// picked from the unit, the same each run (there is no world to place
-/// it over; plates may overlap, as in the game).
+/// A nameplate shown sits where its unit is: the client's size
+/// (`C_NamePlate.GetNamePlateSize`), where the camera sees the unit
+/// (decision T521), or for a unit at no place at a spot of the screen's
+/// middle picked from the unit, the same each run (plates may overlap, as
+/// in the game).
 fn place_nameplate(
     vm: &mut Vm,
     frame: widgets::WidgetId,
     unit: UnitId,
 ) -> Result<(), wowlua_vm::LuaError> {
-    let h = (unit.0 as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    let part = |shift: u32| ((h >> shift) & 0xFFFF) as f64 / 65535.0;
-    let (x, y) = (-350.0 + 700.0 * part(40), -50.0 + 250.0 * part(16));
+    let (x, y) = match plate_spot(vm, unit) {
+        Some(spot) => spot,
+        None => {
+            let h = (unit.0 as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            let part = |shift: u32| ((h >> shift) & 0xFFFF) as f64 / 65535.0;
+            (-350.0 + 700.0 * part(40), -50.0 + 250.0 * part(16))
+        }
+    };
+    // (where it sits already: left as it is, each frame)
+    let spots = &mut engine_mut(vm).units.plate_spots;
+    if spots
+        .get(&frame.0)
+        .is_some_and(|(px, py)| (px - x).abs() < 0.01 && (py - y).abs() < 0.01)
+    {
+        return Ok(());
+    }
+    spots.insert(frame.0, (x, y));
     let plate = Value::Table(engine(vm).world.widgets[frame.0].table);
     widgets::call_method(vm, plate, "ClearAllPoints", &[])?;
     // The screen's center: its parent, WorldFrame, covers the screen.
@@ -4652,6 +4747,7 @@ fn get_name_plates(vm: &mut Vm, _c: NativeCall) -> Ret {
 fn control_hide_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     engine_mut(vm).units.waiting_plates.retain(|u| *u != me);
+    engine_mut(vm).units.wanted_plates.retain(|u| *u != me);
     let slot = engine(vm)
         .units
         .nameplates

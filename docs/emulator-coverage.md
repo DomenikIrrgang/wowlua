@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,161 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,169 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -60,7 +60,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 748 | 100 | 1,254 | 0 |
+| `(globals)` | 2,102 | 770 | 100 | 1,232 | 0 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -346,14 +346,14 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,175 | 1,648 | 437 | 5,090 | 0 |
+| **All** | 7,175 | 1,670 | 437 | 5,068 | 0 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
 | Blizzard's API documentation | 5,111 | 1,057 | 354 | 3,700 | 0 |
-| the client's other C functions (`/stdtest inventory`) | 2,064 | 591 | 83 | 1,390 | 0 |
+| the client's other C functions (`/stdtest inventory`) | 2,064 | 613 | 83 | 1,368 | 0 |
 | the engine's own, in neither list | 15 | 14 | 0 | 1 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
@@ -370,7 +370,7 @@ The modules that answer, by how many functions and methods:
 |--------|------|----------------------:|
 | `extras` | fill-in | 1,489 |
 | `widgets` | model | 635 |
-| `globalsinfo` | fill-in | 546 |
+| `globalsinfo` | fill-in | 524 |
 | `content` | fill-in | 520 |
 | `leftovers2` | fill-in | 388 |
 | `collections` | fill-in | 377 |
@@ -417,6 +417,7 @@ The modules that answer, by how many functions and methods:
 | `merchant` | model | 26 |
 | `actions2` | fill-in | 24 |
 | `widgetops` | model | 24 |
+| `camera` | model | 22 |
 | `trainer` | model | 22 |
 | `models` | model | 20 |
 | `taxi` | model | 20 |
@@ -843,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,161 rules unverified: each rests on Blizzard's
+The engine's code marks 1,169 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -991,6 +992,16 @@ page changes only when a rule is added, removed or reworded.
 
 - [buttons.rs](../crates/wowlua-engine/src/buttons.rs): The state textures shown as the button's state has them (SuuUI probe trees: of 380 state textures of enabled, uncheck...
 - [buttons.rs](../crates/wowlua-engine/src/buttons.rs): The layer a state's texture is drawn in (SuuUI probe trees: XML's `<HighlightTexture>` in HIGHLIGHT, `<CheckedTexture...
+
+### camera (7)
+
+- [camera.rs](../crates/wowlua-engine/src/camera.rs): The camera's pivot: this high above the player's feet (yards; unverified).
+- [camera.rs](../crates/wowlua-engine/src/camera.rs): The furthest zoom before `cameraDistanceMaxZoomFactor` (yards; unverified).
+- [camera.rs](../crates/wowlua-engine/src/camera.rs): The steepest pitch either way (unverified).
+- [camera.rs](../crates/wowlua-engine/src/camera.rs): Where a place shows on a screen `width` by `height` (its center's offset, right and up, in the screen's units), or no...
+- [camera.rs](../crates/wowlua-engine/src/camera.rs): `CameraZoomIn(yards)`, `CameraZoomOut(yards)`: at once (unverified: the client glides there).
+- [camera.rs](../crates/wowlua-engine/src/camera.rs): `SetView(n)`: the camera where `SaveView(n)` left it (a view never saved: as it is; unverified).
+- [camera.rs](../crates/wowlua-engine/src/camera.rs): `CenterCamera()`: the camera behind the player again (unverified).
 
 ### casting (10)
 
@@ -2177,7 +2188,7 @@ page changes only when a rule is added, removed or reworded.
 - [unitinfo.rs](../crates/wowlua-engine/src/unitinfo.rs): Recorded: slots 8 and 10 true (the others unverified).
 - [unitinfo.rs](../crates/wowlua-engine/src/unitinfo.rs): As the client answered (the full probe; facts of Forever's account and systems, unverified for another account).
 
-### units (50)
+### units (51)
 
 - [units.rs](../crates/wowlua-engine/src/units.rs): Unverified until probed: the player's defaults; GUID formats; the order of the events a change fires (a unit event fi...
 - [units.rs](../crates/wowlua-engine/src/units.rs): Each class's ID, file and name (enUS; the client's for Paladin, `UnitClass`; the others unverified).
@@ -2220,6 +2231,7 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine/src/units.rs): The combat text's delay after a hit lands (`/stdtest engine scenario combat`: `UNIT_COMBAT` 0.33 to 0.53 s after the...
 - [units.rs](../crates/wowlua-engine/src/units.rs): Sets a restriction's state, firing `ADDON_RESTRICTION_STATE_CHANGED` with `Activating` before it becomes active (unve...
 - [units.rs](../crates/wowlua-engine/src/units.rs): The corpses still on the player drop it too, before the player's flags (no targettarget: recorded, `quest`'s 4 of 4 c...
+- [units.rs](../crates/wowlua-engine/src/units.rs): A nameplate's height over its unit's feet (yards; unverified).
 - [units.rs](../crates/wowlua-engine/src/units.rs): The nameplates that waited for the player to enter the world, shown (after `PLAYER_ENTERING_WORLD`; unverified: the c...
 - [units.rs](../crates/wowlua-engine/src/units.rs): A slot's first use makes its frame: `NAME_PLATE_CREATED(frame)` in the same frame as, and before, its `NAME_PLATE_UNI...
 - [units.rs](../crates/wowlua-engine/src/units.rs): `mock.addToGroup(unit, raid? | { raid, subgroup })`: the unit joins the player's group (a raid with `raid`; in a raid...
@@ -2425,6 +2437,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - The other clients' answers (decisions T510, T511)
 - Answered on the beta's last day (2026-10-24)
 - Moving and facing (decisions T516, T519)
+- The camera (decisions T520, T521)
 - The dev tools (0.12.1)
 
 ## In-game regressions

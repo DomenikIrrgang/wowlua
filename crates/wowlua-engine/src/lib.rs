@@ -21,6 +21,7 @@ pub mod batch;
 pub mod bindings;
 pub mod blanks;
 pub mod buttons;
+pub mod camera;
 pub mod casting;
 pub mod channels;
 pub mod character;
@@ -1313,6 +1314,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("tooltip", tooltip::behaviours()),
         Behaviours::new("chat", chat::behaviours()),
         Behaviours::new("movement", movement::behaviours()),
+        Behaviours::new("camera", camera::behaviours()),
         Behaviours::new("replies", replies::behaviours()),
         Behaviours::new("bindings", bindings::behaviours()),
         Behaviours::new("facts", facts::behaviours()),
