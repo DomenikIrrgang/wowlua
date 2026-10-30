@@ -176,6 +176,8 @@ pub struct UnitData {
     /// its own (decision T513): another is an error.
     pub faction: Option<String>,
     pub npc_id: Option<f64>,
+    /// The creature display it shows in the 3D world (decision T526).
+    pub display_id: Option<f64>,
     pub classification: Option<String>,
     pub creature_type: Option<String>,
     pub creature_family: Option<String>,

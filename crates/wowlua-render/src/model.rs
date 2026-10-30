@@ -159,6 +159,23 @@ pub(crate) struct Models {
     sprites: Vec<Sprite>,
 }
 
+/// Actors posed: what [`Renderer::pose_actors`] gives.
+struct Posed {
+    verts: Vec<MVertex>,
+    draws: Vec<Draw>,
+    lo: [f32; 3],
+    hi: [f32; 3],
+    portrait: Option<(Vec3, Vec3, f32)>,
+    own_camera: Option<(Vec3, Vec3, f32)>,
+}
+
+/// The world's models, ready to draw (decision T526).
+pub(crate) struct WorldModels {
+    vertices: wgpu::Buffer,
+    group: wgpu::BindGroup,
+    draws: Vec<Draw>,
+}
+
 /// A batch to draw: its vertices' range and how.
 struct Draw {
     blend: u16,
@@ -632,6 +649,32 @@ impl Renderer {
         let width = ((item.rect.w * scale).round() as u32).clamp(1, max);
         let height = ((item.rect.h * scale).round() as u32).clamp(1, max);
         let aspect = width as f32 / height as f32;
+        let ms = (item.time * 1000.0) as u32;
+        let p = self.pose_actors(&item.actors, &item.camera, ms, assets);
+        self.finish_model(
+            item,
+            width,
+            height,
+            aspect,
+            p.verts,
+            p.draws,
+            p.lo,
+            p.hi,
+            p.portrait,
+            p.own_camera,
+        )
+    }
+
+    /// Actors posed (`ms` into their animations) for a camera: their
+    /// vertices and draws, the bounds of their points, the portrait's and
+    /// the model's own camera.
+    fn pose_actors(
+        &mut self,
+        actors: &[scene::Actor],
+        camera: &ModelCamera,
+        ms: u32,
+        assets: &mut dyn Assets,
+    ) -> Posed {
         self.model_layouts();
         self.models.sprites.clear();
         let mut verts: Vec<MVertex> = Vec::new();
@@ -641,8 +684,7 @@ impl Renderer {
         let mut hi = [f32::MIN; 3];
         let mut portrait: Option<(Vec3, Vec3, f32)> = None;
         let mut own_camera: Option<(Vec3, Vec3, f32)> = None;
-        let ms = (item.time * 1000.0) as u32;
-        for actor in &item.actors {
+        for actor in actors {
             let key = source_key(&actor.source);
             if !self.models.displays.contains_key(&key) {
                 let d = assets.model(&actor.source);
@@ -684,7 +726,7 @@ impl Renderer {
                     part,
                     actor,
                     &display,
-                    &item.camera,
+                    camera,
                     world,
                     seq,
                     ms,
@@ -700,9 +742,84 @@ impl Renderer {
                 self.models.files.insert(part.file, Some(l));
             }
         }
-        self.finish_model(
-            item, width, height, aspect, verts, draws, lo, hi, portrait, own_camera,
-        )
+        Posed {
+            verts,
+            draws,
+            lo,
+            hi,
+            portrait,
+            own_camera,
+        }
+    }
+
+    /// The 3D world's units as their models (decision T526): posed for the
+    /// world's camera (`view`, `proj`), lit by `light` (its direction,
+    /// ambient and diffuse), ready to draw in the world's pass; none for
+    /// nothing to draw. Their particles are left out.
+    pub(crate) fn world_models(
+        &mut self,
+        actors: &[scene::Actor],
+        camera: &ModelCamera,
+        ms: u32,
+        view: Mat4,
+        proj: Mat4,
+        light: ([f32; 3], [f32; 3], [f32; 3]),
+        assets: &mut dyn Assets,
+    ) -> Option<WorldModels> {
+        let p = self.pose_actors(actors, camera, ms, assets);
+        self.models.sprites.clear();
+        if p.verts.is_empty() {
+            return None;
+        }
+        let view_proj = m2::mul(&proj, &view);
+        let (dir, ambient, diffuse) = light;
+        let mut globals = Vec::with_capacity(44);
+        globals.extend_from_slice(&view_proj);
+        globals.extend_from_slice(&view);
+        globals.extend_from_slice(&[dir[0], dir[1], dir[2], 0.0]);
+        globals.extend_from_slice(&[ambient[0], ambient[1], ambient[2], 1.0]);
+        globals.extend_from_slice(&[diffuse[0], diffuse[1], diffuse[2], 1.0]);
+        let ubuf = crate::buffer_with(
+            &self.device,
+            &self.queue,
+            "world model globals",
+            bytemuck::cast_slice(&globals),
+            wgpu::BufferUsages::UNIFORM,
+        );
+        let group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &self.models.layout.as_ref().unwrap().0,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: ubuf.as_entire_binding(),
+            }],
+        });
+        let vertices = crate::buffer_with(
+            &self.device,
+            &self.queue,
+            "world model vertices",
+            bytemuck::cast_slice(&p.verts),
+            wgpu::BufferUsages::VERTEX,
+        );
+        for d in &p.draws {
+            self.model_pipeline(d.blend.min(7), d.depth_write);
+        }
+        Some(WorldModels {
+            vertices,
+            group,
+            draws: p.draws,
+        })
+    }
+
+    /// Draws the world's models into its pass.
+    pub(crate) fn record_models<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>, m: &'a WorldModels) {
+        pass.set_vertex_buffer(0, m.vertices.slice(..));
+        pass.set_bind_group(0, &m.group, &[]);
+        for d in &m.draws {
+            pass.set_pipeline(&self.models.pipelines[&(d.blend.min(7), d.depth_write)]);
+            pass.set_bind_group(1, &self.models.groups[&d.tex], &[]);
+            pass.draw(d.start..d.end, 0..1);
+        }
     }
 
     /// One part's batches, posed, into the vertex list.
