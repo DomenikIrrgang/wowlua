@@ -447,6 +447,55 @@ impl Renderer {
     }
 
     /// A model file, read once (with its skeleton and first skin).
+    /// A model file's standing pose as one static mesh (the 3D world's
+    /// doodads): its vertices (posed, with their first coordinates), its
+    /// indices, and each batch's range, texture (its own, kind 0; else
+    /// none), blend mode and flags.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn model_mesh(
+        &mut self,
+        file: u32,
+        assets: &mut dyn Assets,
+    ) -> Option<(Vec<crate::world::BVertex>, Vec<u32>, Vec<(u32, u32, u32, u16, u16)>)> {
+        if !self.loaded(file, assets) {
+            return None;
+        }
+        let Loaded { model: m, skin } = self.models.files.get(&file)?.as_ref()?;
+        let bones = m.pose(m.sequence(0), 0);
+        let posed = m.skinned(&bones);
+        let verts = m
+            .vertices
+            .iter()
+            .zip(posed)
+            .map(|(v, (pos, normal))| crate::world::BVertex {
+                pos,
+                normal,
+                uv: v.uv,
+                color: [0.5, 0.5, 0.5, 1.0],
+            })
+            .collect();
+        let mut batches = Vec::new();
+        for b in &skin.batches {
+            let Some(sub) = skin.submeshes.get(b.submesh as usize) else {
+                continue;
+            };
+            let index = m.texture_combos.get(b.texture_combo as usize).copied().unwrap_or(0) as usize;
+            let texture = match m.textures.get(index) {
+                Some(t) if t.kind == 0 => t.file,
+                _ => 0,
+            };
+            let material = m.materials.get(b.material as usize).copied();
+            batches.push((
+                sub.index_start,
+                sub.index_count,
+                texture,
+                material.map_or(0, |x| x.blend),
+                material.map_or(0, |x| x.flags),
+            ));
+        }
+        Some((verts, skin.indices.clone(), batches))
+    }
+
     fn loaded(&mut self, file: u32, assets: &mut dyn Assets) -> bool {
         if let Some(l) = self.models.files.get(&file) {
             return l.is_some();

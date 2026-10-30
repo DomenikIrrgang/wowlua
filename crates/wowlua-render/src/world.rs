@@ -11,7 +11,9 @@
 //! The buildings the tiles place (decision T523) are read once each
 //! (`Assets::building`) and drawn wherever they stand, by their
 //! placement's matrix: their groups' batches with their materials'
-//! textures, the blended ones last.
+//! textures, the blended ones last. The doodads (decision T525), the
+//! tiles' and the buildings' own, are their models' standing poses, drawn
+//! together for each model.
 
 use std::collections::HashMap;
 
@@ -80,6 +82,7 @@ pub(crate) struct World {
     depth: Option<(wgpu::TextureView, u32, u32)>,
     building_setup: Option<BuildingSetup>,
     buildings: HashMap<u32, Option<GpuBuilding>>,
+    doodads: HashMap<u32, Option<GpuDoodad>>,
     /// The placements' matrices of a draw, and the buffer's size.
     instances: Option<(wgpu::Buffer, u64)>,
 }
@@ -464,6 +467,7 @@ impl Renderer {
         // (one standing on several tiles is placed by each).
         self.building_setup();
         let mut placed: Vec<(u32, [f32; 16])> = Vec::new();
+        let mut homes: Vec<wowlua_casc::obj::Building> = Vec::new();
         let mut seen = std::collections::HashSet::new();
         for &(x, y) in &near {
             let Some(objects) = assets.objects(w.map, x, y) else {
@@ -478,13 +482,77 @@ impl Renderer {
                 self.world_building(b.file, assets);
                 if matches!(self.world.buildings.get(&b.file), Some(Some(_))) {
                     placed.push((b.file, matrix_of(b)));
+                    homes.push(b.clone());
                 }
             }
         }
-        if !placed.is_empty() {
-            let bytes: Vec<u8> = placed
+        // The doodads within the view distance: the tiles' (each once) and
+        // the buildings' own (their first set and the one placed), by model.
+        let mut by_model: HashMap<u32, Vec<[f32; 16]>> = HashMap::new();
+        let mut seen = std::collections::HashSet::new();
+        let near_eye = |p: [f64; 3]| (p[0] - w.eye[0]).hypot(p[1] - w.eye[1]) <= w.far;
+        for &(x, y) in &near {
+            let Some(objects) = assets.objects(w.map, x, y) else {
+                continue;
+            };
+            for d in &objects.doodads {
+                if !near_eye(d.at) || !seen.insert(d.unique) {
+                    continue;
+                }
+                let m = matrix_from(wowlua_casc::obj::placed(d.at, d.rotation, d.scale));
+                by_model.entry(d.file).or_default().push(m);
+            }
+        }
+        for b in &homes {
+            let Some(wmo) = assets.building(b.file) else {
+                continue;
+            };
+            let place = wowlua_casc::obj::placed(b.at, b.rotation, b.scale);
+            let mut sets = vec![0usize];
+            if b.doodad_set != 0 {
+                sets.push(b.doodad_set as usize);
+            }
+            for set in sets {
+                let Some(&(first, count)) = wmo.root.doodad_sets.get(set) else {
+                    continue;
+                };
+                let (first, count) = (first as usize, count as usize);
+                for d in wmo.root.doodads.iter().skip(first).take(count) {
+                    if d.file == 0 {
+                        continue;
+                    }
+                    let local = |v: [f32; 3]| {
+                        let s = f64::from(d.scale);
+                        let v = [f64::from(v[0]) * s, f64::from(v[1]) * s, f64::from(v[2]) * s];
+                        let r = turned(d.rotation, v);
+                        [
+                            (f64::from(d.at[0]) + r[0]) as f32,
+                            (f64::from(d.at[1]) + r[1]) as f32,
+                            (f64::from(d.at[2]) + r[2]) as f32,
+                        ]
+                    };
+                    let f = |v: [f32; 3]| place(local(v));
+                    if !near_eye(f([0.0; 3])) {
+                        continue;
+                    }
+                    by_model.entry(d.file).or_default().push(matrix_from(f));
+                }
+            }
+        }
+        let mut doodad_ranges: Vec<(u32, u32, u32)> = Vec::new();
+        let mut matrices: Vec<[f32; 16]> = placed.iter().map(|(_, m)| *m).collect();
+        for (file, ms) in by_model {
+            self.world_doodad(file, assets);
+            if !matches!(self.world.doodads.get(&file), Some(Some(_))) {
+                continue;
+            }
+            doodad_ranges.push((file, matrices.len() as u32, ms.len() as u32));
+            matrices.extend(ms);
+        }
+        if !matrices.is_empty() {
+            let bytes: Vec<u8> = matrices
                 .iter()
-                .flat_map(|(_, m)| bytemuck::cast_slice::<f32, u8>(m).to_vec())
+                .flat_map(|m| bytemuck::cast_slice::<f32, u8>(m).to_vec())
                 .collect();
             let len = bytes.len() as u64;
             if self
@@ -612,17 +680,31 @@ impl Renderer {
                     }
                 }
             }
+            // (each model's doodads together)
+            for &(file, first, count) in &doodad_ranges {
+                let Some(Some(d)) = self.world.doodads.get(&file) else {
+                    continue;
+                };
+                let (at, end) = (u64::from(first) * 64, u64::from(first + count) * 64);
+                pass.set_vertex_buffer(1, instances.slice(at..end));
+                pass.set_vertex_buffer(0, d.vertices.slice(..));
+                pass.set_index_buffer(d.indices.slice(..), wgpu::IndexFormat::Uint32);
+                for batch in d.batches.iter().filter(|b| b.blended == blended) {
+                    pass.set_bind_group(1, &batch.group, &[]);
+                    pass.draw_indexed(batch.start..batch.start + batch.count, 0, 0..count);
+                }
+            }
         }
     }
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct BVertex {
-    pos: [f32; 3],
-    normal: [f32; 3],
-    uv: [f32; 2],
-    color: [f32; 4],
+pub(crate) struct BVertex {
+    pub(crate) pos: [f32; 3],
+    pub(crate) normal: [f32; 3],
+    pub(crate) uv: [f32; 2],
+    pub(crate) color: [f32; 4],
 }
 
 /// A batch of a building's group: its indices and its material.
@@ -888,5 +970,125 @@ impl Renderer {
             GpuBuilding { groups }
         });
         self.world.buildings.insert(file, gpu);
+    }
+}
+
+/// A doodad model on the GPU: its standing pose's mesh, its batches.
+struct GpuDoodad {
+    vertices: wgpu::Buffer,
+    indices: wgpu::Buffer,
+    batches: Vec<GpuBatch>,
+}
+
+/// A matrix (columns) of a place-turning function: the model's axes and
+/// origin on the map.
+fn matrix_from(f: impl Fn([f32; 3]) -> [f64; 3]) -> [f32; 16] {
+    let o = f([0.0; 3]);
+    let axis = |v: [f32; 3]| {
+        let p = f(v);
+        [(p[0] - o[0]) as f32, (p[1] - o[1]) as f32, (p[2] - o[2]) as f32]
+    };
+    let (x, y, z) = (axis([1.0, 0.0, 0.0]), axis([0.0, 1.0, 0.0]), axis([0.0, 0.0, 1.0]));
+    [
+        x[0], x[1], x[2], 0.0, y[0], y[1], y[2], 0.0, z[0], z[1], z[2], 0.0, o[0] as f32,
+        o[1] as f32, o[2] as f32, 1.0,
+    ]
+}
+
+/// A quaternion's turn of a vector.
+fn turned(q: [f32; 4], v: [f64; 3]) -> [f64; 3] {
+    let (x, y, z, w) = (
+        f64::from(q[0]),
+        f64::from(q[1]),
+        f64::from(q[2]),
+        f64::from(q[3]),
+    );
+    let c = |a: [f64; 3], b: [f64; 3]| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
+    let u = [x, y, z];
+    let t = c(u, v);
+    let t = [t[0] + w * v[0], t[1] + w * v[1], t[2] + w * v[2]];
+    let t = c(u, t);
+    [v[0] + 2.0 * t[0], v[1] + 2.0 * t[1], v[2] + 2.0 * t[2]]
+}
+
+impl Renderer {
+    /// A doodad model on the GPU, read and posed on first use: its
+    /// standing pose (the first frame of "Stand"), its own textures.
+    fn world_doodad(&mut self, file: u32, assets: &mut dyn Assets) {
+        if self.world.doodads.contains_key(&file) {
+            return;
+        }
+        let Some((verts, indices, batches)) = self.model_mesh(file, assets) else {
+            self.world.doodads.insert(file, None);
+            return;
+        };
+        let mut gpu_batches = Vec::new();
+        for (start, count, texture, blend, flags) in batches {
+            let tex = match texture {
+                0 => self.white,
+                f => self.model_texture(f, assets),
+            };
+            let how: [f32; 4] = [
+                if blend == 1 { 1.0 } else { 0.0 },
+                0.0,
+                if flags & 0x1 != 0 { 1.0 } else { 0.0 },
+                0.0,
+            ];
+            let how = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("doodad material"),
+                contents: bytemuck::cast_slice(&how),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+            let setup = self.world.setup.as_ref().expect("the world's setup");
+            let bsetup = self.world.building_setup.as_ref().expect("the buildings' setup");
+            let group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("doodad material"),
+                layout: &bsetup.material_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&self.textures[tex].view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&setup.tiled),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: how.as_entire_binding(),
+                    },
+                ],
+            });
+            gpu_batches.push(GpuBatch {
+                start,
+                count,
+                group,
+                blended: blend >= 2,
+            });
+        }
+        let vertices = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("doodad"),
+            contents: bytemuck::cast_slice(&verts),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let index_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("doodad"),
+            contents: bytemuck::cast_slice(&indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        self.world.doodads.insert(
+            file,
+            Some(GpuDoodad {
+                vertices,
+                indices: index_buffer,
+                batches: gpu_batches,
+            }),
+        );
     }
 }
