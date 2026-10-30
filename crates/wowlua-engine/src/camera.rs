@@ -139,6 +139,16 @@ pub fn eye(vm: &mut Vm) -> Option<Eye> {
         x - look.1 * v.distance,
         z + PIVOT - look.2 * v.distance,
     );
+    // (in front of what stands between it and the player, T524)
+    let pivot = [y, x, z + PIVOT];
+    if let Some(f) = crate::clientdata::hit(vm, map, pivot, [at.0, at.1, at.2]) {
+        let keep = (f - NEAR / v.distance.max(NEAR)).max(0.0);
+        at = (
+            pivot[0] + (at.0 - pivot[0]) * keep,
+            pivot[1] + (at.1 - pivot[1]) * keep,
+            pivot[2] + (at.2 - pivot[2]) * keep,
+        );
+    }
     if let Some(ground) = crate::clientdata::ground(vm, map, at.0, at.1) {
         at.2 = at.2.max(ground + NEAR * 2.0);
     }

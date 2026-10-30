@@ -1347,8 +1347,8 @@ pub(crate) fn player_world(vm: &mut Vm) -> Option<(f64, f64, f64, f64)> {
             (top - v * height, left - u * width, 0.0, instance)
         }
     };
-    // (on the ground while the 3D world is on, T522)
-    let z = crate::clientdata::ground(vm, instance, y, x).unwrap_or(z);
+    // (on the floor under them while the 3D world is on, T522, T524)
+    let z = crate::clientdata::floor(vm, instance, [y, x, z]).unwrap_or(z);
     Some((y, x, z, instance))
 }
 
@@ -1613,14 +1613,15 @@ pub fn place_of(vm: &mut Vm, id: units::UnitId) -> Option<(f64, f64, f64)> {
     }
     let u = &engine(vm).units.list[id.0];
     let (y, x, z) = u.world.map(|(y, x)| (y, x, u.z))?;
-    // (on the ground of the player's map while the 3D world is on, T522)
+    // (on the floor under it, of the player's map, while the 3D world is
+    // on, T522, T524)
     let map = engine(vm)
         .world
         .character
         .position
         .world
         .map_or(0.0, |w| w.3);
-    let z = crate::clientdata::ground(vm, map, y, x).unwrap_or(z);
+    let z = crate::clientdata::floor(vm, map, [y, x, z]).unwrap_or(z);
     Some((y, x, z))
 }
 
@@ -1724,6 +1725,23 @@ pub fn behind(vm: &mut Vm, id: units::UnitId) -> bool {
     // (the turn between, -pi to pi)
     let off = (off + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU) - std::f64::consts::PI;
     off.abs() > std::f64::consts::FRAC_PI_2 + 1e-9
+}
+
+/// Whether two units see each other: the line between their eyes (2
+/// yards over their feet) meets no hill and no building while the 3D world
+/// is on (decision T524); true where either has no place.
+pub fn in_sight(vm: &mut Vm, a: units::UnitId, b: units::UnitId) -> bool {
+    let (Some(pa), Some(pb)) = (place_of(vm, a), place_of(vm, b)) else {
+        return true;
+    };
+    let map = engine(vm)
+        .world
+        .character
+        .position
+        .world
+        .map_or(0.0, |w| w.3);
+    let eye = |p: (f64, f64, f64)| [p.0, p.1, p.2 + 2.0];
+    crate::clientdata::hit(vm, map, eye(pa), eye(pb)).is_none()
 }
 
 /// A unit's distance now `d`: gossip and the group's range told.

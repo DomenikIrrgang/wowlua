@@ -59,3 +59,63 @@ return z, wz";
     let wolf: f64 = on[1].parse().expect("a height");
     assert!(wolf > 75.0 && wolf < 95.0 && wolf != 83.53, "{wolf}");
 }
+
+/// Northshire Abbey's middle (north, west) and how far a side reaches,
+/// from the client's own placement.
+fn abbey() -> Option<(f64, f64, f64)> {
+    let root = std::env::var_os("WOWLUA_WOW_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| "/Applications/World of Warcraft".into());
+    let storage = wowlua_casc::FsStorage { root };
+    let product = wowlua_casc::Casc::product_of_folder(&storage, "_forever_")?;
+    let casc = wowlua_casc::Casc::open(Box::new(storage), &product).ok()?;
+    let mut lib = wowlua_casc::display::Library::default();
+    let objects = lib.objects(&casc, 0, 32, 48)?;
+    let from_start = |x: &wowlua_casc::obj::Building| (x.at[0] + 8949.95).hypot(x.at[1] + 132.493);
+    let b = objects
+        .buildings
+        .iter()
+        .filter(|b| b.bounds[1][0] - b.bounds[0][0] < 300.0)
+        .min_by(|a, b| from_start(a).total_cmp(&from_start(b)))?;
+    Some((
+        (b.bounds[0][0] + b.bounds[1][0]) / 2.0,
+        (b.bounds[0][1] + b.bounds[1][1]) / 2.0,
+        (b.bounds[1][0] - b.bounds[0][0]).max(b.bounds[1][1] - b.bounds[0][1]),
+    ))
+}
+
+/// With the world on, the abbey's walls stop the player running into it
+/// and stand between them and a wolf on its other side: a spell at the
+/// wolf is refused (decision T524).
+#[test]
+fn the_buildings_stop_the_player_and_hide_the_target() {
+    let (Some(mut vm), Some((n, w, reach))) = (session(), abbey()) else {
+        eprintln!("no camelot client: skipped");
+        return;
+    };
+    wowlua_engine::set_world(&mut vm, true);
+    let src = format!(
+        "mock.moveTo({{ world = {{ y = {north}, x = {w}, z = 0, instanceID = 0 }}, facing = math.pi }})
+mock.defineSpell(133, {{ name = 'Fireball', known = true, maxRange = 400 }})
+Errors = {{}}
+local f = CreateFrame('Frame')
+f:RegisterEvent('UI_ERROR_MESSAGE')
+f:SetScript('OnEvent', function(_, _, _, text) Errors[#Errors + 1] = text end)
+local wolf = mock.spawnUnit({{ name = 'Wolf', reaction = 'hostile', world = {{ y = {south}, x = {w}, z = 0 }} }})
+mock.player:target(wolf)
+mock.player:useSpell(133)
+MoveForwardStart()
+mock.advanceFrames(600, 1000 / 60)
+MoveForwardStop()
+local y = UnitPosition('player')
+return y, table.concat(Errors, ', ')",
+        north = n + reach,
+        south = n - reach,
+    );
+    let out = run(&mut vm, &src);
+    let y: f64 = out[0].parse().expect("a place");
+    // (ten seconds south, seventy yards: stopped at the wall, between where
+    // it started and the abbey's middle)
+    assert!(y < n + reach && y > n, "{y} of {n} + {reach}");
+    assert_eq!(out[1], "Target not in line of sight");
+}
