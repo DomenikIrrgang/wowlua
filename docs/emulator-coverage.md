@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,169 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,170 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,169 rules unverified: each rests on Blizzard's
+The engine's code marks 1,170 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1003,7 +1003,7 @@ page changes only when a rule is added, removed or reworded.
 - [camera.rs](../crates/wowlua-engine/src/camera.rs): `SetView(n)`: the camera where `SaveView(n)` left it (a view never saved: as it is; unverified).
 - [camera.rs](../crates/wowlua-engine/src/camera.rs): `CenterCamera()`: the camera behind the player again (unverified).
 
-### casting (10)
+### casting (11)
 
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): Verified against the client (`/stdtest engine record cast`, Forever 70425): the player's `SENT(unit, target name | ni...
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): Secret where units' identities are (`ConditionalSecret`): a paladin's Judgement in Ragefire Chasm (its cast GUIDs' ma...
@@ -1011,6 +1011,7 @@ page changes only when a rule is added, removed or reworded.
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): Another unit's new cast replaces the one running (unverified).
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): Moving: a spell with a cast time refused (recorded, `profession`: Holy Light, 2.5 s, pressed on the walk; unverified:...
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): Why the client refuses a spell at the target (decision T519): out of its range ("Out of range.", 402; recorded: Judge...
+- [casting.rs](../crates/wowlua-engine/src/casting.rs): (a hill or a building between, while the 3D world is on, T524; unverified: the code)
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): `player:setMoving(moving)`: the player starts or stops moving (`PLAYER_STARTED_MOVING`, `PLAYER_STOPPED_MOVING`, reco...
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): `player:spellFailedQuiet(spellID, { client? })`: a spell the server cast for the player (a proc) failing without a wo...
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): `player:castFailed(spellID, { error, client? })`: the player's cast of `spellID` refused, the reason `error` told: a...
@@ -2437,6 +2438,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - The other clients' answers (decisions T510, T511)
 - Answered on the beta's last day (2026-10-24)
 - Moving and facing (decisions T516, T519)
+- A solid world (decision T524)
 - The camera (decisions T520, T521)
 - The dev tools (0.12.1)
 
