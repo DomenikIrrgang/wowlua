@@ -407,6 +407,13 @@ impl Assets for ClientAssets {
         lib.building(casc, file)
     }
 
+    fn minimap_tile(&mut self, map: u32, x: i32, y: i32) -> Option<u32> {
+        let casc = self.casc.as_ref()?;
+        let lib = library_of(casc);
+        let mut lib = lib.lock().ok()?;
+        lib.minimap_tile(casc, map, u32::try_from(x).ok()?, u32::try_from(y).ok()?)
+    }
+
     fn model(&mut self, source: &ModelSource) -> Option<Display> {
         let casc = self.casc.as_ref()?;
         let lib = library_of(casc);

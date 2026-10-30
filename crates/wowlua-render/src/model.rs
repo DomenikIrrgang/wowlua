@@ -447,6 +447,15 @@ impl Renderer {
     }
 
     /// A model file, read once (with its skeleton and first skin).
+    /// A model file's radius (yards), its file read (not drawn) on first
+    /// use: how big a doodad looks (decision T525).
+    pub(crate) fn model_radius(&mut self, file: u32, assets: &mut dyn Assets) -> Option<f32> {
+        if !self.loaded(file, assets) {
+            return None;
+        }
+        Some(self.models.files.get(&file)?.as_ref()?.model.radius)
+    }
+
     /// A model file's standing pose as one static mesh (the 3D world's
     /// doodads): its vertices (posed, with their first coordinates), its
     /// indices, and each batch's range, texture (its own, kind 0; else
@@ -456,7 +465,11 @@ impl Renderer {
         &mut self,
         file: u32,
         assets: &mut dyn Assets,
-    ) -> Option<(Vec<crate::world::BVertex>, Vec<u32>, Vec<(u32, u32, u32, u16, u16)>)> {
+    ) -> Option<(
+        Vec<crate::world::BVertex>,
+        Vec<u32>,
+        Vec<(u32, u32, u32, u16, u16)>,
+    )> {
         if !self.loaded(file, assets) {
             return None;
         }
@@ -479,7 +492,11 @@ impl Renderer {
             let Some(sub) = skin.submeshes.get(b.submesh as usize) else {
                 continue;
             };
-            let index = m.texture_combos.get(b.texture_combo as usize).copied().unwrap_or(0) as usize;
+            let index = m
+                .texture_combos
+                .get(b.texture_combo as usize)
+                .copied()
+                .unwrap_or(0) as usize;
             let texture = match m.textures.get(index) {
                 Some(t) if t.kind == 0 => t.file,
                 _ => 0,
