@@ -169,6 +169,11 @@ pub trait ClientData: Send + Sync {
     fn minimap_tile(&self, _map: u32, _x: u32, _y: u32) -> Option<u32> {
         None
     }
+    /// The ground's height at a place of a map (north and west yards), from
+    /// its terrain (decision T522); none off its tiles or over a hole.
+    fn ground(&self, _map: u32, _north: f64, _west: f64) -> Option<f64> {
+        None
+    }
     /// A spell as the client's tables (and its hotfixes) have it
     /// (decision T391).
     fn spell(&self, _id: u32) -> Option<ClientSpell> {
@@ -487,6 +492,15 @@ pub(crate) fn item(vm: &Vm, id: i64) -> Option<ClientItem> {
 /// it.
 pub(crate) fn minimap_tile(vm: &Vm, map: u32, x: u32, y: u32) -> Option<u32> {
     data(vm)?.minimap_tile(map, x, y)
+}
+
+/// The ground's height at a place of a map, from its terrain, while the
+/// 3D world is on (decision T522).
+pub(crate) fn ground(vm: &Vm, map: f64, north: f64, west: f64) -> Option<f64> {
+    if !crate::engine(vm).world_on {
+        return None;
+    }
+    data(vm)?.ground(u32::try_from(map as i64).ok()?, north, west)
 }
 
 /// The UI camera the client's tables give an item on a character of a

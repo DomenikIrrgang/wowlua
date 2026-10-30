@@ -1339,12 +1339,17 @@ fn vector_xy(vm: &mut Vm, c: NativeCall) -> Ret {
 /// Unverified: never recorded; the height (z) unknown, 0.
 pub(crate) fn player_world(vm: &mut Vm) -> Option<(f64, f64, f64, f64)> {
     let p = engine(vm).world.character.position.clone();
-    if p.world.is_some() {
-        return p.world;
-    }
-    let (map, u, v) = (p.map_id?, p.x?, p.y?);
-    let (instance, left, top, width, height) = crate::maps::world_rect(vm, map as i64)?;
-    Some((top - v * height, left - u * width, 0.0, instance))
+    let (y, x, z, instance) = match p.world {
+        Some(w) => w,
+        None => {
+            let (map, u, v) = (p.map_id?, p.x?, p.y?);
+            let (instance, left, top, width, height) = crate::maps::world_rect(vm, map as i64)?;
+            (top - v * height, left - u * width, 0.0, instance)
+        }
+    };
+    // (on the ground while the 3D world is on, T522)
+    let z = crate::clientdata::ground(vm, instance, y, x).unwrap_or(z);
+    Some((y, x, z, instance))
 }
 
 fn unit_position(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -1355,10 +1360,9 @@ fn unit_position(vm: &mut Vm, c: NativeCall) -> Ret {
         // Another unit: where the test put it (`world`), in the player's
         // instance; else nothing (unverified).
         Some(id) if id != units::PLAYER => {
-            let Some((y, x)) = engine(vm).units.list[id.0].world else {
+            let Some((y, x, z)) = place_of(vm, id) else {
                 return Ok(vec![]);
             };
-            let z = engine(vm).units.list[id.0].z;
             let instance = player_world(vm).map_or(0.0, |w| w.3);
             return Ok(vec![
                 Value::Num(y),
@@ -1608,7 +1612,16 @@ pub fn place_of(vm: &mut Vm, id: units::UnitId) -> Option<(f64, f64, f64)> {
         return player_world(vm).map(|(y, x, z, _)| (y, x, z));
     }
     let u = &engine(vm).units.list[id.0];
-    u.world.map(|(y, x)| (y, x, u.z))
+    let (y, x, z) = u.world.map(|(y, x)| (y, x, u.z))?;
+    // (on the ground of the player's map while the 3D world is on, T522)
+    let map = engine(vm)
+        .world
+        .character
+        .position
+        .world
+        .map_or(0.0, |w| w.3);
+    let z = crate::clientdata::ground(vm, map, y, x).unwrap_or(z);
+    Some((y, x, z))
 }
 
 /// The straight distance between two places, to the thousandth of a yard.
