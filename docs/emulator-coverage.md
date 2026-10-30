@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,159 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,160 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -398,13 +398,13 @@ The modules that answer, by how many functions and methods:
 | `queries` | model | 62 |
 | `facts` | model | 58 |
 | `auction` | model | 52 |
-| `protection` | model | 51 |
 | `traits` | recorded | 47 |
 | `quests` | model | 41 |
 | `bindings` | model | 40 |
 | `collected` | model | 38 |
 | `framescript` | model | 36 |
 | `gamedata` | model | 36 |
+| `protection` | model | 35 |
 | `character` | model | 34 |
 | `misc` | model | 32 |
 | `lfg` | model | 31 |
@@ -426,6 +426,7 @@ The modules that answer, by how many functions and methods:
 | `pets` | model | 18 |
 | `replies` | model | 18 |
 | `clock` | model | 16 |
+| `movement` | model | 16 |
 | `traits` | model | 16 |
 | `cursor` | model | 15 |
 | `animations` | model | 14 |
@@ -842,7 +843,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,159 rules unverified: each rests on Blizzard's
+The engine's code marks 1,160 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1773,6 +1774,10 @@ page changes only when a rule is added, removed or reworded.
 - [misc.rs](../crates/wowlua-engine/src/misc.rs): `ClassicExpansionAtLeast(level)`: true for every level (the user's probe: true for 0 to 4; LibDualSpec's note "Classi...
 - [misc.rs](../crates/wowlua-engine/src/misc.rs): `ClassicExpansionAtMost(level)`: false for every level (the user's probe: false for 0 to 4, so Forever takes LibDualS...
 - [misc.rs](../crates/wowlua-engine/src/misc.rs): `GetThreatStatusColor(status)`: grey, yellow, orange, red for 0 to 3, magenta above, white at 4294967295, as single-p...
+
+### movement (1)
+
+- [movement.rs](../crates/wowlua-engine/src/movement.rs): Speeds: running 7 yards a second, walking 2.5, backwards 4.5, a turn half a circle a second (the game's defaults; unv...
 
 ### objects2 (34)
 
