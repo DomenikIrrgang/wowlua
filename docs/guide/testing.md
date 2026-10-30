@@ -512,8 +512,8 @@ $ wowlua data pull --flavor camelot --wow "/Applications/World of Warcraft"
 
 `--world` turns on the 3D world from your installation: the character and
 the units stand on the zone's ground (`UnitPosition` answers its height),
-and `wowlua screenshot --world` draws the terrain and its buildings behind
-the UI, as far as the game's view distance setting reaches. It is off by default, so the
+and `wowlua screenshot --world` draws the terrain, its buildings, trees and
+props behind the UI, as far as the game's view distance setting reaches. It is off by default, so the
 places a test gives stay as they are.
 
 ## Coverage

@@ -257,7 +257,11 @@ pub struct Scene {
 
 /// The 3D world as the camera sees it (decision T522): the map, the eye
 /// and its axes (north, west and up yards), the horizontal field of view
-/// (radians) and how far the world is drawn (yards, `farclip`).
+/// (radians) and how far the world is drawn (yards, `farclip`); within
+/// `detail` yards the terrain in full (`terrainLodDist`), beyond it its
+/// tiles' minimap pictures; within `objects` yards the buildings and
+/// doodads (`horizonStart`), a doodad while it looks at least `cull`
+/// pixels big (`lodObjectCullSize`; decision T525).
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorldView {
     pub map: u32,
@@ -266,6 +270,9 @@ pub struct WorldView {
     pub up: [f64; 3],
     pub fov: f64,
     pub far: f64,
+    pub detail: f64,
+    pub objects: f64,
+    pub cull: f64,
 }
 
 /// The world's view while it is on and the player is at a place.
@@ -275,9 +282,15 @@ fn world_view(vm: &mut Vm) -> Option<WorldView> {
     }
     let map = crate::character::player_world(vm)?.3;
     let e = crate::camera::eye(vm)?;
-    let far = crate::framescript::cvar_get(vm, "farclip")
-        .and_then(|v| v.parse::<f64>().ok())
-        .unwrap_or(1000.0);
+    let setting = |vm: &mut Vm, name: &str, default: f64| {
+        crate::framescript::cvar_get(vm, name)
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(default)
+    };
+    let far = setting(vm, "farclip", 1000.0);
+    let detail = setting(vm, "terrainLodDist", 500.0).min(far);
+    let objects = setting(vm, "horizonStart", 1900.0).min(far);
+    let cull = setting(vm, "lodObjectCullSize", 18.0);
     let v = |a: (f64, f64, f64)| [a.0, a.1, a.2];
     Some(WorldView {
         map: map as u32,
@@ -286,6 +299,9 @@ fn world_view(vm: &mut Vm) -> Option<WorldView> {
         up: v(e.up),
         fov: e.fov,
         far,
+        detail,
+        objects,
+        cull,
     })
 }
 

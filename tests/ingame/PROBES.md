@@ -903,6 +903,16 @@ Unverified numbers and answers from M13's movement and ranges. A paladin
 2. **A step's height**: walk onto a crate or a ledge and note the highest
    one you step onto without jumping (wowlua: 2 yards).
 
+## How far the world is drawn (decision T525)
+
+1. **The settings**: enter
+   `/run for _,n in ipairs({"farclip","terrainLodDist","horizonStart","lodObjectCullSize","lodObjectMinSize","wmoLodDist"}) do print(n, GetCVar(n)) end`.
+   Answers the view distance settings wowlua draws by.
+2. **Small things far away**: stand at Northshire's start facing the
+   abbey, then walk back from it. Note at about which distance the
+   lanterns and crates disappear (wowlua: where they look smaller than 18
+   pixels).
+
 ## The camera (decisions T520, T521)
 
 The camera's numbers wowlua could not read from the settings. Any

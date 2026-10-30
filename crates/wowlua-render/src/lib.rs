@@ -64,6 +64,10 @@ pub trait Assets {
     fn building(&mut self, _file: u32) -> Option<std::sync::Arc<wowlua_casc::display::Building>> {
         None
     }
+    /// A map's minimap picture of a terrain tile (a file ID; decision T525).
+    fn minimap_tile(&mut self, _map: u32, _x: i32, _y: i32) -> Option<u32> {
+        None
+    }
 }
 
 /// An atlas's part of its file.
