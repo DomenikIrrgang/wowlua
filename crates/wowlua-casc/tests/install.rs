@@ -221,6 +221,48 @@ fn reads_the_minimap_tiles() {
     }
 }
 
+/// Every product's terrain (decision T522): the ground where a new human
+/// starts, at Northshire Abbey (-8949.95, -132.49), is where the game puts
+/// their feet (83.53), and its tile has its textures and their blends.
+#[test]
+fn reads_the_terrain() {
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let storage = FsStorage { root: root.clone() };
+    for (product, version) in Casc::products(&storage) {
+        let casc = Casc::open(Box::new(FsStorage { root: root.clone() }), &product).expect("opens");
+        let mut lib = wowlua_casc::display::Library::default();
+        let started = std::time::Instant::now();
+        let ground = lib.ground(&casc, 0, -8949.95, -132.493);
+        let tile = lib.terrain_tile(&casc, 0, 32, 48).expect("the tile");
+        let layers = tile
+            .chunks
+            .iter()
+            .map(|c| c.layers.len())
+            .max()
+            .unwrap_or(0);
+        let blends = tile
+            .chunks
+            .iter()
+            .flat_map(|c| &c.layers)
+            .filter(|l| l.alpha.is_some())
+            .count();
+        eprintln!(
+            "{product} {version}: ground {ground:?} in {:?}, {} textures, up to {layers} layers, {blends} blends",
+            started.elapsed(),
+            tile.textures.len(),
+        );
+        let ground = ground.expect("the ground");
+        assert!((ground - 83.53).abs() < 1.5, "{product}: {ground}");
+        assert!(
+            !tile.textures.is_empty() && layers >= 2 && blends > 0,
+            "{product}"
+        );
+    }
+}
+
 /// Every product's `ItemSparse` (a sparse table: records of their own
 /// sizes, strings inline) reads: the Hearthstone's name and quality, and
 /// the `Item` table's class for it.

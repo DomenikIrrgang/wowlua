@@ -114,7 +114,16 @@ pub struct Library {
     creature_cache: Option<HashMap<u32, Vec<u32>>>,
     /// Each map's minimap tiles, read from its WDT on first use.
     minimap: HashMap<u32, Option<Vec<u32>>>,
+    /// Each map's terrain tiles' files (decision T522).
+    terrain_files: HashMap<u32, Option<crate::wdt::Tiles>>,
+    /// The terrain tiles read, by map, column and row: the last
+    /// [`TILES_KEPT`] asked for.
+    terrain: HashMap<(u32, i32, i32), (u64, Option<std::sync::Arc<crate::adt::Tile>>)>,
+    terrain_asked: u64,
 }
+
+/// How many terrain tiles a library keeps read (a 7 × 7 around the player).
+const TILES_KEPT: usize = 49;
 
 impl Library {
     pub fn table(&mut self, casc: &Casc, name: &'static str) -> Option<&Table> {
@@ -134,22 +143,83 @@ impl Library {
             return None;
         }
         if !self.minimap.contains_key(&map) {
-            let wdt = self.table(casc, "Map").and_then(|t| {
-                let r = t.row(map)?;
-                let named = t.has("WdtFileDataID").then(|| r.int("WdtFileDataID"));
-                match named.filter(|f| *f != 0) {
-                    Some(f) => casc.file_by_id(f),
-                    None => {
-                        let dir = r.string("Directory")?;
-                        casc.file_by_path(&format!("world/maps/{dir}/{dir}.wdt"))
-                    }
-                }
-            });
-            let tiles = wdt.and_then(|b| crate::wdt::minimap_tiles(&b));
+            let tiles = self
+                .wdt(casc, map)
+                .and_then(|b| crate::wdt::minimap_tiles(&b));
             self.minimap.insert(map, tiles);
         }
         let t = self.minimap.get(&map)?.as_ref()?[(y * 64 + x) as usize];
         (t != 0).then_some(t)
+    }
+
+    /// A map's WDT: the file the map names, else the one at its
+    /// directory's path.
+    fn wdt(&mut self, casc: &Casc, map: u32) -> Option<Vec<u8>> {
+        let t = self.table(casc, "Map")?;
+        let r = t.row(map)?;
+        let named = t.has("WdtFileDataID").then(|| r.int("WdtFileDataID"));
+        match named.filter(|f| *f != 0) {
+            Some(f) => casc.file_by_id(f),
+            None => {
+                let dir = r.string("Directory")?;
+                casc.file_by_path(&format!("world/maps/{dir}/{dir}.wdt"))
+            }
+        }
+    }
+
+    /// A map's terrain tile at a column and row (0 to 63, from the
+    /// north-west), read from its root and textures files on first use
+    /// (decision T522); none where the map has no tile.
+    pub fn terrain_tile(
+        &mut self,
+        casc: &Casc,
+        map: u32,
+        x: i32,
+        y: i32,
+    ) -> Option<std::sync::Arc<crate::adt::Tile>> {
+        if !(0..64).contains(&x) || !(0..64).contains(&y) {
+            return None;
+        }
+        self.terrain_asked += 1;
+        let asked = self.terrain_asked;
+        if let Some((when, tile)) = self.terrain.get_mut(&(map, x, y)) {
+            *when = asked;
+            return tile.clone();
+        }
+        if !self.terrain_files.contains_key(&map) {
+            let tiles = self.wdt(casc, map).and_then(|b| crate::wdt::tiles(&b));
+            self.terrain_files.insert(map, tiles);
+        }
+        let tile = self.terrain_files.get(&map)?.as_ref().and_then(|t| {
+            let files = t.tiles[(y * 64 + x) as usize];
+            let big = t.flags & (0x4 | 0x80) != 0;
+            let root = (files.root != 0).then(|| casc.file_by_id(files.root))??;
+            let tex = (files.tex0 != 0)
+                .then(|| casc.file_by_id(files.tex0))
+                .flatten();
+            crate::adt::read(&root, tex.as_deref(), big).map(std::sync::Arc::new)
+        });
+        // (the tile asked for longest ago goes)
+        if self.terrain.len() >= TILES_KEPT
+            && let Some(old) = self
+                .terrain
+                .iter()
+                .min_by_key(|(_, (when, _))| *when)
+                .map(|(k, _)| *k)
+        {
+            self.terrain.remove(&old);
+        }
+        self.terrain.insert((map, x, y), (asked, tile.clone()));
+        tile
+    }
+
+    /// The ground's height at a place of a map (north and west yards), from
+    /// its terrain (decision T522); none off its tiles or over a hole.
+    pub fn ground(&mut self, casc: &Casc, map: u32, north: f64, west: f64) -> Option<f64> {
+        let (x, y) = crate::adt::tile_of(north, west);
+        let tile = self.terrain_tile(casc, map, x, y)?;
+        let (n, w) = crate::adt::corner(x, y);
+        tile.height_at(n - north, w - west)
     }
 
     /// A creature display (`CreatureDisplayInfo` ID).

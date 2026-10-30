@@ -31,6 +31,71 @@ pub fn minimap_tiles(data: &[u8]) -> Option<Vec<u32>> {
     None
 }
 
+/// A map's terrain tiles (decision T522): each tile's files, row by row from
+/// the north-west (`tiles[y * 64 + x]`, all 0 for none), and the map's
+/// flags (`MPHD`: 0x4 or 0x80, the tiles' texture blends at 8 bits).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Tiles {
+    pub flags: u32,
+    pub tiles: Vec<TileFiles>,
+}
+
+/// A terrain tile's files (`MAID`): its root (heights), objects, textures
+/// and the rest.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TileFiles {
+    pub root: u32,
+    pub obj0: u32,
+    pub obj1: u32,
+    pub tex0: u32,
+    pub lod: u32,
+    pub map_texture: u32,
+    pub map_texture_n: u32,
+    pub minimap: u32,
+}
+
+/// A WDT's tiles and flags, none without its `MAID` chunk (a WMO-only map).
+pub fn tiles(data: &[u8]) -> Option<Tiles> {
+    let mut o = 0;
+    let mut flags = 0;
+    while o + 8 <= data.len() {
+        let tag = &data[o..o + 4];
+        let size = u32::from_le_bytes(data[o + 4..o + 8].try_into().ok()?) as usize;
+        let body = data.get(o + 8..o + 8 + size)?;
+        let at = |i: usize| -> u32 {
+            body.get(i..i + 4)
+                .map_or(0, |b| u32::from_le_bytes(b.try_into().unwrap()))
+        };
+        if tag == b"DHPM" {
+            flags = at(0);
+        }
+        if tag == b"DIAM" {
+            let per = size / 4096;
+            if per < 32 {
+                return None;
+            }
+            let tiles = (0..4096)
+                .map(|i| {
+                    let b = i * per;
+                    TileFiles {
+                        root: at(b),
+                        obj0: at(b + 4),
+                        obj1: at(b + 8),
+                        tex0: at(b + 12),
+                        lod: at(b + 16),
+                        map_texture: at(b + 20),
+                        map_texture_n: at(b + 24),
+                        minimap: at(b + 28),
+                    }
+                })
+                .collect();
+            return Some(Tiles { flags, tiles });
+        }
+        o += 8 + size;
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -58,5 +123,9 @@ mod tests {
         assert_eq!(tiles[48 * 64 + 32], 204493);
         assert_eq!(tiles.iter().filter(|t| **t != 0).count(), 1);
         assert_eq!(minimap_tiles(&chunk(b"REVM", &[0; 4])), None);
+        let all = super::tiles(&wdt).unwrap();
+        assert_eq!(all.tiles[48 * 64 + 32].root, 7);
+        assert_eq!(all.tiles[48 * 64 + 32].minimap, 204493);
+        assert_eq!(all.flags, 0);
     }
 }

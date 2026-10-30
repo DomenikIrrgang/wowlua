@@ -8,6 +8,7 @@
 //! the browser's File System Access API there), so the crate has no file
 //! access of its own (decision T212).
 
+pub mod adt;
 pub mod atlas;
 pub mod blp;
 mod blte;
