@@ -122,6 +122,11 @@ pub struct TestArgs {
     /// so a test gives the same result on every machine
     #[arg(long)]
     pub game_data: bool,
+    /// Turn on the 3D world from your WoW installation: the character and
+    /// units stand on its ground, and screenshots show it behind the UI;
+    /// off by default (it reads the installation, as `--game-data` does)
+    #[arg(long)]
+    pub world: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -165,6 +170,10 @@ pub struct ScreenshotArgs {
     /// The PNG to write
     #[arg(short = 'o', long = "output")]
     pub output: PathBuf,
+    /// Draw the 3D world from your WoW installation behind the UI, the
+    /// character and units on its ground; off by default
+    #[arg(long)]
+    pub world: bool,
 }
 
 #[derive(Args, Debug, Clone)]

@@ -73,6 +73,7 @@ fn main() {
             },
             time: 0.0,
         })],
+        world: None,
     };
     let mut r = wowlua_render::Renderer::new_blocking().expect("a GPU");
     let t = std::time::Instant::now();

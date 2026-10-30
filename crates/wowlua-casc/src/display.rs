@@ -118,9 +118,12 @@ pub struct Library {
     terrain_files: HashMap<u32, Option<crate::wdt::Tiles>>,
     /// The terrain tiles read, by map, column and row: the last
     /// [`TILES_KEPT`] asked for.
-    terrain: HashMap<(u32, i32, i32), (u64, Option<std::sync::Arc<crate::adt::Tile>>)>,
+    terrain: HashMap<(u32, i32, i32), (u64, Option<SharedTile>)>,
     terrain_asked: u64,
 }
+
+/// A terrain tile read, shared with whoever draws it.
+type SharedTile = std::sync::Arc<crate::adt::Tile>;
 
 /// How many terrain tiles a library keeps read (a 7 × 7 around the player).
 const TILES_KEPT: usize = 49;

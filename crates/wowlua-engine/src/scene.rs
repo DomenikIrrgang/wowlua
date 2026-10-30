@@ -251,6 +251,42 @@ pub struct Scene {
     pub width: u32,
     pub height: u32,
     pub items: Vec<Item>,
+    /// The 3D world behind the UI, while it is on (decision T522).
+    pub world: Option<WorldView>,
+}
+
+/// The 3D world as the camera sees it (decision T522): the map, the eye
+/// and its axes (north, west and up yards), the horizontal field of view
+/// (radians) and how far the world is drawn (yards, `farclip`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct WorldView {
+    pub map: u32,
+    pub eye: [f64; 3],
+    pub look: [f64; 3],
+    pub up: [f64; 3],
+    pub fov: f64,
+    pub far: f64,
+}
+
+/// The world's view while it is on and the player is at a place.
+fn world_view(vm: &mut Vm) -> Option<WorldView> {
+    if !engine(vm).world_on {
+        return None;
+    }
+    let map = crate::character::player_world(vm)?.3;
+    let e = crate::camera::eye(vm)?;
+    let far = crate::framescript::cvar_get(vm, "farclip")
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(1000.0);
+    let v = |a: (f64, f64, f64)| [a.0, a.1, a.2];
+    Some(WorldView {
+        map: map as u32,
+        eye: v(e.at),
+        look: v(e.look),
+        up: v(e.up),
+        fov: e.fov,
+        far,
+    })
 }
 
 const LAYERS: [&str; 5] = ["BACKGROUND", "BORDER", "ARTWORK", "OVERLAY", "HIGHLIGHT"];
@@ -2071,10 +2107,12 @@ fn build_scene(vm: &mut Vm) -> Scene {
             }
         }
     }
+    let world = world_view(vm);
     Scene {
         width,
         height,
         items,
+        world,
     }
 }
 

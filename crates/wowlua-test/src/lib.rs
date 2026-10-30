@@ -74,6 +74,10 @@ pub struct Suite<'a> {
     /// nothing (`wowlua test --game-data`, decision T366); off, a test
     /// gives the same result on every machine.
     pub game_data: bool,
+    /// The 3D world on (decision T522): the character and the units on
+    /// the installation's ground, the world behind the UI in screenshots
+    /// (`--world`); off by default.
+    pub world: bool,
     /// Called after each test with its VM and name, before the next
     /// (`wowlua screenshot`).
     pub after_test: Option<std::sync::Arc<AfterTest>>,
@@ -702,6 +706,7 @@ fn load_vm(
     {
         wowlua_engine::clientdata::set(&mut vm, data);
     }
+    wowlua_engine::set_world(&mut vm, suite.world);
     // The machine the client runs on (decision T236): the file's
     // `config({ platform = … })`, else the manifest's `test.platform`.
     let source = file

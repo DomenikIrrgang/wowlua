@@ -43,6 +43,8 @@ pub fn command(
         let Some(camera) = suite.camera.clone() else {
             return;
         };
+        // (`--world`: the 3D world behind the UI, T522)
+        suite.world = args.world;
         let root = suite.root.clone();
         let rel = std::path::Path::new(&file);
         let rel = std::fs::canonicalize(rel)

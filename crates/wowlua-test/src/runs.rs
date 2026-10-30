@@ -11,12 +11,13 @@ use wowlua_manifest::model::{CoverageSettings, TestPlatform};
 use crate::coverage::{Report, percent};
 use crate::{FileResult, SnapshotSummary, Suite, UiSource};
 
-/// How a suite runs: `-u`, `--coverage`, `--game-data`.
+/// How a suite runs: `-u`, `--coverage`, `--game-data`, `--world`.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Switches {
     pub update_snapshots: bool,
     pub coverage: bool,
     pub game_data: bool,
+    pub world: bool,
 }
 
 /// The runner's suite for a test build of `project` for `flavor`, with
@@ -35,6 +36,7 @@ pub fn suite<'a>(
         update_snapshots,
         coverage,
         game_data,
+        world,
     } = switches;
     let test_settings = &project.manifest.manifest.test;
     Suite {
@@ -69,6 +71,7 @@ pub fn suite<'a>(
         instrument,
         camera,
         game_data,
+        world,
         after_test: None,
         after_file: None,
     }

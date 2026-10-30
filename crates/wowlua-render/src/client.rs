@@ -386,6 +386,13 @@ impl Assets for ClientAssets {
         self.casc.as_ref()?.file_by_id(id)
     }
 
+    fn terrain(&mut self, map: u32, x: i32, y: i32) -> Option<Arc<wowlua_casc::adt::Tile>> {
+        let casc = self.casc.as_ref()?;
+        let lib = library_of(casc);
+        let mut lib = lib.lock().ok()?;
+        lib.terrain_tile(casc, map, x, y)
+    }
+
     fn model(&mut self, source: &ModelSource) -> Option<Display> {
         let casc = self.casc.as_ref()?;
         let lib = library_of(casc);

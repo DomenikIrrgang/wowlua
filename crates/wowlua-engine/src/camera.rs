@@ -103,12 +103,21 @@ pub fn tick(vm: &mut Vm, dt: f64) {
     set_view(vm, v);
 }
 
-/// Where a place shows on a screen `width` by `height` (its center's
-/// offset, right and up, in the screen's units), or none off it: the
-/// camera's, a horizontal field of view of `cameraFov` (90°; unverified:
-/// horizontal).
-pub fn project(vm: &mut Vm, at: (f64, f64, f64), width: f64, height: f64) -> Option<(f64, f64)> {
-    let (y, x, z, _) = crate::character::player_world(vm)?;
+/// Where the camera is and how it is turned: its eye and its axes (north,
+/// west, up), and its horizontal field of view (radians).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Eye {
+    pub at: (f64, f64, f64),
+    pub look: (f64, f64, f64),
+    pub right: (f64, f64, f64),
+    pub up: (f64, f64, f64),
+    pub fov: f64,
+}
+
+/// The camera's eye now, none while the player is at no place: never
+/// under the ground while the 3D world is on (decision T522).
+pub fn eye(vm: &mut Vm) -> Option<Eye> {
+    let (y, x, z, map) = crate::character::player_world(vm)?;
     let v = view(vm);
     let turn = crate::unitinfo::player_facing(vm) + v.yaw;
     // (north, west, up): ahead along the facing; right a quarter turn
@@ -125,20 +134,38 @@ pub fn project(vm: &mut Vm, at: (f64, f64, f64), width: f64, height: f64) -> Opt
         ahead_w * v.pitch.sin(),
         v.pitch.cos(),
     );
-    let eye = (
+    let mut at = (
         y - look.0 * v.distance,
         x - look.1 * v.distance,
         z + PIVOT - look.2 * v.distance,
     );
-    let rel = (at.0 - eye.0, at.1 - eye.1, at.2 - eye.2);
+    if let Some(ground) = crate::clientdata::ground(vm, map, at.0, at.1) {
+        at.2 = at.2.max(ground + NEAR * 2.0);
+    }
+    let fov = cvar(vm, "cameraFov", 90.0).to_radians().clamp(0.1, 3.0);
+    Some(Eye {
+        at,
+        look,
+        right,
+        up,
+        fov,
+    })
+}
+
+/// Where a place shows on a screen `width` by `height` (its center's
+/// offset, right and up, in the screen's units), or none off it: the
+/// camera's, a horizontal field of view of `cameraFov` (90°; unverified:
+/// horizontal).
+pub fn project(vm: &mut Vm, at: (f64, f64, f64), width: f64, height: f64) -> Option<(f64, f64)> {
+    let e = eye(vm)?;
+    let rel = (at.0 - e.at.0, at.1 - e.at.1, at.2 - e.at.2);
     let dot = |a: (f64, f64, f64)| rel.0 * a.0 + rel.1 * a.1 + rel.2 * a.2;
-    let depth = dot(look);
+    let depth = dot(e.look);
     if depth < NEAR {
         return None;
     }
-    let fov = cvar(vm, "cameraFov", 90.0).to_radians().clamp(0.1, 3.0);
-    let focal = width / 2.0 / (fov / 2.0).tan();
-    let (sx, sy) = (dot(right) * focal / depth, dot(up) * focal / depth);
+    let focal = width / 2.0 / (e.fov / 2.0).tan();
+    let (sx, sy) = (dot(e.right) * focal / depth, dot(e.up) * focal / depth);
     (sx.abs() <= width / 2.0 && sy.abs() <= height / 2.0).then_some((sx, sy))
 }
 
