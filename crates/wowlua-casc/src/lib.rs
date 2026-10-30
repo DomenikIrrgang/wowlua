@@ -18,6 +18,7 @@ pub mod db2;
 pub mod display;
 pub mod jenkins;
 pub mod m2;
+pub mod obj;
 mod salsa20;
 mod schema;
 pub mod spells;
@@ -26,6 +27,7 @@ pub mod tables;
 pub mod tga;
 pub mod wdb;
 pub mod wdt;
+pub mod wmo;
 
 pub use casc::{Casc, CascError};
 

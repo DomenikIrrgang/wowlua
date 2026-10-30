@@ -657,3 +657,67 @@ fn pulled_game_data_reads_as_the_installation() {
     let spells = |c: &Casc| wowlua_casc::spells::SpellTables::open(c).is_some();
     assert_eq!(spells(&live), spells(&pulled));
 }
+
+/// Every product's buildings at Northshire (decision T523): the tile's
+/// objects file places them, each one's root and groups read, and turned
+/// and moved by its placement its bounds are where the placement says.
+#[test]
+fn reads_the_buildings() {
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let storage = FsStorage { root: root.clone() };
+    for (product, version) in Casc::products(&storage) {
+        let casc = Casc::open(Box::new(FsStorage { root: root.clone() }), &product).expect("opens");
+        let mut lib = wowlua_casc::display::Library::default();
+        let objects = lib.objects(&casc, 0, 32, 48).expect("the tile's objects");
+        let (mut checked, mut groups, mut triangles) = (0, 0, 0);
+        for b in &objects.buildings {
+            let Some(wmo) = lib.building(&casc, b.file) else {
+                continue;
+            };
+            let place = wowlua_casc::obj::placed(b.at, b.rotation, b.scale);
+            let (lo, hi) = (wmo.root.bounds[0], wmo.root.bounds[1]);
+            let mut min = [f64::MAX; 3];
+            let mut max = [f64::MIN; 3];
+            for i in 0..8 {
+                let c = [
+                    if i & 1 == 0 { lo[0] } else { hi[0] },
+                    if i & 2 == 0 { lo[1] } else { hi[1] },
+                    if i & 4 == 0 { lo[2] } else { hi[2] },
+                ];
+                let w = place(c);
+                for k in 0..3 {
+                    min[k] = min[k].min(w[k]);
+                    max[k] = max[k].max(w[k]);
+                }
+            }
+            let off = (0..3)
+                .map(|k| {
+                    (min[k] - b.bounds[0][k])
+                        .abs()
+                        .max((max[k] - b.bounds[1][k]).abs())
+                })
+                .fold(0.0, f64::max);
+            eprintln!("{product}: building {} off by {off:.2}", b.file);
+            assert!(off < 2.0, "{product}: building {} off by {off}", b.file);
+            checked += 1;
+            groups += wmo.groups.len();
+            triangles += wmo
+                .groups
+                .iter()
+                .map(|g| g.indices.len() / 3)
+                .sum::<usize>();
+        }
+        eprintln!(
+            "{product} {version}: {} buildings ({checked} checked, {groups} groups, {triangles} triangles), {} doodads",
+            objects.buildings.len(),
+            objects.doodads.len()
+        );
+        assert!(
+            checked > 0 && triangles > 0 && !objects.doodads.is_empty(),
+            "{product}"
+        );
+    }
+}

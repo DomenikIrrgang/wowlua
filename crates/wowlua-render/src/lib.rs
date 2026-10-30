@@ -51,6 +51,19 @@ pub trait Assets {
     ) -> Option<std::sync::Arc<wowlua_casc::adt::Tile>> {
         None
     }
+    /// A terrain tile's buildings and doodads (decision T523).
+    fn objects(
+        &mut self,
+        _map: u32,
+        _x: i32,
+        _y: i32,
+    ) -> Option<std::sync::Arc<wowlua_casc::obj::Objects>> {
+        None
+    }
+    /// A building with its groups, by its root file (decision T523).
+    fn building(&mut self, _file: u32) -> Option<std::sync::Arc<wowlua_casc::display::Building>> {
+        None
+    }
 }
 
 /// An atlas's part of its file.
