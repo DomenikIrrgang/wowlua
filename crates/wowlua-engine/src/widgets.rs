@@ -269,6 +269,9 @@ pub struct World {
     /// The action slots whose range is told (`EnableActionRangeCheck`),
     /// each with what was told last: in range, checks range (T519).
     pub range_checks: std::collections::BTreeMap<i64, (bool, bool)>,
+    /// The chat windows whose `AddMessage` a hook logs (Blizzard's, a Lua
+    /// mixin's; T514).
+    pub chat_hooked: std::collections::HashSet<usize>,
     /// Warnings for gaps that would make every test fail if they were errors
     /// (templates without Blizzard's UI code).
     pub warnings: Vec<String>,
@@ -1683,6 +1686,7 @@ pub fn fire_now(vm: &mut Vm, event: &str, args: &[Value]) {
     let targets: Vec<WidgetId> = targets.into_iter().map(|(_, id)| id).collect();
     if event == "PLAYER_LOGIN" {
         engine_mut(vm).world.logged_in = true;
+        crate::chat::hook_chat_windows(vm);
     }
     // The interactions open, as the client tells them (asked by
     // `C_PlayerInteractionManager.IsInteractingWithNpcOfType`).
@@ -2283,42 +2287,56 @@ fn add_message(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         .entry(id.0)
         .or_default()
         .push((message_id, fs));
-    // (a chat window's line: the session's chat, T514)
-    let chat_window = engine(vm).world.widgets[id.0]
+    // (a chat window's line, unless its hook logs it: the session's
+    // chat, T514)
+    if !engine(vm).world.chat_hooked.contains(&id.0) {
+        log_chat_line(vm, id, &c);
+    }
+    Ok(vec![])
+}
+
+/// Whether a widget is a chat window (`ChatFrame1` and on).
+pub fn chat_window(vm: &Vm, id: WidgetId) -> bool {
+    engine(vm).world.widgets[id.0]
         .name
         .as_deref()
         .and_then(|n| n.strip_prefix("ChatFrame"))
-        .is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()));
-    if chat_window {
-        let frame = engine(vm).world.widgets[id.0]
-            .name
-            .clone()
-            .unwrap_or_default();
-        let text = match vm.hidden(c.arg(2)) {
-            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
-            Value::Num(n) => wowlua_vm::number::fmt_num(n),
-            _ => String::new(),
-        };
-        let rgb: Vec<f64> = (3..=5)
-            .filter_map(|i| match c.arg(i) {
-                Value::Num(n) => Some(n),
-                _ => None,
-            })
-            .collect();
-        let world = &mut engine_mut(vm).world;
-        let seq = world.chat_log_next;
-        world.chat_log_next += 1;
-        world.chat_log.push_back(ChatLine {
-            seq,
-            frame,
-            text,
-            color: (rgb.len() == 3).then(|| [rgb[0], rgb[1], rgb[2]]),
-        });
-        while world.chat_log.len() > CHAT_LOG_LINES {
-            world.chat_log.pop_front();
-        }
+        .is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// A chat window's `AddMessage(text, r, g, b)` kept in the session's chat
+/// log (decision T514): `c`'s arguments from the frame on.
+pub fn log_chat_line(vm: &mut Vm, id: WidgetId, c: &NativeCall) {
+    if !chat_window(vm, id) {
+        return;
     }
-    Ok(vec![])
+    let frame = engine(vm).world.widgets[id.0]
+        .name
+        .clone()
+        .unwrap_or_default();
+    let text = match vm.hidden(c.arg(2)) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        Value::Num(n) => wowlua_vm::number::fmt_num(n),
+        _ => String::new(),
+    };
+    let rgb: Vec<f64> = (3..=5)
+        .filter_map(|i| match c.arg(i) {
+            Value::Num(n) => Some(n),
+            _ => None,
+        })
+        .collect();
+    let world = &mut engine_mut(vm).world;
+    let seq = world.chat_log_next;
+    world.chat_log_next += 1;
+    world.chat_log.push_back(ChatLine {
+        seq,
+        frame,
+        text,
+        color: (rgb.len() == 3).then(|| [rgb[0], rgb[1], rgb[2]]),
+    });
+    while world.chat_log.len() > CHAT_LOG_LINES {
+        world.chat_log.pop_front();
+    }
 }
 
 /// `GetFontStringByID(messageID)`: the font string of the last message

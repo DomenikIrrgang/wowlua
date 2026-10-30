@@ -647,6 +647,40 @@ pub fn slash_control(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// The functions with behaviour here.
+/// At login every chat window's `AddMessage` is hooked (decision T514):
+/// Blizzard's chat windows add their lines with a Lua mixin's
+/// `AddMessage` the engine does not run, so the hook logs them as the
+/// engine's own does.
+pub fn hook_chat_windows(vm: &mut Vm) {
+    let hook = vm.get_global("hooksecurefunc");
+    if hook.is_nil() {
+        return;
+    }
+    let windows: Vec<(usize, wowlua_vm::TableRef)> = (0..engine(vm).world.widgets.len())
+        .filter(|&i| widgets::chat_window(vm, widgets::WidgetId(i)))
+        .map(|i| (i, engine(vm).world.widgets[i].table))
+        .filter(|(i, _)| !engine(vm).world.chat_hooked.contains(i))
+        .collect();
+    for (i, table) in windows {
+        let record = vm.native("chat log", record_chat_line);
+        let method = vm.str("AddMessage");
+        if vm
+            .pcall(hook, &[Value::Table(table), method, record])
+            .is_ok()
+        {
+            engine_mut(vm).world.chat_hooked.insert(i);
+        }
+    }
+}
+
+/// A hooked chat window's `AddMessage(self, text, r, g, b, …)`.
+fn record_chat_line(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(id) = widgets::widget_of(vm, c.arg(1)) {
+        widgets::log_chat_line(vm, id, &c);
+    }
+    Ok(vec![])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("C_ChatInfo.RegisterAddonMessagePrefix", register_prefix),
