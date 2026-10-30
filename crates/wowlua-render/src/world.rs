@@ -1244,15 +1244,15 @@ fn shrunk(img: &Rgba, side: u32) -> Rgba {
             for yy in y0..y1 {
                 for xx in x0..x1 {
                     let i = ((yy * img.width + xx) * 4) as usize;
-                    for k in 0..4 {
-                        sum[k] += u32::from(img.pixels.get(i + k).copied().unwrap_or(0));
+                    for (k, s) in sum.iter_mut().enumerate() {
+                        *s += u32::from(img.pixels.get(i + k).copied().unwrap_or(0));
                     }
                     n += 1;
                 }
             }
             let o = ((y * side + x) * 4) as usize;
-            for k in 0..4 {
-                pixels[o + k] = (sum[k] / n.max(1)) as u8;
+            for (p, s) in pixels[o..o + 4].iter_mut().zip(sum) {
+                *p = (s / n.max(1)) as u8;
             }
         }
     }
