@@ -215,7 +215,39 @@ pub fn input(vm: &mut Vm, input: &Input) -> Result<(), String> {
             let t = vm.str(text);
             call_control(vm, "slash", wowlua_engine::chat::slash_control, &[t])
         }
+        Input::Chat {
+            text,
+            chat_type,
+            target,
+        } => {
+            let send = vm.get_global("SendChatMessage");
+            if send.is_nil() {
+                return Err("the client has no SendChatMessage".into());
+            }
+            let args = [
+                vm.str(text),
+                vm.str(chat_type),
+                Value::Nil,
+                target.as_deref().map_or(Value::Nil, |t| vm.str(t)),
+            ];
+            inp::as_user(vm, |vm| vm.pcall(send, &args))
+                .map(|_| ())
+                .map_err(|e| crate::values::error_text(vm, e.value))
+        }
     }
+}
+
+/// The chat windows' lines from line `since` on, and the next line's
+/// number (decision T514).
+pub fn chat_lines(vm: &Vm, since: u64) -> Json {
+    let world = &wowlua_engine::engine(vm).world;
+    let lines: Vec<Json> = world
+        .chat_log
+        .iter()
+        .filter(|l| l.seq >= since)
+        .map(|l| json!({ "seq": l.seq, "frame": l.frame, "text": l.text, "color": l.color }))
+        .collect();
+    json!({ "lines": lines, "next": world.chat_log_next })
 }
 
 /// Fires a documented event with JSON arguments.

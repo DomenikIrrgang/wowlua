@@ -187,6 +187,20 @@ pub enum Input {
     Slash {
         text: String,
     },
+    /// A chat message as the player sends it from the chat box (decision
+    /// T514): `SendChatMessage(text, chatType, nil, target)`, so addons get
+    /// its `CHAT_MSG_*`.
+    Chat {
+        text: String,
+        #[serde(rename = "chatType", default = "say")]
+        chat_type: String,
+        #[serde(default)]
+        target: Option<String>,
+    },
+}
+
+fn say() -> String {
+    "SAY".into()
 }
 
 fn left_button() -> String {
@@ -314,6 +328,12 @@ pub enum Request {
     },
     /// The events told since the last read.
     Events,
+    /// The chat windows' lines from line `since` on (decision T514):
+    /// `{ lines: [{ seq, frame, text, color }], next }`.
+    ChatLines {
+        #[serde(default)]
+        since: u64,
+    },
     /// The game's settings change (decision T482): the window's size, and
     /// the UI scale ("Use UI Scale" with its slider; none: off).
     SetScreen {
