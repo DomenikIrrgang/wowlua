@@ -397,6 +397,8 @@ pub struct ClientSpell {
     pub next_swing: bool,
     /// It is passive ("Passive").
     pub passive: bool,
+    /// It needs its target in front of the caster (decision T519).
+    pub facing: bool,
     /// The tools it needs ("Earth Totem").
     pub tools: Vec<String>,
     /// Its reagents: (item, count).

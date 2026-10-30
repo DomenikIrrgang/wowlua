@@ -356,7 +356,7 @@ fn unit_at(vm: &Vm, c: &NativeCall, n: usize) -> Option<UnitId> {
 /// Whether the unit is in the spell's range: nil for a spell without one,
 /// no unit, or a unit at no known distance (the client's nil for "can't
 /// tell"; unverified).
-fn in_range(vm: &mut Vm, id: f64, unit: Option<UnitId>) -> Value {
+pub(crate) fn in_range(vm: &mut Vm, id: f64, unit: Option<UnitId>) -> Value {
     let (min, max) = range(vm, id);
     let Some(unit) = unit else {
         return Value::Nil;
@@ -1100,6 +1100,60 @@ fn is_action_in_range(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![in_range(vm, id, unit)])
 }
 
+/// `C_ActionBar.EnableActionRangeCheck(slot, enable)`: the slot's range
+/// told by `ACTION_RANGE_CHECK_UPDATE` from now on, or no more (Blizzard's
+/// buttons, for their hotkey's red; decision T519).
+fn enable_action_range_check(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(slot) = num(vm.hidden(c.arg(1))) else {
+        return Ok(vec![]);
+    };
+    let enable = vm.hidden(c.arg(2)).truthy();
+    let checks = &mut crate::engine_mut(vm).world.range_checks;
+    if enable {
+        checks.entry(slot as i64).or_insert((false, false));
+    } else {
+        checks.remove(&(slot as i64));
+    }
+    Ok(vec![])
+}
+
+/// Each frame: `ACTION_RANGE_CHECK_UPDATE(slot, inRange, checksRange)` for
+/// each slot whose range to the target changed (recorded: the bars' slots
+/// as the target was taken and came in reach; a slot without a range or
+/// without a target, false and false).
+pub fn range_checks_tick(vm: &mut Vm) {
+    if engine(vm).world.range_checks.is_empty() {
+        return;
+    }
+    let target = engine(vm).units.target;
+    let slots: Vec<(i64, (bool, bool))> = engine(vm)
+        .world
+        .range_checks
+        .iter()
+        .map(|(s, v)| (*s, *v))
+        .collect();
+    for (slot, was) in slots {
+        let action = engine(vm).world.character.actions.get(&slot).cloned();
+        let now = match action_spell(&action).map(|id| in_range(vm, id, target)) {
+            Some(Value::Bool(b)) => (b, true),
+            _ => (false, false),
+        };
+        if now == was {
+            continue;
+        }
+        crate::engine_mut(vm).world.range_checks.insert(slot, now);
+        widgets::fire_event(
+            vm,
+            "ACTION_RANGE_CHECK_UPDATE",
+            &[
+                Value::Num(slot as f64),
+                Value::Bool(now.0),
+                Value::Bool(now.1),
+            ],
+        );
+    }
+}
+
 /// An item action's data field.
 fn action_item_field(vm: &mut Vm, a: &Option<Action>, key: &str) -> Value {
     match a {
@@ -1745,7 +1799,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_ActionBar.GetItemActionOnEquipSpellID", nil),
         ("C_ActionBar.RegisterActionUIButton", nothing),
         ("C_ActionBar.UnregisterActionUIButton", nothing),
-        ("C_ActionBar.EnableActionRangeCheck", nothing),
+        (
+            "C_ActionBar.EnableActionRangeCheck",
+            enable_action_range_check,
+        ),
         ("C_ActionBar.ToggleAutoCastPetAction", nothing),
         ("C_ActionBar.ForceUpdateAction", nothing),
         // Macros

@@ -892,6 +892,7 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
             channeled: s.channeled,
             next_swing: s.next_swing,
             passive: s.passive,
+            facing: s.facing,
             tools: s.tools.clone(),
             reagents: s.reagents.clone(),
             equipped: s.equipped.clone(),

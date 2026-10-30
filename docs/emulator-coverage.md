@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,160 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,161 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -843,7 +843,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,160 rules unverified: each rests on Blizzard's
+The engine's code marks 1,161 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -992,13 +992,14 @@ page changes only when a rule is added, removed or reworded.
 - [buttons.rs](../crates/wowlua-engine/src/buttons.rs): The state textures shown as the button's state has them (SuuUI probe trees: of 380 state textures of enabled, uncheck...
 - [buttons.rs](../crates/wowlua-engine/src/buttons.rs): The layer a state's texture is drawn in (SuuUI probe trees: XML's `<HighlightTexture>` in HIGHLIGHT, `<CheckedTexture...
 
-### casting (9)
+### casting (10)
 
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): Verified against the client (`/stdtest engine record cast`, Forever 70425): the player's `SENT(unit, target name | ni...
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): Secret where units' identities are (`ConditionalSecret`): a paladin's Judgement in Ragefire Chasm (its cast GUIDs' ma...
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): A spell's slots told changed as it is sent (its data's `slotChanges`: the seconds after, one per time; recorded: Seal...
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): Another unit's new cast replaces the one running (unverified).
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): Moving: a spell with a cast time refused (recorded, `profession`: Holy Light, 2.5 s, pressed on the walk; unverified:...
+- [casting.rs](../crates/wowlua-engine/src/casting.rs): Why the client refuses a spell at the target (decision T519): out of its range ("Out of range.", 402; recorded: Judge...
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): `player:setMoving(moving)`: the player starts or stops moving (`PLAYER_STARTED_MOVING`, `PLAYER_STOPPED_MOVING`, reco...
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): `player:spellFailedQuiet(spellID, { client? })`: a spell the server cast for the player (a proc) failing without a wo...
 - [casting.rs](../crates/wowlua-engine/src/casting.rs): `player:castFailed(spellID, { error, client? })`: the player's cast of `spellID` refused, the reason `error` told: a...
@@ -2423,6 +2424,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Owed from the world profiles (next beta, about 2026-11-07)
 - The other clients' answers (decisions T510, T511)
 - Answered on the beta's last day (2026-10-24)
+- Moving and facing (decisions T516, T519)
 - The dev tools (0.12.1)
 
 ## In-game regressions

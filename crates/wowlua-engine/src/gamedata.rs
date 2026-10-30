@@ -394,6 +394,9 @@ pub fn scanned_spell(vm: &mut Vm, id: i64) -> Option<TableRef> {
         set(vm, t, "castTime", Value::Num(f64::from(c.cast_ms)));
         set(vm, t, "minRange", Value::Num(f64::from(c.min_range)));
         set(vm, t, "maxRange", Value::Num(f64::from(c.max_range)));
+        if c.facing {
+            set(vm, t, "facing", Value::Bool(true));
+        }
     }
     set(vm, t, "cached", Value::Bool(true));
     widgets::keep(vm, Value::Table(t));

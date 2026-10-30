@@ -518,6 +518,10 @@ pub fn use_spell(vm: &mut Vm, id: f64) -> Ret {
         refuse(vm, id, 57.0, "Can't do that while moving");
         return Ok(vec![]);
     }
+    if let Some((code, text)) = target_refusal(vm, id) {
+        refuse(vm, id, code, &text);
+        return Ok(vec![]);
+    }
     if let Value::Num(cost) = spell_field(vm, id, "powerCost")
         && engine(vm).units.list[units::PLAYER.0].power() < cost
     {
@@ -571,6 +575,37 @@ pub fn use_spell(vm: &mut Vm, id: f64) -> Ret {
     );
     crate::clock::after_engine(vm, delay, later);
     Ok(vec![])
+}
+
+/// Why the client refuses a spell at the target (decision T519): out of
+/// its range ("Out of range.", 402; recorded: Judgement pressed at a mob
+/// that ran off), or behind the player for a spell that needs it in front
+/// (its data's `facing`, from the client's `SpellCastingRequirements`;
+/// `SPELL_FAILED_UNIT_NOT_INFRONT`, 57, unverified). None for a spell
+/// without a target (data `targeted = false`), a helpful one (data
+/// `helpful`: the game casts it on the player instead, unverified), no
+/// target, or a target at no known place.
+fn target_refusal(vm: &mut Vm, id: f64) -> Option<(f64, String)> {
+    if matches!(spell_field(vm, id, "targeted"), Value::Bool(false))
+        || spell_field(vm, id, "helpful").truthy()
+    {
+        return None;
+    }
+    let target = engine(vm).units.target.filter(|t| *t != units::PLAYER)?;
+    if matches!(
+        crate::spellinfo::in_range(vm, id, Some(target)),
+        Value::Bool(false)
+    ) {
+        return Some((402.0, "Out of range.".into()));
+    }
+    if spell_field(vm, id, "facing").truthy() && crate::character::behind(vm, target) {
+        let text = match vm.get_global("SPELL_FAILED_UNIT_NOT_INFRONT") {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => "Target needs to be in front of you.".into(),
+        };
+        return Some((57.0, text));
+    }
+    None
 }
 
 /// A spell's cast time in ms (its data's, else the probed spell info's), 0

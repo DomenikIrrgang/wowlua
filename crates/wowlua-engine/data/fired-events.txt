@@ -13,6 +13,7 @@ ACTIONBAR_SLOT_CHANGED	actions,casting,cursor,inventory,login,macros,systeminfo,
 ACTIONBAR_UPDATE_COOLDOWN	casting,cursor,death,inventory,levels,login,loot,macros,systeminfo,tradeskill,trainer,units
 ACTIONBAR_UPDATE_STATE	casting,inventory,login,loot,tradeskill,units
 ACTIONBAR_UPDATE_USABLE	actions,batch,death,login,party,taxi,units
+ACTION_RANGE_CHECK_UPDATE	spellinfo
 ACTION_USABLE_CHANGED	actions
 ACTIVE_TALENT_GROUP_CHANGED	levels,login,stats
 ADDONS_UNLOADING	login
