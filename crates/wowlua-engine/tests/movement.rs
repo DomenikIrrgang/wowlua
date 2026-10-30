@@ -58,7 +58,14 @@ return tostring(moving), r(y), r(x), tostring(IsPlayerMoving()), table.concat(Se
     // (7 yards north in a second; the wolf 13 yards away: within 28)
     assert_eq!(
         out,
-        ["true", "7.0", "0.0", "false", "PLAYER_STARTED_MOVING,PLAYER_STOPPED_MOVING", "true"]
+        [
+            "true",
+            "7.0",
+            "0.0",
+            "false",
+            "PLAYER_STARTED_MOVING,PLAYER_STOPPED_MOVING",
+            "true"
+        ]
     );
 }
 
@@ -127,4 +134,84 @@ return tostring(IsPlayerMoving())",
 return tostring(IsPlayerMoving()), string.format('%.1f', y)",
     );
     assert_eq!(out, ["false", "3.5"]);
+}
+
+/// A unit's place to the tenth, as `UnitPosition` answers it.
+const WHERE: &str = "local function at(u) mock.player:target(u) local y, x = UnitPosition('target') return string.format('%.1f,%.1f', y, x) end\n";
+
+#[test]
+fn a_patrol_walks_its_path_and_stands_at_its_end() {
+    let mut vm = vm();
+    let out = run(
+        &mut vm,
+        &format!(
+            "{START}{WHERE}local wolf = mock.spawnUnit({{ name = 'Wolf', world = {{ y = 10, x = 0 }} }})
+wolf:patrol({{ {{ y = 10, x = 0 }}, {{ y = 10, x = 5 }} }}, {{ speed = 5, loop = false }})
+mock.advanceFrames(30, 1000 / 60)
+local half = at(wolf)
+mock.advanceFrames(90, 1000 / 60)
+return half, at(wolf)"
+        ),
+    );
+    // (5 yards a second west: half way after half a second, then standing)
+    assert_eq!(out, ["10.0,2.5", "10.0,5.0"]);
+}
+
+#[test]
+fn following_keeps_its_distance_and_approaching_comes_to_reach() {
+    let mut vm = vm();
+    let out = run(
+        &mut vm,
+        &format!(
+            "{START}local healer = mock.spawnUnit({{ name = 'Healer', reaction = 'friendly', world = {{ y = 30, x = 0 }} }})
+healer:follow({{ keep = 18 }})
+local ogre = mock.spawnUnit({{ name = 'Ogre', reaction = 'hostile', world = {{ y = -20, x = 0 }} }})
+ogre:approach()
+mock.advanceFrames(240, 1000 / 60)
+mock.player:target(healer)
+local d1 = select(1, UnitDistanceSquared('target'))
+mock.player:target(ogre)
+return string.format('%.1f', math.sqrt(d1)), tostring(CheckInteractDistance('target', 3))"
+        ),
+    );
+    assert_eq!(out, ["18.0", "true"]);
+}
+
+#[test]
+fn fleeing_runs_away_and_move_to_goes_there() {
+    let mut vm = vm();
+    let out = run(
+        &mut vm,
+        &format!(
+            "{START}{WHERE}local rabbit = mock.spawnUnit({{ name = 'Rabbit', world = {{ y = 5, x = 0 }} }})
+rabbit:flee()
+local guard = mock.spawnUnit({{ name = 'Guard', world = {{ y = 0, x = 10 }} }})
+guard:moveTo({{ y = 0, x = 20 }}, {{ speed = 5 }})
+mock.advanceFrames(60, 1000 / 60)
+local fled = at(rabbit)
+mock.advanceFrames(120, 1000 / 60)
+return fled, at(guard)"
+        ),
+    );
+    // (7 yards a second away, north; the guard 10 yards at 5 a second)
+    assert_eq!(out, ["12.0,0.0", "0.0,20.0"]);
+}
+
+#[test]
+fn a_profile_s_movement_is_spawned_with_the_unit() {
+    let mut vm = vm();
+    let out = run(
+        &mut vm,
+        &format!(
+            "{START}{WHERE}local wolf = mock.spawnUnit({{ name = 'Wolf', world = {{ y = 0, x = 4 }},
+    movement = {{ kind = 'patrol', path = {{ {{ y = 0, x = 4 }}, {{ y = 0, x = 8 }} }}, loop = false }} }})
+mock.advanceFrames(120, 1000 / 60)
+local ok, err = pcall(mock.spawnUnit, {{ name = 'Lost', movement = {{ kind = 'wander' }} }})
+return at(wolf), tostring(ok), err"
+        ),
+    );
+    // (walking 2.5 yards a second: there in 1.6 seconds)
+    assert_eq!(out[0], "0.0,8.0");
+    assert_eq!(out[1], "false");
+    assert!(out[2].contains("wander"), "{out:?}");
 }

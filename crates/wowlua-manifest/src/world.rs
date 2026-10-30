@@ -167,6 +167,8 @@ pub struct UnitData {
     /// Radians counter-clockwise from north; facing the player when not
     /// given.
     pub facing: Option<f64>,
+    /// How it moves on its own (decision T517).
+    pub movement: Option<UnitMovement>,
     /// `Alliance` or `Horde`: the one a race of either picked (the
     /// Pandaren, the Skyborne), or a creature's. A race of one faction has
     /// its own (decision T513): another is an error.
@@ -191,6 +193,41 @@ pub struct PowerAmount {
     pub current: Option<f64>,
     /// The most it can have (`UnitPowerMax(unit, type)`).
     pub max: Option<f64>,
+}
+
+/// How a unit moves on its own (decision T517), facing its way, its
+/// distance from the player following.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitMovement {
+    pub kind: MovementKind,
+    /// A patrol's waypoints, in order.
+    pub path: Option<Vec<WorldPosition>>,
+    /// A patrol starts again at its first waypoint after the last (true by
+    /// default); else it stands at the last.
+    #[serde(rename = "loop")]
+    pub looping: Option<bool>,
+    /// Yards a second: 2.5 (walking) for a patrol, 7 (running) otherwise.
+    pub speed: Option<f64>,
+    /// Yards it keeps from the player following or coming to them (2:
+    /// melee reach).
+    pub keep: Option<f64>,
+}
+
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum MovementKind {
+    /// It stands.
+    #[default]
+    Stand,
+    /// Along its `path`.
+    Patrol,
+    /// After the player, `keep` yards behind.
+    Follow,
+    /// To the player, stopping `keep` yards away.
+    Approach,
+    /// Away from the player.
+    Flee,
 }
 
 /// A unit around the player, and how it relates to them.

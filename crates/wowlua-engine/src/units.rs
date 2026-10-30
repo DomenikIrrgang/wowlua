@@ -115,6 +115,8 @@ pub struct Unit {
     pub z: f64,
     /// Radians counter-clockwise from north; none: it faces the player.
     pub facing: Option<f64>,
+    /// How it moves on its own (decision T517); none: it stands.
+    pub walk: Option<crate::movement::Walk>,
     /// A raid member's subgroup when not the one its place gives.
     pub subgroup: Option<f64>,
     /// A player character logged in (an offline group member not).
@@ -492,6 +494,7 @@ pub fn install(vm: &mut Vm) {
         world: None,
         z: 0.0,
         facing: None,
+        walk: None,
         subgroup: None,
         online: true,
         accepts_invites: false,
@@ -851,6 +854,7 @@ fn clone_unit(u: &Unit) -> Unit {
         role: u.role.clone(),
         zone: u.zone.clone(),
         powers: u.powers.clone(),
+        walk: u.walk.clone(),
         ..*u
     }
 }
@@ -1829,6 +1833,12 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ),
         ("setMoving", crate::casting::control_set_moving),
         ("setDistance", crate::character::control_set_distance),
+        ("patrol", crate::movement::control_patrol),
+        ("follow", crate::movement::control_follow),
+        ("approach", crate::movement::control_approach),
+        ("flee", crate::movement::control_flee),
+        ("moveTo", crate::movement::control_move_to),
+        ("stop", crate::movement::control_stop),
         ("setMoney", crate::character::control_set_money),
         ("setStats", crate::stats::control_set_stats),
         ("equip", crate::character::control_equip),
@@ -2357,6 +2367,10 @@ fn unit_from(
         facing: match get(vm, "facing") {
             Value::Num(f) => Some(f.rem_euclid(std::f64::consts::TAU)),
             _ => None,
+        },
+        walk: {
+            let m = get(vm, "movement");
+            crate::movement::walk_of(vm, m)?
         },
         subgroup: None,
         online: !matches!(get(vm, "online"), Value::Bool(false)),
@@ -3122,6 +3136,9 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     if has("facing") {
         u.facing = new.facing;
+    }
+    if has("movement") {
+        u.walk = new.walk;
     }
     if has("acceptsInvites") {
         u.accepts_invites = new.accepts_invites;

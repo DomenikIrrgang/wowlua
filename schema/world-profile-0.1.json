@@ -419,6 +419,17 @@
           ],
           "format": "double"
         },
+        "movement": {
+          "description": "How it moves on its own (decision T517).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnitMovement"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "faction": {
           "description": "`Alliance` or `Horde`: the one a race of either picked (the\nPandaren, the Skyborne), or a creature's. A race of one faction has\nits own (decision T513): another is an error.",
           "type": [
@@ -529,6 +540,80 @@
       "required": [
         "y",
         "x"
+      ]
+    },
+    "UnitMovement": {
+      "description": "How a unit moves on its own (decision T517), facing its way, its\ndistance from the player following.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/MovementKind"
+        },
+        "path": {
+          "description": "A patrol's waypoints, in order.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/WorldPosition"
+          }
+        },
+        "loop": {
+          "description": "A patrol starts again at its first waypoint after the last (true by\ndefault); else it stands at the last.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "speed": {
+          "description": "Yards a second: 2.5 (walking) for a patrol, 7 (running) otherwise.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "keep": {
+          "description": "Yards it keeps from the player following or coming to them (2:\nmelee reach).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "MovementKind": {
+      "oneOf": [
+        {
+          "description": "It stands.",
+          "type": "string",
+          "const": "stand"
+        },
+        {
+          "description": "Along its `path`.",
+          "type": "string",
+          "const": "patrol"
+        },
+        {
+          "description": "After the player, `keep` yards behind.",
+          "type": "string",
+          "const": "follow"
+        },
+        {
+          "description": "To the player, stopping `keep` yards away.",
+          "type": "string",
+          "const": "approach"
+        },
+        {
+          "description": "Away from the player.",
+          "type": "string",
+          "const": "flee"
+        }
       ]
     },
     "List": {
@@ -1651,6 +1736,17 @@
             "null"
           ],
           "format": "double"
+        },
+        "movement": {
+          "description": "How it moves on its own (decision T517).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnitMovement"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "faction": {
           "description": "`Alliance` or `Horde`: the one a race of either picked (the\nPandaren, the Skyborne), or a creature's. A race of one faction has\nits own (decision T513): another is an error.",
