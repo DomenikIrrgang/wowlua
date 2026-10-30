@@ -7,6 +7,11 @@
 //! left out) in one vertex and index buffer, each chunk with its textures
 //! and a blend texture of its layers (red, green and blue the second to
 //! fourth layer's).
+//!
+//! The buildings the tiles place (decision T523) are read once each
+//! (`Assets::building`) and drawn wherever they stand, by their
+//! placement's matrix: their groups' batches with their materials'
+//! textures, the blended ones last.
 
 use std::collections::HashMap;
 
@@ -58,6 +63,7 @@ struct GpuTile {
 
 struct Setup {
     pipeline: wgpu::RenderPipeline,
+    globals_layout: wgpu::BindGroupLayout,
     globals: wgpu::Buffer,
     globals_group: wgpu::BindGroup,
     chunk_layout: wgpu::BindGroupLayout,
@@ -72,6 +78,10 @@ pub(crate) struct World {
     setup: Option<Setup>,
     tiles: HashMap<(u32, i32, i32), Option<GpuTile>>,
     depth: Option<(wgpu::TextureView, u32, u32)>,
+    building_setup: Option<BuildingSetup>,
+    buildings: HashMap<u32, Option<GpuBuilding>>,
+    /// The placements' matrices of a draw, and the buffer's size.
+    instances: Option<(wgpu::Buffer, u64)>,
 }
 
 fn texture_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -299,6 +309,7 @@ impl Renderer {
         };
         self.world.setup = Some(Setup {
             pipeline,
+            globals_layout,
             globals,
             globals_group,
             chunk_layout,
@@ -449,6 +460,55 @@ impl Renderer {
         for &(x, y) in &near {
             self.world_tile(w.map, x, y, assets);
         }
+        // The buildings the tiles place within the view distance, each once
+        // (one standing on several tiles is placed by each).
+        self.building_setup();
+        let mut placed: Vec<(u32, [f32; 16])> = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for &(x, y) in &near {
+            let Some(objects) = assets.objects(w.map, x, y) else {
+                continue;
+            };
+            for b in &objects.buildings {
+                let dn = w.eye[0] - w.eye[0].clamp(b.bounds[0][0], b.bounds[1][0]);
+                let dw = w.eye[1] - w.eye[1].clamp(b.bounds[0][1], b.bounds[1][1]);
+                if dn.hypot(dw) > w.far || !seen.insert(b.unique) {
+                    continue;
+                }
+                self.world_building(b.file, assets);
+                if matches!(self.world.buildings.get(&b.file), Some(Some(_))) {
+                    placed.push((b.file, matrix_of(b)));
+                }
+            }
+        }
+        if !placed.is_empty() {
+            let bytes: Vec<u8> = placed
+                .iter()
+                .flat_map(|(_, m)| bytemuck::cast_slice::<f32, u8>(m).to_vec())
+                .collect();
+            let len = bytes.len() as u64;
+            if self
+                .world
+                .instances
+                .as_ref()
+                .is_none_or(|(_, size)| *size < len)
+            {
+                let size = len.next_power_of_two().max(4096);
+                let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("building placements"),
+                    size,
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                self.world.instances = Some((buffer, size));
+            }
+            let (buffer, _) = self
+                .world
+                .instances
+                .as_ref()
+                .expect("the placements' buffer");
+            self.queue.write_buffer(buffer, 0, &bytes);
+        }
         let aspect = width as f32 / height.max(1) as f32;
         let fov_y = 2.0 * ((w.fov as f32 / 2.0).tan() / aspect).atan();
         let f32s = |a: [f64; 3]| [a[0] as f32, a[1] as f32, a[2] as f32];
@@ -523,5 +583,310 @@ impl Renderer {
                 pass.draw_indexed(c.start..c.start + c.count, 0, 0..1);
             }
         }
+        // The buildings: their opaque batches, then the blended ones.
+        let (Some(bsetup), Some((instances, _))) = (
+            self.world.building_setup.as_ref(),
+            self.world.instances.as_ref(),
+        ) else {
+            return;
+        };
+        for blended in [false, true] {
+            pass.set_pipeline(if blended {
+                &bsetup.blended
+            } else {
+                &bsetup.opaque
+            });
+            pass.set_bind_group(0, &setup.globals_group, &[]);
+            for (i, (file, _)) in placed.iter().enumerate() {
+                let Some(Some(b)) = self.world.buildings.get(file) else {
+                    continue;
+                };
+                let at = i as u64 * 64;
+                pass.set_vertex_buffer(1, instances.slice(at..at + 64));
+                for g in &b.groups {
+                    pass.set_vertex_buffer(0, g.vertices.slice(..));
+                    pass.set_index_buffer(g.indices.slice(..), wgpu::IndexFormat::Uint16);
+                    for batch in g.batches.iter().filter(|b| b.blended == blended) {
+                        pass.set_bind_group(1, &batch.group, &[]);
+                        pass.draw_indexed(batch.start..batch.start + batch.count, 0, 0..1);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct BVertex {
+    pos: [f32; 3],
+    normal: [f32; 3],
+    uv: [f32; 2],
+    color: [f32; 4],
+}
+
+/// A batch of a building's group: its indices and its material.
+struct GpuBatch {
+    start: u32,
+    count: u32,
+    group: wgpu::BindGroup,
+    blended: bool,
+}
+
+struct GpuGroup {
+    vertices: wgpu::Buffer,
+    indices: wgpu::Buffer,
+    batches: Vec<GpuBatch>,
+}
+
+/// A building on the GPU: its groups, drawn wherever it is placed.
+struct GpuBuilding {
+    groups: Vec<GpuGroup>,
+}
+
+struct BuildingSetup {
+    opaque: wgpu::RenderPipeline,
+    blended: wgpu::RenderPipeline,
+    material_layout: wgpu::BindGroupLayout,
+}
+
+/// A placement's matrix (columns): the model's axes and origin on the map.
+fn matrix_of(b: &wowlua_casc::obj::Building) -> [f32; 16] {
+    let f = wowlua_casc::obj::placed(b.at, b.rotation, b.scale);
+    let o = f([0.0; 3]);
+    let axis = |v: [f32; 3]| {
+        let p = f(v);
+        [
+            (p[0] - o[0]) as f32,
+            (p[1] - o[1]) as f32,
+            (p[2] - o[2]) as f32,
+        ]
+    };
+    let (x, y, z) = (
+        axis([1.0, 0.0, 0.0]),
+        axis([0.0, 1.0, 0.0]),
+        axis([0.0, 0.0, 1.0]),
+    );
+    [
+        x[0],
+        x[1],
+        x[2],
+        0.0,
+        y[0],
+        y[1],
+        y[2],
+        0.0,
+        z[0],
+        z[1],
+        z[2],
+        0.0,
+        o[0] as f32,
+        o[1] as f32,
+        o[2] as f32,
+        1.0,
+    ]
+}
+
+impl Renderer {
+    fn building_setup(&mut self) {
+        if self.world.building_setup.is_some() {
+            return;
+        }
+        let d = &self.device;
+        let globals_layout = &self
+            .world
+            .setup
+            .as_ref()
+            .expect("the world's setup")
+            .globals_layout;
+        let material_layout = d.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("building material"),
+            entries: &[
+                texture_entry(0),
+                sampler_entry(1),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+        let layout = d.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("buildings"),
+            bind_group_layouts: &[Some(globals_layout), Some(&material_layout)],
+            immediate_size: 0,
+        });
+        let shader = d.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("buildings"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("building.wgsl").into()),
+        });
+        let pipeline = |blended: bool| {
+            d.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("buildings"),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs"),
+                    compilation_options: Default::default(),
+                    buffers: &[
+                        Some(wgpu::VertexBufferLayout {
+                            array_stride: std::mem::size_of::<BVertex>() as u64,
+                            step_mode: wgpu::VertexStepMode::Vertex,
+                            attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x2, 3 => Float32x4],
+                        }),
+                        Some(wgpu::VertexBufferLayout {
+                            array_stride: 64,
+                            step_mode: wgpu::VertexStepMode::Instance,
+                            attributes: &wgpu::vertex_attr_array![4 => Float32x4, 5 => Float32x4, 6 => Float32x4, 7 => Float32x4],
+                        }),
+                    ],
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth32Float,
+                    depth_write_enabled: Some(!blended),
+                    depth_compare: Some(wgpu::CompareFunction::LessEqual),
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs"),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: crate::FORMAT,
+                        blend: blended.then_some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+        let (opaque, blended) = (pipeline(false), pipeline(true));
+        self.world.building_setup = Some(BuildingSetup {
+            opaque,
+            blended,
+            material_layout,
+        });
+    }
+
+    /// A building on the GPU, read and built on first use.
+    fn world_building(&mut self, file: u32, assets: &mut dyn Assets) {
+        if self.world.buildings.contains_key(&file) {
+            return;
+        }
+        let gpu = assets.building(file).map(|wmo| {
+            let mut groups = Vec::new();
+            for g in &wmo.groups {
+                if g.positions.is_empty() || g.indices.is_empty() {
+                    continue;
+                }
+                let indoors = g.flags & 0x2000 != 0 && g.flags & 0x8 == 0;
+                let verts: Vec<BVertex> = (0..g.positions.len())
+                    .map(|i| BVertex {
+                        pos: g.positions[i],
+                        normal: g.normals.get(i).copied().unwrap_or([0.0, 0.0, 1.0]),
+                        uv: g.uvs.get(i).copied().unwrap_or([0.0, 0.0]),
+                        color: g.colors.get(i).map_or([0.5, 0.5, 0.5, 1.0], |c| {
+                            // (BGRA)
+                            [
+                                f32::from(c[2]) / 255.0,
+                                f32::from(c[1]) / 255.0,
+                                f32::from(c[0]) / 255.0,
+                                f32::from(c[3]) / 255.0,
+                            ]
+                        }),
+                    })
+                    .collect();
+                // (an even count: the buffer's size a multiple of four bytes)
+                let mut indices = g.indices.clone();
+                if indices.len() % 2 == 1 {
+                    indices.push(0);
+                }
+                let vertices = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("building"),
+                        contents: bytemuck::cast_slice(&verts),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+                let index_buffer =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("building"),
+                            contents: bytemuck::cast_slice(&indices),
+                            usage: wgpu::BufferUsages::INDEX,
+                        });
+                let mut batches = Vec::new();
+                for b in &g.batches {
+                    let Some(m) = wmo.root.materials.get(b.material as usize) else {
+                        continue;
+                    };
+                    let tex = match m.textures[0] {
+                        0 => self.white,
+                        f => self.model_texture(f, assets),
+                    };
+                    let how: [f32; 4] = [
+                        if m.blend == 1 { 1.0 } else { 0.0 },
+                        if indoors { 1.0 } else { 0.0 },
+                        if m.flags & 0x1 != 0 { 1.0 } else { 0.0 },
+                        0.0,
+                    ];
+                    let how = self
+                        .device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("building material"),
+                            contents: bytemuck::cast_slice(&how),
+                            usage: wgpu::BufferUsages::UNIFORM,
+                        });
+                    let setup = self.world.setup.as_ref().expect("the world's setup");
+                    let bsetup = self
+                        .world
+                        .building_setup
+                        .as_ref()
+                        .expect("the buildings' setup");
+                    let group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("building material"),
+                        layout: &bsetup.material_layout,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: wgpu::BindingResource::TextureView(
+                                    &self.textures[tex].view,
+                                ),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: wgpu::BindingResource::Sampler(&setup.tiled),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: how.as_entire_binding(),
+                            },
+                        ],
+                    });
+                    batches.push(GpuBatch {
+                        start: b.start,
+                        count: b.count,
+                        group,
+                        blended: m.blend >= 2,
+                    });
+                }
+                groups.push(GpuGroup {
+                    vertices,
+                    indices: index_buffer,
+                    batches,
+                });
+            }
+            GpuBuilding { groups }
+        });
+        self.world.buildings.insert(file, gpu);
     }
 }

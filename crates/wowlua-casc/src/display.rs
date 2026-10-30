@@ -120,10 +120,21 @@ pub struct Library {
     /// [`TILES_KEPT`] asked for.
     terrain: HashMap<(u32, i32, i32), (u64, Option<SharedTile>)>,
     terrain_asked: u64,
+    /// Each terrain tile's buildings and doodads (decision T523).
+    objects: HashMap<(u32, i32, i32), Option<std::sync::Arc<crate::obj::Objects>>>,
+    /// The buildings read, by their root file.
+    buildings: HashMap<u32, Option<std::sync::Arc<Building>>>,
 }
 
 /// A terrain tile read, shared with whoever draws it.
 type SharedTile = std::sync::Arc<crate::adt::Tile>;
+
+/// A building (a WMO) with its groups (decision T523).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Building {
+    pub root: crate::wmo::Root,
+    pub groups: Vec<crate::wmo::Group>,
+}
 
 /// How many terrain tiles a library keeps read (a 7 × 7 around the player).
 const TILES_KEPT: usize = 49;
@@ -223,6 +234,57 @@ impl Library {
         let tile = self.terrain_tile(casc, map, x, y)?;
         let (n, w) = crate::adt::corner(x, y);
         tile.height_at(n - north, w - west)
+    }
+
+    /// A map tile's buildings and doodads, from its objects file
+    /// (decision T523), read once.
+    pub fn objects(
+        &mut self,
+        casc: &Casc,
+        map: u32,
+        x: i32,
+        y: i32,
+    ) -> Option<std::sync::Arc<crate::obj::Objects>> {
+        if !(0..64).contains(&x) || !(0..64).contains(&y) {
+            return None;
+        }
+        if let Some(o) = self.objects.get(&(map, x, y)) {
+            return o.clone();
+        }
+        if !self.terrain_files.contains_key(&map) {
+            let tiles = self.wdt(casc, map).and_then(|b| crate::wdt::tiles(&b));
+            self.terrain_files.insert(map, tiles);
+        }
+        let objects = self.terrain_files.get(&map)?.as_ref().and_then(|t| {
+            let files = t.tiles[(y * 64 + x) as usize];
+            let data = (files.obj0 != 0).then(|| casc.file_by_id(files.obj0))??;
+            let by_path = |p: &str| casc.id_of(p);
+            Some(std::sync::Arc::new(crate::obj::read(&data, &by_path)))
+        });
+        self.objects.insert((map, x, y), objects.clone());
+        objects
+    }
+
+    /// A building (a WMO root file's ID) with its groups, read once
+    /// (decision T523).
+    pub fn building(&mut self, casc: &Casc, file: u32) -> Option<std::sync::Arc<Building>> {
+        if let Some(b) = self.buildings.get(&file) {
+            return b.clone();
+        }
+        let by_path = |p: &str| casc.id_of(p);
+        let building = casc
+            .file_by_id(file)
+            .and_then(|data| crate::wmo::Root::read(&data, &by_path))
+            .map(|root| {
+                let groups = root
+                    .groups
+                    .iter()
+                    .filter_map(|g| crate::wmo::Group::read(&casc.file_by_id(*g)?))
+                    .collect();
+                std::sync::Arc::new(Building { root, groups })
+            });
+        self.buildings.insert(file, building.clone());
+        building
     }
 
     /// A creature display (`CreatureDisplayInfo` ID).
