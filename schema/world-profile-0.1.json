@@ -430,6 +430,16 @@
             }
           ]
         },
+        "actions": {
+          "description": "What it does on its own (decision T518), each action when and what.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/UnitAction"
+          }
+        },
         "faction": {
           "description": "`Alliance` or `Horde`: the one a race of either picked (the\nPandaren, the Skyborne), or a creature's. A race of one faction has\nits own (decision T513): another is an error.",
           "type": [
@@ -613,6 +623,94 @@
           "description": "Away from the player.",
           "type": "string",
           "const": "flee"
+        }
+      ]
+    },
+    "UnitAction": {
+      "description": "A unit's action (decision T518): when (one of `at`, `every`,\n`within`) and what (`do`).",
+      "type": "object",
+      "properties": {
+        "at": {
+          "description": "Once, this many seconds after the unit appears.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "every": {
+          "description": "Every so many seconds (the first after that long).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "within": {
+          "description": "Each time the player comes within so many yards.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "do": {
+          "description": "What it does.",
+          "$ref": "#/$defs/ActionKind"
+        },
+        "damage": {
+          "description": "An attack's damage a swing (10).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "speed": {
+          "description": "An attack's seconds between swings (2).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "spell": {
+          "description": "A cast's spell ID.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "castTime": {
+          "description": "A cast's time in seconds (the spell's own by default).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "required": [
+        "do"
+      ]
+    },
+    "ActionKind": {
+      "oneOf": [
+        {
+          "description": "Swings at the player while within melee reach (5 yards), from then\non.",
+          "type": "string",
+          "const": "attack"
+        },
+        {
+          "description": "Casts `spell`.",
+          "type": "string",
+          "const": "cast"
+        },
+        {
+          "description": "Turns to the player.",
+          "type": "string",
+          "const": "face"
         }
       ]
     },
@@ -1747,6 +1845,16 @@
               "type": "null"
             }
           ]
+        },
+        "actions": {
+          "description": "What it does on its own (decision T518), each action when and what.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/UnitAction"
+          }
         },
         "faction": {
           "description": "`Alliance` or `Horde`: the one a race of either picked (the\nPandaren, the Skyborne), or a creature's. A race of one faction has\nits own (decision T513): another is an error.",

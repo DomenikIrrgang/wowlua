@@ -421,6 +421,7 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
         widgets::run_text_changes(vm);
         crate::animations::tick(vm, ms / 1000.0);
         crate::movement::tick(vm, ms / 1000.0);
+        crate::unitacts::tick(vm);
         crate::curves::update_text_bindings(vm);
         crate::bars::update_timers(vm);
         advance(vm, 0.0);

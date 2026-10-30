@@ -97,6 +97,7 @@ pub mod tradeskill;
 pub mod trainer;
 pub mod traits;
 pub mod ui;
+pub mod unitacts;
 pub mod unitinfo;
 pub mod units;
 pub mod widgetdata;

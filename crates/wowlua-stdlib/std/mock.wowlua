@@ -473,6 +473,12 @@ export type UnitData = {
     --- (along `path`), "follow" (the player, `keep` yards away), "approach"
     --- (to the player, stopping `keep` yards away) or "flee".
     movement?: { kind: string, path?: { y: number, x: number, z?: number }[], loop?: boolean, speed?: number, keep?: number },
+    --- What it does on its own (decision T518): each action `at` seconds
+    --- after it appears, `every` so many seconds or `within` so many yards
+    --- of the player, `do` "attack" (swings of `damage` every `speed`
+    --- seconds while within 5 yards), "cast" (`spell`, `castTime`) or
+    --- "face" (it turns to the player).
+    actions?: { at?: number, every?: number, within?: number, ["do"]: string, damage?: number, speed?: number, spell?: number, castTime?: number }[],
     --- false: an offline player character (`UnitIsConnected` false; the
     --- roster's level 0, zone "Offline").
     online?: boolean,
