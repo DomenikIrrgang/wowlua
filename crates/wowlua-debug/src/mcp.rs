@@ -248,6 +248,16 @@ fn tools() -> Json {
             &["command"]
         ),
         t(
+            "chat",
+            "The player sends a chat message (SendChatMessage): addons get its CHAT_MSG_*.",
+            json!({
+                "text": { "type": "string" },
+                "chatType": { "type": "string", "description": "SAY (default), YELL, PARTY, RAID, GUILD, WHISPER, …" },
+                "target": { "type": "string", "description": "A whisper's player" }
+            }),
+            &["text"]
+        ),
+        t(
             "advance",
             "Moves the game's time on: frames (1/60 s each) or seconds; OnUpdate and timers run.",
             json!({ "frames": { "type": "integer" }, "seconds": { "type": "number" } }),
@@ -647,6 +657,14 @@ impl Server {
             "slash" => self.simple(
                 input(Input::Slash {
                     text: str_arg(a, "command").unwrap_or_default(),
+                }),
+                true,
+            ),
+            "chat" => self.simple(
+                input(Input::Chat {
+                    text: str_arg(a, "text").unwrap_or_default(),
+                    chat_type: str_arg(a, "chatType").unwrap_or_else(|| "SAY".into()),
+                    target: str_arg(a, "target"),
                 }),
                 true,
             ),
