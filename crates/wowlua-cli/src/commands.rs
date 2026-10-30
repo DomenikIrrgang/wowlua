@@ -427,6 +427,7 @@ pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> b
                 watch: false,
                 profile_out: None,
                 game_data: false,
+                world: false,
             };
             test_once(&out, &test_global, &test_args).0
         }))
@@ -1147,13 +1148,14 @@ fn test_once(
                 SuiteSwitches {
                     update_snapshots: args.update_snapshots,
                     coverage: args.coverage,
-                    game_data: args.game_data,
+                    game_data: args.game_data || args.world,
+                    world: args.world,
                 },
                 args.profile_out.as_ref().map(|_| start_profile),
             );
             // `--game-data`: the game data `wowlua data pull` read, else the
             // installation's.
-            if args.game_data {
+            if args.game_data || args.world {
                 let (camera, pulled) = crate::data::with_pulled(suite.camera.take(), &flavor);
                 suite.camera = camera;
                 if !pulled {
@@ -3035,6 +3037,7 @@ pub fn bench(out: &Output, global: &GlobalArgs, args: &crate::BenchArgs) -> bool
                 update_snapshots: false,
                 coverage: false,
                 game_data: false,
+                world: false,
             };
             let plain_suite = make_suite(
                 &project,

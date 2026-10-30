@@ -386,6 +386,13 @@ impl Assets for ClientAssets {
         self.casc.as_ref()?.file_by_id(id)
     }
 
+    fn terrain(&mut self, map: u32, x: i32, y: i32) -> Option<Arc<wowlua_casc::adt::Tile>> {
+        let casc = self.casc.as_ref()?;
+        let lib = library_of(casc);
+        let mut lib = lib.lock().ok()?;
+        lib.terrain_tile(casc, map, x, y)
+    }
+
     fn model(&mut self, source: &ModelSource) -> Option<Display> {
         let casc = self.casc.as_ref()?;
         let lib = library_of(casc);
@@ -550,6 +557,10 @@ fn vec3(v: Vec<f32>) -> [f32; 3] {
 impl wowlua_engine::clientdata::ClientData for CascClientData {
     fn minimap_tile(&self, map: u32, x: u32, y: u32) -> Option<u32> {
         self.with(|lib, casc| lib.minimap_tile(casc, map, x, y))
+    }
+
+    fn ground(&self, map: u32, north: f64, west: f64) -> Option<f64> {
+        self.with(|lib, casc| lib.ground(casc, map, north, west))
     }
 
     fn model_scene(&self, id: u32) -> Option<wowlua_engine::clientdata::ModelScene> {

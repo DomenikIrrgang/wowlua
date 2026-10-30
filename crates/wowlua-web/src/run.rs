@@ -401,6 +401,7 @@ fn suite<'a>(
         coverage: false,
         instrument: debugged.then_some(&crate::debug::instrument as &(dyn Fn(&mut Vm) + Sync)),
         game_data: installation.is_some(),
+        world: false,
         camera: installation.map(|casc| {
             std::sync::Arc::new(crate::installation::GameData(casc))
                 as std::sync::Arc<dyn wowlua_test::screenshots::Camera>

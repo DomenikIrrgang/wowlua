@@ -118,6 +118,10 @@ pub struct Engine {
     pub platform: Platform,
     /// The screen it draws on (decision T237).
     pub screen: Screen,
+    /// The 3D world is on (decision T522): the player and the units stand
+    /// on the terrain of the installation, and the world is drawn behind
+    /// the UI. Off unless turned on ([`set_world`]).
+    pub world_on: bool,
     pub api: &'static api::Api,
     /// Set by a behaviour whose answer has nothing to hide this call.
     pub plain_results: bool,
@@ -298,6 +302,11 @@ impl Screen {
 /// Sets the screen the client draws on (after `install`): UIParent's size
 /// follows, and with a UI scale "Use UI Scale" and its slider's CVars
 /// (`useUiScale`, `uiScale`) read as it (decision T482).
+/// Turns the 3D world on or off (decision T522).
+pub fn set_world(vm: &mut Vm, on: bool) {
+    engine_mut(vm).world_on = on;
+}
+
 pub fn set_screen(vm: &mut Vm, screen: Screen) {
     place_screen(vm, screen);
     if let Some(ui) = screen.ui_scale {
@@ -544,6 +553,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         flavor: flavor.to_string(),
         platform: Platform::Mac,
         screen: Screen::default(),
+        world_on: false,
         api,
         behaviours: fill.into_iter().chain(own).collect(),
         fill_ins,

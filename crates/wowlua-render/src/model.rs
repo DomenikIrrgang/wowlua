@@ -169,7 +169,7 @@ struct Draw {
 }
 
 /// The view and projection of a camera, and whether anything was framed.
-fn look_at(eye: Vec3, forward: Vec3, up: Vec3) -> Mat4 {
+pub(crate) fn look_at(eye: Vec3, forward: Vec3, up: Vec3) -> Mat4 {
     let f = normalize(forward);
     let r = normalize(cross(f, up));
     let u = cross(r, f);
@@ -193,7 +193,7 @@ fn look_at(eye: Vec3, forward: Vec3, up: Vec3) -> Mat4 {
     ]
 }
 
-fn perspective(fov_y: f32, aspect: f32, near: f32, far: f32) -> Mat4 {
+pub(crate) fn perspective(fov_y: f32, aspect: f32, near: f32, far: f32) -> Mat4 {
     let f = 1.0 / (fov_y / 2.0).tan();
     let mut m = [0.0; 16];
     m[0] = f / aspect;

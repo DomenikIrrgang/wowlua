@@ -13,6 +13,7 @@ pub mod compare;
 mod composite;
 mod glyphs;
 mod model;
+mod world;
 
 use std::collections::HashMap;
 
@@ -38,6 +39,16 @@ pub trait Assets {
     }
     /// What a model shows, as the build's tables give it.
     fn model(&mut self, _source: &ModelSource) -> Option<Display> {
+        None
+    }
+    /// A map's terrain tile, by column and row from the north-west
+    /// (decision T522).
+    fn terrain(
+        &mut self,
+        _map: u32,
+        _x: i32,
+        _y: i32,
+    ) -> Option<std::sync::Arc<wowlua_casc::adt::Tile>> {
         None
     }
 }
@@ -255,6 +266,8 @@ pub struct Renderer {
     missing: usize,
     atlas_tex: usize,
     models: model::Models,
+    /// The 3D world's terrain and pipeline (decision T522).
+    world: world::World,
     /// The textures the frame's models are drawn into, reused each frame.
     model_slots: Vec<usize>,
     model_slot_next: usize,
@@ -500,6 +513,7 @@ impl Renderer {
             missing: 0,
             atlas_tex: 0,
             models: model::Models::default(),
+            world: world::World::default(),
             model_slots: Vec::new(),
             model_slot_next: 0,
             adapter,
@@ -1087,6 +1101,10 @@ impl Renderer {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("ui") });
+        // The 3D world first, while it is on: the UI over it (T522).
+        let world = scene.world.as_ref().inspect(|w| {
+            self.draw_world(&mut encoder, view, width, height, w, assets);
+        });
         let screen: [f32; 4] = [width as f32, height as f32, 0.0, 0.0];
         self.belt
             .write_buffer(
@@ -1132,7 +1150,10 @@ impl Renderer {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        load: match world {
+                            Some(_) => wgpu::LoadOp::Load,
+                            None => wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        },
                         store: wgpu::StoreOp::Store,
                     },
                 })],
