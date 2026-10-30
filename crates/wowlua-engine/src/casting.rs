@@ -605,6 +605,15 @@ fn target_refusal(vm: &mut Vm, id: f64) -> Option<(f64, String)> {
         };
         return Some((57.0, text));
     }
+    // (a hill or a building between, while the 3D world is on, T524;
+    // unverified: the code)
+    if !crate::character::in_sight(vm, units::PLAYER, target) {
+        let text = match vm.get_global("SPELL_FAILED_LINE_OF_SIGHT") {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => "Target not in line of sight".into(),
+        };
+        return Some((57.0, text));
+    }
     None
 }
 

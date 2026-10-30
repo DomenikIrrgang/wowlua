@@ -48,15 +48,34 @@ pub struct Doodad {
 pub struct Group {
     /// Its flags (0x8: outdoors, 0x2000: indoors).
     pub flags: u32,
+    /// Its bounds in the building (min, max).
+    pub bounds: [[f32; 3]; 2],
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub uvs: Vec<[f32; 2]>,
     /// Its vertex colors (BGRA), none where it has none.
     pub colors: Vec<[u8; 4]>,
     pub indices: Vec<u16>,
-    /// Each triangle's flags and material (255: collision only).
-    pub triangles: Vec<(u8, u8)>,
+    /// Each triangle's flags and material (none, 0xFFFF: collision
+    /// only): `MOPY`'s bytes, or the newer files' `MPY2` words.
+    pub triangles: Vec<(u16, u16)>,
     pub batches: Vec<Batch>,
+    /// Its collision tree (`MOBN`), whose leaves list triangles (`MOBR`).
+    pub bsp: Vec<BspNode>,
+    pub bsp_faces: Vec<u16>,
+}
+
+/// A node of a group's collision tree: a plane across one axis (0 x, 1 y,
+/// 2 z) at `dist`, its children on either side (-1: none), or a leaf of
+/// triangles (`faces` from `first` of the tree's list).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BspNode {
+    pub flags: u16,
+    pub negative: i16,
+    pub positive: i16,
+    pub faces: u16,
+    pub first: u32,
+    pub dist: f32,
 }
 
 /// A batch: a run of indices drawn with one material.
@@ -215,13 +234,55 @@ impl Group {
         let header = 0x44;
         let mut g = Group {
             flags: u32_at(mogp, 8),
+            bounds: [
+                [f32_at(mogp, 12), f32_at(mogp, 16), f32_at(mogp, 20)],
+                [f32_at(mogp, 24), f32_at(mogp, 28), f32_at(mogp, 32)],
+            ],
             ..Default::default()
         };
         // (its own chunks follow its header, inside it)
         for (tag, b) in chunks(mogp.get(header..)?) {
             match &tag {
                 b"MOPY" => {
-                    g.triangles = b.as_chunks::<2>().0.iter().map(|t| (t[0], t[1])).collect()
+                    g.triangles = b
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
+                        .map(|t| {
+                            let material = if t[1] == 0xFF {
+                                0xFFFF
+                            } else {
+                                u16::from(t[1])
+                            };
+                            (u16::from(t[0]), material)
+                        })
+                        .collect()
+                }
+                b"MPY2" => {
+                    g.triangles = b
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .map(|t| (u16_at(t, 0), u16_at(t, 2)))
+                        .collect()
+                }
+                b"MOBN" => {
+                    g.bsp = b
+                        .as_chunks::<16>()
+                        .0
+                        .iter()
+                        .map(|n| BspNode {
+                            flags: u16_at(n, 0),
+                            negative: u16_at(n, 2) as i16,
+                            positive: u16_at(n, 4) as i16,
+                            faces: u16_at(n, 6),
+                            first: u32_at(n, 8),
+                            dist: f32_at(n, 12),
+                        })
+                        .collect()
+                }
+                b"MOBR" => {
+                    g.bsp_faces = b.as_chunks::<2>().0.iter().map(|i| u16_at(i, 0)).collect()
                 }
                 b"MOVI" => g.indices = b.as_chunks::<2>().0.iter().map(|i| u16_at(i, 0)).collect(),
                 b"MOVT" => g.positions = vec3s(b),
@@ -273,7 +334,43 @@ impl Group {
     /// Whether a triangle (by its index) collides: not detail, not one
     /// only drawn (`MOPY` 0x4 detail, 0x20 render without collision).
     pub fn collides(&self, triangle: usize) -> bool {
-        let (flags, material) = self.triangles.get(triangle).copied().unwrap_or((0, 0));
-        material == 0xFF || flags & 0x04 == 0 && (flags & 0x08 != 0 || flags & 0x20 == 0)
+        let (flags, _) = self.triangles.get(triangle).copied().unwrap_or((0x20, 0));
+        // (collision, or drawn and not detail)
+        flags & 0x08 != 0 || flags & 0x20 != 0 && flags & 0x04 == 0
+    }
+
+    /// The triangles near a box of the group (min, max): its collision
+    /// tree's leaves the box reaches, else every triangle.
+    pub fn near(&self, lo: [f64; 3], hi: [f64; 3], out: &mut Vec<usize>) {
+        out.clear();
+        if self.bsp.is_empty() {
+            out.extend(0..self.indices.len() / 3);
+            return;
+        }
+        let mut stack = vec![0usize];
+        while let Some(i) = stack.pop() {
+            let Some(n) = self.bsp.get(i) else {
+                continue;
+            };
+            if n.flags & 0x4 != 0 {
+                let from = n.first as usize;
+                for f in self.bsp_faces.iter().skip(from).take(n.faces as usize) {
+                    out.push(*f as usize);
+                }
+                continue;
+            }
+            let axis = (n.flags & 0x3) as usize;
+            let d = f64::from(n.dist);
+            if axis < 3 {
+                if lo[axis] <= d && n.negative >= 0 {
+                    stack.push(n.negative as usize);
+                }
+                if hi[axis] >= d && n.positive >= 0 {
+                    stack.push(n.positive as usize);
+                }
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
     }
 }

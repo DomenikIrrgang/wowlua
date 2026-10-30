@@ -577,6 +577,18 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
         self.with(|lib, casc| lib.ground(casc, map, north, west))
     }
 
+    fn floor(&self, map: u32, at: [f64; 3]) -> Option<f64> {
+        self.with(|lib, casc| lib.floor(casc, map, at))
+    }
+
+    fn hit(&self, map: u32, a: [f64; 3], b: [f64; 3]) -> Option<f64> {
+        self.with(|lib, casc| lib.hit(casc, map, a, b))
+    }
+
+    fn walk(&self, map: u32, a: [f64; 3], b: [f64; 3]) -> Option<f64> {
+        self.with(|lib, casc| Some(lib.walk(casc, map, a, b)))
+    }
+
     fn model_scene(&self, id: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
         self.with(|lib, casc| {
             let (kind, flags) = {

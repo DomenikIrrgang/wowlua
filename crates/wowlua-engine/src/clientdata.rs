@@ -174,6 +174,22 @@ pub trait ClientData: Send + Sync {
     fn ground(&self, _map: u32, _north: f64, _west: f64) -> Option<f64> {
         None
     }
+    /// The floor under a place of a map (north, west, up): the highest
+    /// ground or building floor no more than a step over it (decision
+    /// T524).
+    fn floor(&self, _map: u32, _at: [f64; 3]) -> Option<f64> {
+        None
+    }
+    /// Where the line between two places first meets the terrain or a
+    /// building (0 to 1 along it); none for a clear line (decision T524).
+    fn hit(&self, _map: u32, _a: [f64; 3], _b: [f64; 3]) -> Option<f64> {
+        None
+    }
+    /// How far one walks from a place toward another before a wall (0 to
+    /// 1; decision T524).
+    fn walk(&self, _map: u32, _a: [f64; 3], _b: [f64; 3]) -> Option<f64> {
+        None
+    }
     /// A spell as the client's tables (and its hotfixes) have it
     /// (decision T391).
     fn spell(&self, _id: u32) -> Option<ClientSpell> {
@@ -501,6 +517,35 @@ pub(crate) fn ground(vm: &Vm, map: f64, north: f64, west: f64) -> Option<f64> {
         return None;
     }
     data(vm)?.ground(u32::try_from(map as i64).ok()?, north, west)
+}
+
+/// The floor under a place of a map while the 3D world is on (decision
+/// T524).
+pub(crate) fn floor(vm: &Vm, map: f64, at: [f64; 3]) -> Option<f64> {
+    if !crate::engine(vm).world_on {
+        return None;
+    }
+    data(vm)?.floor(u32::try_from(map as i64).ok()?, at)
+}
+
+/// Where the line between two places first meets the world while it is
+/// on (decision T524); none for a clear line, or the world off.
+pub(crate) fn hit(vm: &Vm, map: f64, a: [f64; 3], b: [f64; 3]) -> Option<f64> {
+    if !crate::engine(vm).world_on {
+        return None;
+    }
+    data(vm)?.hit(u32::try_from(map as i64).ok()?, a, b)
+}
+
+/// How far one walks between two places before a wall while the world is
+/// on (decision T524); all the way while it is off.
+pub(crate) fn walk(vm: &Vm, map: f64, a: [f64; 3], b: [f64; 3]) -> f64 {
+    if !crate::engine(vm).world_on {
+        return 1.0;
+    }
+    data(vm)
+        .and_then(|d| d.walk(u32::try_from(map as i64).ok()?, a, b))
+        .unwrap_or(1.0)
 }
 
 /// The UI camera the client's tables give an item on a character of a

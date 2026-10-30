@@ -893,6 +893,16 @@ Unverified numbers and answers from M13's movement and ranges. A paladin
    and walk away from it until a button's hotkey turns red. Answers the
    slots told and their values (wowlua: each slot's `false true` once).
 
+## A solid world (decision T524)
+
+1. **Line of sight**: enter
+   `/run local f=CreateFrame("Frame") f:RegisterEvent("UI_ERROR_MESSAGE") f:SetScript("OnEvent",function(_,_,c,t) print(c,t) end)`,
+   target a mob with a wall or hill between you and press an attack spell
+   in range. Answers the code and text (wowlua: 57, "Target not in line of
+   sight").
+2. **A step's height**: walk onto a crate or a ledge and note the highest
+   one you step onto without jumping (wowlua: 2 yards).
+
 ## The camera (decisions T520, T521)
 
 The camera's numbers wowlua could not read from the settings. Any

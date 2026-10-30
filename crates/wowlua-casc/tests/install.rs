@@ -721,3 +721,70 @@ fn reads_the_buildings() {
         );
     }
 }
+
+/// The buildings are solid (decision T524), on camelot's client: walking
+/// toward Northshire Abbey's middle from each side meets a wall on most
+/// (its doors may be open), there is a floor in it, and a line through it
+/// is not clear.
+#[test]
+fn the_buildings_are_solid() {
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let storage = FsStorage { root: root.clone() };
+    let Some(product) = Casc::product_of_folder(&storage, "_forever_") else {
+        eprintln!("no camelot client: skipped");
+        return;
+    };
+    let casc = Casc::open(Box::new(storage), &product).expect("opens");
+    let mut lib = wowlua_casc::display::Library::default();
+    let objects = lib.objects(&casc, 0, 32, 48).expect("the tile's objects");
+    // (the building nearest where a new human starts, of a building's
+    // size: the tile also places the valley's cliffs as one)
+    let from_start = |x: &wowlua_casc::obj::Building| (x.at[0] + 8949.95).hypot(x.at[1] + 132.493);
+    let abbey = objects
+        .buildings
+        .iter()
+        .filter(|b| b.bounds[1][0] - b.bounds[0][0] < 300.0)
+        .min_by(|a, b| from_start(a).total_cmp(&from_start(b)))
+        .expect("a building");
+    let mid = [
+        (abbey.bounds[0][0] + abbey.bounds[1][0]) / 2.0,
+        (abbey.bounds[0][1] + abbey.bounds[1][1]) / 2.0,
+    ];
+    let inside_ground = lib.ground(&casc, 0, mid[0], mid[1]).expect("the ground");
+    let started = std::time::Instant::now();
+    let floor = lib.floor(&casc, 0, [mid[0], mid[1], inside_ground]);
+    eprintln!(
+        "abbey {}: ground {inside_ground:.2}, floor {floor:?} in {:?}",
+        abbey.file,
+        started.elapsed()
+    );
+    assert!(floor.is_some_and(|f| f >= inside_ground - 0.5), "{floor:?}");
+    let reach =
+        (abbey.bounds[1][0] - abbey.bounds[0][0]).max(abbey.bounds[1][1] - abbey.bounds[0][1]);
+    let mut blocked = 0;
+    for (dn, dw) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
+        let (n, w) = (mid[0] + dn * reach, mid[1] + dw * reach);
+        let z = lib.ground(&casc, 0, n, w).expect("the ground");
+        let started = std::time::Instant::now();
+        let f = lib.walk(&casc, 0, [n, w, z], [mid[0], mid[1], z]);
+        eprintln!(
+            "from ({dn}, {dw}): walks {f:.2} of the way, in {:?}",
+            started.elapsed()
+        );
+        if f < 1.0 {
+            blocked += 1;
+        }
+    }
+    assert!(blocked >= 2, "{blocked}");
+    let high = inside_ground + 5.0;
+    let through = lib.hit(
+        &casc,
+        0,
+        [mid[0] + reach, mid[1], high],
+        [mid[0] - reach, mid[1], high],
+    );
+    assert!(through.is_some(), "a line through the abbey");
+}
