@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### New
+
+- A debug session tells what the game's chat windows show (`wowlua/chatLines`: each line's text and colour, your addon's prints too) and sends a chat message as the player would type it (`wowlua/input` with `chat`: your addons get its `CHAT_MSG_SAY`, `CHAT_MSG_PARTY`, …), for wowlua Studio's chat tab.
+
 ## 0.13.7 (2026-10-30)
 
 ### New

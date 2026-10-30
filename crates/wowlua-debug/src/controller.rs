@@ -618,6 +618,7 @@ impl Controller {
                 | Request::Inspect { .. }
                 | Request::Pick { .. }
                 | Request::Units
+                | Request::ChatLines { .. }
                 | Request::Target { .. }
                 | Request::LogEvents { .. }
                 | Request::Events
@@ -760,6 +761,9 @@ impl Controller {
             }),
             Request::Units => Ok(Response::Data {
                 data: crate::ui::units(vm),
+            }),
+            Request::ChatLines { since } => Ok(Response::Data {
+                data: crate::ui::chat_lines(vm, since),
             }),
             Request::Target { unit } => crate::ui::target_unit(vm, unit).map(|()| Response::Ok),
             Request::LogEvents { on } => {
