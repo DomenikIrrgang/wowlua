@@ -893,6 +893,25 @@ Unverified numbers and answers from M13's movement and ranges. A paladin
    and walk away from it until a button's hotkey turns red. Answers the
    slots told and their values (wowlua: each slot's `false true` once).
 
+## The camera (decisions T520, T521)
+
+The camera's numbers wowlua could not read from the settings. Any
+character, outdoors.
+
+1. **The furthest zoom**: scroll all the way out, then enter
+   `/run print(GetCameraZoom(), GetCVar("cameraDistanceMaxZoomFactor"))`.
+   Answers the furthest zoom (wowlua: 15 times the factor).
+2. **Zooming at once**: enter
+   `/run CameraZoomOut(5) print(GetCameraZoom())`. Answers whether the
+   distance changes at once (wowlua) or as the camera glides.
+3. **A view never saved**: enter `/run ResetView(3) SetView(3)`. Note where
+   the camera goes (wowlua: it stays).
+4. **A nameplate's height**: target a mob 20 yards ahead on flat ground,
+   then enter
+   `/run local p=C_NamePlate.GetNamePlateForUnit("target") print(p:GetCenter()) print(WorldFrame:GetCenter())`.
+   Answers how far above the screen's middle its plate sits (wowlua: the
+   pivot 2 yards over the player's feet, the plate 2.5 over the mob's).
+
 ## The dev tools (0.12.1)
 
 The dev window's performance tab, hints, HUD and error toast are tested in

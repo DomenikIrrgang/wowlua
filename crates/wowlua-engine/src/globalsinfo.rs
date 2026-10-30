@@ -424,15 +424,6 @@ fn get_mouse_button_name(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.str(if known { &name } else { "UNKNOWN" })])
 }
 
-/// `GetCameraZoom()`: the camera's distance, as the `cameraSavedDistance`
-/// CVar keeps it (the full probe: 30 with it "30.000000").
-fn get_camera_zoom(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let d = crate::framescript::cvar_get(vm, "cameraSavedDistance")
-        .and_then(|v| v.parse::<f64>().ok())
-        .unwrap_or(0.0);
-    Ok(vec![Value::Num(d)])
-}
-
 /// `GetDefaultScale()`: the UI scale that makes the screen 768 units high
 /// at its physical height (the screen's, decision T237), Blizzard's long-standing
 /// rule, as a C float (recorded 0.71111112833023 at 1080).
@@ -999,29 +990,8 @@ const NOTHING: &[&str] = &[
     "RemoveRaidTargets",
     "RespondInstanceLock",
     "SetSavedInstanceExtend",
-    // The client window, the camera, the console, profiling.
+    // The client window, the console, profiling.
     "FlashClientIcon",
-    "SetView",
-    "SaveView",
-    "ResetView",
-    "NextView",
-    "PrevView",
-    "CameraZoomIn",
-    "CameraZoomOut",
-    "FlipCameraYaw",
-    "CenterCamera",
-    "MoveViewLeftStart",
-    "MoveViewLeftStop",
-    "MoveViewRightStart",
-    "MoveViewRightStop",
-    "MoveViewUpStart",
-    "MoveViewUpStop",
-    "MoveViewDownStart",
-    "MoveViewDownStop",
-    "MoveViewInStart",
-    "MoveViewInStop",
-    "MoveViewOutStart",
-    "MoveViewOutStop",
     "LaunchURL",
     "LoadURLIndex",
     "ResetCPUUsage",
@@ -1597,7 +1567,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("SelectedRealmName", selected_realm_name),
         ("GetLocalGameTime", get_local_game_time),
         ("GetResSicknessDuration", get_res_sickness_duration),
-        ("GetCameraZoom", get_camera_zoom),
         ("GetGuildRosterShowOffline", get_guild_roster_show_offline),
         ("SetGuildRosterShowOffline", set_guild_roster_show_offline),
         ("GetMouseButtonName", get_mouse_button_name),

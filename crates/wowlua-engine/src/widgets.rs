@@ -266,6 +266,8 @@ pub struct World {
     pub chat_log: std::collections::VecDeque<ChatLine>,
     /// The next chat log line's number.
     pub chat_log_next: u64,
+    /// The camera (decision T520).
+    pub camera: crate::camera::Camera,
     /// The action slots whose range is told (`EnableActionRangeCheck`),
     /// each with what was told last: in range, checks range (T519).
     pub range_checks: std::collections::BTreeMap<i64, (bool, bool)>,
