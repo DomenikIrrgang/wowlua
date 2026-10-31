@@ -788,3 +788,81 @@ fn the_buildings_are_solid() {
     );
     assert!(through.is_some(), "a line through the abbey");
 }
+
+/// One standing on a building stays there (decision T524), on camelot's
+/// client: every colliding floor of Northshire Abbey, each 3 yards, is
+/// the floor under one standing on it, though a wall or a steep roof is
+/// over it within a step.
+#[test]
+fn one_stands_on_every_floor() {
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let storage = FsStorage { root: root.clone() };
+    let Some(product) = Casc::product_of_folder(&storage, "_forever_") else {
+        eprintln!("no camelot client: skipped");
+        return;
+    };
+    let casc = Casc::open(Box::new(storage), &product).expect("opens");
+    let mut lib = wowlua_casc::display::Library::default();
+    let objects = lib.objects(&casc, 0, 32, 48).expect("the tile's objects");
+    let from_start = |x: &wowlua_casc::obj::Building| (x.at[0] + 8949.95).hypot(x.at[1] + 132.493);
+    let abbey = objects
+        .buildings
+        .iter()
+        .filter(|b| b.bounds[1][0] - b.bounds[0][0] < 300.0)
+        .min_by(|a, b| from_start(a).total_cmp(&from_start(b)))
+        .expect("a building")
+        .clone();
+    let wmo = lib.building(&casc, abbey.file).expect("the abbey");
+    let place = wowlua_casc::obj::placed(abbey.at, abbey.rotation, abbey.scale);
+    // (its colliding triangles facing up, on the map)
+    let mut floors = Vec::new();
+    for g in &wmo.groups {
+        for (t, tri) in g.indices.as_chunks::<3>().0.iter().enumerate() {
+            let v = tri.map(|i| place(g.positions[i as usize]));
+            let (e1, e2) = (
+                [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]],
+                [v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]],
+            );
+            let n = [
+                e1[1] * e2[2] - e1[2] * e2[1],
+                e1[2] * e2[0] - e1[0] * e2[2],
+                e1[0] * e2[1] - e1[1] * e2[0],
+            ];
+            let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+            if g.collides(t) && l > 1e-9 && (n[2] / l).abs() >= wowlua_casc::collide::WALKABLE {
+                floors.push(v);
+            }
+        }
+    }
+    // (the height where a vertical line crosses a triangle)
+    let height = |v: &[[f64; 3]; 3], n: f64, w: f64| {
+        let d =
+            (v[1][0] - v[0][0]) * (v[2][1] - v[0][1]) - (v[2][0] - v[0][0]) * (v[1][1] - v[0][1]);
+        let s = ((n - v[0][0]) * (v[2][1] - v[0][1]) - (v[2][0] - v[0][0]) * (w - v[0][1])) / d;
+        let t = ((v[1][0] - v[0][0]) * (w - v[0][1]) - (n - v[0][0]) * (v[1][1] - v[0][1])) / d;
+        (d.abs() > 1e-9 && s >= 0.0 && t >= 0.0 && s + t <= 1.0)
+            .then(|| v[0][2] + s * (v[1][2] - v[0][2]) + t * (v[2][2] - v[0][2]))
+    };
+    let (mut stood, mut fell) = (0, Vec::new());
+    let mut n = abbey.bounds[0][0];
+    while n <= abbey.bounds[1][0] {
+        let mut w = abbey.bounds[0][1];
+        while w <= abbey.bounds[1][1] {
+            for z in floors.iter().filter_map(|v| height(v, n, w)) {
+                stood += 1;
+                let floor = lib.floor(&casc, 0, [n, w, z]);
+                if floor.is_none_or(|f| f < z - 0.3) {
+                    fell.push((n, w, z, floor));
+                }
+            }
+            w += 3.0;
+        }
+        n += 3.0;
+    }
+    eprintln!("abbey {}: {stood} places, {} fell", abbey.file, fell.len());
+    assert!(stood > 500, "{stood}");
+    assert!(fell.is_empty(), "{:?}", &fell[..fell.len().min(5)]);
+}
