@@ -2209,6 +2209,11 @@ fn build_scene(vm: &mut Vm) -> Scene {
         }
     }
     let world = world_view(vm);
+    // (the names over the units, behind the UI, T534)
+    if world.is_some() {
+        let names = crate::unitnames::items(vm, f64::from(width), f64::from(height));
+        items.splice(0..0, names);
+    }
     Scene {
         width,
         height,

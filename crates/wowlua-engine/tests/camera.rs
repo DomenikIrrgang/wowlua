@@ -161,3 +161,100 @@ fn a_point_of_the_screen_is_a_place_of_the_world() {
         None
     );
 }
+
+/// The player at (0, 0) facing north with the 3D world on; a vendor (an
+/// interactive NPC) 10 yards north, a hostile wolf 12; every name and
+/// plate setting off; the plate events in `Log`.
+const PEOPLE: &str = "mock.moveTo({ world = { y = 0, x = 0, z = 0 }, facing = 0 })
+for _, n in ipairs({ 'nameplateShowEnemies', 'nameplateShowFriendlyNpcs', 'nameplateShowFriendlyPlayers',
+    'UnitNameNPC', 'UnitNameInteractiveNPC', 'UnitNameHostleNPC', 'UnitNameFriendlySpecialNPCName' }) do
+    C_CVar.SetCVar(n, '0')
+end
+Log = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('NAME_PLATE_UNIT_ADDED')
+f:RegisterEvent('NAME_PLATE_UNIT_REMOVED')
+f:SetScript('OnEvent', function(_, e, token)
+    Log[#Log + 1] = (e == 'NAME_PLATE_UNIT_ADDED' and '+' or '-') .. token
+end)
+Clara = mock.spawnUnit({ name = 'Clara', title = 'Cloth Armor Merchant', reaction = 'friendly', world = { y = 10, x = 0, z = 0 } })
+mock.defineVendor(Clara, { items = { { id = 159 } } })
+Wolf = mock.spawnUnit({ name = 'Wolf', reaction = 'hostile', world = { y = 12, x = 3, z = 0 } })
+";
+
+/// The names the 3D world draws over the units (decision T534).
+fn names(vm: &mut Vm) -> Vec<String> {
+    let scene = wowlua_engine::scene::build(vm);
+    scene
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            wowlua_engine::scene::Item::Text(t) => Some(t),
+            _ => None,
+        })
+        .flat_map(|t| {
+            t.lines
+                .iter()
+                .flat_map(|l| l.runs.iter().map(|r| r.text.clone()))
+        })
+        .filter(|t| ["Clara", "<Cloth Armor Merchant>", "Wolf"].contains(&t.as_str()))
+        .collect()
+}
+
+/// With the 3D world on, the game's settings give units their nameplates
+/// (decision T534): an enemy's by `nameplateShowEnemies`, a friendly
+/// NPC's by `nameplateShowFriendlyNpcs`, coming and going as they change.
+#[test]
+fn the_settings_give_units_their_nameplates() {
+    let mut vm = vm();
+    wowlua_engine::set_world(&mut vm, true);
+    let out = run(
+        &mut vm,
+        &format!(
+            "{PEOPLE}mock.advanceFrames(1, 1000 / 60)
+local none = #Log
+C_CVar.SetCVar('nameplateShowEnemies', '1')
+mock.advanceFrames(1, 1000 / 60)
+C_CVar.SetCVar('nameplateShowFriendlyNpcs', '1')
+mock.advanceFrames(1, 1000 / 60)
+C_CVar.SetCVar('nameplateShowEnemies', '0')
+mock.advanceFrames(1, 1000 / 60)
+return none, table.concat(Log, ' ')"
+        ),
+    );
+    assert_eq!(out, ["0", "+nameplate1 +nameplate2 -nameplate1"]);
+}
+
+/// With the 3D world on, the names over the units follow the game's name
+/// settings (decision T534): an interactive NPC's with its title by
+/// `UnitNameInteractiveNPC`, a hostile one's by `UnitNameHostleNPC`; a
+/// unit whose nameplate shows has none.
+#[test]
+fn names_show_over_the_units_the_settings_name() {
+    let mut vm = vm();
+    wowlua_engine::set_world(&mut vm, true);
+    run(
+        &mut vm,
+        &format!("{PEOPLE}mock.advanceFrames(1, 1000 / 60)"),
+    );
+    assert!(names(&mut vm).is_empty());
+    run(
+        &mut vm,
+        "C_CVar.SetCVar('UnitNameInteractiveNPC', '1') mock.advanceFrames(1, 1000 / 60)",
+    );
+    assert_eq!(names(&mut vm), ["Clara", "<Cloth Armor Merchant>"]);
+    run(
+        &mut vm,
+        "C_CVar.SetCVar('UnitNameHostleNPC', '1') mock.advanceFrames(1, 1000 / 60)",
+    );
+    // (the farther first)
+    assert_eq!(names(&mut vm), ["Wolf", "Clara", "<Cloth Armor Merchant>"]);
+    run(
+        &mut vm,
+        "C_CVar.SetCVar('nameplateShowFriendlyNpcs', '1') mock.advanceFrames(1, 1000 / 60)",
+    );
+    assert_eq!(names(&mut vm), ["Wolf"]);
+    // (the world off: no names)
+    wowlua_engine::set_world(&mut vm, false);
+    assert!(names(&mut vm).is_empty());
+}

@@ -907,6 +907,30 @@ Unverified numbers and answers from M13's movement and ranges. A paladin
    camera moves in front of the trunk, as it does for a wall (wowlua: it
    does not).
 
+## Names over units (decision T534)
+
+Any character, outdoors near a town's NPCs, with nameplates for friendly
+NPCs off.
+
+1. **The settings**: enter
+   `/run for _,n in ipairs({"UnitNameNPC","UnitNameInteractiveNPC","UnitNameHostleNPC","UnitNameFriendlySpecialNPCName","UnitNameNonCombatCreatureName","nameplateShowAll","nameplateShowEnemies","nameplateShowFriendlyNpcs","nameplateMaxDistance"}) do print(n, GetCVar(n)) end`.
+   Answers the settings wowlua reads.
+2. **A guard**: stand by a guard (a friendly NPC with nothing to sell)
+   and note whether its name shows, then enter
+   `/run SetCVar("UnitNameFriendlySpecialNPCName", 0)` and note whether
+   it still shows (wowlua: it goes).
+3. **How far**: walk away from a vendor until its name goes, then enter
+   `/run print(UnitPosition("player"))`; walk back to it and enter the
+   same. Answers how far names show (wowlua: as far as nameplates, 45
+   yards).
+4. **Plates out of combat**: enter `/run SetCVar("nameplateShowAll", 0)`
+   and look at a hostile mob out of combat: note whether its plate shows
+   (wowlua: not until it is in combat). Enter
+   `/run SetCVar("nameplateShowAll", 1)` after.
+5. **The look**: take a screenshot (Print Screen) of a vendor's name and
+   title close up, for their size, colors and height over its head
+   (wowlua: 15 and 13 pixels at 1080, green, 2.4 yards up).
+
 ## How far the world is drawn (decision T525)
 
 1. **The settings**: enter

@@ -12,18 +12,24 @@
     "facing": 0
   },
   "money": 500000,
+  "cvars": {
+    "UnitNameInteractiveNPC": "1",
+    "UnitNameHostleNPC": "1",
+    "UnitNameFriendlySpecialNPCName": "1"
+  },
   "units": [
     {
-      "name": "Test Vendor: Cloth",
+      "name": "Clara",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1261,
       "world": {
-        "y": -8938.0,
-        "x": -116.0,
+        "y": -8941.95,
+        "x": -118.63,
         "z": 0
       },
-      "facing": 4.085,
+      "facing": 4.189,
+      "title": "Cloth Armor Merchant",
       "vendor": {
         "items": [
           {
@@ -103,16 +109,17 @@
       }
     },
     {
-      "name": "Test Vendor: Leather",
+      "name": "Lorn",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1276,
       "world": {
-        "y": -8938.0,
-        "x": -120.0,
+        "y": -8938.22,
+        "x": -121.61,
         "z": 0
       },
-      "facing": 3.949,
+      "facing": 3.889,
+      "title": "Leather Armor Merchant",
       "vendor": {
         "items": [
           {
@@ -176,16 +183,17 @@
       }
     },
     {
-      "name": "Test Vendor: Mail & Shields",
+      "name": "Magnus",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1277,
       "world": {
-        "y": -8938.0,
-        "x": -124.0,
+        "y": -8935.53,
+        "x": -125.55,
         "z": 0
       },
-      "facing": 3.759,
+      "facing": 3.59,
+      "title": "Mail Armor & Shields",
       "vendor": {
         "items": [
           {
@@ -241,16 +249,17 @@
       }
     },
     {
-      "name": "Test Vendor: Weapons",
+      "name": "Wendel",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1288,
       "world": {
-        "y": -8938.0,
-        "x": -128.0,
+        "y": -8934.13,
+        "x": -130.11,
         "z": 0
       },
-      "facing": 3.501,
+      "facing": 3.291,
+      "title": "Weapons Merchant",
       "vendor": {
         "items": [
           {
@@ -326,16 +335,17 @@
       }
     },
     {
-      "name": "Test Vendor: General Goods",
+      "name": "Gemma",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1287,
       "world": {
-        "y": -8938.0,
-        "x": -132.0,
+        "y": -8934.13,
+        "x": -134.87,
         "z": 0
       },
-      "facing": 3.183,
+      "facing": 2.992,
+      "title": "General Goods",
       "vendor": {
         "items": [
           {
@@ -452,16 +462,17 @@
       }
     },
     {
-      "name": "Test Vendor: Reagents & Trade Goods",
+      "name": "Rhea",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1285,
       "world": {
-        "y": -8938.0,
-        "x": -136.0,
+        "y": -8935.53,
+        "x": -139.43,
         "z": 0
       },
-      "facing": 2.856,
+      "facing": 2.693,
+      "title": "Reagents & Trade Goods",
       "vendor": {
         "items": [
           {
@@ -551,16 +562,17 @@
       }
     },
     {
-      "name": "Test Repairs",
+      "name": "Brom",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1280,
       "world": {
-        "y": -8938.0,
-        "x": -140.0,
+        "y": -8938.22,
+        "x": -143.37,
         "z": 0
       },
-      "facing": 2.581,
+      "facing": 2.394,
+      "title": "Armorer & Repairs",
       "vendor": {
         "items": [
           {
@@ -584,16 +596,17 @@
       }
     },
     {
-      "name": "Test Innkeeper",
+      "name": "Ingrid",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1440,
       "world": {
-        "y": -8938.0,
-        "x": -144.0,
+        "y": -8941.95,
+        "x": -146.35,
         "z": 0
       },
-      "facing": 2.375,
+      "facing": 2.094,
+      "title": "Innkeeper",
       "vendor": {
         "items": [
           {
@@ -644,16 +657,17 @@
       }
     },
     {
-      "name": "Test Trainer: Warrior",
+      "name": "Garrick",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1289,
       "world": {
-        "y": -8931.0,
-        "x": -116.0,
+        "y": -8934.52,
+        "x": -114.1,
         "z": 0
       },
-      "facing": 3.858,
+      "facing": 4.014,
+      "title": "Warrior Trainer",
       "trainer": {
         "class": "WARRIOR"
       },
@@ -669,16 +683,17 @@
       }
     },
     {
-      "name": "Test Trainer: Paladin",
+      "name": "Lumen",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1290,
       "world": {
-        "y": -8931.0,
-        "x": -120.0,
+        "y": -8930.91,
+        "x": -117.88,
         "z": 0
       },
-      "facing": 3.724,
+      "facing": 3.796,
+      "title": "Paladin Trainer",
       "trainer": {
         "class": "PALADIN"
       },
@@ -694,16 +709,17 @@
       }
     },
     {
-      "name": "Test Trainer: Hunter",
+      "name": "Fenna",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1543,
       "world": {
-        "y": -8931.0,
-        "x": -124.0,
+        "y": -8928.2,
+        "x": -122.35,
         "z": 0
       },
-      "facing": 3.563,
+      "facing": 3.578,
+      "title": "Hunter Trainer",
       "trainer": {
         "class": "HUNTER"
       },
@@ -719,16 +735,17 @@
       }
     },
     {
-      "name": "Test Trainer: Rogue",
+      "name": "Shade",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1291,
       "world": {
-        "y": -8931.0,
-        "x": -128.0,
+        "y": -8926.52,
+        "x": -127.3,
         "z": 0
       },
-      "facing": 3.374,
+      "facing": 3.36,
+      "title": "Rogue Trainer",
       "trainer": {
         "class": "ROGUE"
       },
@@ -744,16 +761,17 @@
       }
     },
     {
-      "name": "Test Trainer: Priest",
+      "name": "Celeste",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1295,
       "world": {
-        "y": -8931.0,
-        "x": -132.0,
+        "y": -8925.95,
+        "x": -132.49,
         "z": 0
       },
-      "facing": 3.167,
+      "facing": 3.142,
+      "title": "Priest Trainer",
       "trainer": {
         "class": "PRIEST"
       },
@@ -769,16 +787,17 @@
       }
     },
     {
-      "name": "Test Trainer: Shaman",
+      "name": "Thorne",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1832,
       "world": {
-        "y": -8931.0,
-        "x": -136.0,
+        "y": -8926.52,
+        "x": -137.68,
         "z": 0
       },
-      "facing": 2.958,
+      "facing": 2.924,
+      "title": "Shaman Trainer",
       "trainer": {
         "class": "SHAMAN"
       },
@@ -794,16 +813,17 @@
       }
     },
     {
-      "name": "Test Trainer: Mage",
+      "name": "Arcanis",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1296,
       "world": {
-        "y": -8931.0,
-        "x": -140.0,
+        "y": -8928.2,
+        "x": -142.63,
         "z": 0
       },
-      "facing": 2.764,
+      "facing": 2.705,
+      "title": "Mage Trainer",
       "trainer": {
         "class": "MAGE"
       },
@@ -819,16 +839,17 @@
       }
     },
     {
-      "name": "Test Trainer: Warlock",
+      "name": "Mordis",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1527,
       "world": {
-        "y": -8931.0,
-        "x": -144.0,
+        "y": -8930.91,
+        "x": -147.1,
         "z": 0
       },
-      "facing": 2.596,
+      "facing": 2.487,
+      "title": "Warlock Trainer",
       "trainer": {
         "class": "WARLOCK"
       },
@@ -844,16 +865,17 @@
       }
     },
     {
-      "name": "Test Trainer: Druid",
+      "name": "Willow",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1890,
       "world": {
-        "y": -8931.0,
-        "x": -148.0,
+        "y": -8934.52,
+        "x": -150.88,
         "z": 0
       },
-      "facing": 2.456,
+      "facing": 2.269,
+      "title": "Druid Trainer",
       "trainer": {
         "class": "DRUID"
       },
@@ -869,7 +891,7 @@
       }
     },
     {
-      "name": "Test Banker",
+      "name": "Bertram",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1292,
@@ -879,11 +901,12 @@
         "z": 0
       },
       "facing": 4.854,
+      "title": "Banker",
       "service": "banker",
       "bank": {}
     },
     {
-      "name": "Test Auctioneer",
+      "name": "Aurelia",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1297,
@@ -893,6 +916,7 @@
         "z": 0
       },
       "facing": 4.714,
+      "title": "Auctioneer",
       "service": "auctioneer",
       "auctionHouse": {
         "browse": [
@@ -990,7 +1014,7 @@
       }
     },
     {
-      "name": "Test Postmaster",
+      "name": "Percival",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1298,
@@ -1000,6 +1024,7 @@
         "z": 0
       },
       "facing": 4.575,
+      "title": "Postmaster",
       "service": "mailbox",
       "mailbox": {
         "letters": [
@@ -1034,7 +1059,7 @@
             }
           },
           {
-            "sender": "Test Postmaster",
+            "sender": "Percival",
             "subject": "Read me",
             "daysLeft": 3,
             "wasRead": false,
@@ -1045,7 +1070,7 @@
       }
     },
     {
-      "name": "Test Flight Master",
+      "name": "Gavin",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1299,
@@ -1055,6 +1080,7 @@
         "z": 0
       },
       "facing": 4.44,
+      "title": "Gryphon Master",
       "service": "flightmaster",
       "taxi": {
         "mapID": 1415,
@@ -1207,7 +1233,7 @@
       }
     },
     {
-      "name": "Test Gossip",
+      "name": "Talia",
       "level": 30,
       "reaction": "friendly",
       "displayId": 1300,
@@ -1217,6 +1243,7 @@
         "z": 0
       },
       "facing": 4.988,
+      "title": "Storyteller",
       "gossip": {
         "text": "I have nothing to sell, only things to say.",
         "options": [
@@ -1236,7 +1263,7 @@
       }
     },
     {
-      "name": "Test Target Dummy",
+      "name": "Target Dummy",
       "level": 1,
       "reaction": "hostile",
       "displayId": 163,
@@ -1252,7 +1279,7 @@
       "classification": "normal"
     },
     {
-      "name": "Test Kobold",
+      "name": "Kobold Laborer",
       "level": 3,
       "reaction": "hostile",
       "displayId": 365,
@@ -1281,7 +1308,7 @@
       ]
     },
     {
-      "name": "Test Wolf",
+      "name": "Young Wolf",
       "level": 2,
       "reaction": "hostile",
       "displayId": 903,
@@ -1306,7 +1333,7 @@
       ]
     },
     {
-      "name": "Test Boar",
+      "name": "Wild Boar",
       "level": 4,
       "reaction": "hostile",
       "displayId": 193,
@@ -1331,7 +1358,7 @@
       ]
     },
     {
-      "name": "Test Elite Bear",
+      "name": "Elder Bear",
       "level": 10,
       "reaction": "hostile",
       "displayId": 706,

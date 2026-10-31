@@ -387,7 +387,8 @@ wowlua also has a profile of its own for WoW Forever: `northshire`. Name it
 as you'd name yours, with `config({ profile = "northshire" })` or
 `test.profile`; a `tests/profiles/northshire.json` of your own comes first.
 It starts the fresh level 1 character, with 50 gold, at Northshire's start
-among test NPCs of every kind:
+among test NPCs of every kind, each named with its title (Clara `<Cloth
+Armor Merchant>`, Garrick `<Warrior Trainer>`):
 
 - vendors of cloth, leather, mail and shields, and weapons, selling the
   game's own items with their stats (when your WoW installation answers the
@@ -531,6 +532,17 @@ the units stand on the zone's ground (`UnitPosition` answers its height),
 and `wowlua screenshot --world` draws the terrain, its buildings, trees and
 props behind the UI, as far as the game's view distance setting reaches. It is off by default, so the
 places a test gives stay as they are.
+
+With the world on, units are named as in the game. A unit's name floats
+over it in its reaction's color, with an NPC's title under it
+(`"title": "Cloth Armor Merchant"` in a profile's unit). The game's name
+settings decide which units have a name (`UnitNameInteractiveNPC`,
+`UnitNameHostleNPC`, `UnitNameFriendlyPlayerName`, …). The nameplate
+settings give units their nameplates (`nameplateShowEnemies`,
+`nameplateShowFriendlyNpcs`, `nameplateShowFriendlyPlayers`), with
+`NAME_PLATE_UNIT_ADDED` as they turn on. A unit with a nameplate has no name
+over it. `unit:showNameplate()` still gives one a plate whatever the
+settings.
 
 ## Coverage
 

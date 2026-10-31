@@ -84,6 +84,9 @@ pub struct Unit {
     pub distance: Option<f64>,
     /// `UnitClassification` (`normal`, `elite`, `rare`, …).
     pub classification: String,
+    /// An NPC's title, under its name in the world (`Cloth Armor
+    /// Merchant`; decision T534).
+    pub title: Option<String>,
     /// The player's threat on this creature (`setThreat`).
     pub threat: Option<f64>,
     /// Others' threat on it (`setThreat(value, unit)`: group members,
@@ -320,6 +323,9 @@ pub struct Units {
     /// The units whose nameplate was shown (by a test or a world profile):
     /// at a place, the camera shows and hides it (decision T521).
     pub wanted_plates: Vec<UnitId>,
+    /// The units the game's settings gave a nameplate last frame, while
+    /// the 3D world is on (decision T534).
+    pub settings_plates: Vec<UnitId>,
     /// Where each nameplate frame sits (its widget's index): the spot
     /// from the screen's center.
     pub plate_spots: std::collections::HashMap<usize, (f64, f64)>,
@@ -501,6 +507,7 @@ pub fn install(vm: &mut Vm) {
         alive_in_world: true,
         distance: Some(0.0),
         classification: "normal".into(),
+        title: None,
         threat: None,
         threat_others: Vec::new(),
         absorbs: 0.0,
@@ -870,6 +877,7 @@ fn clone_unit(u: &Unit) -> Unit {
         race: u.race.clone(),
         faction_group: u.faction_group.clone(),
         classification: u.classification.clone(),
+        title: u.title.clone(),
         loot: u.loot.clone(),
         drops: u.drops.clone(),
         threat_others: u.threat_others.clone(),
@@ -2362,6 +2370,7 @@ fn unit_from(
             _ => None,
         },
         classification: text(vm, "classification", "normal"),
+        title: Some(text(vm, "title", "")).filter(|t| !t.is_empty()),
         threat: None,
         threat_others: Vec::new(),
         absorbs: 0.0,
@@ -3090,6 +3099,7 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
         "powers",
         "pvp",
         "classification",
+        "title",
         "creatureType",
         "creatureFamily",
         "zone",
@@ -3195,6 +3205,9 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     if has("classification") {
         u.classification = new.classification;
+    }
+    if has("title") {
+        u.title = new.title;
     }
     if has("creatureType") {
         u.creature_type = new.creature_type;
@@ -4631,10 +4644,45 @@ fn plate_spot(vm: &mut Vm, me: UnitId) -> Option<(f64, f64)> {
 /// the camera comes to see them, moved with them, removed as it no longer
 /// does (decision T521).
 pub fn plates_tick(vm: &mut Vm) {
-    if engine(vm).units.wanted_plates.is_empty() {
+    // (and those the game's settings give, while the world is on, T534)
+    let mut by_settings = Vec::new();
+    if engine(vm).world_on {
+        for i in 1..engine(vm).units.list.len() {
+            if plate_by_settings(vm, UnitId(i)) {
+                by_settings.push(UnitId(i));
+            }
+        }
+    }
+    let asked = engine(vm).units.wanted_plates.clone();
+    // (a plate the settings no longer give, and no test asked for, goes)
+    let before = std::mem::replace(
+        &mut engine_mut(vm).units.settings_plates,
+        by_settings.clone(),
+    );
+    for me in before {
+        if by_settings.contains(&me) || asked.contains(&me) {
+            continue;
+        }
+        if let Some(i) = engine(vm)
+            .units
+            .nameplates
+            .iter()
+            .position(|n| *n == Some(me))
+        {
+            let token = vm.str(&format!("nameplate{}", i + 1));
+            fire(vm, "NAME_PLATE_UNIT_REMOVED", &[token]);
+            engine_mut(vm).units.nameplates[i] = None;
+        }
+    }
+    let mut wanted = asked;
+    for me in by_settings {
+        if !wanted.contains(&me) {
+            wanted.push(me);
+        }
+    }
+    if wanted.is_empty() {
         return;
     }
-    let wanted = engine(vm).units.wanted_plates.clone();
     for me in wanted {
         // (a world profile's waits for the player to enter the world)
         if crate::character::place_of(vm, me).is_none()
@@ -4661,6 +4709,39 @@ pub fn plates_tick(vm: &mut Vm) {
                 engine_mut(vm).units.nameplates[i] = None;
             }
             (None, None) => {}
+        }
+    }
+}
+
+/// Whether the game's settings give a unit at a place its nameplate
+/// (decision T534): an enemy (hostile, or a neutral NPC) by
+/// `nameplateShowEnemies`, a friendly NPC by `nameplateShowFriendlyNpcs`,
+/// another friendly player by `nameplateShowFriendlyPlayers`; with
+/// `nameplateShowAll` off, only while it is in combat (unverified).
+fn plate_by_settings(vm: &mut Vm, me: UnitId) -> bool {
+    let (player, reaction, placed, in_combat) = {
+        let u = &engine(vm).units.list[me.0];
+        (
+            u.player,
+            u.reaction,
+            u.alive_in_world && u.world.is_some(),
+            u.in_combat,
+        )
+    };
+    if !placed {
+        return false;
+    }
+    let mut on = |name: &str, default: bool| {
+        crate::framescript::cvar_get(vm, name).map_or(default, |v| v != "0" && !v.is_empty())
+    };
+    if !on("nameplateShowAll", true) && !in_combat {
+        return false;
+    }
+    match (player, reaction) {
+        (_, Reaction::Hostile) | (false, Reaction::Neutral) => on("nameplateShowEnemies", false),
+        (true, _) => on("nameplateShowFriendlyPlayers", false) || on("nameplateShowFriends", false),
+        (false, Reaction::Friendly) => {
+            on("nameplateShowFriendlyNpcs", false) || on("nameplateShowFriendlyNPCs", false)
         }
     }
 }
