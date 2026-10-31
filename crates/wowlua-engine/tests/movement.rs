@@ -215,3 +215,56 @@ return at(wolf), tostring(ok), err"
     assert_eq!(out[1], "false");
     assert!(out[2].contains("wander"), "{out:?}");
 }
+
+/// A wall across the way 10 yards north of (0, 0), and every model's body
+/// 0.5 yards wide.
+struct Wall;
+
+impl wowlua_engine::clientdata::ClientData for Wall {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn walk(&self, _: u32, a: [f64; 3], b: [f64; 3], radius: f64) -> Option<f64> {
+        // (one stops one's body short of it)
+        let stop = 10.0 - radius;
+        Some(if b[0] <= stop {
+            1.0
+        } else if a[0] >= stop {
+            0.0
+        } else {
+            (stop - a[0]) / (b[0] - a[0])
+        })
+    }
+    fn body(&self, _: &wowlua_engine::scene::ModelSource) -> Option<f64> {
+        Some(0.5)
+    }
+}
+
+/// One's body has its model's width (decision T532): running at a wall
+/// with the 3D world on stops the player that far from it.
+#[test]
+fn a_wall_stops_one_a_body_short_of_it() {
+    let mut vm = vm();
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Wall));
+    wowlua_engine::set_world(&mut vm, true);
+    let out = run(
+        &mut vm,
+        &format!(
+            "{START}{R}MoveForwardStart()
+mock.advanceFrames(120, 1000 / 60)
+MoveForwardStop()
+local y, x = UnitPosition('player')
+return r(y), r(x)"
+        ),
+    );
+    assert_eq!(out, ["9.5", "0.0"]);
+}

@@ -769,7 +769,7 @@ fn the_buildings_are_solid() {
         let (n, w) = (mid[0] + dn * reach, mid[1] + dw * reach);
         let z = lib.ground(&casc, 0, n, w).expect("the ground");
         let started = std::time::Instant::now();
-        let f = lib.walk(&casc, 0, [n, w, z], [mid[0], mid[1], z]);
+        let f = lib.walk(&casc, 0, [n, w, z], [mid[0], mid[1], z], 0.3);
         eprintln!(
             "from ({dn}, {dw}): walks {f:.2} of the way, in {:?}",
             started.elapsed()
@@ -785,6 +785,7 @@ fn the_buildings_are_solid() {
         0,
         [mid[0] + reach, mid[1], high],
         [mid[0] - reach, mid[1], high],
+        false,
     );
     assert!(through.is_some(), "a line through the abbey");
 }
@@ -895,4 +896,170 @@ fn one_stands_on_every_floor() {
     eprintln!("abbey {}: {stood} places, {} fell", abbey.file, fell.len());
     assert!(stood > 500, "{stood}");
     assert!(fell.is_empty(), "{:?}", &fell[..fell.len().min(5)]);
+}
+
+/// Camelot's client and its Northshire Abbey (the building nearest where
+/// a new human starts, of a building's size); none without them.
+fn northshire() -> Option<(
+    Casc,
+    wowlua_casc::display::Library,
+    wowlua_casc::obj::Building,
+)> {
+    let root = install()?;
+    let storage = FsStorage { root };
+    let product = Casc::product_of_folder(&storage, "_forever_")?;
+    let casc = Casc::open(Box::new(storage), &product).expect("opens");
+    let mut lib = wowlua_casc::display::Library::default();
+    let objects = lib.objects(&casc, 0, 32, 48).expect("the tile's objects");
+    let from_start = |x: &wowlua_casc::obj::Building| (x.at[0] + 8949.95).hypot(x.at[1] + 132.493);
+    let abbey = objects
+        .buildings
+        .iter()
+        .filter(|b| b.bounds[1][0] - b.bounds[0][0] < 300.0)
+        .min_by(|a, b| from_start(a).total_cmp(&from_start(b)))?
+        .clone();
+    Some((casc, lib, abbey))
+}
+
+/// One walking in Northshire Abbey as the engine moves one (decision
+/// T532: a step at a time, sliding along a wall) does not pass through a
+/// wall from the knee to the head: from places all over it on the ground,
+/// each way, the abbey's walls (a beam, a sill) stop one.
+#[test]
+fn one_walks_through_no_wall() {
+    let Some((casc, mut lib, abbey)) = northshire() else {
+        eprintln!("no camelot client: skipped");
+        return;
+    };
+    let wmo = lib.building(&casc, abbey.file).expect("the abbey");
+    let walls = wowlua_casc::collide::Placed::new(wmo, &abbey);
+    let steep = |_: f64, n: [f64; 3]| n[2].abs() < wowlua_casc::collide::WALKABLE;
+    let (mut runs, mut through) = (0, Vec::new());
+    let mut n0 = abbey.bounds[0][0] + 2.0;
+    while n0 < abbey.bounds[1][0] {
+        let mut w0 = abbey.bounds[0][1] + 2.0;
+        while w0 < abbey.bounds[1][1] {
+            let Some(ground) = lib.ground(&casc, 0, n0, w0) else {
+                w0 += 12.0;
+                continue;
+            };
+            let z0 = lib.floor(&casc, 0, [n0, w0, ground]).unwrap_or(ground);
+            for k in 0..8 {
+                let a = f64::from(k) * std::f64::consts::TAU / 8.0;
+                let (dn, dw) = (a.cos() * 0.12, a.sin() * 0.12);
+                let (mut y, mut x, mut z) = (n0, w0, z0);
+                runs += 1;
+                for _ in 0..60 {
+                    let (ty, tx) = (y + dn, x + dw);
+                    let (ny, nx) = if lib.walk(&casc, 0, [y, x, z], [ty, tx, z], 0.306) >= 1.0 {
+                        (ty, tx)
+                    } else {
+                        let fy = lib.walk(&casc, 0, [y, x, z], [ty, x, z], 0.306);
+                        let ny = y + (ty - y) * fy;
+                        let fx = lib.walk(&casc, 0, [ny, x, z], [ny, tx, z], 0.306);
+                        (ny, x + (tx - x) * fx)
+                    };
+                    let nz = lib.floor(&casc, 0, [ny, nx, z]).unwrap_or(z);
+                    // (a step down from a ledge passes its side: not a wall)
+                    if nz > z - 0.3
+                        && [1.0, 1.4].iter().any(|up| {
+                            walls
+                                .first([y, x, z + up], [ny, nx, nz + up], steep)
+                                .is_some()
+                        })
+                    {
+                        through.push((y, x, z));
+                        break;
+                    }
+                    (y, x, z) = (ny, nx, nz);
+                }
+            }
+            w0 += 12.0;
+        }
+        n0 += 12.0;
+    }
+    eprintln!(
+        "abbey {}: {runs} walks, {} through a wall",
+        abbey.file,
+        through.len()
+    );
+    assert!(runs > 100, "{runs}");
+    assert!(through.is_empty(), "{:?}", &through[..through.len().min(5)]);
+}
+
+/// The props are solid (decision T532), on camelot's client: Northshire's
+/// props with a collision mesh (fences, posts, crates, trees) stop one
+/// walking at them; a body's width keeps one that far from a wall; a
+/// human's body is the width the game's servers know (0.306 yards).
+#[test]
+fn the_props_are_solid() {
+    let Some((casc, mut lib, abbey)) = northshire() else {
+        eprintln!("no camelot client: skipped");
+        return;
+    };
+    let started = std::time::Instant::now();
+    let solids = lib.placed_near(&casc, 0, -8949.95, -132.493, 80.0);
+    eprintln!("the solids within 80 yards read in {:?}", started.elapsed());
+    let props: Vec<_> = solids
+        .iter()
+        .filter(|p| {
+            let size = |k: usize| p.bounds[1][k] - p.bounds[0][k];
+            p.is_prop()
+                && size(2) > 1.5
+                && size(0) > 0.8
+                && size(0) < 6.0
+                && size(1) > 0.8
+                && size(1) < 6.0
+        })
+        .take(20)
+        .collect();
+    let mut stopped = 0;
+    for p in &props {
+        let mid = [
+            (p.bounds[0][0] + p.bounds[1][0]) / 2.0,
+            (p.bounds[0][1] + p.bounds[1][1]) / 2.0,
+        ];
+        let away = (p.bounds[1][1] - p.bounds[0][1]) / 2.0 + 3.0;
+        let z = p.bounds[0][2];
+        if lib.walk(
+            &casc,
+            0,
+            [mid[0], mid[1] - away, z],
+            [mid[0], mid[1], z],
+            0.306,
+        ) < 1.0
+        {
+            stopped += 1;
+        }
+    }
+    eprintln!(
+        "{} solids within 80 yards, {} props of a person's size: {stopped} stop one",
+        solids.len(),
+        props.len()
+    );
+    assert!(
+        props.len() >= 10 && stopped * 4 >= props.len() * 3,
+        "{stopped} of {}",
+        props.len()
+    );
+    // (a wall of the abbey, walked at from outside: a wider body stops
+    // further from it)
+    let mid = [
+        (abbey.bounds[0][0] + abbey.bounds[1][0]) / 2.0,
+        (abbey.bounds[0][1] + abbey.bounds[1][1]) / 2.0,
+    ];
+    let reach = abbey.bounds[1][0] - abbey.bounds[0][0];
+    let from = [mid[0] + reach, mid[1]];
+    let z = lib.ground(&casc, 0, from[0], from[1]).expect("the ground");
+    let (a, b) = ([from[0], from[1], z], [mid[0], mid[1], z]);
+    let thin = lib.walk(&casc, 0, a, b, 0.0);
+    let wide = lib.walk(&casc, 0, a, b, 0.5);
+    eprintln!("toward the abbey: {thin:.4} of the way, {wide:.4} a body 0.5 wide");
+    assert!(thin < 1.0, "{thin}");
+    assert!(((thin - wide) * reach - 0.5).abs() < 0.05, "{thin} {wide}");
+    let human = lib
+        .character_display(&casc, 1, 0)
+        .and_then(|d| lib.body_radius(&casc, d));
+    eprintln!("a human male's body: {human:?}");
+    assert!(human.is_some_and(|r| (r - 0.306).abs() < 0.01), "{human:?}");
 }

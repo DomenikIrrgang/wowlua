@@ -1625,6 +1625,29 @@ pub fn place_of(vm: &mut Vm, id: units::UnitId) -> Option<(f64, f64, f64)> {
     Some((y, x, z))
 }
 
+/// How wide a unit's body is, a radius in yards (decision T532): its
+/// model's (the player's character's, another's display or creature)
+/// while the 3D world is on, else a human's (0.306, the human male
+/// model's).
+pub fn body_of(vm: &mut Vm, id: units::UnitId) -> f64 {
+    const HUMAN: f64 = 0.306;
+    if !engine(vm).world_on {
+        return HUMAN;
+    }
+    let source = if id == units::PLAYER {
+        let look = crate::scene::look_of(vm, "player");
+        (look.race > 0).then_some(crate::scene::ModelSource::Character(look))
+    } else {
+        let u = &engine(vm).units.list[id.0];
+        u.display
+            .map(crate::scene::ModelSource::Display)
+            .or(u.npc.map(crate::scene::ModelSource::Creature))
+    };
+    source
+        .and_then(|s| crate::clientdata::body(vm, &s))
+        .unwrap_or(HUMAN)
+}
+
 /// The straight distance between two places, to the thousandth of a yard.
 pub fn between(a: (f64, f64, f64), b: (f64, f64, f64)) -> f64 {
     let d = ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2) + (a.2 - b.2).powi(2)).sqrt();
@@ -1741,7 +1764,7 @@ pub fn in_sight(vm: &mut Vm, a: units::UnitId, b: units::UnitId) -> bool {
         .world
         .map_or(0.0, |w| w.3);
     let eye = |p: (f64, f64, f64)| [p.0, p.1, p.2 + 2.0];
-    crate::clientdata::hit(vm, map, eye(pa), eye(pb)).is_none()
+    crate::clientdata::hit(vm, map, eye(pa), eye(pb), true).is_none()
 }
 
 /// A unit's distance now `d`: gossip and the group's range told.

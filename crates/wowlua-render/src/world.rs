@@ -565,20 +565,7 @@ impl Renderer {
                     if d.file == 0 {
                         continue;
                     }
-                    let local = |v: [f32; 3]| {
-                        let s = f64::from(d.scale);
-                        let v = [
-                            f64::from(v[0]) * s,
-                            f64::from(v[1]) * s,
-                            f64::from(v[2]) * s,
-                        ];
-                        let r = turned(d.rotation, v);
-                        [
-                            (f64::from(d.at[0]) + r[0]) as f32,
-                            (f64::from(d.at[1]) + r[1]) as f32,
-                            (f64::from(d.at[2]) + r[2]) as f32,
-                        ]
-                    };
+                    let local = d.local();
                     let f = |v: [f32; 3]| place(local(v));
                     let scale = f64::from(d.scale) * f64::from(b.scale);
                     if !shown(self, assets, d.file, f([0.0; 3]), scale) {
@@ -1147,28 +1134,6 @@ fn matrix_from(f: impl Fn([f32; 3]) -> [f64; 3]) -> [f32; 16] {
         o[2] as f32,
         1.0,
     ]
-}
-
-/// A quaternion's turn of a vector.
-fn turned(q: [f32; 4], v: [f64; 3]) -> [f64; 3] {
-    let (x, y, z, w) = (
-        f64::from(q[0]),
-        f64::from(q[1]),
-        f64::from(q[2]),
-        f64::from(q[3]),
-    );
-    let c = |a: [f64; 3], b: [f64; 3]| {
-        [
-            a[1] * b[2] - a[2] * b[1],
-            a[2] * b[0] - a[0] * b[2],
-            a[0] * b[1] - a[1] * b[0],
-        ]
-    };
-    let u = [x, y, z];
-    let t = c(u, v);
-    let t = [t[0] + w * v[0], t[1] + w * v[1], t[2] + w * v[2]];
-    let t = c(u, t);
-    [v[0] + 2.0 * t[0], v[1] + 2.0 * t[1], v[2] + 2.0 * t[2]]
 }
 
 impl Renderer {

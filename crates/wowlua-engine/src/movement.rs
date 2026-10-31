@@ -182,7 +182,8 @@ fn walks_tick(vm: &mut Vm, seconds: f64) {
                 .world
                 .map_or(0.0, |w| w.3);
             let to = [at.0 + n * step, at.1 + w * step, at.2];
-            let free = crate::clientdata::walk(vm, map, [at.0, at.1, at.2], to);
+            let body = crate::character::body_of(vm, id);
+            let free = crate::clientdata::walk(vm, map, [at.0, at.1, at.2], to, body);
             let blocked = free < 1.0;
             step *= free;
             let u = &mut engine_mut(vm).units.list[i];
@@ -422,12 +423,13 @@ fn player_tick(vm: &mut Vm, seconds: f64) {
         let (ty, tx) = (y + north * step, x + west * step);
         // (a wall stops the player; they slide along it: north, then
         // west, each as far as it lets them; T524)
-        if crate::clientdata::walk(vm, instance, [y, x, z], [ty, tx, z]) >= 1.0 {
+        let body = crate::character::body_of(vm, crate::units::PLAYER);
+        if crate::clientdata::walk(vm, instance, [y, x, z], [ty, tx, z], body) >= 1.0 {
             (ty, tx)
         } else {
-            let fy = crate::clientdata::walk(vm, instance, [y, x, z], [ty, x, z]);
+            let fy = crate::clientdata::walk(vm, instance, [y, x, z], [ty, x, z], body);
             let ny = y + (ty - y) * fy;
-            let fx = crate::clientdata::walk(vm, instance, [ny, x, z], [ny, tx, z]);
+            let fx = crate::clientdata::walk(vm, instance, [ny, x, z], [ny, tx, z], body);
             (ny, x + (tx - x) * fx)
         }
     } else {

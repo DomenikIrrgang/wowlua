@@ -43,6 +43,49 @@ pub struct Doodad {
     pub scale: f32,
 }
 
+impl Doodad {
+    /// A place of its model in the building's own space: scaled, turned
+    /// and moved where it stands.
+    pub fn local(&self) -> impl Fn([f32; 3]) -> [f32; 3] + '_ {
+        move |v: [f32; 3]| {
+            let s = f64::from(self.scale);
+            let v = [
+                f64::from(v[0]) * s,
+                f64::from(v[1]) * s,
+                f64::from(v[2]) * s,
+            ];
+            let r = turned(self.rotation, v);
+            [
+                (f64::from(self.at[0]) + r[0]) as f32,
+                (f64::from(self.at[1]) + r[1]) as f32,
+                (f64::from(self.at[2]) + r[2]) as f32,
+            ]
+        }
+    }
+}
+
+/// A vector turned by a quaternion (x, y, z, w).
+pub fn turned(q: [f32; 4], v: [f64; 3]) -> [f64; 3] {
+    let (x, y, z, w) = (
+        f64::from(q[0]),
+        f64::from(q[1]),
+        f64::from(q[2]),
+        f64::from(q[3]),
+    );
+    let c = |a: [f64; 3], b: [f64; 3]| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
+    let u = [x, y, z];
+    let t = c(u, v);
+    let t = [t[0] + w * v[0], t[1] + w * v[1], t[2] + w * v[2]];
+    let t = c(u, t);
+    [v[0] + 2.0 * t[0], v[1] + 2.0 * t[1], v[2] + 2.0 * t[2]]
+}
+
 /// A group: its mesh.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Group {

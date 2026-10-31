@@ -588,12 +588,25 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
         self.with(|lib, casc| lib.floor(casc, map, at))
     }
 
-    fn hit(&self, map: u32, a: [f64; 3], b: [f64; 3]) -> Option<f64> {
-        self.with(|lib, casc| lib.hit(casc, map, a, b))
+    fn hit(&self, map: u32, a: [f64; 3], b: [f64; 3], props: bool) -> Option<f64> {
+        self.with(|lib, casc| lib.hit(casc, map, a, b, props))
     }
 
-    fn walk(&self, map: u32, a: [f64; 3], b: [f64; 3]) -> Option<f64> {
-        self.with(|lib, casc| Some(lib.walk(casc, map, a, b)))
+    fn walk(&self, map: u32, a: [f64; 3], b: [f64; 3], radius: f64) -> Option<f64> {
+        self.with(|lib, casc| Some(lib.walk(casc, map, a, b, radius)))
+    }
+
+    fn body(&self, source: &wowlua_engine::scene::ModelSource) -> Option<f64> {
+        use wowlua_engine::scene::ModelSource;
+        self.with(|lib, casc| {
+            let display = match source {
+                ModelSource::Display(d) => *d,
+                ModelSource::Creature(c) => lib.creature_display_id(casc, *c)?,
+                ModelSource::Character(look) => lib.character_display(casc, look.race, look.sex)?,
+                _ => return None,
+            };
+            lib.body_radius(casc, display)
+        })
     }
 
     fn model_scene(&self, id: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
