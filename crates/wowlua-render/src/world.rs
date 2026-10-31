@@ -50,6 +50,28 @@ const FOG_START: f32 = 0.55;
 /// The nearest the camera draws (yards).
 const NEAR: f32 = 0.2;
 
+/// Where a point of the world (north, west, up yards) shows on a screen
+/// `width` by `height` pixels as the world pass draws `w` (top left
+/// origin); none behind the eye (decision T546).
+pub fn project(w: &WorldView, width: u32, height: u32, p: [f64; 3]) -> Option<[f32; 2]> {
+    let f32s = |a: [f64; 3]| [a[0] as f32, a[1] as f32, a[2] as f32];
+    let aspect = width as f32 / height.max(1) as f32;
+    let fov_y = 2.0 * ((w.fov as f32 / 2.0).tan() / aspect).atan();
+    let view = crate::model::look_at(f32s(w.eye), f32s(w.look), f32s(w.up));
+    let proj = crate::model::perspective(fov_y, aspect, NEAR, w.far as f32);
+    let m = wowlua_casc::m2::mul(&proj, &view);
+    let v = [p[0] as f32, p[1] as f32, p[2] as f32, 1.0];
+    let row = |r: usize| (0..4).map(|c| m[c * 4 + r] * v[c]).sum::<f32>();
+    let (x, y, clip_w) = (row(0), row(1), row(3));
+    if clip_w <= NEAR * 0.5 {
+        return None;
+    }
+    Some([
+        (x / clip_w + 1.0) / 2.0 * width as f32,
+        (1.0 - y / clip_w) / 2.0 * height as f32,
+    ])
+}
+
 struct GpuChunk {
     start: u32,
     count: u32,

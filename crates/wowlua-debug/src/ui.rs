@@ -589,6 +589,18 @@ pub fn pick(vm: &mut Vm, x: f64, y: f64) -> Json {
 /// The world's units: each one's index, name, tokens, level, class,
 /// reaction, health, and where it is (decision T484).
 pub fn units(vm: &mut Vm) -> Json {
+    // (whether the player sees each unit with a place, and where it faces:
+    // what a view of the world shows; T546)
+    let count = wowlua_engine::engine(vm).units.list.len();
+    let looks: Vec<(Option<bool>, Option<f64>)> = (0..count)
+        .map(|i| {
+            let id = wowlua_engine::units::UnitId(i);
+            let placed = wowlua_engine::character::place_of(vm, id).is_some();
+            let sight = (placed && id != wowlua_engine::units::PLAYER)
+                .then(|| wowlua_engine::character::in_sight(vm, wowlua_engine::units::PLAYER, id));
+            (sight, wowlua_engine::character::unit_facing(vm, id))
+        })
+        .collect();
     let e = wowlua_engine::engine(vm);
     let u = &e.units;
     let mob = u.target;
@@ -621,6 +633,8 @@ pub fn units(vm: &mut Vm) -> Json {
                 "dead": unit.dead,
                 "distance": unit.distance,
                 "position": unit.world.map(|(y, x)| json!({ "x": x, "y": y })),
+                "sight": looks[i].0,
+                "facing": looks[i].1,
                 "target": u.target == Some(id),
             })
         })
