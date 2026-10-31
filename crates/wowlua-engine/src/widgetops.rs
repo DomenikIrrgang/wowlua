@@ -207,6 +207,36 @@ pub fn insert(vm: &mut Vm, id: WidgetId, text: &str) {
     widgets::store(vm, id, "CursorPosition", &[Value::Num(at)]);
 }
 
+/// Backspace (`forward`: Delete) in an edit box: the selection gone, else
+/// the character before (after) the cursor; whether the text changed.
+pub fn erase(vm: &mut Vm, id: WidgetId, forward: bool) -> bool {
+    let mut now = text_of(vm, id);
+    let (from, to) = match selection(vm, id, &now) {
+        Some(range) if range.0 != range.1 => range,
+        _ => {
+            let at = cursor(vm, id, &now);
+            let near = if forward {
+                now[at..].chars().next().map(|c| (at, at + c.len_utf8()))
+            } else {
+                now[..at]
+                    .chars()
+                    .next_back()
+                    .map(|c| (at - c.len_utf8(), at))
+            };
+            match near {
+                Some(range) => range,
+                None => return false,
+            }
+        }
+    };
+    now.replace_range(from..to, "");
+    let v = vm.str(&now);
+    widgets::store_text(vm, id, Some(v));
+    unset(vm, id, HIGHLIGHT);
+    widgets::store(vm, id, "CursorPosition", &[Value::Num(from as f64)]);
+    true
+}
+
 /// The text set: the cursor at its end, nothing selected.
 pub fn text_set(vm: &mut Vm, id: WidgetId) {
     unset(vm, id, HIGHLIGHT);

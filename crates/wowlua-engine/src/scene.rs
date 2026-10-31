@@ -1350,7 +1350,7 @@ fn mouse_enabled(vm: &Vm, id: WidgetId) -> bool {
         Some(v) => v.truthy(),
         None => {
             let class = &engine(vm).world.widgets[id.0].class;
-            widgets::is_a(engine(vm), class, "Button")
+            widgets::mouse_by_default(engine(vm), class)
         }
     }
 }

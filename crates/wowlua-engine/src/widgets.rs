@@ -1228,11 +1228,11 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
     {
         let on = match stored_args(vm, props, stem) {
             Some(values) => values.first().is_some_and(|v| v.truthy()),
-            // Off until set, but a button takes the mouse
-            // (`/stdtest engine`).
+            // Off until set, but the kinds that take the mouse do
+            // (`/stdtest engine`, the widget defaults).
             None => {
                 let class = engine(vm).world.widgets[id.0].class.clone();
-                short == "IsMouseEnabled" && is_a(engine(vm), &class, "Button")
+                short == "IsMouseEnabled" && mouse_by_default(engine(vm), &class)
             }
         };
         return Ok(vec![Value::Bool(on)]);
@@ -4183,15 +4183,42 @@ fn get_vertex_color(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(stored_args(vm, props, "VertexColor").unwrap_or_else(|| vec![Value::Num(1.0); 4]))
 }
 
-/// The engine's controls for the mouse: a drag of a frame by (dx, dy)
-/// screen units, if it (or, for an overlay, its parent) starts moving.
-pub fn drag(vm: &mut Vm, id: WidgetId, dx: f64, dy: f64, frames: usize) {
-    // The mouse pressed on the frame, then moved by (dx, dy) in `frames`
-    // steps, a frame after each (none: at once).
+/// Whether a kind of widget takes the mouse until told otherwise
+/// (recorded: `camelot-widget-defaults.txt`'s `IsMouseEnabled` true:
+/// buttons, edit boxes, sliders, color selects, browsers, checkouts, event
+/// frames, contained alert frames).
+pub fn mouse_by_default(e: &Engine, class: &str) -> bool {
+    [
+        "Button",
+        "EditBox",
+        "Slider",
+        "ColorSelect",
+        "Browser",
+        "Checkout",
+        "EventFrame",
+        "ContainedAlertFrame",
+    ]
+    .iter()
+    .any(|kind| is_a(e, class, kind))
+}
+
+/// A frame's drag under way (the mouse held on it, moving): the frame,
+/// what moves with the mouse (it, or for an overlay its parent, when it
+/// started moving), where that stood and where the mouse began.
+pub struct Dragging {
+    pub frame: WidgetId,
+    moved: Option<WidgetId>,
+    start: Option<(f64, f64, f64, f64)>,
+    from: (f64, f64),
+}
+
+/// The mouse pressed on a frame starts dragging it: `OnDragStart` with
+/// the button.
+pub fn drag_begin(vm: &mut Vm, id: WidgetId, button: &str) -> Dragging {
     crate::input::cursor_onto(vm, id);
     let from = engine(vm).world.input.cursor;
-    let left = vm.str("LeftButton");
-    run_script(vm, id, "OnDragStart", &[left]);
+    let b = vm.str(button);
+    run_script(vm, id, "OnDragStart", &[b]);
     let e = engine(vm);
     let moved = if e.world.widgets[id.0].moving {
         Some(id)
@@ -4201,30 +4228,55 @@ pub fn drag(vm: &mut Vm, id: WidgetId, dx: f64, dy: f64, frames: usize) {
             .filter(|p| e.world.widgets[p.0].moving)
     };
     let start = moved.and_then(|m| bounds(vm, m, 0));
+    Dragging {
+        frame: id,
+        moved,
+        start,
+        from,
+    }
+}
+
+/// The drag's mouse now (dx, dy) screen units from where it began: what
+/// moves follows it.
+pub fn drag_move(vm: &mut Vm, d: &Dragging, dx: f64, dy: f64) {
+    engine_mut(vm).world.input.cursor = (d.from.0 + dx, d.from.1 + dy);
+    if let (Some(m), Some(b)) = (d.moved, d.start) {
+        let s = layout_scale(engine(vm), m);
+        // (the drag in screen units, rectangles in UIParent's)
+        let ui = ui_parent_scale(engine(vm));
+        let screen = vm.get_global("UIParent");
+        let w = &mut engine_mut(vm).world.widgets[m.0];
+        w.points = vec![Point {
+            point: "BOTTOMLEFT".into(),
+            relative: Some(screen),
+            relative_point: "BOTTOMLEFT".into(),
+            x: (b.0 + dx / ui) / s,
+            y: (b.1 + dy / ui) / s,
+        }];
+        layout_changed(vm);
+    }
+}
+
+/// The mouse let go: `OnDragStop`.
+pub fn drag_end(vm: &mut Vm, d: &Dragging) {
+    run_script(vm, d.frame, "OnDragStop", &[]);
+}
+
+/// The engine's controls for the mouse: a drag of a frame by (dx, dy)
+/// screen units, if it (or, for an overlay, its parent) starts moving.
+pub fn drag(vm: &mut Vm, id: WidgetId, dx: f64, dy: f64, frames: usize) {
+    // The mouse pressed on the frame, then moved by (dx, dy) in `frames`
+    // steps, a frame after each (none: at once).
+    let d = drag_begin(vm, id, "LeftButton");
     let steps = frames.max(1);
     for k in 1..=steps {
         let part = k as f64 / steps as f64;
-        engine_mut(vm).world.input.cursor = (from.0 + dx * part, from.1 + dy * part);
-        if let (Some(m), Some(b)) = (moved, start) {
-            let s = layout_scale(engine(vm), m);
-            // (the drag in screen units, rectangles in UIParent's)
-            let ui = ui_parent_scale(engine(vm));
-            let screen = vm.get_global("UIParent");
-            let w = &mut engine_mut(vm).world.widgets[m.0];
-            w.points = vec![Point {
-                point: "BOTTOMLEFT".into(),
-                relative: Some(screen),
-                relative_point: "BOTTOMLEFT".into(),
-                x: (b.0 + dx * part / ui) / s,
-                y: (b.1 + dy * part / ui) / s,
-            }];
-            layout_changed(vm);
-        }
+        drag_move(vm, &d, dx * part, dy * part);
         if frames > 0 {
             crate::clock::advance_frames(vm, 1, 1000.0 / 60.0);
         }
     }
-    run_script(vm, id, "OnDragStop", &[]);
+    drag_end(vm, &d);
 }
 
 /// A drag of a resize grip by (dw, dh) screen units: its parent, if it

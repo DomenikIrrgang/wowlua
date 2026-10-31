@@ -223,7 +223,7 @@ pub fn input(vm: &mut Vm, input: &Input) -> Result<(), String> {
             });
             if frame.is_some() {
                 let t = target(vm, &None, Some(*x), Some(*y))?;
-                let b = vm.str("LeftButton");
+                let b = vm.str(if *right { "RightButton" } else { "LeftButton" });
                 return call_control(vm, "click", inp::control_click, &[t, b]);
             }
             if let Some(unit) = wowlua_engine::camera::unit_at(vm, *x, *y) {
@@ -239,6 +239,26 @@ pub fn input(vm: &mut Vm, input: &Input) -> Result<(), String> {
         }
         Input::KeyUp { key } => {
             inp::as_user(vm, |vm| inp::key_up(vm, key));
+            Ok(())
+        }
+        Input::MouseMove { x, y } => {
+            wowlua_engine::play::mouse_move(vm, *x, *y);
+            Ok(())
+        }
+        Input::MouseDown { x, y, right } => {
+            wowlua_engine::play::mouse_down(vm, *x, *y, *right);
+            Ok(())
+        }
+        Input::MouseUp { x, y, right } => {
+            wowlua_engine::play::mouse_up(vm, *x, *y, *right);
+            Ok(())
+        }
+        Input::Wheel { x, y, delta } => {
+            wowlua_engine::play::wheel(vm, *x, *y, *delta);
+            Ok(())
+        }
+        Input::Text { text } => {
+            inp::type_text(vm, text);
             Ok(())
         }
         Input::Slash { text } => {
