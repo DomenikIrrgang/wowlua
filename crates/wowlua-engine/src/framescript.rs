@@ -214,20 +214,11 @@ pub fn run_callbacks(vm: &mut Vm, event: &str, args: &[Value]) {
 
 /// A CVar's value as set (none: not set, its default the client's).
 pub fn cvar_get(vm: &mut Vm, name: &str) -> Option<String> {
-    engine(vm)
-        .world
-        .cvars
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case(name))
-        .map(|(_, v)| v.clone())
+    engine(vm).world.cvars.get(name).map(str::to_owned)
 }
 
 pub(crate) fn cvar_set(vm: &mut Vm, name: &str, value: String) {
-    let cvars = &mut engine_mut(vm).world.cvars;
-    match cvars.iter_mut().find(|(k, _)| k.eq_ignore_ascii_case(name)) {
-        Some(slot) => slot.1 = value,
-        None => cvars.push((name.to_string(), value)),
-    }
+    engine_mut(vm).world.cvars.set(name, value);
 }
 
 fn value_text(vm: &mut Vm, v: Value) -> String {
@@ -388,10 +379,7 @@ pub(crate) fn set_cvar_text(vm: &mut Vm, name: &str, text: String, tell: bool) -
     // Camelot's CVars are the client's (recorded); other flavors' unknown.
     let world = &engine(vm).world;
     let unknown = engine(vm).flavor == "camelot"
-        && !world
-            .cvars
-            .iter()
-            .any(|(k, _)| k.eq_ignore_ascii_case(&name))
+        && !world.cvars.has(&name)
         && !world
             .cvar_defaults
             .iter()

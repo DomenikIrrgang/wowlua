@@ -527,11 +527,24 @@ pub(crate) fn ground(vm: &Vm, map: f64, north: f64, west: f64) -> Option<f64> {
 
 /// The floor under a place of a map while the 3D world is on (decision
 /// T524).
-pub(crate) fn floor(vm: &Vm, map: f64, at: [f64; 3]) -> Option<f64> {
+pub(crate) fn floor(vm: &mut Vm, map: f64, at: [f64; 3]) -> Option<f64> {
     if !crate::engine(vm).world_on {
         return None;
     }
-    data(vm)?.floor(u32::try_from(map as i64).ok()?, at)
+    // (the world's geometry stays: a place's floor is found once, to the
+    // centimeter, T537)
+    let cm = |v: f64| (v * 100.0).round() as i64;
+    let key = (map as i64, cm(at[0]), cm(at[1]), cm(at[2]));
+    if let Some(found) = crate::engine(vm).world.floors.get(&key) {
+        return *found;
+    }
+    let found = data(vm)?.floor(u32::try_from(map as i64).ok()?, at);
+    let floors = &mut crate::engine_mut(vm).world.floors;
+    if floors.len() > 16_384 {
+        floors.clear();
+    }
+    floors.insert(key, found);
+    found
 }
 
 /// Where the line between two places first meets the world while it is
