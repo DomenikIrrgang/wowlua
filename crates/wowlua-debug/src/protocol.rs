@@ -183,6 +183,26 @@ pub enum Input {
     KeyUp {
         key: String,
     },
+    /// The mouse dragged over the 3D world (decision T528): the camera
+    /// turns and pitches by the pixels moved; `turn` (the right button)
+    /// turns the player with it.
+    Look {
+        dx: f64,
+        dy: f64,
+        #[serde(default)]
+        turn: bool,
+    },
+    /// The mouse wheel over the 3D world: the camera zooms out `steps`
+    /// yards (in for negative ones).
+    Zoom {
+        steps: f64,
+    },
+    /// A click on the 3D world at a point (screen pixels, top left origin):
+    /// the unit there targeted.
+    ClickWorld {
+        x: f64,
+        y: f64,
+    },
     /// A chat line as the user types it: a slash command (`/wdemo`).
     Slash {
         text: String,

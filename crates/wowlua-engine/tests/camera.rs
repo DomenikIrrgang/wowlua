@@ -101,3 +101,38 @@ return ahead, right > 50"
     // (straight ahead: the middle; 5 yards east: right of it)
     assert_eq!(out, ["0", "true"]);
 }
+
+/// Playing (decision T528): a drag turns the camera (the right button
+/// the player too), the wheel zooms, and a click on a unit picks it.
+#[test]
+fn the_mouse_turns_zooms_and_picks() {
+    let mut vm = vm();
+    let out = run(
+        &mut vm,
+        "mock.moveTo({ world = { y = 0, x = 0, z = 0 }, facing = 0 })
+Wolf = mock.spawnUnit({ name = 'Wolf', reaction = 'hostile', world = { y = 12, x = 0, z = 0 } })
+-- (the mouse's speed as the character's settings have it: 1)
+C_CVar.SetCVar('mouseSpeed', '1')
+return GetCameraZoom()",
+    );
+    assert_eq!(out, ["5.55"]);
+    // (a left drag: the camera only; a right drag: the player turns)
+    wowlua_engine::camera::look(&mut vm, 100.0, 0.0, false);
+    let facing = |vm: &mut Vm| run(vm, "return GetPlayerFacing()")[0].clone();
+    assert_eq!(facing(&mut vm), "0");
+    wowlua_engine::camera::look(&mut vm, -300.0, 0.0, true);
+    let turned: f64 = facing(&mut vm).parse().unwrap();
+    // (300 pixels at 0.3 degrees, less the camera's 100 already turned:
+    // 60 degrees to the left, counter-clockwise)
+    assert!((turned - 60f64.to_radians()).abs() < 0.01, "{turned}");
+    wowlua_engine::camera::look(&mut vm, 0.0, 0.0, true);
+    run(&mut vm, "mock.moveTo({ facing = 0 })");
+    wowlua_engine::camera::wheel(&mut vm, 2.0);
+    assert_eq!(run(&mut vm, "return GetCameraZoom()"), ["7.55"]);
+    // (the wolf where the camera shows it: picked; the sky: nothing)
+    let (w, h) = (1920.0, 1080.0);
+    let (sx, sy) = wowlua_engine::camera::project(&mut vm, (12.0, 0.0, 1.0), w, h).expect("seen");
+    let picked = wowlua_engine::camera::unit_at(&mut vm, w / 2.0 + sx, h / 2.0 - sy);
+    assert!(picked.is_some());
+    assert_eq!(wowlua_engine::camera::unit_at(&mut vm, w / 2.0, 5.0), None);
+}

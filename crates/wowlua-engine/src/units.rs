@@ -2813,7 +2813,7 @@ pub fn target(vm: &mut Vm, new: Option<UnitId>) {
     set_player_target(vm, new);
 }
 
-pub(crate) fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
+pub fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
     // The same target again: told to the UI, not to the server (no flags,
     // no echo: recorded, `auradeath` 10.030, the cat targeted again).
     let same = new.is_some() && engine(vm).units.target == new;
