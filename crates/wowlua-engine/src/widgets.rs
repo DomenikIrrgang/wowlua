@@ -146,6 +146,9 @@ pub struct World {
     /// checked as its turn comes (most of the UI's widgets never update);
     /// in order, each once (`World::updates`).
     pub updating: Vec<usize>,
+    /// The widgets ever given an `OnSizeChanged` script or hook: the ones
+    /// a layout change looks at (decision T540), in order, each once.
+    pub size_watching: Vec<usize>,
     /// The widgets that ever registered for events: the ones an event
     /// looks at.
     pub listening: std::collections::BTreeSet<usize>,
@@ -1456,8 +1459,10 @@ fn set_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// A script stored for a widget (set, hooked or from XML): an `OnUpdate`
 /// makes it one a frame looks at.
 pub fn script_stored(vm: &mut Vm, id: WidgetId, script: &str) {
-    if script == "OnUpdate" {
-        engine_mut(vm).world.updates(id.0);
+    match script {
+        "OnUpdate" => engine_mut(vm).world.updates(id.0),
+        "OnSizeChanged" => insert_sorted(&mut engine_mut(vm).world.size_watching, id.0),
+        _ => {}
     }
 }
 
@@ -2742,9 +2747,9 @@ pub fn run_size_changes(vm: &mut Vm) {
     let watching: Vec<WidgetId> = {
         let e = engine(vm);
         e.world
-            .widgets
+            .size_watching
             .iter()
-            .enumerate()
+            .filter_map(|&i| Some((i, e.world.widgets.get(i)?)))
             .filter(|(_, w)| !w.points.is_empty())
             .filter(|(_, w)| {
                 !vm.heap.table(w.scripts).get_str(key).is_nil()
@@ -2753,7 +2758,7 @@ pub fn run_size_changes(vm: &mut Vm) {
             .map(|(i, _)| WidgetId(i))
             .collect()
     };
-    let mut known = HashMap::new();
+    let mut known = KnownBounds::default();
     let mut changed = Vec::new();
     for id in watching {
         let Some(b) = bounds_in(vm, id, 0, &mut known) else {
@@ -3091,13 +3096,13 @@ pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64
     {
         return bounds_in(vm, id, depth, known);
     }
-    bounds_in(vm, id, depth, &mut HashMap::new())
+    bounds_in(vm, id, depth, &mut KnownBounds::default())
 }
 
 /// While `f` builds a scene, the rectangles it asks for worked out once
 /// (decision T537).
 pub fn with_scene_bounds<T>(vm: &mut Vm, f: impl FnOnce(&mut Vm) -> T) -> T {
-    *engine(vm).scene_bounds.borrow_mut() = Some(HashMap::new());
+    *engine(vm).scene_bounds.borrow_mut() = Some(KnownBounds::default());
     let out = f(vm);
     *engine(vm).scene_bounds.borrow_mut() = None;
     out
@@ -3107,7 +3112,7 @@ pub fn with_scene_bounds<T>(vm: &mut Vm, f: impl FnOnce(&mut Vm) -> T) -> T {
 type Rect = (f64, f64, f64, f64);
 
 /// The rectangles worked out in one [`bounds`], by widget and depth.
-pub(crate) type KnownBounds = HashMap<(usize, usize), Option<Rect>>;
+pub(crate) type KnownBounds = rustc_hash::FxHashMap<(usize, usize), Option<Rect>>;
 
 /// [`bounds`], each widget's at a depth worked out once (two points on the
 /// same frame ask for it twice, and so on up the chain).

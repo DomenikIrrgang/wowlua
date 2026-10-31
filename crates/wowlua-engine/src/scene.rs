@@ -1333,8 +1333,9 @@ fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
     let mut frames: Vec<(usize, f64, usize)> = Vec::new();
     // (each widget's visibility and strata found once, its children's
     // from it, T537)
-    let mut shown: rustc_hash::FxHashMap<usize, bool> = Default::default();
-    let mut stratas: rustc_hash::FxHashMap<usize, usize> = Default::default();
+    // (by widget: 0 not known yet; T540)
+    let mut shown: Vec<u8> = vec![0; count];
+    let mut stratas: Vec<u8> = vec![0; count];
     for i in 0..count {
         let id = WidgetId(i);
         let w = &engine(vm).world.widgets[i];
@@ -1350,24 +1351,28 @@ fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
 }
 
 /// `widgets::visible`, each widget's answer kept for its children's.
-fn visible_memo(vm: &Vm, id: WidgetId, known: &mut rustc_hash::FxHashMap<usize, bool>) -> bool {
-    if let Some(&v) = known.get(&id.0) {
-        return v;
+/// (`known`: by widget, 0 not known yet, 1 hidden, 2 shown)
+fn visible_memo(vm: &Vm, id: WidgetId, known: &mut [u8]) -> bool {
+    match known.get(id.0) {
+        Some(1) => return false,
+        Some(2) => return true,
+        _ => {}
     }
     let w = &engine(vm).world.widgets[id.0];
     let v = w.shown && w.parent.is_none_or(|p| visible_memo(vm, p, known));
-    known.insert(id.0, v);
+    if let Some(k) = known.get_mut(id.0) {
+        *k = if v { 2 } else { 1 };
+    }
     v
 }
 
 /// `widgets::strata_rank`, each widget's answer kept for its children's.
-fn strata_memo(
-    vm: &mut Vm,
-    id: WidgetId,
-    known: &mut rustc_hash::FxHashMap<usize, usize>,
-) -> usize {
-    if let Some(&s) = known.get(&id.0) {
-        return s;
+/// (`known`: by widget, its rank and one, 0 not known yet)
+fn strata_memo(vm: &mut Vm, id: WidgetId, known: &mut [u8]) -> usize {
+    if let Some(&s) = known.get(id.0)
+        && s > 0
+    {
+        return usize::from(s - 1);
     }
     let s = match widgets::own_strata(vm, id) {
         Some(s) => s,
@@ -1376,7 +1381,9 @@ fn strata_memo(
             None => 2,
         },
     };
-    known.insert(id.0, s);
+    if let Some(k) = known.get_mut(id.0) {
+        *k = u8::try_from(s + 1).unwrap_or(0);
+    }
     s
 }
 
