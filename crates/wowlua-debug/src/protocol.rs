@@ -361,6 +361,12 @@ pub enum Request {
     SetForeground {
         on: bool,
     },
+    /// The display's refresh rate (frames a second), from now on: the
+    /// rate a realtime session's frames keep to with `vsync` on (60 until
+    /// told; decision T544).
+    SetDisplayRate {
+        hz: f64,
+    },
     /// Whether stepping goes into Blizzard's UI code and stops there, from
     /// now on (the launch's `debugBlizzardUI`; decision T496).
     SetDebugBlizzardUi {

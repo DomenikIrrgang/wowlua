@@ -72,7 +72,8 @@ In `realtime` mode (the default of DAP sessions) frames run as fast as the
 game's settings let them, each moving time as far as it really took, so
 `OnUpdate` and timers advance as in game: no faster than `maxFPS`
 (`maxFPSBk` while the session is in the background) and, with `vsync` on,
-the display's rate (decision T538); in `manual` mode
+the display's rate (decision T538): 60 Hz, or what the host tells
+(`SetDisplayRate`, decision T544); in `manual` mode
 (the default of MCP sessions) time moves only when asked
 (`advance(seconds | frames)`), so what an agent sees repeats exactly. Time
 stops while paused.

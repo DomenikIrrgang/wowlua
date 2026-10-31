@@ -27,7 +27,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - **Units act**: a unit's `actions` in a world profile or `mock.spawnUnit` make it attack you while in reach, cast a spell every few seconds or turn to you when you come near (`{ at = 0, ["do"] = "attack", damage = 50 }`, `{ every = 8, ["do"] = "cast", spell = 133 }`, `{ within = 10, ["do"] = "face" }`).
 - **Units walk**: `unit:patrol(path)`, `unit:follow()`, `unit:approach()`, `unit:flee()`, `unit:moveTo(place)` and `unit:stop()`, or a unit's `movement` in a world profile, make it walk on its own, its distance to you following.
 - A debug session tells what the game's chat windows show (`wowlua/chatLines`: each line's text and colour, your addon's prints too) and sends a chat message as the player would type it (`wowlua/input` with `chat`: your addons get its `CHAT_MSG_SAY`, `CHAT_MSG_PARTY`, …), for wowlua Studio's chat tab.
-- **The game's graphics settings**: a debug session runs as fast as `maxFPS` lets it (`maxFPSBk` while wowlua Studio is in the background) and, with `vsync` on, at most the display's rate, and `GetFramerate` answers the frames a second it really runs at. With `--world`, the 3D world is drawn at the render scale (`RenderScale`, 0.33 to 2) and stretched to the screen, the UI sharp over it.
+- **The game's graphics settings**: a debug session runs as fast as `maxFPS` lets it (`maxFPSBk` while wowlua Studio is in the background) and, with `vsync` on, at most the display's rate (your monitor's own in wowlua Studio), and `GetFramerate` answers the frames a second it really runs at. With `--world`, the 3D world is drawn at the render scale (`RenderScale`, 0.33 to 2) and stretched to the screen, the UI sharp over it.
 
 ### Changed
 
