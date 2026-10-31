@@ -42,6 +42,7 @@ fn get_button_state(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// a pushed one its pushed texture, a checked one its checked texture, or
 /// its disabled checked one while disabled.
 pub fn refresh_states(vm: &mut Vm, id: WidgetId) {
+    crate::widgets::mark(crate::engine_mut(vm), id);
     let (enabled, props) = {
         let w = &engine(vm).world.widgets[id.0];
         (w.enabled, w.props)

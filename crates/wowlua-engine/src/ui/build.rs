@@ -450,6 +450,7 @@ fn apply(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Element>
 }
 
 fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Element>, phase: Phase) {
+    crate::widgets::mark(crate::engine_mut(vm), id);
     let is_font_string = engine(vm).world.widgets[id.0].class == "FontString";
     for t in el.attr("inherits").unwrap_or("").split(',') {
         let t = t.trim();

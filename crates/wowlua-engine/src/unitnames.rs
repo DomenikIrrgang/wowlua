@@ -182,7 +182,7 @@ pub fn items(vm: &mut Vm, width: f64, height: f64) -> Vec<Item> {
         };
         found.push((
             depth,
-            Item::Text(Text {
+            Item::text(Text {
                 widget: world_frame,
                 images: Vec::new(),
                 rect,

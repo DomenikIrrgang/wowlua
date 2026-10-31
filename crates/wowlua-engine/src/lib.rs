@@ -141,6 +141,8 @@ pub struct Engine {
     pub(crate) lineages: std::cell::RefCell<rustc_hash::FxHashMap<String, std::rc::Rc<[String]>>>,
     /// The rectangles of the scene being built (decision T538).
     pub(crate) scene_bounds: std::cell::RefCell<Option<widgets::KnownBounds>>,
+    /// The frames' items of the last scene, kept (decision T542).
+    pub(crate) scene_kept: std::cell::RefCell<scene::Kept>,
     pub world: widgets::World,
     pub timers: clock::Timers,
     /// The events owed at the frame's end (`batch`).
@@ -376,6 +378,7 @@ pub(crate) fn screen_from_cvars(vm: &mut Vm) -> Screen {
 }
 
 fn place_screen(vm: &mut Vm, screen: Screen) {
+    engine_mut(vm).world.scene_epoch += 1;
     engine_mut(vm).screen = screen;
     let ui = vm.get_global("UIParent");
     if let Some(id) = widgets::widget_of(vm, ui) {
@@ -568,6 +571,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .collect(),
         lineages: Default::default(),
         scene_bounds: Default::default(),
+        scene_kept: Default::default(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),
         batch: batch::Batch::default(),

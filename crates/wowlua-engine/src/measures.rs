@@ -349,6 +349,13 @@ fn mask_list(vm: &mut Vm, id: WidgetId) -> Vec<Value> {
 }
 
 fn set_mask_list(vm: &mut Vm, id: WidgetId, list: &[Value]) {
+    crate::widgets::mark(crate::engine_mut(vm), id);
+    // (the masked texture changes with its masks, T542)
+    for v in list {
+        if let Some(m) = crate::widgets::widget_of(vm, *v) {
+            crate::widgets::depends_on(crate::engine_mut(vm), id, m);
+        }
+    }
     let t = vm.new_table();
     for (i, v) in list.iter().enumerate() {
         let _ = vm.heap.table_mut(t).set(Value::Num(i as f64 + 1.0), *v);

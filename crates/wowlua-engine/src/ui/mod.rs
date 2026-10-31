@@ -1101,6 +1101,7 @@ fn font(vm: &mut Vm, el: &Rc<Element>) {
 }
 
 fn font_named(vm: &mut Vm, name: &str, el: &Element) {
+    crate::engine_mut(vm).world.scene_epoch += 1;
     let f = crate::widgets::create(vm, "Font", Some(name.to_string()), None);
     let call = |vm: &mut Vm, method: &str, args: &[Value]| {
         let key = vm.str(method);

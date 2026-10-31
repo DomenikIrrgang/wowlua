@@ -1523,6 +1523,7 @@ fn add_unit(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 
 /// `UnitPositionFrame:ClearUnits()`: no pins.
 fn clear_units(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    crate::widgets::mark(crate::engine_mut(vm), id);
     let props = engine(vm).world.widgets[id.0].props;
     let keys: Vec<Value> = {
         let mut out = Vec::new();

@@ -197,8 +197,15 @@ another tool's speedscope file reads as the tree of its samples (decision T495).
 The scene is what the screen shows, as data (decision T309): every visible
 region in draw order, in screen pixels (top-left origin, UIParent's scale
 applied), each with the widget it belongs to. It is built from the engine's
-state on request (a screenshot, a viewer's frame) and costs time in
-proportion to the visible regions.
+state on request (a screenshot, a viewer's frame). Each frame's items are
+kept from one scene to the next and laid out again only when something
+they show changed (decision T542): a widget changed by a method (anything
+but its `Get…`, `Is…`, `Has…` and `Can…`) or by the engine, the widgets
+under it and those anchored to it or masked by it; a font object or the
+screen changing lays everything out again; a minimap, a model, a message
+frame and what an animation plays are laid out each time. A debug build,
+or `WOWLUA_SCENE_CHECK=1`, lays every scene out anew as well and stops on
+a difference.
 
 - **Order**: frame strata (`BACKGROUND` to `TOOLTIP`), frame level, then a
   frame's regions (with those of its children on its level,

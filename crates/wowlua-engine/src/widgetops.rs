@@ -43,6 +43,7 @@ const HIGHLIGHT: &str = "\u{0}Highlight";
 
 /// Drops what setter `stem` stored.
 fn unset(vm: &mut Vm, id: WidgetId, stem: &str) {
+    crate::widgets::mark(crate::engine_mut(vm), id);
     let props = engine(vm).world.widgets[id.0].props;
     let key = vm.str(stem);
     let _ = vm.heap.table_mut(props).set(key, Value::Nil);
@@ -387,6 +388,7 @@ fn same(a: Value, b: Value) -> bool {
 /// A button's `Clear…Texture()`: the state's texture gone (hidden, no
 /// longer the button's).
 fn clear_state_texture(vm: &mut Vm, id: WidgetId, state: &str) -> Ret {
+    crate::widgets::mark(crate::engine_mut(vm), id);
     let stem = format!("{state}Texture");
     let props = engine(vm).world.widgets[id.0].props;
     let region = widgets::stored_args(vm, props, &stem)

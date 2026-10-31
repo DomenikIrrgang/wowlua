@@ -293,11 +293,31 @@ fn follow_timer(vm: &mut Vm, id: WidgetId) {
     let f = if draining { 1.0 - elapsed } else { elapsed };
     // The duration is the bar's range (Blizzard's code sets none for a
     // timer, and clears one with `SetMinMaxValues(0, 0)`).
-    let mut b = bar(vm, id);
+    let was = bar(vm, id);
+    let mut b = was;
     (b.min, b.max, b.ranged, b.secret_range) = (0.0, total, true, secret);
     b.value = total * f;
     b.secret_value = secret;
+    // (the scene draws it again when it moved, T542)
+    let moved = (
+        was.min,
+        was.max,
+        was.value,
+        was.ranged,
+        was.secret_range,
+        was.secret_value,
+    ) != (
+        b.min,
+        b.max,
+        b.value,
+        b.ranged,
+        b.secret_range,
+        b.secret_value,
+    );
     engine_mut(vm).world.bars.insert(id.0, b);
+    if moved {
+        crate::widgets::mark(crate::engine_mut(vm), id);
+    }
 }
 
 /// Each frame: the shown timer bars' values follow their durations (a
