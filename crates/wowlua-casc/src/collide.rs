@@ -90,6 +90,18 @@ impl Placed {
     /// The first colliding triangle a segment meets: how far along it (0
     /// to 1) and the triangle's normal on the map.
     pub fn hit(&self, a: [f64; 3], b: [f64; 3]) -> Option<(f64, [f64; 3])> {
+        self.first(a, b, |_| true)
+    }
+
+    /// The first colliding triangle a segment meets whose normal on the
+    /// map is one `accept` takes (a floor under a wall, a wall behind a
+    /// step).
+    pub fn first(
+        &self,
+        a: [f64; 3],
+        b: [f64; 3],
+        accept: impl Fn([f64; 3]) -> bool,
+    ) -> Option<(f64, [f64; 3])> {
         let (lo, hi) = (
             [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2])],
             [a[0].max(b[0]), a[1].max(b[1]), a[2].max(b[2])],
@@ -148,7 +160,10 @@ impl Placed {
                     let n = cross(e1, e2);
                     let n = self.outside(n);
                     let l = dot(n, n).sqrt().max(1e-12);
-                    best = Some((f, [n[0] / l, n[1] / l, n[2] / l]));
+                    let n = [n[0] / l, n[1] / l, n[2] / l];
+                    if accept(n) {
+                        best = Some((f, n));
+                    }
                 }
             }
         }
@@ -201,10 +216,9 @@ impl Library {
         let mut best = terrain;
         for p in self.placed_near(casc, map, at[0], at[1], 1.0) {
             let (a, b) = ([at[0], at[1], from], [at[0], at[1], from - 200.0]);
-            // (the highest floor under: the first a falling line meets)
-            if let Some((f, n)) = p.hit(a, b)
-                && n[2].abs() >= WALKABLE
-            {
+            // (the highest floor under: the first a falling line meets,
+            // past the walls and steep slopes over it)
+            if let Some((f, _)) = p.first(a, b, |n| n[2].abs() >= WALKABLE) {
                 let z = from - 200.0 * f;
                 if best.is_none_or(|t| z > t) {
                     best = Some(z);
@@ -253,9 +267,8 @@ impl Library {
         for p in self.placed_near(casc, map, a[0], a[1], len + 1.0) {
             for up in [0.6, 1.6] {
                 let (ka, kb) = ([a[0], a[1], a[2] + up], [b[0], b[1], b[2] + up]);
-                if let Some((t, n)) = p.hit(ka, kb)
-                    && n[2].abs() < WALKABLE
-                {
+                // (a wall, past the floors and steps before it)
+                if let Some((t, _)) = p.first(ka, kb, |n| n[2].abs() < WALKABLE) {
                     // (stopping a hand short of it)
                     f = f.min((t - 0.3 / len).max(0.0));
                 }
