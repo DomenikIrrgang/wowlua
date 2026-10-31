@@ -17,6 +17,20 @@ struct Globals {
 @group(1) @binding(2) var tex3: texture_2d<f32>;
 @group(1) @binding(3) var samp: sampler;
 
+// A batch the GPU poses (decision T539): where its part stands, its two
+// texture transforms, its color, and its flags, shaders, first bone and
+// bone count.
+struct Record {
+    world: mat4x4<f32>,
+    uv1: mat4x4<f32>,
+    uv2: mat4x4<f32>,
+    color: vec4<f32>,
+    info: vec4<u32>,
+};
+
+@group(2) @binding(0) var<storage, read> records: array<Record>;
+@group(2) @binding(1) var<storage, read> bones: array<mat4x4<f32>>;
+
 struct In {
     @location(0) pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -44,8 +58,56 @@ struct Out {
     @location(7) fade: f32,
 };
 
+// A model file's vertex as it is: posed by its bones (up to four, their
+// weights) on the GPU.
+struct Skinned {
+    @location(0) pos: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+    @location(3) uv2: vec2<f32>,
+    @location(4) bones: vec4<u32>,
+    @location(5) weights: vec4<f32>,
+};
+
 @vertex
 fn vs(v: In) -> Out {
+    return shade(v);
+}
+
+// The vertex posed by its bones and placed as its batch's record says (the
+// record is the draw's instance), then as `vs` (decision T539).
+@vertex
+fn vs_skinned(v: Skinned, @builtin(instance_index) i: u32) -> Out {
+    let r = records[i];
+    var p = vec3<f32>(0.0);
+    var n = vec3<f32>(0.0);
+    var total = 0.0;
+    for (var k = 0u; k < 4u; k++) {
+        let w = v.weights[k];
+        if (w > 0.0 && v.bones[k] < r.info.w) {
+            let m = bones[r.info.z + v.bones[k]];
+            p += (m * vec4<f32>(v.pos, 1.0)).xyz * w;
+            n += (m * vec4<f32>(v.normal, 0.0)).xyz * w;
+            total += w;
+        }
+    }
+    if (total == 0.0) {
+        p = v.pos;
+        n = v.normal;
+    }
+    var o: In;
+    o.pos = (r.world * vec4<f32>(p, 1.0)).xyz;
+    o.normal = normalize((r.world * vec4<f32>(n, 0.0)).xyz);
+    o.t1 = (r.uv1 * vec4<f32>(v.uv, 0.0, 1.0)).xy;
+    o.t2 = (r.uv2 * vec4<f32>(v.uv2, 0.0, 1.0)).xy;
+    o.raw2 = v.uv2;
+    o.color = r.color;
+    o.flags = r.info.x;
+    o.shaders = r.info.y;
+    return shade(o);
+}
+
+fn shade(v: In) -> Out {
     var o: Out;
     o.pos = g.view_proj * vec4<f32>(v.pos, 1.0);
     o.normal = v.normal;

@@ -4,7 +4,9 @@
 //!
 //! Model files are read once and kept with the sequences read so far;
 //! each frame poses them on the CPU (bones, then skinning) and draws one
-//! vertex buffer.
+//! vertex buffer. The 3D world's units are skinned on the GPU instead
+//! (decision T539): each model file's vertices uploaded once, a frame's
+//! bones and its batches' records each frame.
 
 use std::collections::HashMap;
 
@@ -26,6 +28,55 @@ pub(crate) struct MVertex {
     flags: u32,
     shaders: u32,
 }
+
+/// A model file's vertex as it is, for the GPU to pose (decision T539).
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub(crate) struct SVertex {
+    pos: [f32; 3],
+    normal: [f32; 3],
+    uv: [f32; 2],
+    uv2: [f32; 2],
+    bones: [u8; 4],
+    weights: [u8; 4],
+}
+
+/// A batch the GPU poses: where its part stands, its two texture
+/// transforms, its color, and its flags, shaders, first bone and bone
+/// count (`model.wgsl`'s `Record`).
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub(crate) struct Record {
+    world: [f32; 16],
+    uv1: [f32; 16],
+    uv2: [f32; 16],
+    color: [f32; 4],
+    info: [u32; 4],
+}
+
+/// A batch the GPU poses: its model file's indices' range, how it blends,
+/// its textures, and its record.
+#[derive(Clone)]
+pub(crate) struct SkinDraw {
+    file: u32,
+    start: u32,
+    end: u32,
+    blend: u16,
+    depth_write: bool,
+    tex: [usize; 3],
+    record: Record,
+}
+
+/// Actors as the GPU poses them: their batches, and the bones the records
+/// point into.
+#[derive(Clone, Default)]
+pub(crate) struct Skinned {
+    draws: Vec<SkinDraw>,
+    bones: Vec<Mat4>,
+}
+
+const CPU_ATTRIBUTES: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x2, 3 => Float32x2, 4 => Float32x2, 5 => Float32x4, 6 => Uint32, 7 => Uint32];
+const SKINNED_ATTRIBUTES: [wgpu::VertexAttribute; 6] = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x2, 3 => Float32x2, 4 => Uint8x4, 5 => Unorm8x4];
 
 const UNLIT: u32 = 1;
 const ALPHA_KEY: u32 = 2;
@@ -140,7 +191,16 @@ pub(crate) struct Models {
     files: HashMap<u32, Option<Loaded>>,
     /// Displays by their source.
     displays: HashMap<String, Option<Display>>,
-    pipelines: HashMap<(u16, bool), wgpu::RenderPipeline>,
+    /// By blend mode, depth writing, and skinned on the GPU.
+    pipelines: HashMap<(u16, bool, bool), wgpu::RenderPipeline>,
+    /// What skinning on the GPU binds (its records and bones) and its
+    /// pipelines' layout; none where the GPU cannot (decision T539), not
+    /// known yet before the first world.
+    skin_layout: Option<Option<(wgpu::BindGroupLayout, wgpu::PipelineLayout)>>,
+    /// Model files' vertices and indices on the GPU, by file.
+    meshes: HashMap<u32, (wgpu::Buffer, wgpu::Buffer)>,
+    /// While the world's units are posed: what the GPU will pose.
+    skinned_out: Option<Skinned>,
     layout: Option<(
         wgpu::BindGroupLayout,
         wgpu::BindGroupLayout,
@@ -170,14 +230,18 @@ pub(crate) struct Posed {
     hi: [f32; 3],
     portrait: Option<(Vec3, Vec3, f32)>,
     own_camera: Option<(Vec3, Vec3, f32)>,
+    /// What the GPU poses (the world's units, decision T539).
+    skinned: Option<Skinned>,
 }
 
-/// The world's models, ready to draw (decision T526).
+/// The world's models, ready to draw (decision T526): the ones posed on
+/// the CPU, and the ones the GPU poses with their records and bones.
 pub(crate) struct WorldModels {
-    vertices: wgpu::Buffer,
-    indices: wgpu::Buffer,
+    vertices: Option<wgpu::Buffer>,
+    indices: Option<wgpu::Buffer>,
     group: wgpu::BindGroup,
     draws: Vec<Draw>,
+    skinned: Option<(wgpu::BindGroup, Vec<SkinDraw>)>,
 }
 
 /// A batch to draw: its indices' range and how.
@@ -287,6 +351,51 @@ fn source_key(s: &scene::ModelSource) -> String {
     format!("{s:?}")
 }
 
+/// How an M2 blend mode blends.
+fn blend_state(blend: u16) -> Option<wgpu::BlendState> {
+    use wgpu::{BlendComponent as C, BlendFactor as F, BlendOperation as O};
+    let c = |src, dst| C {
+        src_factor: src,
+        dst_factor: dst,
+        operation: O::Add,
+    };
+    let keep = c(F::Zero, F::One);
+    match blend {
+        0 | 1 => None,
+        2 => Some(wgpu::BlendState {
+            color: c(F::SrcAlpha, F::OneMinusSrcAlpha),
+            alpha: c(F::One, F::OneMinusSrcAlpha),
+        }),
+        3 => Some(wgpu::BlendState {
+            color: c(F::One, F::One),
+            alpha: keep,
+        }),
+        4 => Some(wgpu::BlendState {
+            color: c(F::SrcAlpha, F::One),
+            alpha: keep,
+        }),
+        5 => Some(wgpu::BlendState {
+            color: c(F::Dst, F::Zero),
+            alpha: keep,
+        }),
+        6 => Some(wgpu::BlendState {
+            color: c(F::Dst, F::Src),
+            alpha: keep,
+        }),
+        // BlendAdd: adds, never darkening what is behind
+        // (in game a texture without alpha draws no black: a
+        // totem's rune, probed 2026-10-23).
+        7 => Some(wgpu::BlendState {
+            color: c(F::One, F::One),
+            alpha: keep,
+        }),
+        _ => Some(wgpu::BlendState {
+            color: c(F::One, F::OneMinusSrcAlpha),
+            alpha: c(F::One, F::OneMinusSrcAlpha),
+        }),
+    }
+}
+
 fn texture_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
     wgpu::BindGroupLayoutEntry {
         binding,
@@ -354,69 +463,44 @@ impl Renderer {
         self.models.layout = Some((globals, tex, layout));
     }
 
-    /// The pipeline of an M2 blend mode, writing depth or not.
-    fn model_pipeline(&mut self, blend: u16, depth_write: bool) -> &wgpu::RenderPipeline {
-        let (layout, shader) = (
-            &self.models.layout.as_ref().unwrap().2,
-            self.models.shader.as_ref().unwrap(),
-        );
+    /// The pipeline of an M2 blend mode, writing depth or not, its vertices
+    /// posed already or `skinned` on the GPU (decision T539).
+    fn model_pipeline(
+        &mut self,
+        blend: u16,
+        depth_write: bool,
+        skinned: bool,
+    ) -> &wgpu::RenderPipeline {
+        let layout = match &self.models.skin_layout {
+            Some(Some((_, layout))) if skinned => layout,
+            _ => &self.models.layout.as_ref().unwrap().2,
+        };
+        let shader = self.models.shader.as_ref().unwrap();
         let device = &self.device;
         self.models
             .pipelines
-            .entry((blend, depth_write))
+            .entry((blend, depth_write, skinned))
             .or_insert_with(|| {
-                use wgpu::{BlendComponent as C, BlendFactor as F, BlendOperation as O};
-                let c = |src, dst| C {
-                    src_factor: src,
-                    dst_factor: dst,
-                    operation: O::Add,
-                };
-                let keep = c(F::Zero, F::One);
-                let state = match blend {
-                    0 | 1 => None,
-                    2 => Some(wgpu::BlendState {
-                        color: c(F::SrcAlpha, F::OneMinusSrcAlpha),
-                        alpha: c(F::One, F::OneMinusSrcAlpha),
-                    }),
-                    3 => Some(wgpu::BlendState {
-                        color: c(F::One, F::One),
-                        alpha: keep,
-                    }),
-                    4 => Some(wgpu::BlendState {
-                        color: c(F::SrcAlpha, F::One),
-                        alpha: keep,
-                    }),
-                    5 => Some(wgpu::BlendState {
-                        color: c(F::Dst, F::Zero),
-                        alpha: keep,
-                    }),
-                    6 => Some(wgpu::BlendState {
-                        color: c(F::Dst, F::Src),
-                        alpha: keep,
-                    }),
-                    // BlendAdd: adds, never darkening what is behind
-                    // (in game a texture without alpha draws no black: a
-                    // totem's rune, probed 2026-10-23).
-                    7 => Some(wgpu::BlendState {
-                        color: c(F::One, F::One),
-                        alpha: keep,
-                    }),
-                    _ => Some(wgpu::BlendState {
-                        color: c(F::One, F::OneMinusSrcAlpha),
-                        alpha: c(F::One, F::OneMinusSrcAlpha),
-                    }),
-                };
+                let state = blend_state(blend);
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                     label: Some("model"),
                     layout: Some(layout),
                     vertex: wgpu::VertexState {
                         module: shader,
-                        entry_point: Some("vs"),
+                        entry_point: Some(if skinned { "vs_skinned" } else { "vs" }),
                         compilation_options: Default::default(),
-                        buffers: &[Some(wgpu::VertexBufferLayout {
-                            array_stride: std::mem::size_of::<MVertex>() as u64,
-                            step_mode: wgpu::VertexStepMode::Vertex,
-                            attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x2, 3 => Float32x2, 4 => Float32x2, 5 => Float32x4, 6 => Uint32, 7 => Uint32],
+                        buffers: &[Some(if skinned {
+                            wgpu::VertexBufferLayout {
+                                array_stride: std::mem::size_of::<SVertex>() as u64,
+                                step_mode: wgpu::VertexStepMode::Vertex,
+                                attributes: &SKINNED_ATTRIBUTES,
+                            }
+                        } else {
+                            wgpu::VertexBufferLayout {
+                                array_stride: std::mem::size_of::<MVertex>() as u64,
+                                step_mode: wgpu::VertexStepMode::Vertex,
+                                attributes: &CPU_ATTRIBUTES,
+                            }
                         })],
                     },
                     primitive: wgpu::PrimitiveState::default(),
@@ -442,6 +526,85 @@ impl Renderer {
                     cache: None,
                 })
             })
+    }
+
+    /// Whether the GPU poses the world's units (decision T539): it needs
+    /// storage buffers in the vertex stage, which WebGL lacks. Their
+    /// layouts are made on the first call.
+    fn skinning(&mut self) -> bool {
+        if let Some(known) = &self.models.skin_layout {
+            return known.is_some();
+        }
+        self.model_layouts();
+        let can = self.device.limits().max_storage_buffers_per_shader_stage >= 2
+            && self.device.adapter_info().backend != wgpu::Backend::Gl;
+        let layouts = can.then(|| {
+            let storage = |binding| wgpu::BindGroupLayoutEntry {
+                binding,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            };
+            let d = &self.device;
+            let skin = d.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("model skin"),
+                entries: &[storage(0), storage(1)],
+            });
+            let (globals, tex, _) = self.models.layout.as_ref().unwrap();
+            let layout = d.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("model skinned"),
+                bind_group_layouts: &[Some(globals), Some(tex), Some(&skin)],
+                immediate_size: 0,
+            });
+            (skin, layout)
+        });
+        self.models.skin_layout = Some(layouts);
+        can
+    }
+
+    /// Poses the 3D world's units on the CPU even where the GPU could (as
+    /// on WebGL): to compare the two (decision T539).
+    pub fn skin_on_the_cpu(&mut self) {
+        self.models.skin_layout = Some(None);
+    }
+
+    /// A model file's vertices and indices on the GPU, uploaded once.
+    fn skin_mesh(&mut self, file: u32, l: &Loaded) {
+        if self.models.meshes.contains_key(&file) {
+            return;
+        }
+        let verts: Vec<SVertex> = l
+            .model
+            .vertices
+            .iter()
+            .map(|v| SVertex {
+                pos: v.position,
+                normal: v.normal,
+                uv: v.uv,
+                uv2: v.uv2,
+                bones: v.bones,
+                weights: v.weights,
+            })
+            .collect();
+        let vertices = crate::buffer_with(
+            &self.device,
+            &self.queue,
+            "model vertices",
+            bytemuck::cast_slice(&verts),
+            wgpu::BufferUsages::VERTEX,
+        );
+        let indices = crate::buffer_with(
+            &self.device,
+            &self.queue,
+            "model indices",
+            bytemuck::cast_slice(&l.skin.indices),
+            wgpu::BufferUsages::INDEX,
+        );
+        self.models.meshes.insert(file, (vertices, indices));
     }
 
     fn model_group(&mut self, tex: [usize; 3]) {
@@ -758,6 +921,7 @@ impl Renderer {
             hi,
             portrait,
             own_camera,
+            skinned: None,
         }
     }
 
@@ -791,9 +955,15 @@ impl Renderer {
             hi: [f32::MIN; 3],
             portrait: None,
             own_camera: None,
+            skinned: None,
         };
         p.verts.clear();
         p.indices.clear();
+        // (posed on the GPU where it can: the bones of every unit's parts
+        // together, each batch's record pointing at its own; T539)
+        let skinning = self.skinning();
+        let mut bones: Vec<Mat4> = Vec::new();
+        let mut skin_draws: Vec<SkinDraw> = Vec::new();
         let mut kept = std::mem::take(&mut self.world_poses);
         let mut fresh = HashMap::new();
         for actor in actors {
@@ -817,8 +987,25 @@ impl Renderer {
             );
             let one = match kept.remove(&key) {
                 Some((at, one)) if period != 0 && at == moment => one,
-                _ => self.pose_actors(std::slice::from_ref(actor), camera, ms, assets),
+                _ => {
+                    if skinning {
+                        self.models.skinned_out = Some(Skinned::default());
+                    }
+                    let mut one =
+                        self.pose_actors(std::slice::from_ref(actor), camera, ms, assets);
+                    one.skinned = self.models.skinned_out.take();
+                    one
+                }
             };
+            if let Some(s) = &one.skinned {
+                let base = bones.len() as u32;
+                bones.extend_from_slice(&s.bones);
+                skin_draws.extend(s.draws.iter().map(|d| {
+                    let mut d = d.clone();
+                    d.record.info[2] += base;
+                    d
+                }));
+            }
             let (vbase, ibase) = (p.verts.len() as u32, p.indices.len() as u32);
             p.verts.extend_from_slice(&one.verts);
             p.indices.extend(one.indices.iter().map(|i| i + vbase));
@@ -835,7 +1022,7 @@ impl Renderer {
         self.world_poses = fresh;
         drop(kept);
         self.models.sprites.clear();
-        if p.verts.is_empty() {
+        if p.verts.is_empty() && skin_draws.is_empty() {
             self.world_verts = p.verts;
             self.world_indices = p.indices;
             return None;
@@ -863,23 +1050,68 @@ impl Renderer {
                 resource: ubuf.as_entire_binding(),
             }],
         });
-        let vertices = crate::buffer_with(
-            &self.device,
-            &self.queue,
-            "world model vertices",
-            bytemuck::cast_slice(&p.verts),
-            wgpu::BufferUsages::VERTEX,
-        );
-        let indices = crate::buffer_with(
-            &self.device,
-            &self.queue,
-            "world model indices",
-            bytemuck::cast_slice(&p.indices),
-            wgpu::BufferUsages::INDEX,
-        );
+        let (vertices, indices) = if p.verts.is_empty() {
+            (None, None)
+        } else {
+            (
+                Some(crate::buffer_with(
+                    &self.device,
+                    &self.queue,
+                    "world model vertices",
+                    bytemuck::cast_slice(&p.verts),
+                    wgpu::BufferUsages::VERTEX,
+                )),
+                Some(crate::buffer_with(
+                    &self.device,
+                    &self.queue,
+                    "world model indices",
+                    bytemuck::cast_slice(&p.indices),
+                    wgpu::BufferUsages::INDEX,
+                )),
+            )
+        };
         for d in &p.draws {
-            self.model_pipeline(d.blend.min(7), d.depth_write);
+            self.model_pipeline(d.blend.min(7), d.depth_write, false);
         }
+        for d in &skin_draws {
+            self.model_pipeline(d.blend.min(7), d.depth_write, true);
+        }
+        let skinned = match (&self.models.skin_layout, skin_draws.is_empty()) {
+            (Some(Some((layout, _))), false) => {
+                let records: Vec<Record> = skin_draws.iter().map(|d| d.record).collect();
+                // (a binding holds one bone at least)
+                if bones.is_empty() {
+                    bones.push(m2::IDENTITY);
+                }
+                let storage = |label, bytes: &[u8]| {
+                    crate::buffer_with(
+                        &self.device,
+                        &self.queue,
+                        label,
+                        bytes,
+                        wgpu::BufferUsages::STORAGE,
+                    )
+                };
+                let records = storage("world model records", bytemuck::cast_slice(&records));
+                let bones = storage("world model bones", bytemuck::cast_slice(&bones));
+                let group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("world model skin"),
+                    layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: records.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: bones.as_entire_binding(),
+                        },
+                    ],
+                });
+                Some((group, skin_draws))
+            }
+            _ => None,
+        };
         // (the lists kept for the next frame's, their room with them)
         self.world_verts = p.verts;
         self.world_indices = p.indices;
@@ -888,18 +1120,42 @@ impl Renderer {
             indices,
             group,
             draws: p.draws,
+            skinned,
         })
     }
 
-    /// Draws the world's models into its pass.
+    /// Draws the world's models into its pass: the ones posed on the CPU,
+    /// then the ones the GPU poses (each batch its record, the draw's
+    /// instance; decision T539).
     pub(crate) fn record_models<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>, m: &'a WorldModels) {
-        pass.set_vertex_buffer(0, m.vertices.slice(..));
-        pass.set_index_buffer(m.indices.slice(..), wgpu::IndexFormat::Uint32);
         pass.set_bind_group(0, &m.group, &[]);
-        for d in &m.draws {
-            pass.set_pipeline(&self.models.pipelines[&(d.blend.min(7), d.depth_write)]);
+        if let (Some(vertices), Some(indices)) = (&m.vertices, &m.indices) {
+            pass.set_vertex_buffer(0, vertices.slice(..));
+            pass.set_index_buffer(indices.slice(..), wgpu::IndexFormat::Uint32);
+            for d in &m.draws {
+                pass.set_pipeline(&self.models.pipelines[&(d.blend.min(7), d.depth_write, false)]);
+                pass.set_bind_group(1, &self.models.groups[&d.tex], &[]);
+                pass.draw_indexed(d.start..d.end, 0, 0..1);
+            }
+        }
+        let Some((group, draws)) = &m.skinned else {
+            return;
+        };
+        pass.set_bind_group(2, group, &[]);
+        let mut bound = None;
+        for (i, d) in draws.iter().enumerate() {
+            let Some((vertices, indices)) = self.models.meshes.get(&d.file) else {
+                continue;
+            };
+            if bound != Some(d.file) {
+                pass.set_vertex_buffer(0, vertices.slice(..));
+                pass.set_index_buffer(indices.slice(..), wgpu::IndexFormat::Uint32);
+                bound = Some(d.file);
+            }
+            pass.set_pipeline(&self.models.pipelines[&(d.blend.min(7), d.depth_write, true)]);
             pass.set_bind_group(1, &self.models.groups[&d.tex], &[]);
-            pass.draw_indexed(d.start..d.end, 0, 0..1);
+            let i = i as u32;
+            pass.draw_indexed(d.start..d.end, 0, i..i + 1);
         }
     }
 
@@ -951,6 +1207,15 @@ impl Renderer {
             Some(b) if part.skinned && b.pose.len() >= m.bones.len() => b.pose.clone(),
             _ => m.pose_facing(seq, time, Some(toward)),
         };
+        // (posed on the GPU: its bones once, its batches as records; T539)
+        let bone_base = self.models.skinned_out.as_mut().map(|out| {
+            let base = out.bones.len() as u32;
+            out.bones.extend_from_slice(&pose);
+            base
+        });
+        if bone_base.is_some() {
+            self.skin_mesh(part.file, l);
+        }
         // (each vertex posed and placed once, as a visible triangle first
         // uses it: hidden geosets cost nothing, shared corners once; the
         // cache's stamp tells this part's from earlier ones, T537)
@@ -1059,6 +1324,28 @@ impl Renderer {
             }
             let shaders = pixel | (vertex << 8);
             let color = [tint.color[0], tint.color[1], tint.color[2], alpha];
+            if let (Some(base), Some(out)) = (bone_base, self.models.skinned_out.as_mut()) {
+                let first = sub.index_start as usize;
+                let end = (first + sub.index_count as usize).min(skin.indices.len());
+                if end > first {
+                    out.draws.push(SkinDraw {
+                        file: part.file,
+                        start: first as u32,
+                        end: end as u32,
+                        blend: mat.blend,
+                        depth_write: mat.blend <= 1 && mat.flags & 0x10 == 0,
+                        tex,
+                        record: Record {
+                            world: part_world,
+                            uv1: uv_m.unwrap_or(m2::IDENTITY),
+                            uv2: uv2_m.unwrap_or(m2::IDENTITY),
+                            color,
+                            info: [flags, shaders, base, pose.len() as u32],
+                        },
+                    });
+                }
+                continue;
+            }
             // (the batch's vertices once each, its corners as indices)
             self.emit_stamp = self.emit_stamp.wrapping_add(1);
             if self.emit_stamp == 0 {
@@ -1589,7 +1876,7 @@ impl Renderer {
         let color_view = color.create_view(&wgpu::TextureViewDescriptor::default());
         let depth_view = depth.create_view(&wgpu::TextureViewDescriptor::default());
         for d in &draws {
-            self.model_pipeline(d.blend.min(7), d.depth_write);
+            self.model_pipeline(d.blend.min(7), d.depth_write, false);
         }
         let mut encoder = self
             .device
@@ -1628,7 +1915,7 @@ impl Renderer {
             pass.set_index_buffer(ibuf.slice(..), wgpu::IndexFormat::Uint32);
             pass.set_bind_group(0, &ugroup, &[]);
             for d in &draws {
-                pass.set_pipeline(&self.models.pipelines[&(d.blend.min(7), d.depth_write)]);
+                pass.set_pipeline(&self.models.pipelines[&(d.blend.min(7), d.depth_write, false)]);
                 pass.set_bind_group(1, &self.models.groups[&d.tex], &[]);
                 pass.draw_indexed(d.start..d.end, 0, 0..1);
             }

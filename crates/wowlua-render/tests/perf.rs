@@ -1,7 +1,9 @@
 //! How long a frame of the 3D world takes (decision T537): Northshire's
 //! start among its 27 test NPCs (T533), the names and nameplates on, the
-//! player running; the engine's frame, the scene and the drawing timed
-//! apart. Run by hand: `cargo test --release -p wowlua-render --test perf
+//! player running; the engine's frame, the scene, the drawing (the CPU's
+//! part, as Studio's window pays it: posing and encoding the frame) and
+//! the GPU's time after it timed apart, each frame drawn with its units
+//! posed on the GPU and again on the CPU (T539). Run by hand: `cargo test --release -p wowlua-render --test perf
 //! -- --ignored --nocapture`.
 
 use std::time::{Duration, Instant};
@@ -83,8 +85,26 @@ fn a_frame_of_northshire() {
     };
     run(&mut vm, &people);
     let mut assets = wowlua_render::client::ClientAssets::new(Some(casc), &[]);
-    let mut r = wowlua_render::Renderer::new_blocking().expect("a GPU");
-    let (mut engine, mut scene_t, mut draw) = (Duration::ZERO, Duration::ZERO, Duration::ZERO);
+    // (a device as Studio's window gets one: wgpu's default limits)
+    let instance =
+        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).expect("a GPU");
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        required_limits: wgpu::Limits::default().using_resolution(adapter.limits()),
+        ..Default::default()
+    }))
+    .expect("a device");
+    // (each frame drawn twice: its units posed on the GPU, then on the
+    // CPU as on WebGL; T539)
+    let name = adapter.get_info().name;
+    let mut renderers = [
+        wowlua_render::Renderer::with_device(device.clone(), queue.clone(), name.clone()),
+        wowlua_render::Renderer::with_device(device.clone(), queue.clone(), name),
+    ];
+    renderers[1].skin_on_the_cpu();
+    let mut target: Option<(wgpu::TextureView, [u32; 2])> = None;
+    let (mut engine, mut scene_t) = (Duration::ZERO, Duration::ZERO);
+    let (mut draw, mut gpu) = ([Duration::ZERO; 2], [Duration::ZERO; 2]);
     let frames: u32 = std::env::var("PERF_FRAMES")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -96,22 +116,55 @@ fn a_frame_of_northshire() {
         let t = Instant::now();
         let scene = wowlua_engine::scene::build(&mut vm);
         let s = t.elapsed();
-        let t = Instant::now();
-        r.render_blocking(&scene, 1.0, None, &mut assets)
-            .expect("drawn");
-        let d = t.elapsed();
+        let size = [scene.width.max(1), scene.height.max(1)];
+        if target.as_ref().is_none_or(|(_, s)| *s != size) {
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("perf"),
+                size: wgpu::Extent3d {
+                    width: size[0],
+                    height: size[1],
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wowlua_render::FORMAT,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            target = Some((texture.create_view(&Default::default()), size));
+        }
+        let view = &target.as_ref().expect("the target").0;
         // (the first frames read the world: not counted)
         if i >= 3 {
             engine += e;
             scene_t += s;
-            draw += d;
+        }
+        for (k, r) in renderers.iter_mut().enumerate() {
+            let t = Instant::now();
+            let encoder = r.draw(&scene, view, size[0], size[1], 1.0, &mut assets);
+            queue.submit([encoder.finish()]);
+            let d = t.elapsed();
+            let t = Instant::now();
+            let _ = device.poll(wgpu::PollType::wait_indefinitely());
+            let g = t.elapsed();
+            if i >= 3 {
+                draw[k] += d;
+                gpu[k] += g;
+            }
         }
     }
     let ms = |d: Duration| d.as_secs_f64() * 1000.0 / f64::from(frames);
     eprintln!(
-        "a frame: engine {:.2} ms, scene {:.2} ms, drawing {:.2} ms",
+        "a frame: engine {:.2} ms, scene {:.2} ms",
         ms(engine),
-        ms(scene_t),
-        ms(draw)
+        ms(scene_t)
     );
+    for (k, how) in ["on the GPU", "on the CPU"].iter().enumerate() {
+        eprintln!(
+            "units posed {how}: drawing {:.2} ms, the GPU after it {:.2} ms",
+            ms(draw[k]),
+            ms(gpu[k])
+        );
+    }
 }

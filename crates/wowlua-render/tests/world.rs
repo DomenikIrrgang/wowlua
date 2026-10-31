@@ -180,3 +180,50 @@ mock.advanceFrames(2, 1000 / 60)",
     assert_eq!(at(&mut vm, "0.1").0, 0.33);
     assert_eq!(at(&mut vm, "4").0, 2.0);
 }
+
+/// The world's units posed on the GPU look as posed on the CPU (decision
+/// T539): Northshire's start among six NPCs, the same picture.
+#[test]
+fn the_gpu_poses_the_units_as_the_cpu_does() {
+    let Some((mut vm, casc)) = session_and_casc() else {
+        eprintln!("no camelot client: skipped");
+        return;
+    };
+    wowlua_engine::set_world(&mut vm, true);
+    run(
+        &mut vm,
+        "mock.moveTo({ world = { y = -8949.95, x = -132.493, z = 0, instanceID = 0 }, facing = 0 })
+local displays = { 1261, 1276, 1277, 1288, 1440, 163 }
+for i = 1, 6 do
+    mock.spawnUnit({ name = 'Npc' .. i, reaction = 'friendly', displayID = displays[i],
+        world = { y = -8949.95 + 5 + i, x = -132.493 - 5 + i * 1.6, z = 0 } })
+end
+mock.advanceFrames(2, 1000 / 60)",
+    );
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let draw = |cpu: bool| {
+        let mut r = wowlua_render::Renderer::new_blocking().ok()?;
+        if cpu {
+            r.skin_on_the_cpu();
+        }
+        let mut assets = wowlua_render::client::ClientAssets::new(Some(casc.clone()), &[]);
+        // (the first draw reads the world)
+        r.render_blocking(&scene, 1.0, None, &mut assets).ok()?;
+        r.render_blocking(&scene, 1.0, None, &mut assets).ok()
+    };
+    let (Some(gpu), Some(cpu)) = (draw(false), draw(true)) else {
+        eprintln!("no GPU: skipped");
+        return;
+    };
+    assert_eq!((gpu.width, gpu.height), (cpu.width, cpu.height));
+    let differ: Vec<u8> = gpu
+        .pixels
+        .iter()
+        .zip(&cpu.pixels)
+        .map(|(a, b)| a.abs_diff(*b))
+        .collect();
+    let mean = differ.iter().map(|d| f64::from(*d)).sum::<f64>() / differ.len() as f64;
+    let far = differ.iter().filter(|d| **d > 24).count();
+    assert!(mean < 0.5, "{mean}");
+    assert!(far * 1000 < differ.len(), "{far} of {}", differ.len());
+}
