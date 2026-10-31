@@ -211,6 +211,50 @@ pub fn wheel(vm: &mut Vm, steps: f64) {
     set_view(vm, v);
 }
 
+/// The place of the world under a point of the screen (pixels, from the
+/// top left; decision T529): where the camera's line through it meets the
+/// terrain or a building while the 3D world is on, else the level of the
+/// player's feet; none for a point above that level or the player at no
+/// place.
+pub fn ground_at(vm: &mut Vm, x: f64, y: f64) -> Option<(f64, f64, f64)> {
+    let (w, h) = {
+        let s = &engine(vm).screen;
+        (s.width, s.height)
+    };
+    let e = eye(vm)?;
+    let map = crate::character::player_world(vm)?.3;
+    let focal = w / 2.0 / (e.fov / 2.0).tan();
+    let (sx, sy) = ((x - w / 2.0) / focal, (h / 2.0 - y) / focal);
+    let d = (
+        e.look.0 + e.right.0 * sx + e.up.0 * sy,
+        e.look.1 + e.right.1 * sx + e.up.1 * sy,
+        e.look.2 + e.right.2 * sx + e.up.2 * sy,
+    );
+    let l = (d.0 * d.0 + d.1 * d.1 + d.2 * d.2).sqrt().max(1e-9);
+    let d = (d.0 / l, d.1 / l, d.2 / l);
+    let reach = cvar(vm, "farclip", 1000.0);
+    let end = [
+        e.at.0 + d.0 * reach,
+        e.at.1 + d.1 * reach,
+        e.at.2 + d.2 * reach,
+    ];
+    let from = [e.at.0, e.at.1, e.at.2];
+    if let Some(f) = crate::clientdata::hit(vm, map, from, end) {
+        return Some((
+            from[0] + (end[0] - from[0]) * f,
+            from[1] + (end[1] - from[1]) * f,
+            from[2] + (end[2] - from[2]) * f,
+        ));
+    }
+    // (no world: the level of the player's feet)
+    let feet = crate::character::place_of(vm, crate::units::PLAYER)?.2;
+    if d.2 >= -1e-9 {
+        return None;
+    }
+    let t = (feet - e.at.2) / d.2;
+    (t > 0.0).then_some((e.at.0 + d.0 * t, e.at.1 + d.1 * t, feet))
+}
+
 /// The unit a click at a point of the screen (pixels, from the top left)
 /// is on (decision T528): of the units the camera sees, the nearest to
 /// the point within a yard of its middle (a yard over its feet) as the

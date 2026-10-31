@@ -136,3 +136,28 @@ return GetCameraZoom()",
     assert!(picked.is_some());
     assert_eq!(wowlua_engine::camera::unit_at(&mut vm, w / 2.0, 5.0), None);
 }
+
+/// The place under a point of the screen (decision T529): without the
+/// world, where the camera's line meets the level of the player's feet; a
+/// place shown at a point comes back from it.
+#[test]
+fn a_point_of_the_screen_is_a_place_of_the_world() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "mock.moveTo({ world = { y = 0, x = 0, z = 0 }, facing = 0 })",
+    );
+    let (w, h) = (1920.0, 1080.0);
+    let (sx, sy) = wowlua_engine::camera::project(&mut vm, (20.0, 3.0, 0.0), w, h).expect("seen");
+    let (y, x, z) =
+        wowlua_engine::camera::ground_at(&mut vm, w / 2.0 + sx, h / 2.0 - sy).expect("a place");
+    assert!(
+        (y - 20.0).abs() < 1e-6 && (x - 3.0).abs() < 1e-6 && z == 0.0,
+        "{y} {x} {z}"
+    );
+    // (the sky: no place)
+    assert_eq!(
+        wowlua_engine::camera::ground_at(&mut vm, w / 2.0, 1.0),
+        None
+    );
+}
