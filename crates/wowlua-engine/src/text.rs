@@ -20,7 +20,6 @@
 //! the user's installation, its font files measure what the recordings
 //! lack (decision T392).
 
-use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use wowlua_vm::{Value, Vm};
@@ -39,25 +38,23 @@ pub struct Row {
 /// The recorded fonts' glyphs, by font file (found by its name without a
 /// copy of it: a line's every character looks; decision T537).
 struct Glyphs {
-    rows: HashMap<String, HashMap<(bool, i64), Row>>,
-    kern: HashMap<String, HashMap<(i64, char, char), f64>>,
+    rows: rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<(bool, i64), Row>>,
+    kern: rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<(i64, char, char), f64>>,
 }
 
 impl Glyphs {
     fn row(&self, file: &str, outline: bool, px: i64) -> Option<&Row> {
         self.rows.get(file)?.get(&(outline, px))
     }
-
-    fn kern(&self, file: &str, px: i64, a: char, b: char) -> Option<f64> {
-        self.kern.get(file)?.get(&(px, a, b)).copied()
-    }
 }
 
 fn glyphs() -> &'static Glyphs {
     static GLYPHS: OnceLock<Glyphs> = OnceLock::new();
     GLYPHS.get_or_init(|| {
-        let mut rows: HashMap<String, HashMap<(bool, i64), Row>> = HashMap::new();
-        let mut kern: HashMap<String, HashMap<(i64, char, char), f64>> = HashMap::new();
+        let mut rows: rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<(bool, i64), Row>> =
+            Default::default();
+        let mut kern: rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<(i64, char, char), f64>> =
+            Default::default();
         for line in include_str!("../data/camelot-glyphs.txt").lines() {
             if line.starts_with('#') {
                 continue;
@@ -147,30 +144,63 @@ pub fn font_of(vm: &Vm, id: WidgetId) -> Font {
 /// row's (its font's or Friz Quadrata's, scaled to the size), a
 /// character outside it as `?`.
 fn glyph(font: &Font, px: i64, c: char) -> (f64, f64) {
-    let g = glyphs();
-    let i = c as u32;
-    let ascii = (32..=126).contains(&i);
-    let recorded = g.row(&font.file, font.outline, 12).is_some();
-    if !(recorded && ascii && (8..=45).contains(&px))
-        && let Some(client) = &font.client
-        && let Ok(size) = u32::try_from(px)
-        && let Some((advance, ink)) = client.glyph(&font.file, size, c)
-    {
-        let advance = f64::from(advance).ceil();
-        let width = if c == ' ' {
-            advance
-        } else {
-            f64::from(ink).ceil() + 1.0
-        };
-        return (advance, width);
+    Metrics::new(font, px).glyph(c)
+}
+
+/// A font's glyphs at a pixel size, its tables found once for a run of
+/// characters (decision T537).
+struct Metrics<'a> {
+    font: &'a Font,
+    px: i64,
+    /// The recorded fonts know it (else the client's file measures what
+    /// they lack).
+    recorded: bool,
+    /// Its row of recorded glyphs and the scale to `px`.
+    row: (&'static Row, f64),
+    kern: Option<&'static rustc_hash::FxHashMap<(i64, char, char), f64>>,
+}
+
+impl<'a> Metrics<'a> {
+    fn new(font: &'a Font, px: i64) -> Metrics<'a> {
+        let g = glyphs();
+        Metrics {
+            font,
+            px,
+            recorded: g.row(&font.file, font.outline, 12).is_some(),
+            row: row(font, px),
+            kern: g.kern.get(&font.file),
+        }
     }
-    let (row, scale) = row(font, px);
-    let index = if ascii {
-        (i - 32) as usize
-    } else {
-        ('?' as u32 - 32) as usize
-    };
-    (row.advances[index] * scale, row.widths[index] * scale)
+
+    fn kern(&self, a: char, b: char) -> Option<f64> {
+        self.kern?.get(&(self.px, a, b)).copied()
+    }
+
+    fn glyph(&self, c: char) -> (f64, f64) {
+        let (font, px, recorded) = (self.font, self.px, self.recorded);
+        let i = c as u32;
+        let ascii = (32..=126).contains(&i);
+        if !(recorded && ascii && (8..=45).contains(&px))
+            && let Some(client) = &font.client
+            && let Ok(size) = u32::try_from(px)
+            && let Some((advance, ink)) = client.glyph(&font.file, size, c)
+        {
+            let advance = f64::from(advance).ceil();
+            let width = if c == ' ' {
+                advance
+            } else {
+                f64::from(ink).ceil() + 1.0
+            };
+            return (advance, width);
+        }
+        let (row, scale) = self.row;
+        let index = if ascii {
+            (i - 32) as usize
+        } else {
+            ('?' as u32 - 32) as usize
+        };
+        (row.advances[index] * scale, row.widths[index] * scale)
+    }
 }
 
 /// The screen's pixel in the region's own units: 768 over the screen's
@@ -343,20 +373,20 @@ fn line_px(font: &Font, px: i64, line: &str) -> f64 {
         return 0.0;
     };
     let mut total = 0.0;
+    let m = Metrics::new(font, px);
     let advance = |c: char| match inline_height(c) {
         Some(h) => inline_advance(font, px, h),
-        None => glyph(font, px, c).0,
+        None => m.glyph(c).0,
     };
     for &c in &chars[..chars.len() - 1] {
         total += advance(c);
     }
     total += match inline_height(last) {
         Some(h) => inline_advance(font, px, h),
-        None => glyph(font, px, last).1,
+        None => m.glyph(last).1,
     };
-    let g = glyphs();
     for pair in chars.windows(2) {
-        if let Some(d) = g.kern(&font.file, px, pair[0], pair[1]) {
+        if let Some(d) = m.kern(pair[0], pair[1]) {
             total += d;
         }
     }
@@ -402,10 +432,10 @@ pub fn line_height(vm: &Vm, id: WidgetId) -> f64 {
 /// A line's advance in pixels: each glyph's advance (the last one's too)
 /// and the kerning of pairs that kern. What a line must fit the width in.
 fn advance_px(font: &Font, px: i64, chars: &[char]) -> f64 {
-    let mut total: f64 = chars.iter().map(|&c| glyph(font, px, c).0).sum();
-    let g = glyphs();
+    let m = Metrics::new(font, px);
+    let mut total: f64 = chars.iter().map(|&c| m.glyph(c).0).sum();
     for pair in chars.windows(2) {
-        if let Some(d) = g.kern(&font.file, px, pair[0], pair[1]) {
+        if let Some(d) = m.kern(pair[0], pair[1]) {
             total += d;
         }
     }
@@ -516,6 +546,7 @@ pub fn wrapped_lines(vm: &Vm, id: WidgetId, text: &str, max: Option<f64>) -> Vec
 }
 
 /// What the client makes of a text at a width (decision T282).
+#[derive(Clone)]
 pub struct Layout {
     /// `GetNumLines()`: every line the text breaks into at the width, also
     /// with word wrap off or more lines than it may show.
@@ -553,6 +584,78 @@ pub fn layout(
     let non_space = crate::widgets::stored_ref(vm, props, "NonSpaceWrap")
         .and_then(|v| v.first().copied())
         .is_some_and(|v| v.truthy());
+    // (a layout depends on these alone: found once, T537)
+    let key = LayoutKey {
+        file: font.file.clone(),
+        size: font.size.to_bits(),
+        outline: font.outline,
+        shadow: font.shadow_x.to_bits(),
+        client: font.client.is_some(),
+        pixel: pixel.to_bits(),
+        non_space,
+        text: text.to_owned(),
+        max: max.map(f64::to_bits),
+        wraps,
+        max_lines,
+    };
+    if let Some(found) = LAYOUTS.with(|l| l.borrow().get(&key).cloned()) {
+        return found;
+    }
+    let found = layout_anew(
+        vm, id, text, max, wraps, max_lines, &font, pixel, px, non_space,
+    );
+    LAYOUTS.with(|l| {
+        let mut l = l.borrow_mut();
+        if l.len() > 8192 {
+            l.clear();
+        }
+        l.insert(key, found.clone());
+    });
+    found
+}
+
+/// What a text's layout depends on (decision T537).
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct LayoutKey {
+    file: String,
+    size: u64,
+    outline: bool,
+    shadow: u64,
+    client: bool,
+    pixel: u32,
+    non_space: bool,
+    text: String,
+    max: Option<u64>,
+    wraps: bool,
+    max_lines: usize,
+}
+
+thread_local! {
+    /// The layouts found, by what they depend on.
+    static LAYOUTS: std::cell::RefCell<rustc_hash::FxHashMap<LayoutKey, Layout>> =
+        Default::default();
+}
+
+#[allow(clippy::too_many_arguments)]
+fn layout_anew(
+    vm: &Vm,
+    id: WidgetId,
+    text: &str,
+    max: Option<f64>,
+    wraps: bool,
+    max_lines: usize,
+    font: &Font,
+    pixel: f32,
+    px: i64,
+    non_space: bool,
+) -> Layout {
+    let font = Font {
+        file: font.file.clone(),
+        size: font.size,
+        outline: font.outline,
+        shadow_x: font.shadow_x,
+        client: font.client.clone(),
+    };
     let vis = visible(text);
     let full = width(vm, id, text);
     let hard: Vec<Vec<char>> = vis.split('\n').map(|l| l.chars().collect()).collect();
@@ -683,8 +786,8 @@ pub fn glyph_line(vm: &Vm, id: WidgetId, line: &str) -> GlyphLine {
 /// over it in the world, decision T534).
 pub fn glyph_line_of(font: &Font, px: i64, line: &str) -> GlyphLine {
     let px = px.max(1);
-    let (row, scale) = row(font, px);
-    let g = glyphs();
+    let m = Metrics::new(font, px);
+    let (row, scale) = m.row;
     let chars: Vec<char> = line.chars().collect();
     let mut xs = Vec::with_capacity(chars.len());
     let mut x = 0.0;
@@ -692,10 +795,10 @@ pub fn glyph_line_of(font: &Font, px: i64, line: &str) -> GlyphLine {
         xs.push(x);
         x += match inline_height(c) {
             Some(h) => inline_advance(font, px, h),
-            None => glyph(font, px, c).0,
+            None => m.glyph(c).0,
         };
         if let Some(&next) = chars.get(i + 1)
-            && let Some(d) = g.kern(&font.file, px, c, next)
+            && let Some(d) = m.kern(c, next)
         {
             x += d;
         }

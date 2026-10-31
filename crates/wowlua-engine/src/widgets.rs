@@ -3084,14 +3084,30 @@ fn anchor(point: &str) -> (f64, f64) {
 /// `LEFT` and a `RIGHT` point give the width, a `TOP` and a `BOTTOM` the
 /// height); otherwise the size set, placed by the axis's first point.
 pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64)> {
+    // (while a scene is built, its rectangles worked out once: the layout
+    // does not change meanwhile, T537)
+    if let Ok(mut held) = engine(vm).scene_bounds.try_borrow_mut()
+        && let Some(known) = held.as_mut()
+    {
+        return bounds_in(vm, id, depth, known);
+    }
     bounds_in(vm, id, depth, &mut HashMap::new())
+}
+
+/// While `f` builds a scene, the rectangles it asks for worked out once
+/// (decision T537).
+pub fn with_scene_bounds<T>(vm: &mut Vm, f: impl FnOnce(&mut Vm) -> T) -> T {
+    *engine(vm).scene_bounds.borrow_mut() = Some(HashMap::new());
+    let out = f(vm);
+    *engine(vm).scene_bounds.borrow_mut() = None;
+    out
 }
 
 /// A rectangle (left, bottom, width, height), as [`bounds`] gives it.
 type Rect = (f64, f64, f64, f64);
 
 /// The rectangles worked out in one [`bounds`], by widget and depth.
-type KnownBounds = HashMap<(usize, usize), Option<Rect>>;
+pub(crate) type KnownBounds = HashMap<(usize, usize), Option<Rect>>;
 
 /// [`bounds`], each widget's at a depth worked out once (two points on the
 /// same frame ask for it twice, and so on up the chain).
