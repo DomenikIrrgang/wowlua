@@ -1,0 +1,7 @@
+cargo:rerun-if-changed=data
+cargo:rerun-if-changed=data/shared.d.wowlua
+cargo:rerun-if-changed=data/camelot.d.wowlua
+cargo:rerun-if-changed=data/standard.d.wowlua
+cargo:rerun-if-changed=data/vanilla.d.wowlua
+cargo:rerun-if-changed=data/tbc.d.wowlua
+cargo:rerun-if-changed=data/mists.d.wowlua

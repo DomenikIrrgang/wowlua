@@ -23,6 +23,35 @@ pub struct Vertex {
     pub uv2: [f32; 2],
 }
 
+/// A vertex posed by `bones`: its bones' transforms blended by their
+/// weights (its rest place without any).
+fn skin(v: &Vertex, bones: &[Mat4]) -> (Vec3, Vec3) {
+    let mut p = [0.0f32; 3];
+    let mut nrm = [0.0f32; 3];
+    let mut total = 0.0;
+    for k in 0..4 {
+        let w = f32::from(v.weights[k]) / 255.0;
+        if w == 0.0 {
+            continue;
+        }
+        let Some(m) = bones.get(v.bones[k] as usize) else {
+            continue;
+        };
+        let tp = transform(m, v.position);
+        let tn = transform_dir(m, v.normal);
+        for c in 0..3 {
+            p[c] += tp[c] * w;
+            nrm[c] += tn[c] * w;
+        }
+        total += w;
+    }
+    if total == 0.0 {
+        (v.position, v.normal)
+    } else {
+        (p, nrm)
+    }
+}
+
 /// A texture the model uses: a file of its own (kind 0, the file from the
 /// model's `TXID` chunk) or one the display gives (1 the character's skin,
 /// 2 an item's, 6 hair, 11 to 13 a creature's skins, …).
@@ -1327,35 +1356,13 @@ impl Model {
 
     /// The vertices posed by `bones` (positions and normals).
     pub fn skinned(&self, bones: &[Mat4]) -> Vec<(Vec3, Vec3)> {
-        self.vertices
-            .iter()
-            .map(|v| {
-                let mut p = [0.0f32; 3];
-                let mut nrm = [0.0f32; 3];
-                let mut total = 0.0;
-                for k in 0..4 {
-                    let w = f32::from(v.weights[k]) / 255.0;
-                    if w == 0.0 {
-                        continue;
-                    }
-                    let Some(m) = bones.get(v.bones[k] as usize) else {
-                        continue;
-                    };
-                    let tp = transform(m, v.position);
-                    let tn = transform_dir(m, v.normal);
-                    for c in 0..3 {
-                        p[c] += tp[c] * w;
-                        nrm[c] += tn[c] * w;
-                    }
-                    total += w;
-                }
-                if total == 0.0 {
-                    (v.position, v.normal)
-                } else {
-                    (p, nrm)
-                }
-            })
-            .collect()
+        self.vertices.iter().map(|v| skin(v, bones)).collect()
+    }
+
+    /// One vertex posed by `bones` (its position and normal): what a
+    /// drawing needs of the vertices its visible triangles use, each once.
+    pub fn skinned_vertex(&self, index: usize, bones: &[Mat4]) -> Option<(Vec3, Vec3)> {
+        self.vertices.get(index).map(|v| skin(v, bones))
     }
 
     /// A batch's color and transparency at `time` of `sequence`.

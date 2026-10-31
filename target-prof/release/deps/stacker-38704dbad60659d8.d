@@ -1,0 +1,10 @@
+/Users/domenikirrgang/repositories/wowlua/.claude/worktrees/pr103/target-prof/release/deps/stacker-38704dbad60659d8.d: /Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/lib.rs /Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/backends/mod.rs /Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/backends/macos.rs /Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/mmap_stack_restore_guard.rs
+
+/Users/domenikirrgang/repositories/wowlua/.claude/worktrees/pr103/target-prof/release/deps/libstacker-38704dbad60659d8.rlib: /Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/lib.rs /Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/backends/mod.rs /Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/backends/macos.rs /Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/mmap_stack_restore_guard.rs
+
+/Users/domenikirrgang/repositories/wowlua/.claude/worktrees/pr103/target-prof/release/deps/libstacker-38704dbad60659d8.rmeta: /Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/lib.rs /Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/backends/mod.rs /Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/backends/macos.rs /Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/mmap_stack_restore_guard.rs
+
+/Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/lib.rs:
+/Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/backends/mod.rs:
+/Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/backends/macos.rs:
+/Users/domenikirrgang/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stacker-0.1.25/src/mmap_stack_restore_guard.rs:

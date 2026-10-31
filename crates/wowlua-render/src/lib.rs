@@ -267,6 +267,14 @@ struct Batch {
 }
 
 pub struct Renderer {
+    /// The vertices of the part being drawn, posed and placed (T537): each
+    /// with the stamp of the part that posed it.
+    posed: Vec<(u32, [f32; 3], [f32; 3])>,
+    posed_stamp: u32,
+    /// Which vertex a model's vertex became in the batch being drawn, with
+    /// the batch's stamp.
+    emitted: Vec<(u32, u32)>,
+    emit_stamp: u32,
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipelines: Vec<wgpu::RenderPipeline>,
@@ -527,6 +535,10 @@ impl Renderer {
             font_ids: HashMap::new(),
             atlas: glyphs::Atlas::default(),
             white: 0,
+            posed: Vec::new(),
+            posed_stamp: 0,
+            emitted: Vec::new(),
+            emit_stamp: 0,
             missing: 0,
             atlas_tex: 0,
             models: model::Models::default(),

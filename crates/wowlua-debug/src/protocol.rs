@@ -355,6 +355,12 @@ pub enum Request {
     SetClock {
         manual: bool,
     },
+    /// Whether the game is in the foreground (the window the user works
+    /// in) or the background, from now on: a realtime session's frame rate
+    /// is `maxFPS`'s or `maxFPSBk`'s (decision T537).
+    SetForeground {
+        on: bool,
+    },
     /// Whether stepping goes into Blizzard's UI code and stops there, from
     /// now on (the launch's `debugBlizzardUI`; decision T496).
     SetDebugBlizzardUi {
