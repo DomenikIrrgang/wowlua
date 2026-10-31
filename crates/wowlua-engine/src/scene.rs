@@ -2065,7 +2065,7 @@ fn unit_position_player(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
 pub fn build(vm: &mut Vm) -> Scene {
     let effects = crate::animations::effects(vm);
     EFFECTS.with(|e| *e.borrow_mut() = effects);
-    let scene = build_scene(vm);
+    let scene = widgets::with_scene_bounds(vm, build_scene);
     EFFECTS.with(|e| e.borrow_mut().clear());
     scene
 }

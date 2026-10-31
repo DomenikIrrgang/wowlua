@@ -139,6 +139,8 @@ pub struct Engine {
     /// Each class's lineage (`widgets::lineage`), worked out once: the
     /// documentation's classes do not change.
     pub(crate) lineages: std::cell::RefCell<rustc_hash::FxHashMap<String, std::rc::Rc<[String]>>>,
+    /// The rectangles of the scene being built (decision T537).
+    pub(crate) scene_bounds: std::cell::RefCell<Option<widgets::KnownBounds>>,
     pub world: widgets::World,
     pub timers: clock::Timers,
     /// The events owed at the frame's end (`batch`).
@@ -565,6 +567,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .flat_map(|m| m.list)
             .collect(),
         lineages: Default::default(),
+        scene_bounds: Default::default(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),
         batch: batch::Batch::default(),
