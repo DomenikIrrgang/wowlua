@@ -386,10 +386,14 @@ pub enum Request {
         y: f64,
     },
     /// The place of the world under a point of the screen (decision
-    /// T529): `{ y, x, z }` (north, west, up), or null.
+    /// T529): `{ y, x, z }` (north, west, up), or null; as the game's
+    /// camera sees the screen, or `camera` (a host's own: its eye, the way
+    /// it looks and its up, north, west, up yards; its field of view
+    /// across, radians; decision T547).
     WorldPoint {
         x: f64,
         y: f64,
+        camera: Option<wowlua_engine::camera::HostCamera>,
     },
     /// The world's units.
     Units,

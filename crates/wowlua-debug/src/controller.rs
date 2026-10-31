@@ -766,8 +766,11 @@ impl Controller {
                 };
                 crate::ui::inspect(vm, frame, &source).map(|data| Response::Data { data })
             }
-            Request::WorldPoint { x, y } => Ok(Response::Data {
-                data: match wowlua_engine::camera::ground_at(vm, x, y) {
+            Request::WorldPoint { x, y, camera } => Ok(Response::Data {
+                data: match match camera {
+                    Some(c) => wowlua_engine::camera::ground_seen(vm, x, y, c),
+                    None => wowlua_engine::camera::ground_at(vm, x, y),
+                } {
                     Some((n, w, z)) => serde_json::json!({ "y": n, "x": w, "z": z }),
                     None => serde_json::Value::Null,
                 },

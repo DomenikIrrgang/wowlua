@@ -439,6 +439,7 @@ fn to_request(
             Request::WorldPoint {
                 x: args.get("x").and_then(Json::as_f64).unwrap_or(0.0),
                 y: args.get("y").and_then(Json::as_f64).unwrap_or(0.0),
+                camera: None,
             },
             None,
         ),
