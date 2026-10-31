@@ -212,7 +212,8 @@ pub fn run_callbacks(vm: &mut Vm, event: &str, args: &[Value]) {
 
 // ----------------------------------------------------------------- CVars
 
-pub(crate) fn cvar_get(vm: &mut Vm, name: &str) -> Option<String> {
+/// A CVar's value as set (none: not set, its default the client's).
+pub fn cvar_get(vm: &mut Vm, name: &str) -> Option<String> {
     engine(vm)
         .world
         .cvars

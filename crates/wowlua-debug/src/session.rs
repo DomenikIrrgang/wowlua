@@ -371,14 +371,43 @@ fn run_test(suite: &Suite, file: &str, filters: &[String]) -> (Option<String>, b
 }
 
 const FRAME_MS: f64 = 1000.0 / 60.0;
+/// The longest a realtime frame moves the world (milliseconds): a longer
+/// stall moves it this far (unverified: the client's own limit).
+const MAX_FRAME_MS: f64 = 250.0;
+/// The display's refresh rate vsync waits for (unverified: the display's
+/// own).
+const DISPLAY_HZ: f64 = 60.0;
+
+/// How long a realtime frame lasts at least (milliseconds), as the game's
+/// settings pace it (decision T537): `maxFPS` in the foreground,
+/// `maxFPSBk` in the background (0: no limit), with `vsync` on at most
+/// the display's rate.
+fn frame_ms(vm: &mut wowlua_vm::Vm, background: bool) -> f64 {
+    let mut number = |name: &str| {
+        wowlua_engine::framescript::cvar_get(vm, name).and_then(|v| v.trim().parse::<f64>().ok())
+    };
+    let limit = if background {
+        number("maxFPSBk").or_else(|| number("maxFPS"))
+    } else {
+        number("maxFPS")
+    };
+    let vsync = number("vsync").is_none_or(|v| v != 0.0);
+    let mut fps: f64 = 1000.0;
+    if let Some(l) = limit.filter(|l| *l > 0.0) {
+        fps = fps.min(l);
+    }
+    if vsync {
+        fps = fps.min(DISPLAY_HZ);
+    }
+    1000.0 / fps.max(1.0)
+}
 
 fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<String>, bool) {
     let mut session = match wowlua_test::AddonSession::open(suite) {
         Ok(s) => s,
         Err(e) => return (Some(e), true),
     };
-    let mut started = Instant::now();
-    let mut frames_run: u64 = 0;
+    let mut last_frame: Option<Instant> = None;
     let mut last_clock = opts.clock;
     loop {
         // A `/reload` (`ReloadUI()`) ended the addon's session: the UI loads
@@ -431,16 +460,22 @@ fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<Strin
         };
         if clock != last_clock {
             last_clock = clock;
-            started = Instant::now();
-            frames_run = 0;
+            last_frame = None;
         }
         match clock {
             ClockMode::Realtime => {
-                wowlua_engine::clock::advance_frames(vm, 1, FRAME_MS);
-                frames_run += 1;
+                // (a frame as long as it really took, as the game's: a slow
+                // frame moves the world as far as its time, not less;
+                // decision T537)
+                let now = Instant::now();
+                let ms = last_frame
+                    .map_or(FRAME_MS, |t| (now - t).as_secs_f64() * 1000.0)
+                    .clamp(1.0, MAX_FRAME_MS);
+                last_frame = Some(now);
+                wowlua_engine::clock::advance_frames(vm, 1, ms);
                 Shared::run_frame_hook(shared, vm);
-                let deadline =
-                    started + Duration::from_secs_f64(frames_run as f64 * FRAME_MS / 1000.0);
+                let background = shared.borrow().background;
+                let deadline = now + Duration::from_secs_f64(frame_ms(vm, background) / 1000.0);
                 // Requests that come before the next frame wait for it.
                 loop {
                     let now = Instant::now();
