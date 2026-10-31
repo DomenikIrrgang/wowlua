@@ -301,17 +301,14 @@ fn world_units(vm: &mut Vm, eye: [f64; 3], reach: f64) -> Vec<WorldUnit> {
         && near(at)
     {
         let look = look_of(vm, "player");
-        let m = engine(vm).world.movement.clone();
-        let animation = match (m.moving(), m.walking) {
-            (false, _) => 0,
-            (true, true) => 4,
-            (true, false) => 5,
-        };
+        // (running, walking backwards, strafing turned toward the way,
+        // shuffling as it turns: T536)
+        let (animation, turned) = engine(vm).world.movement.pose();
         if look.race > 0 {
             out.push(WorldUnit {
                 source: ModelSource::Character(look),
                 at: [at.0, at.1, at.2],
-                facing: crate::unitinfo::player_facing(vm),
+                facing: crate::unitinfo::player_facing(vm) + turned,
                 animation,
             });
         }

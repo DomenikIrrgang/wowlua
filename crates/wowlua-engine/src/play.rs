@@ -131,6 +131,10 @@ pub fn mouse_down(vm: &mut Vm, x: f64, y: f64, right: bool) {
     }
     mouse_move(vm, x, y);
     let frame = frame_at(vm, x, y);
+    // (the right button held over the world: the turn keys strafe, T536)
+    if right && frame.is_none() {
+        engine_mut(vm).world.movement.mouselook = true;
+    }
     engine_mut(vm).world.input.play = Some(Press {
         right,
         frame,
@@ -151,6 +155,9 @@ pub fn mouse_up(vm: &mut Vm, x: f64, y: f64, right: bool) {
     if p.right != right {
         engine_mut(vm).world.input.play = Some(p);
         return;
+    }
+    if right {
+        engine_mut(vm).world.movement.mouselook = false;
     }
     if let Some(d) = &p.dragging {
         crate::input::as_user(vm, |vm| widgets::drag_end(vm, d));
