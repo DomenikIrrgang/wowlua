@@ -674,14 +674,9 @@ fn profile_screen(suite: &Suite, source: &[u8]) -> Result<Option<wowlua_engine::
     let Some(name) = named.or_else(|| suite.profile.clone()) else {
         return Ok(None);
     };
-    let path = suite
-        .root
-        .join("tests")
-        .join("profiles")
-        .join(format!("{name}.json"));
     // (a profile that can't be read is told when it is applied)
-    match wowlua_host::read_to_string(&path) {
-        Ok(text) => profile::screen_of(&text, &path.display().to_string()),
+    match profile::named(&suite.root, &suite.flavor, &name) {
+        Ok((text, label)) => profile::screen_of(&text, &label),
         Err(_) => Ok(None),
     }
 }
@@ -785,12 +780,8 @@ fn load_vm(
     if let (None, Some(text)) = (&named, &suite.profile_text) {
         profile::apply_text(&mut vm, controls, text, "given")?;
     } else if let Some(name) = named.or_else(|| suite.profile.clone()) {
-        let path = suite
-            .root
-            .join("tests")
-            .join("profiles")
-            .join(format!("{name}.json"));
-        profile::apply(&mut vm, controls, &path)?;
+        let (text, label) = profile::named(&suite.root, &suite.flavor, &name)?;
+        profile::apply_text(&mut vm, controls, &text, &label)?;
     } else if let Some(text) = profile::default_for(&suite.flavor) {
         profile::apply_text(&mut vm, controls, text, "of the fresh character")?;
     }

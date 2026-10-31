@@ -89,7 +89,10 @@ pub(crate) fn check<'a>(
             session.push(d);
         }
     }
-    let known = |name: &str| profiles.iter().any(|(n, _)| n == name);
+    // (the package's own, or one wowlua has built in, T533)
+    let known = |name: &str| {
+        profiles.iter().any(|(n, _)| n == name) || wowlua_manifest::world::BUILT_IN.contains(&name)
+    };
     let missing = |name: &str| {
         let mut names: Vec<&str> = profiles.iter().map(|(n, _)| n.as_str()).collect();
         names.sort_unstable();

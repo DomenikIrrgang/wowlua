@@ -28,6 +28,42 @@ pub fn schema_url() -> String {
 /// Where a package's world profiles are, relative to its root.
 pub const PROFILES_DIR: &str = "tests/profiles";
 
+/// The world of a test that names no profile: the flavor's fresh
+/// character as the client recorded it (camelot: a level 1 Human Warrior
+/// in Elwynn Forest, `/stdtest snapshot`; `cargo xtask profile` writes it).
+pub fn fresh_character(flavor: &str) -> Option<&'static str> {
+    match flavor {
+        "camelot" => Some(include_str!(
+            "../../wowlua-engine/data/camelot-default-character.json"
+        )),
+        _ => None,
+    }
+}
+
+/// The world profiles wowlua has built in (decision T533), by name: a
+/// package names one as its own (`test.profile`, `config({ profile })`)
+/// where it has none of that name. `northshire`: the fresh character at
+/// Northshire's start among test NPCs of every kind (vendors of gear,
+/// repairs, the class trainers, a banker, an auctioneer, a postmaster, a
+/// flight master, gossip, things to fight).
+pub const BUILT_IN: &[&str] = &["northshire"];
+
+/// A built-in world profile's text for a flavor (decision T533): its parts
+/// over the fresh character's; none where the flavor has none.
+pub fn built_in(flavor: &str, name: &str) -> Option<String> {
+    let over = match (flavor, name) {
+        ("camelot", "northshire") => {
+            include_str!("../../wowlua-engine/data/camelot-northshire.json")
+        }
+        _ => return None,
+    };
+    let mut profile: serde_json::Map<String, Value> =
+        serde_json::from_str(fresh_character(flavor)?).ok()?;
+    let over: serde_json::Map<String, Value> = serde_json::from_str(over).ok()?;
+    profile.extend(over);
+    serde_json::to_string_pretty(&Value::Object(profile)).ok()
+}
+
 /// Other fields, passed to the engine's controls as they are.
 type Rest = BTreeMap<String, Value>;
 
@@ -1142,5 +1178,29 @@ mod tests {
             codes(r#"{ "character": { "name": "A", "honorLevel": 3 } }"#),
             Vec::<(String, String)>::new()
         );
+    }
+
+    /// The built-in profiles (decision T533) are profiles the check finds
+    /// nothing in: Northshire's test NPCs over camelot's fresh character.
+    #[test]
+    fn the_built_in_profiles_are_sound() {
+        for name in BUILT_IN {
+            let text = built_in("camelot", name).expect("camelot has it");
+            let mut db = SourceDb::new();
+            let (_, found) = check_for(
+                &mut db,
+                Path::new("northshire.json"),
+                text.clone(),
+                &["camelot".to_string()],
+            );
+            let found: Vec<String> = found.into_vec().into_iter().map(|d| d.message).collect();
+            assert!(found.is_empty(), "{name}: {found:?}");
+            let json: Value = serde_json::from_str(&text).expect("JSON");
+            // (the fresh character's parts, and its own)
+            assert_eq!(json["character"]["class"], "WARRIOR");
+            assert!(json["units"].as_array().is_some_and(|u| u.len() > 20));
+        }
+        assert!(built_in("vanilla", "northshire").is_none());
+        assert!(built_in("camelot", "nowhere").is_none());
     }
 }

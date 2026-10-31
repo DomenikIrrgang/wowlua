@@ -96,14 +96,23 @@ fn to_lua(vm: &mut Vm, v: &serde_json::Value) -> Value {
 }
 
 /// The world of a test that names no profile: the flavor's fresh
-/// character as the client recorded it (camelot: a level 1 Human Warrior
-/// in Elwynn Forest, `/stdtest snapshot`; `cargo xtask profile` writes it).
+/// character (`wowlua_manifest::world::fresh_character`).
 pub fn default_for(flavor: &str) -> Option<&'static str> {
-    match flavor {
-        "camelot" => Some(include_str!(
-            "../../wowlua-engine/data/camelot-default-character.json"
-        )),
-        _ => None,
+    wowlua_manifest::world::fresh_character(flavor)
+}
+
+/// A profile a package names: its own `tests/profiles/<name>.json`, else
+/// wowlua's built-in of that name for the flavor (decision T533); the
+/// text and how to call it in an error.
+pub fn named(root: &std::path::Path, flavor: &str, name: &str) -> Result<(String, String), String> {
+    let path = root
+        .join(wowlua_manifest::world::PROFILES_DIR)
+        .join(format!("{name}.json"));
+    match wowlua_host::read_to_string(&path) {
+        Ok(text) => Ok((text, path.display().to_string())),
+        Err(e) => wowlua_manifest::world::built_in(flavor, name)
+            .map(|text| (text, format!("built in `{name}`")))
+            .ok_or_else(|| format!("the world profile {}: {e}", path.display())),
     }
 }
 
