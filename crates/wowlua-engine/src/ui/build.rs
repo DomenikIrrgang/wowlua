@@ -285,6 +285,7 @@ pub fn build(
         unforbid_file_widget(vm, id, parent);
     }
     engine_mut(vm).world.widgets[id.0].frame = true;
+    crate::widgets::reorder(crate::engine_mut(vm));
     // An intrinsic type's own element comes first.
     let intrinsic = engine(vm)
         .world
