@@ -1273,30 +1273,30 @@ fn g_px(g: &crate::text::GlyphLine) -> f32 {
 
 /// A region's draw layer rank and sublevel.
 fn layer_of(vm: &Vm, id: WidgetId) -> (usize, i32) {
-    let a = args(vm, id, "DrawLayer");
+    let props = engine(vm).world.widgets[id.0].props;
     // A region no layer was given: a font string on `OVERLAY`, the others
     // on `ARTWORK`, as a fresh one's `GetDrawLayer` answers in the client
     // (recorded; a button's `ButtonText`, outside any `<Layer>`, was drawn
-    // under its normal texture: the Legacy challenges' categories).
-    let fallback = if widgets::is_a(
-        engine(vm),
-        &engine(vm).world.widgets[id.0].class,
-        "FontString",
-    ) {
-        "OVERLAY"
+    // under its normal texture: the Legacy challenges' categories). Read
+    // without copies: every region asks each frame (T540).
+    let fallback = if widgets::kind(engine(vm), id) & widgets::KIND_FONT_STRING != 0 {
+        3
     } else {
-        "ARTWORK"
+        2
     };
-    let layer = a
-        .as_ref()
-        .and_then(|a| a.first().copied())
-        .and_then(|v| text_of(vm, v))
-        .unwrap_or_else(|| fallback.into());
-    let sub = a.as_ref().map_or(0.0, |a| num(vm, a.get(1), 0.0));
-    (
-        LAYERS.iter().position(|l| *l == layer).unwrap_or(2),
-        sub as i32,
-    )
+    let layer = match widgets::stored_arg(vm, props, "DrawLayer", 0).map(|v| vm.hidden(v)) {
+        Some(Value::Str(s)) => {
+            let name = vm.heap.str_bytes(s);
+            LAYERS
+                .iter()
+                .position(|l| l.as_bytes() == name)
+                .unwrap_or(2)
+        }
+        Some(Value::Nil) | None => fallback,
+        Some(_) => 2,
+    };
+    let sub = widgets::stored_arg(vm, props, "DrawLayer", 1);
+    (layer, num(vm, sub.as_ref(), 0.0) as i32)
 }
 
 /// Whether a widget is a region (drawn by its frame), by its type: XML
@@ -1329,62 +1329,40 @@ fn merges_into_parent(vm: &mut Vm, id: WidgetId) -> bool {
 
 /// The visible frames, in draw order (back to front).
 fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
-    let count = engine(vm).world.widgets.len();
     let mut frames: Vec<(usize, f64, usize)> = Vec::new();
-    // (each widget's visibility and strata found once, its children's
-    // from it, T537)
-    // (by widget: 0 not known yet; T540)
-    let mut shown: Vec<u8> = vec![0; count];
-    let mut stratas: Vec<u8> = vec![0; count];
-    for i in 0..count {
+    // (walked from the widgets without a parent through the shown ones
+    // alone: a hidden frame's widgets, most of a large UI's, are never
+    // looked at; a frame's strata its own, else its parent's; T540)
+    let mut stack: Vec<(usize, usize)> = engine(vm)
+        .world
+        .widgets
+        .iter()
+        .enumerate()
+        .filter(|(_, w)| w.parent.is_none() && w.shown)
+        .map(|(i, _)| (i, 2))
+        .collect();
+    while let Some((i, inherited)) = stack.pop() {
         let id = WidgetId(i);
-        let w = &engine(vm).world.widgets[i];
-        if w.forbidden || !is_frame(vm, id) || !visible_memo(vm, id, &mut shown) {
-            continue;
+        let frame = is_frame(vm, id);
+        let strata = if frame {
+            widgets::own_strata(vm, id).unwrap_or(inherited)
+        } else {
+            inherited
+        };
+        if frame && !engine(vm).world.widgets[i].forbidden {
+            frames.push((strata, widgets::frame_level(vm, id), i));
         }
-        let strata = strata_memo(vm, id, &mut stratas);
-        let level = widgets::frame_level(vm, id);
-        frames.push((strata, level, i));
+        let e = engine(vm);
+        stack.extend(
+            e.world.widgets[i]
+                .children
+                .iter()
+                .filter(|c| e.world.widgets[c.0].shown)
+                .map(|c| (c.0, strata)),
+        );
     }
     frames.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
     frames.into_iter().map(|(_, _, i)| WidgetId(i)).collect()
-}
-
-/// `widgets::visible`, each widget's answer kept for its children's.
-/// (`known`: by widget, 0 not known yet, 1 hidden, 2 shown)
-fn visible_memo(vm: &Vm, id: WidgetId, known: &mut [u8]) -> bool {
-    match known.get(id.0) {
-        Some(1) => return false,
-        Some(2) => return true,
-        _ => {}
-    }
-    let w = &engine(vm).world.widgets[id.0];
-    let v = w.shown && w.parent.is_none_or(|p| visible_memo(vm, p, known));
-    if let Some(k) = known.get_mut(id.0) {
-        *k = if v { 2 } else { 1 };
-    }
-    v
-}
-
-/// `widgets::strata_rank`, each widget's answer kept for its children's.
-/// (`known`: by widget, its rank and one, 0 not known yet)
-fn strata_memo(vm: &mut Vm, id: WidgetId, known: &mut [u8]) -> usize {
-    if let Some(&s) = known.get(id.0)
-        && s > 0
-    {
-        return usize::from(s - 1);
-    }
-    let s = match widgets::own_strata(vm, id) {
-        Some(s) => s,
-        None => match engine(vm).world.widgets[id.0].parent {
-            Some(p) => strata_memo(vm, p, known),
-            None => 2,
-        },
-    };
-    if let Some(k) = known.get_mut(id.0) {
-        *k = u8::try_from(s + 1).unwrap_or(0);
-    }
-    s
 }
 
 fn mouse_enabled(vm: &Vm, id: WidgetId) -> bool {
@@ -2193,7 +2171,7 @@ fn build_scene(vm: &mut Vm) -> Scene {
             // (the Settings panel's title, a font string on its border
             // frame's `OVERLAY`, shows over the border's top edge, made
             // later on the same layer; a screenshot, 2026-10-23).
-            let text = widgets::is_a(engine(vm), &w.class, "FontString");
+            let text = widgets::kind(engine(vm), c) & widgets::KIND_FONT_STRING != 0;
             regions.push((layer, sub, text, masked, owner, c.0));
         }
         regions.sort();
@@ -2202,16 +2180,15 @@ fn build_scene(vm: &mut Vm) -> Scene {
         if minimap {
             items.extend(minimap_tiles(vm, f).into_iter().map(Item::Quad));
         }
-        for (_, _, _, _, _, r) in regions {
+        for (_, _, text, _, _, r) in regions {
             let id = WidgetId(r);
-            let class = engine(vm).world.widgets[r].class.clone();
-            if widgets::is_a(engine(vm), &class, "FontString") {
+            if text {
                 if let Some(mut t) = text_item(vm, id, false) {
                     let images = std::mem::take(&mut t.images);
                     items.push(Item::Text(t));
                     items.extend(images.into_iter().map(Item::Quad));
                 }
-            } else if widgets::is_a(engine(vm), &class, "MaskTexture") {
+            } else if widgets::kind(engine(vm), id) & widgets::KIND_MASK != 0 {
                 continue;
             } else if let Some(q) = quad_of(vm, id) {
                 items.push(Item::Quad(q));

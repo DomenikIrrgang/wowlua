@@ -229,6 +229,9 @@ fn set_min_max_values(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 }
 
 fn get_min_max_values(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    if engine(vm).world.timer_bars.contains(&id) {
+        follow_timer(vm, id);
+    }
     let b = bar(vm, id);
     let (min, max) = (b.min, b.max);
     Ok(vec![
@@ -297,10 +300,13 @@ fn follow_timer(vm: &mut Vm, id: WidgetId) {
     engine_mut(vm).world.bars.insert(id.0, b);
 }
 
-/// Each frame: the timer bars' values follow their durations.
+/// Each frame: the shown timer bars' values follow their durations (a
+/// hidden one's when it is read: `GetValue`, `GetMinMaxValues`; T540).
 pub fn update_timers(vm: &mut Vm) {
     for id in engine(vm).world.timer_bars.clone() {
-        follow_timer(vm, id);
+        if widgets::visible(engine(vm), id) {
+            follow_timer(vm, id);
+        }
     }
 }
 

@@ -2842,6 +2842,22 @@ fn unplaced_size(vm: &Vm, id: WidgetId, w: f64, h: f64) -> (f64, f64) {
 
 /// The stored arguments of setter `stem`, read without interning (for the
 /// layout, which only reads the world).
+/// Argument `i` (from 0) of what setter `stem` stored, without the list
+/// (decision T540).
+pub(crate) fn stored_arg(vm: &Vm, props: TableRef, stem: &str, i: usize) -> Option<Value> {
+    let key = vm.heap.interned(stem.as_bytes())?;
+    let Value::Table(list) = vm.heap.table(props).get(Value::Str(key)) else {
+        return None;
+    };
+    let n = vm.heap.interned(b"n")?;
+    match vm.heap.table(list).get(Value::Str(n)) {
+        Value::Num(n) if (n as usize) > i => {
+            Some(vm.heap.table(list).get(Value::Num((i + 1) as f64)))
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn stored_ref(vm: &Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
     let key = vm.heap.interned(stem.as_bytes())?;
     let Value::Table(list) = vm.heap.table(props).get(Value::Str(key)) else {
@@ -4248,6 +4264,10 @@ pub const KIND_KNOWN: u8 = 1;
 pub const KIND_REGION: u8 = 2;
 /// Of a frame's class.
 pub const KIND_FRAME: u8 = 4;
+/// A font string (decision T540).
+pub const KIND_FONT_STRING: u8 = 8;
+/// A mask texture (decision T540).
+pub const KIND_MASK: u8 = 16;
 
 /// A widget's kind (`KIND_*`): its class's, which never changes, found the
 /// first time it is asked (the scene asks of every widget each frame;
@@ -4262,7 +4282,13 @@ pub fn kind(e: &Engine, id: WidgetId) -> u8 {
         .iter()
         .any(|base| is_a(e, &w.class, base));
     let frame = is_a(e, &w.class, "Frame");
-    let k = KIND_KNOWN | if region { KIND_REGION } else { 0 } | if frame { KIND_FRAME } else { 0 };
+    let font = is_a(e, &w.class, "FontString");
+    let mask = is_a(e, &w.class, "MaskTexture");
+    let k = KIND_KNOWN
+        | if region { KIND_REGION } else { 0 }
+        | if frame { KIND_FRAME } else { 0 }
+        | if font { KIND_FONT_STRING } else { 0 }
+        | if mask { KIND_MASK } else { 0 };
     w.kind.set(k);
     k
 }
