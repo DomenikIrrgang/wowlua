@@ -334,6 +334,12 @@ pub enum Request {
         x: f64,
         y: f64,
     },
+    /// The place of the world under a point of the screen (decision
+    /// T529): `{ y, x, z }` (north, west, up), or null.
+    WorldPoint {
+        x: f64,
+        y: f64,
+    },
     /// The world's units.
     Units,
     /// The player targets a unit by its `id` in `Units`' list (none: no

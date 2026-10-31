@@ -617,6 +617,7 @@ impl Controller {
                 | Request::Evaluate { .. }
                 | Request::Inspect { .. }
                 | Request::Pick { .. }
+                | Request::WorldPoint { .. }
                 | Request::Units
                 | Request::ChatLines { .. }
                 | Request::Target { .. }
@@ -757,6 +758,12 @@ impl Controller {
                 };
                 crate::ui::inspect(vm, frame, &source).map(|data| Response::Data { data })
             }
+            Request::WorldPoint { x, y } => Ok(Response::Data {
+                data: match wowlua_engine::camera::ground_at(vm, x, y) {
+                    Some((n, w, z)) => serde_json::json!({ "y": n, "x": w, "z": z }),
+                    None => serde_json::Value::Null,
+                },
+            }),
             Request::Pick { x, y } => Ok(Response::Data {
                 data: crate::ui::pick(vm, x, y),
             }),

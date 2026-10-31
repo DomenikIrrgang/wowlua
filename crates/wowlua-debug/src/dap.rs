@@ -435,6 +435,13 @@ fn to_request(
             },
             None,
         ),
+        "wowlua/worldPoint" => (
+            Request::WorldPoint {
+                x: args.get("x").and_then(Json::as_f64).unwrap_or(0.0),
+                y: args.get("y").and_then(Json::as_f64).unwrap_or(0.0),
+            },
+            None,
+        ),
         "wowlua/showWorld" => (
             Request::ShowWorld {
                 on: args.get("on").and_then(Json::as_bool).unwrap_or(false),
