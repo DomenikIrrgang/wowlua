@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,176 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,178 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,176 rules unverified: each rests on Blizzard's
+The engine's code marks 1,178 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1853,6 +1853,11 @@ page changes only when a rule is added, removed or reworded.
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): The hunter's bar (unverified: classic's layout).
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): `GetPetActionCooldown(slot)`: none, `0, 0, 0` (recorded without a pet, every slot; with one unverified).
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): `GetPetActionSlotUsable(slot)`: an action there, the pet alive; with no pet, any slot (the full probe: -1, 0, 1 and 2...
+
+### play (2)
+
+- [play.rs](../crates/wowlua-engine/src/play.rs): How far the mouse moves while held before it drags (pixels; unverified).
+- [play.rs](../crates/wowlua-engine/src/play.rs): The unit under the mouse in the world: `mouseover`, its tooltip shown as the client shows it (Blizzard's `GameTooltip...
 
 ### protection (6)
 

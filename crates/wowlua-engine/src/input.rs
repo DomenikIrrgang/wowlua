@@ -48,6 +48,8 @@ pub struct Input {
     pub clicking: Option<String>,
     /// Keys held down (`key_down`): each with the binding it ran.
     pub held: Vec<(String, String)>,
+    /// The mouse held down while playing (decision T535).
+    pub play: Option<crate::play::Press>,
 }
 
 /// `setCursorPosition(x, y)`: the mouse moved there (screen units, as
@@ -97,7 +99,7 @@ pub fn cursor_onto(vm: &mut Vm, id: WidgetId) {
 /// The mouse moved onto `new` (`None`: off every frame): onto its middle
 /// unless it is over it already; `OnLeave` for the frame it left, then
 /// `OnEnter` for the new one (`motion` true).
-fn mouse_onto(vm: &mut Vm, new: Option<WidgetId>) {
+pub(crate) fn mouse_onto(vm: &mut Vm, new: Option<WidgetId>) {
     match new {
         Some(id) => cursor_onto(vm, id),
         None => engine_mut(vm).world.input.placed = false,
@@ -385,6 +387,23 @@ pub fn control_type(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// Text the user types while playing (decision T535): into the edit box
+/// with the keyboard focus, each character's `OnChar` and
+/// `OnTextChanged`; nothing without one.
+pub fn type_text(vm: &mut Vm, text: &str) {
+    let Some(id) = engine(vm).world.input.keyboard_focus else {
+        return;
+    };
+    as_user(vm, |vm| {
+        for ch in text.chars() {
+            crate::widgetops::insert(vm, id, &ch.to_string());
+            let ch = vm.str(&ch.to_string());
+            widgets::run_script(vm, id, "OnChar", &[ch]);
+            widgets::run_script(vm, id, "OnTextChanged", &[Value::Bool(true)]);
+        }
+    });
+}
+
 /// A key the focused edit box takes, whether it took it: every key while
 /// it has the focus (unverified: typing into chat runs no binding),
 /// `ENTER`, `ESCAPE`, `TAB` and `SPACE` running its scripts, the arrows
@@ -396,6 +415,15 @@ pub fn edit_box_key(vm: &mut Vm, key: &str) -> bool {
     };
     if matches!(key, "UP" | "DOWN" | "LEFT" | "RIGHT") {
         return as_user(vm, |vm| crate::widgetops::arrow(vm, id, key));
+    }
+    // (Backspace and Delete edit the text, decision T535)
+    if matches!(key, "BACKSPACE" | "DELETE") {
+        as_user(vm, |vm| {
+            if crate::widgetops::erase(vm, id, key == "DELETE") {
+                widgets::run_script(vm, id, "OnTextChanged", &[Value::Bool(true)]);
+            }
+        });
+        return true;
     }
     let script = match key {
         "ENTER" => "OnEnterPressed",

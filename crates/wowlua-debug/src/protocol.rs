@@ -205,6 +205,43 @@ pub enum Input {
         #[serde(default)]
         right: bool,
     },
+    /// Playing (decision T535): the mouse moved to a point (screen pixels,
+    /// top left origin): the frame there hovered or the unit there moused
+    /// over; while a button is held, a drag (the frame's, or the camera
+    /// turning).
+    MouseMove {
+        x: f64,
+        y: f64,
+    },
+    /// Playing: a mouse button pressed at a point (`right`: the right
+    /// one), held until `mouseUp`.
+    MouseDown {
+        x: f64,
+        y: f64,
+        #[serde(default)]
+        right: bool,
+    },
+    /// Playing: the button let go: a click where it was pressed (the
+    /// frame there, or the unit in the world: targeted, the right button
+    /// talking to it), or a drag's end.
+    MouseUp {
+        x: f64,
+        y: f64,
+        #[serde(default)]
+        right: bool,
+    },
+    /// Playing: the mouse wheel turned at a point (`delta` 1 a notch up):
+    /// the frame there taking it, else the camera zooming.
+    Wheel {
+        x: f64,
+        y: f64,
+        delta: f64,
+    },
+    /// Playing: text typed, into the edit box with the keyboard focus
+    /// (none: nothing).
+    Text {
+        text: String,
+    },
     /// A chat line as the user types it: a slash command (`/wdemo`).
     Slash {
         text: String,

@@ -406,7 +406,7 @@ UPDATE_FLOATING_CHAT_WINDOWS	login
 UPDATE_INSTANCE_INFO	encounters,login
 UPDATE_INVENTORY_DURABILITY	character,death,inventory,login,merchant
 UPDATE_MACROS	login,macros
-UPDATE_MOUSEOVER_UNIT	units
+UPDATE_MOUSEOVER_UNIT	play,units
 UPDATE_OVERRIDE_ACTIONBAR	login
 UPDATE_PENDING_MAIL	auction,login,mail
 UPDATE_SHAPESHIFT_COOLDOWN	auras,casting,death,inventory,levels,login,loot,tradeskill,units

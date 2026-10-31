@@ -77,6 +77,7 @@ pub mod movement;
 pub mod objects2;
 pub mod party;
 pub mod pets;
+pub mod play;
 pub mod protection;
 pub mod queries;
 pub mod questinfo;
