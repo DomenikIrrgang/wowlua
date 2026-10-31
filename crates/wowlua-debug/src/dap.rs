@@ -435,6 +435,12 @@ fn to_request(
             },
             None,
         ),
+        "wowlua/showWorld" => (
+            Request::ShowWorld {
+                on: args.get("on").and_then(Json::as_bool).unwrap_or(false),
+            },
+            None,
+        ),
         "wowlua/input" => (
             Request::Input {
                 input: serde_json::from_value(args.clone())

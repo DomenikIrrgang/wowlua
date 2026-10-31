@@ -622,7 +622,8 @@ impl Controller {
                 | Request::Target { .. }
                 | Request::LogEvents { .. }
                 | Request::Events
-                | Request::SetScreen { .. })
+                | Request::SetScreen { .. }
+                | Request::ShowWorld { .. })
                     if !between_frames && self.shared.borrow().drives_time =>
                 {
                     self.shared().deferred.push((id, req));
@@ -784,6 +785,10 @@ impl Controller {
                 ui_scale,
             } => {
                 wowlua_engine::apply_settings(vm, width, height, ui_scale);
+                Ok(Response::Ok)
+            }
+            Request::ShowWorld { on } => {
+                wowlua_engine::set_world(vm, on);
                 Ok(Response::Ok)
             }
             Request::Input { input } => crate::ui::input(vm, &input).map(|()| Response::Ok),

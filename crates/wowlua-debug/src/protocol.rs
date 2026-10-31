@@ -342,6 +342,11 @@ pub enum Request {
         #[serde(default, rename = "uiScale")]
         ui_scale: Option<f64>,
     },
+    /// The 3D world on or off (decisions T522, T527): the character and the
+    /// units on the installation's ground, the world in the screen's scene.
+    ShowWorld {
+        on: bool,
+    },
     Terminate,
 }
 
