@@ -468,6 +468,13 @@
             "null"
           ]
         },
+        "title": {
+          "description": "An NPC's title, under its name in the 3D world (`Cloth Armor\nMerchant`; decision T534).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "creatureType": {
           "type": [
             "string",
@@ -2052,6 +2059,13 @@
           "format": "double"
         },
         "classification": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "description": "An NPC's title, under its name in the 3D world (`Cloth Armor\nMerchant`; decision T534).",
           "type": [
             "string",
             "null"

@@ -497,6 +497,9 @@ export type UnitData = {
     --- `UnitClassification`: "normal" by default, "elite", "rare",
     --- "rareelite", "worldboss", "trivial", "minus".
     classification?: string,
+    --- An NPC's title, under its name in the 3D world ("Cloth Armor
+    --- Merchant"; decision T534).
+    title?: string,
     --- `UnitCreatureType` and `UnitCreatureFamily`, with their IDs.
     creatureType?: string,
     creatureTypeID?: number,

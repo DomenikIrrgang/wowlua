@@ -100,6 +100,7 @@ pub mod traits;
 pub mod ui;
 pub mod unitacts;
 pub mod unitinfo;
+pub mod unitnames;
 pub mod units;
 pub mod widgetdata;
 pub mod widgetops;

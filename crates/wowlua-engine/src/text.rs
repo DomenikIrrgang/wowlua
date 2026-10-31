@@ -663,7 +663,14 @@ pub fn glyph_line(vm: &Vm, id: WidgetId, line: &str) -> GlyphLine {
     let font = font_of(vm, id);
     let pixel = pixel(vm, id);
     let px = pixel_size(&font, pixel).max(1);
-    let (row, scale) = row(&font, px);
+    glyph_line_of(&font, px, line)
+}
+
+/// A line of text in a font at a pixel size, no region's (a unit's name
+/// over it in the world, decision T534).
+pub fn glyph_line_of(font: &Font, px: i64, line: &str) -> GlyphLine {
+    let px = px.max(1);
+    let (row, scale) = row(font, px);
     let g = glyphs();
     let chars: Vec<char> = line.chars().collect();
     let mut xs = Vec::with_capacity(chars.len());
@@ -671,8 +678,8 @@ pub fn glyph_line(vm: &Vm, id: WidgetId, line: &str) -> GlyphLine {
     for (i, &c) in chars.iter().enumerate() {
         xs.push(x);
         x += match inline_height(c) {
-            Some(h) => inline_advance(&font, px, h),
-            None => glyph(&font, px, c).0,
+            Some(h) => inline_advance(font, px, h),
+            None => glyph(font, px, c).0,
         };
         if let Some(&next) = chars.get(i + 1)
             && let Some(d) = g.kern.get(&(font.file.clone(), px, c, next))
@@ -684,6 +691,6 @@ pub fn glyph_line(vm: &Vm, id: WidgetId, line: &str) -> GlyphLine {
         px,
         line_height_px: (row.height * scale).round(),
         xs,
-        width_px: line_px(&font, px, line),
+        width_px: line_px(font, px, line),
     }
 }

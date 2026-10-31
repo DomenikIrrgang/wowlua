@@ -49,7 +49,8 @@ pub fn fresh_character(flavor: &str) -> Option<&'static str> {
 pub const BUILT_IN: &[&str] = &["northshire"];
 
 /// A built-in world profile's text for a flavor (decision T533): its parts
-/// over the fresh character's; none where the flavor has none.
+/// over the fresh character's (an object's entries over its); none where
+/// the flavor has none.
 pub fn built_in(flavor: &str, name: &str) -> Option<String> {
     let over = match (flavor, name) {
         ("camelot", "northshire") => {
@@ -60,7 +61,16 @@ pub fn built_in(flavor: &str, name: &str) -> Option<String> {
     let mut profile: serde_json::Map<String, Value> =
         serde_json::from_str(fresh_character(flavor)?).ok()?;
     let over: serde_json::Map<String, Value> = serde_json::from_str(over).ok()?;
-    profile.extend(over);
+    // (a part both have as an object, the CVars: the fresh character's
+    // with the built-in's over them)
+    for (key, value) in over {
+        match (profile.get_mut(&key), value) {
+            (Some(Value::Object(mine)), Value::Object(theirs)) => mine.extend(theirs),
+            (_, value) => {
+                profile.insert(key, value);
+            }
+        }
+    }
     serde_json::to_string_pretty(&Value::Object(profile)).ok()
 }
 
@@ -215,6 +225,9 @@ pub struct UnitData {
     /// The creature display it shows in the 3D world (decision T526).
     pub display_id: Option<f64>,
     pub classification: Option<String>,
+    /// An NPC's title, under its name in the 3D world (`Cloth Armor
+    /// Merchant`; decision T534).
+    pub title: Option<String>,
     pub creature_type: Option<String>,
     pub creature_family: Option<String>,
     pub zone: Option<String>,
@@ -1199,6 +1212,10 @@ mod tests {
             // (the fresh character's parts, and its own)
             assert_eq!(json["character"]["class"], "WARRIOR");
             assert!(json["units"].as_array().is_some_and(|u| u.len() > 20));
+            // (an object part's entries over the fresh character's: its
+            // CVars kept, the names of the NPCs met shown)
+            assert!(json["cvars"].as_object().is_some_and(|c| c.len() > 100));
+            assert_eq!(json["cvars"]["UnitNameInteractiveNPC"], "1");
         }
         assert!(built_in("vanilla", "northshire").is_none());
         assert!(built_in("camelot", "nowhere").is_none());

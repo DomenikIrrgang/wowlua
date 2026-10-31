@@ -855,8 +855,9 @@ local function cloth()
     expect(UnitClass("player")).toBe("Warrior")
     local npc = mock.unitAt(1)
     mock.player:target(npc)
-    expect(UnitName("target")).toBe("Test Vendor: Cloth")
-    mock.moveTo({ world = { y = -8939.5, x = -116, z = 0, instanceID = 0 }, facing = 0 })
+    expect(UnitName("target")).toBe("Clara")
+    local y, x = UnitPosition("target")
+    mock.moveTo({ world = { y = y - 1.5, x = x, z = 0, instanceID = 0 }, facing = 0 })
     if npc then
         mock.player:interact(npc)
     end
@@ -869,8 +870,9 @@ end
 local function trainer()
     local npc = mock.unitAt(9)
     mock.player:target(npc)
-    expect(UnitName("target")).toBe("Test Trainer: Warrior")
-    mock.moveTo({ world = { y = -8932.5, x = -116, z = 0, instanceID = 0 }, facing = 0 })
+    expect(UnitName("target")).toBe("Garrick")
+    local y, x = UnitPosition("target")
+    mock.moveTo({ world = { y = y - 1.5, x = x, z = 0, instanceID = 0 }, facing = 0 })
     if npc then
         mock.player:interact(npc)
     end
