@@ -90,6 +90,9 @@ pub fn refresh_states(vm: &mut Vm, id: WidgetId) {
             engine_mut(vm).world.widgets[t.0].shown = on;
         }
     }
+    // (again with its textures as they show now: a mark passes hidden
+    // ones by, T545)
+    crate::widgets::mark(crate::engine_mut(vm), id);
 }
 
 /// The layer a state's texture is drawn in (SuuUI probe trees: XML's
