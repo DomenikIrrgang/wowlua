@@ -6,20 +6,26 @@ use wowlua_vm::{Value, Vm};
 /// A camelot session with the client's data, at Northshire Abbey where a
 /// new human starts.
 fn session() -> Option<Vm> {
+    session_and_casc().map(|(vm, _)| vm)
+}
+
+/// [`session`], and the client's storage it reads.
+fn session_and_casc() -> Option<(Vm, std::sync::Arc<wowlua_casc::Casc>)> {
     let root = std::env::var_os("WOWLUA_WOW_PATH")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| "/Applications/World of Warcraft".into());
     let storage = wowlua_casc::FsStorage { root };
     let product = wowlua_casc::Casc::product_of_folder(&storage, "_forever_")?;
     let casc = std::sync::Arc::new(wowlua_casc::Casc::open(Box::new(storage), &product).ok()?);
+    let for_data = casc.clone();
     let data = std::sync::Arc::new(wowlua_render::client::CascClientData::new(Box::new(
-        move || Some(casc.clone()),
+        move || Some(for_data.clone()),
     )));
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, "camelot").ok()?;
     wowlua_engine::controls::install(&mut vm, "mock");
     wowlua_engine::clientdata::set(&mut vm, data);
-    Some(vm)
+    Some((vm, casc))
 }
 
 fn run(vm: &mut Vm, src: &str) -> Vec<String> {
@@ -118,4 +124,59 @@ return y, table.concat(Errors, ', ')",
     // it started and the abbey's middle)
     assert!(y < n + reach && y > n, "{y} of {n} + {reach}");
     assert_eq!(out[1], "Target not in line of sight");
+}
+
+/// The world is drawn at `RenderScale` of the screen's pixels each way and
+/// stretched to it (decision T538): the whole screen covered, a half
+/// scale's picture the full one's, coarser; the setting kept to 0.33 to 2.
+#[test]
+fn the_world_is_drawn_at_its_render_scale() {
+    let Some((mut vm, casc)) = session_and_casc() else {
+        eprintln!("no camelot client: skipped");
+        return;
+    };
+    let Ok(mut r) = wowlua_render::Renderer::new_blocking() else {
+        eprintln!("no GPU: skipped");
+        return;
+    };
+    let mut assets = wowlua_render::client::ClientAssets::new(Some(casc), &[]);
+    wowlua_engine::set_world(&mut vm, true);
+    run(
+        &mut vm,
+        "mock.moveTo({ world = { y = -8949.95, x = -132.493, z = 0, instanceID = 0 }, facing = 0 })
+mock.advanceFrames(2, 1000 / 60)",
+    );
+    let mut at = |vm: &mut Vm, scale: &str| {
+        run(vm, &format!("C_CVar.SetCVar('RenderScale', '{scale}')"));
+        let scene = wowlua_engine::scene::build(vm);
+        let set = scene.world.as_ref().expect("the world").render_scale;
+        let image = r
+            .render_blocking(&scene, 1.0, None, &mut assets)
+            .expect("drawn");
+        (set, image)
+    };
+    // (the first draw reads the world)
+    at(&mut vm, "1");
+    let (_, full) = at(&mut vm, "1");
+    let (set, half) = at(&mut vm, "0.5");
+    assert_eq!(set, 0.5);
+    assert_eq!((half.width, half.height), (full.width, full.height));
+    let pixel = |i: &wowlua_casc::Rgba, x: u32, y: u32| {
+        let at = ((y * i.width + x) * 4) as usize;
+        [i.pixels[at], i.pixels[at + 1], i.pixels[at + 2]]
+    };
+    let (w, h) = (half.width - 1, half.height - 1);
+    for (x, y) in [(0, 0), (w, 0), (0, h), (w, h), (w / 2, h / 2)] {
+        assert_ne!(pixel(&half, x, y), [0, 0, 0], "{x}, {y} drawn");
+    }
+    let differ: Vec<u32> = full
+        .pixels
+        .iter()
+        .zip(&half.pixels)
+        .map(|(a, b)| u32::from(a.abs_diff(*b)))
+        .collect();
+    let mean = f64::from(differ.iter().sum::<u32>()) / differ.len() as f64;
+    assert!(mean > 0.0 && mean < 12.0, "{mean}");
+    assert_eq!(at(&mut vm, "0.1").0, 0.33);
+    assert_eq!(at(&mut vm, "4").0, 2.0);
 }

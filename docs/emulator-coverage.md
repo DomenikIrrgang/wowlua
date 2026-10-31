@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,111 of the 5,111 documented camelot functions have
-  behaviour (100.0%): 1,057 modelled, 354 answered from recordings, 3,700 by a
+  behaviour (100.0%): 1,056 modelled, 354 answered from recordings, 3,701 by a
   documentation-based fill-in. Of all 7,175 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
@@ -60,7 +60,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 770 | 100 | 1,232 | 0 |
+| `(globals)` | 2,102 | 769 | 100 | 1,233 | 0 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -346,13 +346,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,175 | 1,670 | 437 | 5,068 | 0 |
+| **All** | 7,175 | 1,669 | 437 | 5,069 | 0 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,111 | 1,057 | 354 | 3,700 | 0 |
+| Blizzard's API documentation | 5,111 | 1,056 | 354 | 3,701 | 0 |
 | the client's other C functions (`/stdtest inventory`) | 2,064 | 613 | 83 | 1,368 | 0 |
 | the engine's own, in neither list | 15 | 14 | 0 | 1 | 0 |
 
@@ -377,7 +377,7 @@ The modules that answer, by how many functions and methods:
 | `social` | fill-in | 373 |
 | `recorded` | recorded | 320 |
 | `questinfo` | fill-in | 316 |
-| `systeminfo` | fill-in | 307 |
+| `systeminfo` | fill-in | 308 |
 | `iteminfo` | fill-in | 228 |
 | `methods3` | fill-in | 215 |
 | `spellinfo` | fill-in | 198 |
@@ -426,9 +426,9 @@ The modules that answer, by how many functions and methods:
 | `input` | model | 18 |
 | `pets` | model | 18 |
 | `replies` | model | 18 |
-| `clock` | model | 16 |
 | `movement` | model | 16 |
 | `traits` | model | 16 |
+| `clock` | model | 15 |
 | `cursor` | model | 15 |
 | `animations` | model | 14 |
 | `bank` | model | 14 |
@@ -1054,12 +1054,13 @@ page changes only when a rule is added, removed or reworded.
 
 - [clientdata.rs](../crates/wowlua-engine/src/clientdata.rs): Flags 1, 2, 4: the center for the origin on x, y, z (unverified).
 
-### clock (5)
+### clock (6)
 
 - [clock.rs](../crates/wowlua-engine/src/clock.rs): Unverified until probed: `GetTime()` starts at 0; a timer handle is a table with `Cancel`, `IsCancelled` and `Invoke`...
 - [clock.rs](../crates/wowlua-engine/src/clock.rs): Handles are userdata whose metatable is hidden (`/stdtest engine`: no methods table to read; that `__metatable` is fa...
 - [clock.rs](../crates/wowlua-engine/src/clock.rs): A timer a running timer sets without a delay waits for the next run of timers (the next frame), so one that sets itse...
 - [clock.rs](../crates/wowlua-engine/src/clock.rs): `GetTickTime()`: the frame's seconds, as its `OnUpdate` got them (unverified: before the first frame, 0).
+- [clock.rs](../crates/wowlua-engine/src/clock.rs): The frames a second the engine runs at (decision T537): the last second's frames over their time, as fast as a realti...
 - [clock.rs](../crates/wowlua-engine/src/clock.rs): `C_Timer.NewTimedSignalMap(callback)`: keys scheduled to signal at a time, as Blizzard's documentation describes the...
 
 ### collected (6)
@@ -1995,7 +1996,7 @@ page changes only when a rule is added, removed or reworded.
 - [stats.rs](../crates/wowlua-engine/src/stats.rs): `C_SpellBook.IsSpellInSpellBook(spellID [, bank])`: in the player's book (unverified: overrides, the pet's bank).
 - [stats.rs](../crates/wowlua-engine/src/stats.rs): `C_SkillInfo.SetSelectedSkill(index)`: the skill line `GetSelectedSkill` answers from then (Blizzard's skills window...
 
-### systeminfo (66)
+### systeminfo (65)
 
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): Unverified unless a comment says recorded: most answers follow the documentation's shapes and the systems' empty stat...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `Round(value)`: halves away from zero (Blizzard's `MathUtil.lua` in the other flavors; a C function on camelot, unver...
@@ -2003,7 +2004,6 @@ page changes only when a rule is added, removed or reworded.
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `GetCombatRatingBonusForCombatRatingValue(rating, value)`: rating 1's bonus the value's whole part, as a single-preci...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `IsKeyDown(key)`: a modifier the engine holds (Shift, Ctrl, Alt, the left ones or either); any other key or button up...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `IsMouselooking()`: since `MouselookStart`, until `MouselookStop` (unverified: the client also starts it with a held...
-- [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `GetFramerate()`: frames a second by the last frame's length, 60 before any frame (recorded: 166.4 on the probing mac...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `C_DateAndTime.GetServerTimeLocal()`: the epoch seconds in the clock's local zone (unverified).
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `GetSessionTime()`: whole seconds since the session began (`GetTime`'s start; unverified).
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `C_DateAndTime.AdjustTimeByDays(date, days)`, `…ByMinutes`: the date moved (unverified: a date without its time).
@@ -2455,6 +2455,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - A solid world (decisions T524, T532)
 - Names over units (decision T534)
 - How far the world is drawn (decision T525)
+- Frame rate and render scale (decisions T537, T538)
 - The camera (decisions T520, T521)
 - The dev tools (0.12.1)
 
