@@ -991,8 +991,7 @@ impl Renderer {
                     if skinning {
                         self.models.skinned_out = Some(Skinned::default());
                     }
-                    let mut one =
-                        self.pose_actors(std::slice::from_ref(actor), camera, ms, assets);
+                    let mut one = self.pose_actors(std::slice::from_ref(actor), camera, ms, assets);
                     one.skinned = self.models.skinned_out.take();
                     one
                 }
