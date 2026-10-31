@@ -160,8 +160,11 @@ pub(crate) struct Models {
 }
 
 /// Actors posed: what [`Renderer::pose_actors`] gives.
-struct Posed {
+#[derive(Clone)]
+pub(crate) struct Posed {
     verts: Vec<MVertex>,
+    /// The triangles' corners: indices into `verts` (T538).
+    indices: Vec<u32>,
     draws: Vec<Draw>,
     lo: [f32; 3],
     hi: [f32; 3],
@@ -172,12 +175,14 @@ struct Posed {
 /// The world's models, ready to draw (decision T526).
 pub(crate) struct WorldModels {
     vertices: wgpu::Buffer,
+    indices: wgpu::Buffer,
     group: wgpu::BindGroup,
     draws: Vec<Draw>,
 }
 
-/// A batch to draw: its vertices' range and how.
-struct Draw {
+/// A batch to draw: its indices' range and how.
+#[derive(Clone)]
+pub(crate) struct Draw {
     blend: u16,
     depth_write: bool,
     tex: [usize; 3],
@@ -657,6 +662,7 @@ impl Renderer {
             height,
             aspect,
             p.verts,
+            p.indices,
             p.draws,
             p.lo,
             p.hi,
@@ -678,6 +684,7 @@ impl Renderer {
         self.model_layouts();
         self.models.sprites.clear();
         let mut verts: Vec<MVertex> = Vec::new();
+        let mut indices: Vec<u32> = Vec::new();
         let mut draws: Vec<Draw> = Vec::new();
         // The posed points of every actor, for a frame's camera.
         let mut lo = [f32::MAX; 3];
@@ -734,6 +741,7 @@ impl Renderer {
                     &mut portrait,
                     &mut own_camera,
                     &mut verts,
+                    &mut indices,
                     &mut draws,
                     &mut lo,
                     &mut hi,
@@ -744,6 +752,7 @@ impl Renderer {
         }
         Posed {
             verts,
+            indices,
             draws,
             lo,
             hi,
@@ -767,9 +776,68 @@ impl Renderer {
         light: ([f32; 3], [f32; 3], [f32; 3]),
         assets: &mut dyn Assets,
     ) -> Option<WorldModels> {
-        let p = self.pose_actors(actors, camera, ms, assets);
+        // Each unit posed apart, a farther one less often: within 12
+        // yards every frame, to 30 yards 20 times a second, beyond 10;
+        // between, its last pose (T538; the game's rate unverified).
+        let eye = match camera {
+            ModelCamera::Scene { position, .. } => *position,
+            _ => [0.0; 3],
+        };
+        let mut p = Posed {
+            verts: std::mem::take(&mut self.world_verts),
+            indices: std::mem::take(&mut self.world_indices),
+            draws: Vec::new(),
+            lo: [f32::MAX; 3],
+            hi: [f32::MIN; 3],
+            portrait: None,
+            own_camera: None,
+        };
+        p.verts.clear();
+        p.indices.clear();
+        let mut kept = std::mem::take(&mut self.world_poses);
+        let mut fresh = HashMap::new();
+        for actor in actors {
+            let far = dot(sub(actor.position, eye), sub(actor.position, eye)).sqrt();
+            let period = if far < 12.0 {
+                0
+            } else if far < 30.0 {
+                50
+            } else {
+                100
+            };
+            let moment = ms.checked_div(period).unwrap_or(ms);
+            let key = format!(
+                "{}|{:?}|{}|{}|{}|{}",
+                source_key(&actor.source),
+                actor.position.map(f32::to_bits),
+                actor.yaw.to_bits(),
+                actor.animation,
+                actor.scale.to_bits(),
+                period
+            );
+            let one = match kept.remove(&key) {
+                Some((at, one)) if period != 0 && at == moment => one,
+                _ => self.pose_actors(std::slice::from_ref(actor), camera, ms, assets),
+            };
+            let (vbase, ibase) = (p.verts.len() as u32, p.indices.len() as u32);
+            p.verts.extend_from_slice(&one.verts);
+            p.indices.extend(one.indices.iter().map(|i| i + vbase));
+            p.draws.extend(one.draws.iter().map(|d| Draw {
+                start: d.start + ibase,
+                end: d.end + ibase,
+                ..d.clone()
+            }));
+            if period != 0 {
+                fresh.insert(key, (moment, one));
+            }
+        }
+        // (the poses of units no longer drawn go)
+        self.world_poses = fresh;
+        drop(kept);
         self.models.sprites.clear();
         if p.verts.is_empty() {
+            self.world_verts = p.verts;
+            self.world_indices = p.indices;
             return None;
         }
         let view_proj = m2::mul(&proj, &view);
@@ -802,11 +870,22 @@ impl Renderer {
             bytemuck::cast_slice(&p.verts),
             wgpu::BufferUsages::VERTEX,
         );
+        let indices = crate::buffer_with(
+            &self.device,
+            &self.queue,
+            "world model indices",
+            bytemuck::cast_slice(&p.indices),
+            wgpu::BufferUsages::INDEX,
+        );
         for d in &p.draws {
             self.model_pipeline(d.blend.min(7), d.depth_write);
         }
+        // (the lists kept for the next frame's, their room with them)
+        self.world_verts = p.verts;
+        self.world_indices = p.indices;
         Some(WorldModels {
             vertices,
+            indices,
             group,
             draws: p.draws,
         })
@@ -815,11 +894,12 @@ impl Renderer {
     /// Draws the world's models into its pass.
     pub(crate) fn record_models<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>, m: &'a WorldModels) {
         pass.set_vertex_buffer(0, m.vertices.slice(..));
+        pass.set_index_buffer(m.indices.slice(..), wgpu::IndexFormat::Uint32);
         pass.set_bind_group(0, &m.group, &[]);
         for d in &m.draws {
             pass.set_pipeline(&self.models.pipelines[&(d.blend.min(7), d.depth_write)]);
             pass.set_bind_group(1, &self.models.groups[&d.tex], &[]);
-            pass.draw(d.start..d.end, 0..1);
+            pass.draw_indexed(d.start..d.end, 0, 0..1);
         }
     }
 
@@ -839,6 +919,7 @@ impl Renderer {
         portrait: &mut Option<(Vec3, Vec3, f32)>,
         own_camera: &mut Option<(Vec3, Vec3, f32)>,
         verts: &mut Vec<MVertex>,
+        indices: &mut Vec<u32>,
         draws: &mut Vec<Draw>,
         lo: &mut [f32; 3],
         hi: &mut [f32; 3],
@@ -870,7 +951,23 @@ impl Renderer {
             Some(b) if part.skinned && b.pose.len() >= m.bones.len() => b.pose.clone(),
             _ => m.pose_facing(seq, time, Some(toward)),
         };
-        let skinned = m.skinned(&pose);
+        // (each vertex posed and placed once, as a visible triangle first
+        // uses it: hidden geosets cost nothing, shared corners once; the
+        // cache's stamp tells this part's from earlier ones, T538)
+        self.posed_stamp = self.posed_stamp.wrapping_add(1);
+        if self.posed_stamp == 0 {
+            self.posed.clear();
+            self.posed_stamp = 1;
+        }
+        let stamp = self.posed_stamp;
+        if self.posed.len() < m.vertices.len() {
+            self.posed.resize(m.vertices.len(), (0, [0.0; 3], [0.0; 3]));
+        }
+        let mut posed = std::mem::take(&mut self.posed);
+        if self.emitted.len() < m.vertices.len() {
+            self.emitted.resize(m.vertices.len(), (0, 0));
+        }
+        let mut emitted = std::mem::take(&mut self.emitted);
         if part.attachment.is_none() && body_points.is_none() {
             *body_points = Some(Body {
                 points: m
@@ -962,16 +1059,38 @@ impl Renderer {
             }
             let shaders = pixel | (vertex << 8);
             let color = [tint.color[0], tint.color[1], tint.color[2], alpha];
-            let start = verts.len() as u32;
+            // (the batch's vertices once each, its corners as indices)
+            self.emit_stamp = self.emit_stamp.wrapping_add(1);
+            if self.emit_stamp == 0 {
+                emitted.iter_mut().for_each(|e| e.0 = 0);
+                self.emit_stamp = 1;
+            }
+            let batch_stamp = self.emit_stamp;
+            let start = indices.len() as u32;
             let first = sub.index_start as usize;
             let end = (first + sub.index_count as usize).min(skin.indices.len());
             for &vi in &skin.indices[first.min(end)..end] {
-                let Some((p, n)) = skinned.get(vi as usize) else {
+                if let Some(e) = emitted.get(vi as usize)
+                    && e.0 == batch_stamp
+                {
+                    indices.push(e.1);
+                    continue;
+                }
+                let Some(slot) = posed.get_mut(vi as usize) else {
                     continue;
                 };
+                if slot.0 != stamp {
+                    let Some((p, n)) = m.skinned_vertex(vi as usize, &pose) else {
+                        continue;
+                    };
+                    *slot = (
+                        stamp,
+                        m2::transform(&part_world, p),
+                        normalize(m2::transform_dir(&part_world, n)),
+                    );
+                }
+                let (wp, wn) = (slot.1, slot.2);
                 let v = &m.vertices[vi as usize];
-                let wp = m2::transform(&part_world, *p);
-                let wn = normalize(m2::transform_dir(&part_world, *n));
                 for k in 0..3 {
                     lo[k] = lo[k].min(wp[k]);
                     hi[k] = hi[k].max(wp[k]);
@@ -983,6 +1102,8 @@ impl Renderer {
                     }
                     None => uv,
                 };
+                emitted[vi as usize] = (batch_stamp, verts.len() as u32);
+                indices.push(verts.len() as u32);
                 verts.push(MVertex {
                     pos: wp,
                     normal: wn,
@@ -994,7 +1115,7 @@ impl Renderer {
                     shaders,
                 });
             }
-            let end = verts.len() as u32;
+            let end = indices.len() as u32;
             if end > start {
                 draws.push(Draw {
                     blend: mat.blend,
@@ -1005,6 +1126,8 @@ impl Renderer {
                 });
             }
         }
+        self.posed = posed;
+        self.emitted = emitted;
         // Its ribbons: where their bones' points were over their edges'
         // lifetimes (the model posed at those moments), each edge its
         // height above and below the point along the bone's Z axis, the
@@ -1234,6 +1357,7 @@ impl Renderer {
         height: u32,
         aspect: f32,
         mut verts: Vec<MVertex>,
+        mut indices: Vec<u32>,
         mut draws: Vec<Draw>,
         lo: [f32; 3],
         hi: [f32; 3],
@@ -1353,7 +1477,7 @@ impl Renderer {
                 ]
             };
             let [u0, v0, u1, v1] = sp.cell;
-            let start = verts.len() as u32;
+            let start = indices.len() as u32;
             let flags = UNLIT | (u32::from(sp.blend.min(7)) << 8);
             let mk = |p: Vec3, uv: [f32; 2]| MVertex {
                 pos: p,
@@ -1371,7 +1495,9 @@ impl Renderer {
                 mk(corner(1.0, 1.0), [u1, v0]),
                 mk(corner(1.0, -1.0), [u1, v1]),
             );
-            verts.extend_from_slice(&[a, b, c, c, b, d]);
+            let first = verts.len() as u32;
+            verts.extend_from_slice(&[a, b, c, d]);
+            indices.extend([0, 1, 2, 2, 1, 3].map(|k| first + k));
             let tex = [sp.tex, self.white, self.white];
             match draws.last_mut() {
                 Some(last)
@@ -1380,14 +1506,14 @@ impl Renderer {
                         && !last.depth_write
                         && last.end == start =>
                 {
-                    last.end = verts.len() as u32
+                    last.end = indices.len() as u32
                 }
                 _ => draws.push(Draw {
                     blend: sp.blend,
                     depth_write: false,
                     tex,
                     start,
-                    end: verts.len() as u32,
+                    end: indices.len() as u32,
                 }),
             }
         }
@@ -1427,6 +1553,13 @@ impl Renderer {
             "model vertices",
             bytemuck::cast_slice(&verts),
             wgpu::BufferUsages::VERTEX,
+        );
+        let ibuf = crate::buffer_with(
+            &self.device,
+            &self.queue,
+            "model indices",
+            bytemuck::cast_slice(&indices),
+            wgpu::BufferUsages::INDEX,
         );
         let size = wgpu::Extent3d {
             width,
@@ -1492,11 +1625,12 @@ impl Renderer {
                 multiview_mask: None,
             });
             pass.set_vertex_buffer(0, vbuf.slice(..));
+            pass.set_index_buffer(ibuf.slice(..), wgpu::IndexFormat::Uint32);
             pass.set_bind_group(0, &ugroup, &[]);
             for d in &draws {
                 pass.set_pipeline(&self.models.pipelines[&(d.blend.min(7), d.depth_write)]);
                 pass.set_bind_group(1, &self.models.groups[&d.tex], &[]);
-                pass.draw(d.start..d.end, 0..1);
+                pass.draw_indexed(d.start..d.end, 0, 0..1);
             }
         }
         self.queue.submit([encoder.finish()]);

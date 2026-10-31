@@ -89,6 +89,24 @@ pub(crate) struct World {
     identity: Option<wgpu::Buffer>,
     /// The placements' matrices of a draw, and the buffer's size.
     instances: Option<(wgpu::Buffer, u64)>,
+    /// What stretches the world drawn at another scale to the screen, and
+    /// the texture it is drawn into (decision T539).
+    stretch: Option<Stretch>,
+    scaled: Option<Scaled>,
+}
+
+struct Stretch {
+    pipeline: wgpu::RenderPipeline,
+    layout: wgpu::BindGroupLayout,
+    sampler: wgpu::Sampler,
+}
+
+/// The world drawn at `RenderScale`: its texture's view, what binds it to
+/// the stretch and its size.
+struct Scaled {
+    view: wgpu::TextureView,
+    group: wgpu::BindGroup,
+    size: (u32, u32),
 }
 
 fn texture_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -413,15 +431,155 @@ impl Renderer {
         self.world.tiles.insert((map, x, y), gpu);
     }
 
-    /// Draws the world into `view` (cleared to the sky first), with a
-    /// depth buffer of its size: the tiles within the view distance, the
-    /// chunks in front of the camera.
+    /// Draws the world into `view`: at `RenderScale` of its pixels each
+    /// way, stretched to it (decision T539).
     pub(crate) fn draw_world(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         width: u32,
         height: u32,
+        w: &WorldView,
+        assets: &mut dyn Assets,
+    ) {
+        let scale = w.render_scale;
+        let size = (
+            ((f64::from(width) * scale).round() as u32).max(1),
+            ((f64::from(height) * scale).round() as u32).max(1),
+        );
+        if size == (width, height) {
+            self.draw_world_at(encoder, view, width, height, height, w, assets);
+            return;
+        }
+        let scaled = self.scaled_target(size);
+        self.draw_world_at(encoder, &scaled.0, size.0, size.1, height, w, assets);
+        let stretch = self.world.stretch.as_ref().expect("the stretch");
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("world stretched"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_pipeline(&stretch.pipeline);
+        pass.set_bind_group(0, &scaled.1, &[]);
+        pass.draw(0..3, 0..1);
+    }
+
+    /// The texture the world is drawn into at `size`, made again when the
+    /// size changes, and its binding to the stretch.
+    fn scaled_target(&mut self, size: (u32, u32)) -> (wgpu::TextureView, wgpu::BindGroup) {
+        let d = &self.device;
+        let stretch = self.world.stretch.get_or_insert_with(|| {
+            let layout = d.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("world stretch"),
+                entries: &[texture_entry(0), sampler_entry(1)],
+            });
+            let pipeline_layout = d.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("world stretch"),
+                bind_group_layouts: &[Some(&layout)],
+                immediate_size: 0,
+            });
+            let shader = d.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("world stretch"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("stretch.wgsl").into()),
+            });
+            let pipeline = d.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("world stretch"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs"),
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs"),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: crate::FORMAT,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            });
+            let sampler = d.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("world stretch"),
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            });
+            Stretch {
+                pipeline,
+                layout,
+                sampler,
+            }
+        });
+        if self.world.scaled.as_ref().is_none_or(|s| s.size != size) {
+            let texture = d.create_texture(&wgpu::TextureDescriptor {
+                label: Some("world scaled"),
+                size: wgpu::Extent3d {
+                    width: size.0,
+                    height: size.1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: crate::FORMAT,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            let group = d.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("world scaled"),
+                layout: &stretch.layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&stretch.sampler),
+                    },
+                ],
+            });
+            self.world.scaled = Some(Scaled { view, group, size });
+        }
+        let s = self.world.scaled.as_ref().expect("the scaled target");
+        (s.view.clone(), s.group.clone())
+    }
+
+    /// Draws the world into `view` (cleared to the sky first), with a
+    /// depth buffer of its size: the tiles within the view distance, the
+    /// chunks in front of the camera. A doodad's size in pixels is
+    /// measured on a screen `screen_height` tall (the world's scale does
+    /// not change which are drawn).
+    #[allow(clippy::too_many_arguments)]
+    fn draw_world_at(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        width: u32,
+        height: u32,
+        screen_height: u32,
         w: &WorldView,
         assets: &mut dyn Assets,
     ) {
@@ -493,7 +651,7 @@ impl Renderer {
         let aspect = width as f32 / height.max(1) as f32;
         let fov_y = 2.0 * ((w.fov as f32 / 2.0).tan() / aspect).atan();
         // (how many pixels a yard is, a yard away)
-        let focal = f64::from(height) / 2.0 / f64::from((fov_y / 2.0).tan());
+        let focal = f64::from(screen_height) / 2.0 / f64::from((fov_y / 2.0).tan());
         // The buildings the tiles place within the objects' distance, each
         // once (one standing on several tiles is placed by each).
         let mut placed: Vec<(u32, [f32; 16])> = Vec::new();
@@ -637,10 +795,27 @@ impl Renderer {
                 w.far as f32,
             ],
         };
-        // The units as their models, posed for this camera (T526).
+        // The units as their models, posed for this camera (T526): those
+        // the camera can see (4 yards' room around each, T538).
+        let (tan_x, tan_y) = ((w.fov / 2.0).tan(), (f64::from(fov_y) / 2.0).tan());
+        let right = [
+            w.look[1] * w.up[2] - w.look[2] * w.up[1],
+            w.look[2] * w.up[0] - w.look[0] * w.up[2],
+            w.look[0] * w.up[1] - w.look[1] * w.up[0],
+        ];
+        let seen = |at: [f64; 3]| {
+            let d = [at[0] - w.eye[0], at[1] - w.eye[1], at[2] + 1.0 - w.eye[2]];
+            let along = |a: [f64; 3]| d[0] * a[0] + d[1] * a[1] + d[2] * a[2];
+            let depth = along(w.look);
+            const ROOM: f64 = 4.0;
+            depth > -ROOM
+                && along(right).abs() <= depth.max(0.0) * tan_x + ROOM
+                && along(w.up).abs() <= depth.max(0.0) * tan_y + ROOM
+        };
         let actors: Vec<wowlua_engine::scene::Actor> = w
             .units
             .iter()
+            .filter(|u| seen(u.at))
             .map(|u| wowlua_engine::scene::Actor {
                 source: u.source.clone(),
                 position: f32s(u.at),
@@ -717,6 +892,31 @@ impl Renderer {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        // (what the camera can see: a ball of `reach` yards about a middle,
+        // within the view's four sides; T538)
+        let side = [
+            w.look[1] * w.up[2] - w.look[2] * w.up[1],
+            w.look[2] * w.up[0] - w.look[0] * w.up[2],
+            w.look[0] * w.up[1] - w.look[1] * w.up[0],
+        ];
+        let (tan_x, tan_y) = ((w.fov / 2.0).tan(), (f64::from(fov_y) / 2.0).tan());
+        let (cos_x, cos_y) = (
+            1.0 / (1.0 + tan_x * tan_x).sqrt(),
+            1.0 / (1.0 + tan_y * tan_y).sqrt(),
+        );
+        let in_view = |middle: [f64; 3], reach: f64| {
+            let d = [
+                middle[0] - w.eye[0],
+                middle[1] - w.eye[1],
+                middle[2] - w.eye[2],
+            ];
+            let along = |a: [f64; 3]| d[0] * a[0] + d[1] * a[1] + d[2] * a[2];
+            let depth = along(w.look);
+            // (a side plane's distance: the ball within it by its reach)
+            depth > -reach
+                && (along(side).abs() - depth * tan_x) * cos_x <= reach
+                && (along(w.up).abs() - depth * tan_y) * cos_y <= reach
+        };
         pass.set_pipeline(&setup.pipeline);
         pass.set_bind_group(0, &setup.globals_group, &[]);
         for (x, y) in detailed {
@@ -734,7 +934,11 @@ impl Renderer {
                 let ahead = rel[0] * w.look[0] + rel[1] * w.look[1] + rel[2] * w.look[2];
                 let far = (rel[0] * rel[0] + rel[1] * rel[1]).sqrt();
                 // (a chunk wholly behind the eye, or past the view distance)
-                if c.count == 0 || ahead < -1.5 * CHUNK || far > w.far + CHUNK {
+                if c.count == 0
+                    || ahead < -1.5 * CHUNK
+                    || far > w.far + CHUNK
+                    || !in_view(c.center, CHUNK)
+                {
                     continue;
                 }
                 pass.set_bind_group(1, &c.group, &[]);
@@ -776,13 +980,28 @@ impl Renderer {
                 &bsetup.opaque
             });
             pass.set_bind_group(0, &setup.globals_group, &[]);
-            for (i, (file, _)) in placed.iter().enumerate() {
+            for (i, (file, m)) in placed.iter().enumerate() {
                 let Some(Some(b)) = self.world.buildings.get(file) else {
                     continue;
                 };
                 let at = i as u64 * 64;
                 pass.set_vertex_buffer(1, instances.slice(at..at + 64));
+                // (the placement's axes: their lengths its scale)
+                let axis = |k: usize| [m[k * 4], m[k * 4 + 1], m[k * 4 + 2]];
+                let scale = (0..3)
+                    .map(|k| {
+                        let a = axis(k);
+                        (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt()
+                    })
+                    .fold(0.0f32, f32::max);
                 for g in &b.groups {
+                    let c = g.middle;
+                    let world = [0, 1, 2].map(|r| {
+                        f64::from(m[12 + r] + m[r] * c[0] + m[4 + r] * c[1] + m[8 + r] * c[2])
+                    });
+                    if !in_view(world, f64::from(g.reach * scale)) {
+                        continue;
+                    }
                     pass.set_vertex_buffer(0, g.vertices.slice(..));
                     pass.set_index_buffer(g.indices.slice(..), wgpu::IndexFormat::Uint16);
                     for batch in g.batches.iter().filter(|b| b.blended == blended) {
@@ -830,6 +1049,10 @@ struct GpuGroup {
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     batches: Vec<GpuBatch>,
+    /// Its middle and how far it reaches from it, in the building's own
+    /// space (what the view must see of it, T538).
+    middle: [f32; 3],
+    reach: f32,
 }
 
 /// A building on the GPU: its groups, drawn wherever it is placed.
@@ -1080,10 +1303,18 @@ impl Renderer {
                         blended: m.blend >= 2,
                     });
                 }
+                let (lo, hi) = (g.bounds[0], g.bounds[1]);
+                let half = [
+                    (hi[0] - lo[0]) / 2.0,
+                    (hi[1] - lo[1]) / 2.0,
+                    (hi[2] - lo[2]) / 2.0,
+                ];
                 groups.push(GpuGroup {
                     vertices,
                     indices: index_buffer,
                     batches,
+                    middle: [lo[0] + half[0], lo[1] + half[1], lo[2] + half[2]],
+                    reach: (half[0] * half[0] + half[1] * half[1] + half[2] * half[2]).sqrt(),
                 });
             }
             GpuBuilding { groups }

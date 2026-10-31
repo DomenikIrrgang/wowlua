@@ -38,6 +38,10 @@ pub struct View {
 #[derive(Clone, Debug, Default)]
 pub struct Camera {
     pub view: Option<View>,
+    /// The eye last found, and what it followed (the player's place and
+    /// facing, the view, the field of view, the world on): found again
+    /// only when one changed (decision T538).
+    pub eye: Option<([u64; 10], Eye)>,
     pub views: [Option<View>; 5],
     /// The view `SetView`, `NextView` and `PrevView` went to last (from 0).
     pub current_view: usize,
@@ -119,7 +123,28 @@ pub struct Eye {
 pub fn eye(vm: &mut Vm) -> Option<Eye> {
     let (y, x, z, map) = crate::character::player_world(vm)?;
     let v = view(vm);
-    let turn = crate::unitinfo::player_facing(vm) + v.yaw;
+    let facing = crate::unitinfo::player_facing(vm);
+    let fov_degrees = cvar(vm, "cameraFov", 90.0);
+    let world = if engine(vm).world_on { 1.0 } else { 0.0 };
+    let key = [
+        y,
+        x,
+        z,
+        map,
+        facing,
+        v.distance,
+        v.pitch,
+        v.yaw,
+        fov_degrees,
+        world,
+    ]
+    .map(f64::to_bits);
+    if let Some((k, e)) = engine(vm).world.camera.eye
+        && k == key
+    {
+        return Some(e);
+    }
+    let turn = facing + v.yaw;
     // (north, west, up): ahead along the facing; right a quarter turn
     // clockwise of it
     let (ahead_n, ahead_w) = (turn.cos(), turn.sin());
@@ -153,14 +178,16 @@ pub fn eye(vm: &mut Vm) -> Option<Eye> {
     if let Some(ground) = crate::clientdata::ground(vm, map, at.0, at.1) {
         at.2 = at.2.max(ground + NEAR * 2.0);
     }
-    let fov = cvar(vm, "cameraFov", 90.0).to_radians().clamp(0.1, 3.0);
-    Some(Eye {
+    let fov = fov_degrees.to_radians().clamp(0.1, 3.0);
+    let found = Eye {
         at,
         look,
         right,
         up,
         fov,
-    })
+    };
+    engine_mut(vm).world.camera.eye = Some((key, found));
+    Some(found)
 }
 
 /// Where a place shows on a screen `width` by `height` (its center's

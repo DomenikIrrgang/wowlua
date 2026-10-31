@@ -261,7 +261,9 @@ pub struct Scene {
 /// `detail` yards the terrain in full (`terrainLodDist`), beyond it its
 /// tiles' minimap pictures; within `objects` yards the buildings and
 /// doodads (`horizonStart`), a doodad while it looks at least `cull`
-/// pixels big (`lodObjectCullSize`; decision T525).
+/// pixels big (`lodObjectCullSize`; decision T525). It is drawn with
+/// `render_scale` of the screen's pixels each way (`RenderScale`, 0.33 to
+/// 2) and stretched to the screen, the UI over it in full (decision T539).
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorldView {
     pub map: u32,
@@ -273,6 +275,7 @@ pub struct WorldView {
     pub detail: f64,
     pub objects: f64,
     pub cull: f64,
+    pub render_scale: f64,
     /// The units within `objects` yards, the player first (decision T526).
     pub units: Vec<WorldUnit>,
     /// The clock (seconds): how far into their animations.
@@ -369,6 +372,10 @@ fn world_view(vm: &mut Vm) -> Option<WorldView> {
     let detail = setting(vm, "terrainLodDist", 500.0).min(far);
     let objects = setting(vm, "horizonStart", 1900.0).min(far);
     let cull = setting(vm, "lodObjectCullSize", 18.0);
+    let render_scale = match setting(vm, "RenderScale", 1.0) {
+        s if s.is_finite() => s.clamp(0.33, 2.0),
+        _ => 1.0,
+    };
     let units = world_units(vm, [e.at.0, e.at.1, e.at.2], objects);
     let time = vm.clock.elapsed_ms / 1000.0;
     let v = |a: (f64, f64, f64)| [a.0, a.1, a.2];
@@ -382,6 +389,7 @@ fn world_view(vm: &mut Vm) -> Option<WorldView> {
         detail,
         objects,
         cull,
+        render_scale,
         units,
         time,
     })
@@ -777,9 +785,8 @@ fn compass_turn(vm: &Vm, id: WidgetId) -> f32 {
     let rotates = engine(vm)
         .world
         .cvars
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case("rotateMinimap"))
-        .is_some_and(|(_, v)| v.trim() == "1");
+        .get("rotateMinimap")
+        .is_some_and(|v| v.trim() == "1");
     if rotates {
         -crate::unitinfo::player_facing(vm) as f32
     } else {
@@ -1295,18 +1302,14 @@ fn layer_of(vm: &Vm, id: WidgetId) -> (usize, i32) {
 /// Whether a widget is a region (drawn by its frame), by its type: XML
 /// builds regions as it builds frames.
 fn is_region(vm: &Vm, id: WidgetId) -> bool {
-    let e = engine(vm);
-    let class = &e.world.widgets[id.0].class;
-    ["Texture", "FontString", "Line", "MaskTexture"]
-        .iter()
-        .any(|k| widgets::is_a(e, class, k))
+    widgets::kind(engine(vm), id) & widgets::KIND_REGION != 0
 }
 
 /// Whether a widget is a frame (drawn in the strata's order).
 fn is_frame(vm: &Vm, id: WidgetId) -> bool {
     let e = engine(vm);
-    let w = &e.world.widgets[id.0];
-    !is_region(vm, id) && (w.frame || widgets::is_a(e, &w.class, "Frame"))
+    let k = widgets::kind(e, id);
+    k & widgets::KIND_REGION == 0 && (e.world.widgets[id.0].frame || k & widgets::KIND_FRAME != 0)
 }
 
 /// Whether a frame is drawn with its parent: it uses its parent's level
@@ -1328,18 +1331,53 @@ fn merges_into_parent(vm: &mut Vm, id: WidgetId) -> bool {
 fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
     let count = engine(vm).world.widgets.len();
     let mut frames: Vec<(usize, f64, usize)> = Vec::new();
+    // (each widget's visibility and strata found once, its children's
+    // from it, T538)
+    let mut shown: rustc_hash::FxHashMap<usize, bool> = Default::default();
+    let mut stratas: rustc_hash::FxHashMap<usize, usize> = Default::default();
     for i in 0..count {
         let id = WidgetId(i);
         let w = &engine(vm).world.widgets[i];
-        if w.forbidden || !is_frame(vm, id) || !widgets::visible(engine(vm), id) {
+        if w.forbidden || !is_frame(vm, id) || !visible_memo(vm, id, &mut shown) {
             continue;
         }
-        let strata = widgets::strata_rank(vm, id);
+        let strata = strata_memo(vm, id, &mut stratas);
         let level = widgets::frame_level(vm, id);
         frames.push((strata, level, i));
     }
     frames.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
     frames.into_iter().map(|(_, _, i)| WidgetId(i)).collect()
+}
+
+/// `widgets::visible`, each widget's answer kept for its children's.
+fn visible_memo(vm: &Vm, id: WidgetId, known: &mut rustc_hash::FxHashMap<usize, bool>) -> bool {
+    if let Some(&v) = known.get(&id.0) {
+        return v;
+    }
+    let w = &engine(vm).world.widgets[id.0];
+    let v = w.shown && w.parent.is_none_or(|p| visible_memo(vm, p, known));
+    known.insert(id.0, v);
+    v
+}
+
+/// `widgets::strata_rank`, each widget's answer kept for its children's.
+fn strata_memo(
+    vm: &mut Vm,
+    id: WidgetId,
+    known: &mut rustc_hash::FxHashMap<usize, usize>,
+) -> usize {
+    if let Some(&s) = known.get(&id.0) {
+        return s;
+    }
+    let s = match widgets::own_strata(vm, id) {
+        Some(s) => s,
+        None => match engine(vm).world.widgets[id.0].parent {
+            Some(p) => strata_memo(vm, p, known),
+            None => 2,
+        },
+    };
+    known.insert(id.0, s);
+    s
 }
 
 fn mouse_enabled(vm: &Vm, id: WidgetId) -> bool {
@@ -2070,7 +2108,7 @@ fn unit_position_player(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
 pub fn build(vm: &mut Vm) -> Scene {
     let effects = crate::animations::effects(vm);
     EFFECTS.with(|e| *e.borrow_mut() = effects);
-    let scene = build_scene(vm);
+    let scene = widgets::with_scene_bounds(vm, build_scene);
     EFFECTS.with(|e| e.borrow_mut().clear());
     scene
 }

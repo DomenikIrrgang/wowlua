@@ -267,6 +267,20 @@ struct Batch {
 }
 
 pub struct Renderer {
+    /// The vertices of the part being drawn, posed and placed (T538): each
+    /// with the stamp of the part that posed it.
+    posed: Vec<(u32, [f32; 3], [f32; 3])>,
+    posed_stamp: u32,
+    /// Which vertex a model's vertex became in the batch being drawn, with
+    /// the batch's stamp.
+    emitted: Vec<(u32, u32)>,
+    emit_stamp: u32,
+    /// The world's units' vertices and indices, kept from frame to frame
+    /// (their room reused), and the farther units' last poses by unit
+    /// (T538).
+    world_verts: Vec<model::MVertex>,
+    world_indices: Vec<u32>,
+    world_poses: std::collections::HashMap<String, (u32, model::Posed)>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipelines: Vec<wgpu::RenderPipeline>,
@@ -527,6 +541,13 @@ impl Renderer {
             font_ids: HashMap::new(),
             atlas: glyphs::Atlas::default(),
             white: 0,
+            posed: Vec::new(),
+            posed_stamp: 0,
+            emitted: Vec::new(),
+            emit_stamp: 0,
+            world_verts: Vec::new(),
+            world_indices: Vec::new(),
+            world_poses: std::collections::HashMap::new(),
             missing: 0,
             atlas_tex: 0,
             models: model::Models::default(),

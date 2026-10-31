@@ -941,6 +941,23 @@ NPCs off.
    lanterns and crates disappear (wowlua: where they look smaller than 18
    pixels).
 
+## Frame rate and render scale (decisions T538, T539)
+
+1. **The render scale's limits**: enter
+   `/run SetCVar("RenderScale","0.1") print(GetCVar("RenderScale"))`,
+   then `/run SetCVar("RenderScale","4") print(GetCVar("RenderScale"))`,
+   then `/run SetCVar("RenderScale","1")`.
+   Answers whether the client keeps the setting to 0.33 to 2 (wowlua does).
+2. **How GetFramerate averages**: enter
+   `/run SetCVar("maxFPS","30") C_Timer.After(2,function() print(GetFramerate()) end)`,
+   then `/run SetCVar("maxFPS","120") C_Timer.After(0.1,function() print(GetFramerate()) end)`.
+   Answers whether the frame rate follows at once (one frame's time) or
+   over a second (wowlua: the last second's frames).
+3. **The background's frame rate**: enter
+   `/run C_Timer.After(5,function() print(GetFramerate()) end)`, then click
+   another window within the 5 seconds and wait. Answers the frame rate in
+   the background (wowlua: `maxFPSBk`, 30).
+
 ## The camera (decisions T520, T521)
 
 The camera's numbers wowlua could not read from the settings. Any

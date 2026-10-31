@@ -68,8 +68,11 @@ A session is one emulated client under the debugger, started from:
   the game's frames run until the session is stopped.
 
 **Clock** (decision T304). A session's time is the engine's virtual clock.
-In `realtime` mode (the default of DAP sessions) a frame runs every 1/60 s of
-wall time, so `OnUpdate` and timers advance as in game; in `manual` mode
+In `realtime` mode (the default of DAP sessions) frames run as fast as the
+game's settings let them, each moving time as far as it really took, so
+`OnUpdate` and timers advance as in game: no faster than `maxFPS`
+(`maxFPSBk` while the session is in the background) and, with `vsync` on,
+the display's rate (decision T538); in `manual` mode
 (the default of MCP sessions) time moves only when asked
 (`advance(seconds | frames)`), so what an agent sees repeats exactly. Time
 stops while paused.

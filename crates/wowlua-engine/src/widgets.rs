@@ -52,6 +52,8 @@ pub struct Point {
 pub struct Widget {
     /// The class whose methods it has (`Frame`, `Button`, `FontString`).
     pub class: String,
+    /// Its class's kind, found once ([`kind`]): 0 not yet.
+    pub kind: std::cell::Cell<u8>,
     /// The Lua object (a script object's: the engine's own record, its
     /// userdata is [`Widget::object`]).
     pub table: TableRef,
@@ -282,7 +284,11 @@ pub struct World {
     /// Event callbacks (`RegisterEventCallback`), in registration order.
     pub callbacks: Vec<crate::framescript::Callback>,
     /// CVars: name and value, as strings.
-    pub cvars: Vec<(String, String)>,
+    pub cvars: Cvars,
+    /// The floors found under places of the world (map, north, west, up
+    /// in centimeters): the world's geometry stays, so a place's floor
+    /// does (decision T538).
+    pub floors: HashMap<(i64, i64, i64, i64), Option<f64>>,
     /// The CVars' defaults (the client's, for camelot), in its order.
     pub cvar_defaults: Vec<(String, String)>,
     /// Whether `PLAYER_LOGIN` fired.
@@ -614,6 +620,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         keep(vm, Value::Table(t));
     }
     let w = Widget {
+        kind: std::cell::Cell::new(0),
         class: class.to_string(),
         table,
         object: None,
@@ -3077,14 +3084,30 @@ fn anchor(point: &str) -> (f64, f64) {
 /// `LEFT` and a `RIGHT` point give the width, a `TOP` and a `BOTTOM` the
 /// height); otherwise the size set, placed by the axis's first point.
 pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64)> {
+    // (while a scene is built, its rectangles worked out once: the layout
+    // does not change meanwhile, T538)
+    if let Ok(mut held) = engine(vm).scene_bounds.try_borrow_mut()
+        && let Some(known) = held.as_mut()
+    {
+        return bounds_in(vm, id, depth, known);
+    }
     bounds_in(vm, id, depth, &mut HashMap::new())
+}
+
+/// While `f` builds a scene, the rectangles it asks for worked out once
+/// (decision T538).
+pub fn with_scene_bounds<T>(vm: &mut Vm, f: impl FnOnce(&mut Vm) -> T) -> T {
+    *engine(vm).scene_bounds.borrow_mut() = Some(HashMap::new());
+    let out = f(vm);
+    *engine(vm).scene_bounds.borrow_mut() = None;
+    out
 }
 
 /// A rectangle (left, bottom, width, height), as [`bounds`] gives it.
 type Rect = (f64, f64, f64, f64);
 
 /// The rectangles worked out in one [`bounds`], by widget and depth.
-type KnownBounds = HashMap<(usize, usize), Option<Rect>>;
+pub(crate) type KnownBounds = HashMap<(usize, usize), Option<Rect>>;
 
 /// [`bounds`], each widget's at a depth worked out once (two points on the
 /// same frame ask for it twice, and so on up the chain).
@@ -3808,6 +3831,18 @@ pub fn strata_name(vm: &mut Vm, id: WidgetId) -> &'static str {
 
 /// A frame's strata as a rank (`STRATAS`): its own, else its parent's
 /// (`PARENT`, or none set), `MEDIUM` at the top.
+/// A frame's own strata set (`SetFrameStrata`, its XML's), as a rank.
+pub fn own_strata(vm: &mut Vm, id: WidgetId) -> Option<usize> {
+    let props = engine(vm).world.widgets[id.0].props;
+    if let Some(Value::Str(s)) =
+        stored_args(vm, props, "FrameStrata").and_then(|v| v.first().copied())
+    {
+        let s = String::from_utf8_lossy(vm.str_bytes(s)).to_uppercase();
+        return STRATAS.iter().position(|x| *x == s);
+    }
+    None
+}
+
 pub fn strata_rank(vm: &mut Vm, id: WidgetId) -> usize {
     let mut cur = Some(id);
     while let Some(w) = cur {
@@ -4200,6 +4235,82 @@ pub fn mouse_by_default(e: &Engine, class: &str) -> bool {
     ]
     .iter()
     .any(|kind| is_a(e, class, kind))
+}
+
+/// A widget's kind is known.
+pub const KIND_KNOWN: u8 = 1;
+/// A region (a texture, a font string, a line, a mask).
+pub const KIND_REGION: u8 = 2;
+/// Of a frame's class.
+pub const KIND_FRAME: u8 = 4;
+
+/// A widget's kind (`KIND_*`): its class's, which never changes, found the
+/// first time it is asked (the scene asks of every widget each frame;
+/// decision T538).
+pub fn kind(e: &Engine, id: WidgetId) -> u8 {
+    let w = &e.world.widgets[id.0];
+    let k = w.kind.get();
+    if k != 0 {
+        return k;
+    }
+    let region = ["Texture", "FontString", "Line", "MaskTexture"]
+        .iter()
+        .any(|base| is_a(e, &w.class, base));
+    let frame = is_a(e, &w.class, "Frame");
+    let k = KIND_KNOWN | if region { KIND_REGION } else { 0 } | if frame { KIND_FRAME } else { 0 };
+    w.kind.set(k);
+    k
+}
+
+/// The CVars set, in the order they were (a session lists them so), found
+/// by their name in any case at once (decision T538).
+#[derive(Clone, Debug, Default)]
+pub struct Cvars {
+    list: Vec<(String, String)>,
+    index: HashMap<String, usize>,
+}
+
+impl Cvars {
+    /// A CVar's value, its name in any case.
+    pub fn get(&self, name: &str) -> Option<&str> {
+        self.index
+            .get(&name.to_ascii_lowercase())
+            .map(|&i| self.list[i].1.as_str())
+    }
+
+    pub fn has(&self, name: &str) -> bool {
+        self.index.contains_key(&name.to_ascii_lowercase())
+    }
+
+    /// A CVar set (the name as first given kept).
+    pub fn set(&mut self, name: &str, value: String) {
+        let key = name.to_ascii_lowercase();
+        match self.index.get(&key) {
+            Some(&i) => self.list[i].1 = value,
+            None => {
+                self.index.insert(key, self.list.len());
+                self.list.push((name.to_string(), value));
+            }
+        }
+    }
+
+    pub fn extend(&mut self, all: impl IntoIterator<Item = (String, String)>) {
+        for (name, value) in all {
+            self.set(&name, value);
+        }
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, (String, String)> {
+        self.list.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Cvars {
+    type Item = &'a (String, String);
+    type IntoIter = std::slice::Iter<'a, (String, String)>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.list.iter()
+    }
 }
 
 /// A frame's drag under way (the mouse held on it, moving): the frame,

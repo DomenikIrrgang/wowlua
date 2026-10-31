@@ -142,6 +142,9 @@ pub struct Shared {
     /// The clock a front-end chose while running (`SetClock`): manual or
     /// not, over the launch's.
     pub manual: Option<bool>,
+    /// The game in the background (`SetForeground`): its frame rate
+    /// `maxFPSBk`'s (decision T538).
+    pub background: bool,
     /// A host's frame hook (`session::run_hosted`): run whenever the
     /// client may have changed, a stop too (decision T494).
     pub frame_hook: Option<FrameHook>,
@@ -190,6 +193,7 @@ impl Shared {
             idle_paused: false,
             detail: None,
             manual: None,
+            background: false,
             frame_hook: None,
         }))
     }
@@ -851,6 +855,10 @@ impl Controller {
             }
             Request::SetClock { manual } => {
                 self.shared().manual = Some(manual);
+                Ok(Response::Ok)
+            }
+            Request::SetForeground { on } => {
+                self.shared().background = !on;
                 Ok(Response::Ok)
             }
             Request::SetDebugBlizzardUi { on } => {
