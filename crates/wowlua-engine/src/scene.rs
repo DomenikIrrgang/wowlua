@@ -777,9 +777,8 @@ fn compass_turn(vm: &Vm, id: WidgetId) -> f32 {
     let rotates = engine(vm)
         .world
         .cvars
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case("rotateMinimap"))
-        .is_some_and(|(_, v)| v.trim() == "1");
+        .get("rotateMinimap")
+        .is_some_and(|v| v.trim() == "1");
     if rotates {
         -crate::unitinfo::player_facing(vm) as f32
     } else {

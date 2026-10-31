@@ -282,7 +282,11 @@ pub struct World {
     /// Event callbacks (`RegisterEventCallback`), in registration order.
     pub callbacks: Vec<crate::framescript::Callback>,
     /// CVars: name and value, as strings.
-    pub cvars: Vec<(String, String)>,
+    pub cvars: Cvars,
+    /// The floors found under places of the world (map, north, west, up
+    /// in centimeters): the world's geometry stays, so a place's floor
+    /// does (decision T537).
+    pub floors: HashMap<(i64, i64, i64, i64), Option<f64>>,
     /// The CVars' defaults (the client's, for camelot), in its order.
     pub cvar_defaults: Vec<(String, String)>,
     /// Whether `PLAYER_LOGIN` fired.
@@ -4200,6 +4204,57 @@ pub fn mouse_by_default(e: &Engine, class: &str) -> bool {
     ]
     .iter()
     .any(|kind| is_a(e, class, kind))
+}
+
+/// The CVars set, in the order they were (a session lists them so), found
+/// by their name in any case at once (decision T537).
+#[derive(Clone, Debug, Default)]
+pub struct Cvars {
+    list: Vec<(String, String)>,
+    index: HashMap<String, usize>,
+}
+
+impl Cvars {
+    /// A CVar's value, its name in any case.
+    pub fn get(&self, name: &str) -> Option<&str> {
+        self.index
+            .get(&name.to_ascii_lowercase())
+            .map(|&i| self.list[i].1.as_str())
+    }
+
+    pub fn has(&self, name: &str) -> bool {
+        self.index.contains_key(&name.to_ascii_lowercase())
+    }
+
+    /// A CVar set (the name as first given kept).
+    pub fn set(&mut self, name: &str, value: String) {
+        let key = name.to_ascii_lowercase();
+        match self.index.get(&key) {
+            Some(&i) => self.list[i].1 = value,
+            None => {
+                self.index.insert(key, self.list.len());
+                self.list.push((name.to_string(), value));
+            }
+        }
+    }
+
+    pub fn extend(&mut self, all: impl IntoIterator<Item = (String, String)>) {
+        for (name, value) in all {
+            self.set(&name, value);
+        }
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, (String, String)> {
+        self.list.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Cvars {
+    type Item = &'a (String, String);
+    type IntoIter = std::slice::Iter<'a, (String, String)>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.list.iter()
+    }
 }
 
 /// A frame's drag under way (the mouse held on it, moving): the frame,
