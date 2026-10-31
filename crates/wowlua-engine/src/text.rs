@@ -524,6 +524,23 @@ pub fn wrapped_lines(vm: &Vm, id: WidgetId, text: &str, max: Option<f64>) -> Vec
         .and_then(|v| v.first().copied())
         .is_some_and(|v| v.truthy());
     let max = max.filter(|m| *m > 0.0 && font.size > 0.0);
+    // (the lines depend on these alone: found once, T541)
+    let key = LayoutKey {
+        file: font.file.clone(),
+        size: font.size.to_bits(),
+        outline: font.outline,
+        shadow: font.shadow_x.to_bits(),
+        client: font.client.is_some(),
+        pixel: pixel.to_bits(),
+        non_space,
+        text: text.to_owned(),
+        max: max.map(f64::to_bits),
+        wraps: true,
+        max_lines: 0,
+    };
+    if let Some(found) = WRAPPED.with(|w| w.borrow().get(&key).cloned()) {
+        return found;
+    }
     let units = |p: f64| f64::from(p as f32 * pixel);
     let mut out = Vec::new();
     for line in visible(text).split('\n') {
@@ -542,6 +559,13 @@ pub fn wrapped_lines(vm: &Vm, id: WidgetId, text: &str, max: Option<f64>) -> Vec
             out.push(t.iter().collect());
         }
     }
+    WRAPPED.with(|w| {
+        let mut w = w.borrow_mut();
+        if w.len() > 8192 {
+            w.clear();
+        }
+        w.insert(key, out.clone());
+    });
     out
 }
 
@@ -633,6 +657,9 @@ struct LayoutKey {
 thread_local! {
     /// The layouts found, by what they depend on.
     static LAYOUTS: std::cell::RefCell<rustc_hash::FxHashMap<LayoutKey, Layout>> =
+        Default::default();
+    /// The wrapped lines found ([`wrapped_lines`]), by what they depend on.
+    static WRAPPED: std::cell::RefCell<rustc_hash::FxHashMap<LayoutKey, Vec<String>>> =
         Default::default();
 }
 

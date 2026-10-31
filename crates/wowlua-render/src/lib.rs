@@ -356,11 +356,24 @@ impl Renderer {
             format!("no GPU adapter to draw with ({e}); a software one (WARP, lavapipe) works too")
         })?;
         let name = adapter.get_info().name;
+        let mut limits =
+            wgpu::Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits());
+        // (storage buffers where the adapter has them in the vertex stage:
+        // the world's units skinned on the GPU, decision T540)
+        if adapter
+            .get_downlevel_capabilities()
+            .flags
+            .contains(wgpu::DownlevelFlags::VERTEX_STORAGE)
+        {
+            let most = adapter.limits();
+            limits.max_storage_buffers_per_shader_stage =
+                most.max_storage_buffers_per_shader_stage.min(8);
+            limits.max_storage_buffer_binding_size = most.max_storage_buffer_binding_size;
+        }
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("wowlua"),
-                required_limits: wgpu::Limits::downlevel_webgl2_defaults()
-                    .using_resolution(adapter.limits()),
+                required_limits: limits,
                 ..Default::default()
             })
             .await

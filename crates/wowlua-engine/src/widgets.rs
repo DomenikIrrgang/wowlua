@@ -146,6 +146,9 @@ pub struct World {
     /// checked as its turn comes (most of the UI's widgets never update);
     /// in order, each once (`World::updates`).
     pub updating: Vec<usize>,
+    /// The widgets ever given an `OnSizeChanged` script or hook: the ones
+    /// a layout change looks at (decision T541), in order, each once.
+    pub size_watching: Vec<usize>,
     /// The widgets that ever registered for events: the ones an event
     /// looks at.
     pub listening: std::collections::BTreeSet<usize>,
@@ -1456,8 +1459,10 @@ fn set_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// A script stored for a widget (set, hooked or from XML): an `OnUpdate`
 /// makes it one a frame looks at.
 pub fn script_stored(vm: &mut Vm, id: WidgetId, script: &str) {
-    if script == "OnUpdate" {
-        engine_mut(vm).world.updates(id.0);
+    match script {
+        "OnUpdate" => engine_mut(vm).world.updates(id.0),
+        "OnSizeChanged" => insert_sorted(&mut engine_mut(vm).world.size_watching, id.0),
+        _ => {}
     }
 }
 
@@ -2742,9 +2747,9 @@ pub fn run_size_changes(vm: &mut Vm) {
     let watching: Vec<WidgetId> = {
         let e = engine(vm);
         e.world
-            .widgets
+            .size_watching
             .iter()
-            .enumerate()
+            .filter_map(|&i| Some((i, e.world.widgets.get(i)?)))
             .filter(|(_, w)| !w.points.is_empty())
             .filter(|(_, w)| {
                 !vm.heap.table(w.scripts).get_str(key).is_nil()
@@ -2753,7 +2758,7 @@ pub fn run_size_changes(vm: &mut Vm) {
             .map(|(i, _)| WidgetId(i))
             .collect()
     };
-    let mut known = HashMap::new();
+    let mut known = KnownBounds::default();
     let mut changed = Vec::new();
     for id in watching {
         let Some(b) = bounds_in(vm, id, 0, &mut known) else {
@@ -2837,6 +2842,22 @@ fn unplaced_size(vm: &Vm, id: WidgetId, w: f64, h: f64) -> (f64, f64) {
 
 /// The stored arguments of setter `stem`, read without interning (for the
 /// layout, which only reads the world).
+/// Argument `i` (from 0) of what setter `stem` stored, without the list
+/// (decision T541).
+pub(crate) fn stored_arg(vm: &Vm, props: TableRef, stem: &str, i: usize) -> Option<Value> {
+    let key = vm.heap.interned(stem.as_bytes())?;
+    let Value::Table(list) = vm.heap.table(props).get(Value::Str(key)) else {
+        return None;
+    };
+    let n = vm.heap.interned(b"n")?;
+    match vm.heap.table(list).get(Value::Str(n)) {
+        Value::Num(n) if (n as usize) > i => {
+            Some(vm.heap.table(list).get(Value::Num((i + 1) as f64)))
+        }
+        _ => None,
+    }
+}
+
 pub(crate) fn stored_ref(vm: &Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
     let key = vm.heap.interned(stem.as_bytes())?;
     let Value::Table(list) = vm.heap.table(props).get(Value::Str(key)) else {
@@ -3091,13 +3112,13 @@ pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64
     {
         return bounds_in(vm, id, depth, known);
     }
-    bounds_in(vm, id, depth, &mut HashMap::new())
+    bounds_in(vm, id, depth, &mut KnownBounds::default())
 }
 
 /// While `f` builds a scene, the rectangles it asks for worked out once
 /// (decision T538).
 pub fn with_scene_bounds<T>(vm: &mut Vm, f: impl FnOnce(&mut Vm) -> T) -> T {
-    *engine(vm).scene_bounds.borrow_mut() = Some(HashMap::new());
+    *engine(vm).scene_bounds.borrow_mut() = Some(KnownBounds::default());
     let out = f(vm);
     *engine(vm).scene_bounds.borrow_mut() = None;
     out
@@ -3107,7 +3128,7 @@ pub fn with_scene_bounds<T>(vm: &mut Vm, f: impl FnOnce(&mut Vm) -> T) -> T {
 type Rect = (f64, f64, f64, f64);
 
 /// The rectangles worked out in one [`bounds`], by widget and depth.
-pub(crate) type KnownBounds = HashMap<(usize, usize), Option<Rect>>;
+pub(crate) type KnownBounds = rustc_hash::FxHashMap<(usize, usize), Option<Rect>>;
 
 /// [`bounds`], each widget's at a depth worked out once (two points on the
 /// same frame ask for it twice, and so on up the chain).
@@ -4243,6 +4264,10 @@ pub const KIND_KNOWN: u8 = 1;
 pub const KIND_REGION: u8 = 2;
 /// Of a frame's class.
 pub const KIND_FRAME: u8 = 4;
+/// A font string (decision T541).
+pub const KIND_FONT_STRING: u8 = 8;
+/// A mask texture (decision T541).
+pub const KIND_MASK: u8 = 16;
 
 /// A widget's kind (`KIND_*`): its class's, which never changes, found the
 /// first time it is asked (the scene asks of every widget each frame;
@@ -4257,7 +4282,13 @@ pub fn kind(e: &Engine, id: WidgetId) -> u8 {
         .iter()
         .any(|base| is_a(e, &w.class, base));
     let frame = is_a(e, &w.class, "Frame");
-    let k = KIND_KNOWN | if region { KIND_REGION } else { 0 } | if frame { KIND_FRAME } else { 0 };
+    let font = is_a(e, &w.class, "FontString");
+    let mask = is_a(e, &w.class, "MaskTexture");
+    let k = KIND_KNOWN
+        | if region { KIND_REGION } else { 0 }
+        | if frame { KIND_FRAME } else { 0 }
+        | if font { KIND_FONT_STRING } else { 0 }
+        | if mask { KIND_MASK } else { 0 };
     w.kind.set(k);
     k
 }
