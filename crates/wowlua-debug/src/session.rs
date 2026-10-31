@@ -374,15 +374,11 @@ const FRAME_MS: f64 = 1000.0 / 60.0;
 /// The longest a realtime frame moves the world (milliseconds): a longer
 /// stall moves it this far (unverified: the client's own limit).
 const MAX_FRAME_MS: f64 = 250.0;
-/// The display's refresh rate vsync waits for (unverified: the display's
-/// own).
-const DISPLAY_HZ: f64 = 60.0;
-
 /// How long a realtime frame lasts at least (milliseconds), as the game's
 /// settings pace it (decision T538): `maxFPS` in the foreground,
 /// `maxFPSBk` in the background (0: no limit), with `vsync` on at most
-/// the display's rate.
-fn frame_ms(vm: &mut wowlua_vm::Vm, background: bool) -> f64 {
+/// the display's rate (`display_hz`, as the host tells it: T544).
+fn frame_ms(vm: &mut wowlua_vm::Vm, background: bool, display_hz: f64) -> f64 {
     let mut number = |name: &str| {
         wowlua_engine::framescript::cvar_get(vm, name).and_then(|v| v.trim().parse::<f64>().ok())
     };
@@ -397,7 +393,7 @@ fn frame_ms(vm: &mut wowlua_vm::Vm, background: bool) -> f64 {
         fps = fps.min(l);
     }
     if vsync {
-        fps = fps.min(DISPLAY_HZ);
+        fps = fps.min(display_hz);
     }
     1000.0 / fps.max(1.0)
 }
@@ -474,8 +470,12 @@ fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<Strin
                 last_frame = Some(now);
                 wowlua_engine::clock::advance_frames(vm, 1, ms);
                 Shared::run_frame_hook(shared, vm);
-                let background = shared.borrow().background;
-                let deadline = now + Duration::from_secs_f64(frame_ms(vm, background) / 1000.0);
+                let (background, display_hz) = {
+                    let s = shared.borrow();
+                    (s.background, s.display_hz)
+                };
+                let deadline =
+                    now + Duration::from_secs_f64(frame_ms(vm, background, display_hz) / 1000.0);
                 // Requests that come before the next frame wait for it.
                 loop {
                     let now = Instant::now();
@@ -530,5 +530,29 @@ mod tests {
             verbatim_free(std::path::Path::new(r"\\?\C:\x")),
             std::path::PathBuf::from(r"C:\x")
         );
+    }
+
+    /// A realtime frame lasts as the game's settings say (decisions T538,
+    /// T544): `maxFPS`, `maxFPSBk` in the background, at most the
+    /// display's rate with `vsync` on.
+    #[test]
+    fn frames_keep_to_the_settings_and_the_display() {
+        let mut vm = wowlua_vm::Vm::wow();
+        wowlua_engine::install(&mut vm, "camelot").expect("camelot");
+        let set = |vm: &mut wowlua_vm::Vm, name: &str, value: &str| {
+            let src = format!("C_CVar.SetCVar('{name}', '{value}')");
+            let f = vm.load(src.as_bytes(), "@Test.lua").expect("compiles");
+            vm.call(f, &[]).expect("runs");
+        };
+        let fps = |ms: f64| (1000.0 / ms).round();
+        set(&mut vm, "maxFPS", "120");
+        set(&mut vm, "maxFPSBk", "30");
+        set(&mut vm, "vsync", "1");
+        assert_eq!(fps(frame_ms(&mut vm, false, 60.0)), 60.0);
+        assert_eq!(fps(frame_ms(&mut vm, false, 144.0)), 120.0);
+        assert_eq!(fps(frame_ms(&mut vm, true, 144.0)), 30.0);
+        set(&mut vm, "vsync", "0");
+        set(&mut vm, "maxFPS", "0");
+        assert_eq!(fps(frame_ms(&mut vm, false, 60.0)), 1000.0);
     }
 }

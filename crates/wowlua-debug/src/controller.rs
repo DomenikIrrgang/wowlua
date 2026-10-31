@@ -145,6 +145,9 @@ pub struct Shared {
     /// The game in the background (`SetForeground`): its frame rate
     /// `maxFPSBk`'s (decision T538).
     pub background: bool,
+    /// The display's refresh rate (`SetDisplayRate`): `vsync`'s cap
+    /// (decision T544).
+    pub display_hz: f64,
     /// A host's frame hook (`session::run_hosted`): run whenever the
     /// client may have changed, a stop too (decision T494).
     pub frame_hook: Option<FrameHook>,
@@ -194,6 +197,7 @@ impl Shared {
             detail: None,
             manual: None,
             background: false,
+            display_hz: 60.0,
             frame_hook: None,
         }))
     }
@@ -859,6 +863,12 @@ impl Controller {
             }
             Request::SetForeground { on } => {
                 self.shared().background = !on;
+                Ok(Response::Ok)
+            }
+            Request::SetDisplayRate { hz } => {
+                if hz.is_finite() && hz >= 1.0 {
+                    self.shared().display_hz = hz.min(1000.0);
+                }
                 Ok(Response::Ok)
             }
             Request::SetDebugBlizzardUi { on } => {
