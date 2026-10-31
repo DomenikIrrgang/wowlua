@@ -36,6 +36,7 @@ fn main() {
         ModelSource::Display(a[2].parse().unwrap())
     };
     let scene = Scene {
+        over_units: Vec::new(),
         width: 400,
         height: 500,
         items: vec![Item::Model(Model {

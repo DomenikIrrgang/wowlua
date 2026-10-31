@@ -258,3 +258,62 @@ fn names_show_over_the_units_the_settings_name() {
     wowlua_engine::set_world(&mut vm, false);
     assert!(names(&mut vm).is_empty());
 }
+
+/// The scene tells which items stand over units (decision T546): the
+/// names over them and what their nameplates draw, so a view from another
+/// camera can leave them out; the rest of the UI is not among them.
+#[test]
+fn the_items_over_units_are_told_apart() {
+    use wowlua_engine::scene::Item;
+    let mut vm = vm();
+    wowlua_engine::set_world(&mut vm, true);
+    run(
+        &mut vm,
+        &format!(
+            "{PEOPLE}local f = CreateFrame('Frame')
+f:RegisterEvent('NAME_PLATE_UNIT_ADDED')
+f:SetScript('OnEvent', function(_, _, unit)
+    local t = C_NamePlate.GetNamePlateForUnit(unit):CreateTexture()
+    t:SetSize(40, 8)
+    t:SetPoint('CENTER')
+    t:SetColorTexture(1, 0, 0)
+end)
+local ui = UIParent:CreateTexture()
+ui:SetSize(20, 20)
+ui:SetPoint('CENTER')
+ui:SetColorTexture(0, 0, 1)
+C_CVar.SetCVar('UnitNameInteractiveNPC', '1')
+C_CVar.SetCVar('nameplateShowEnemies', '1')
+mock.advanceFrames(1, 1000 / 60)"
+        ),
+    );
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let over = |i: usize| scene.over_units.iter().any(|r| r.contains(&i));
+    let (mut names, mut plates, mut ui) = (Vec::new(), 0, 0);
+    for (i, item) in scene.items.iter().enumerate() {
+        match item {
+            Item::Text(t) => {
+                let text: Vec<String> = t
+                    .lines
+                    .iter()
+                    .map(|l| l.runs.iter().map(|r| r.text.as_str()).collect())
+                    .collect();
+                let text = text.join("\n");
+                if over(i) {
+                    names.push(text);
+                }
+            }
+            Item::Quad(q) if q.color[..3] == [1.0, 0.0, 0.0] => {
+                assert!(over(i), "the nameplate's texture is over its unit");
+                plates += 1;
+            }
+            Item::Quad(q) if q.color[..3] == [0.0, 0.0, 1.0] => {
+                assert!(!over(i), "the UI's texture is not");
+                ui += 1;
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(names, ["Clara\n<Cloth Armor Merchant>"]);
+    assert_eq!((plates, ui), (1, 1));
+}

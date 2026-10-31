@@ -15,6 +15,8 @@ mod glyphs;
 mod model;
 mod world;
 
+pub use world::project;
+
 use std::collections::HashMap;
 
 pub use wowlua_casc::Rgba;

@@ -265,6 +265,11 @@ pub struct Scene {
     pub items: Vec<Item>,
     /// The 3D world behind the UI, while it is on (decision T522).
     pub world: Option<WorldView>,
+    /// The items that stand over units as the game's camera sees them: the
+    /// nameplates' and the names over units (decision T546), by their
+    /// places in `items`. A view of the world from another camera leaves
+    /// them out.
+    pub over_units: Vec<std::ops::Range<usize>>,
 }
 
 /// The 3D world as the camera sees it (decision T522): the map, the eye
@@ -299,6 +304,8 @@ pub struct WorldView {
 /// standing, 1 dead, 4 walking, 5 running).
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorldUnit {
+    /// The unit (its index among the units; the player 0: T546).
+    pub id: usize,
     pub source: ModelSource,
     pub at: [f64; 3],
     pub facing: f64,
@@ -321,6 +328,7 @@ fn world_units(vm: &mut Vm, eye: [f64; 3], reach: f64) -> Vec<WorldUnit> {
         let (animation, turned) = engine(vm).world.movement.pose();
         if look.race > 0 {
             out.push(WorldUnit {
+                id: crate::units::PLAYER.0,
                 source: ModelSource::Character(look),
                 at: [at.0, at.1, at.2],
                 facing: crate::unitinfo::player_facing(vm) + turned,
@@ -359,6 +367,7 @@ fn world_units(vm: &mut Vm, eye: [f64; 3], reach: f64) -> Vec<WorldUnit> {
             (false, None) => 0,
         };
         out.push(WorldUnit {
+            id: id.0,
             source,
             at: [at.0, at.1, at.2],
             facing: crate::character::unit_facing(vm, id).unwrap_or(0.0),
@@ -2251,6 +2260,13 @@ fn build_scene(vm: &mut Vm, keep: bool) -> Scene {
         Default::default()
     };
     let mut new: rustc_hash::FxHashMap<usize, Group> = Default::default();
+    let mut over_units: Vec<std::ops::Range<usize>> = Vec::new();
+    let plates: Vec<usize> = engine(vm)
+        .units
+        .nameplate_frames
+        .iter()
+        .map(|f| f.0)
+        .collect();
     for f in order {
         if merged.contains(&f.0) {
             continue;
@@ -2276,6 +2292,20 @@ fn build_scene(vm: &mut Vm, keep: bool) -> Scene {
             .enumerate()
             .flat_map(|(i, cs)| cs.into_iter().map(move |c| (i, c)))
             .collect();
+        // (a nameplate's items stand over its unit: T546)
+        let start = all.len();
+        let on_plate = !plates.is_empty() && {
+            let mut cur = Some(f);
+            let mut found = false;
+            while let Some(c) = cur {
+                if plates.contains(&c.0) {
+                    found = true;
+                    break;
+                }
+                cur = engine(vm).world.widgets[c.0].parent;
+            }
+            found
+        };
         // (its kept items, while nothing they show changed: T542)
         let members: Vec<usize> = group
             .iter()
@@ -2292,6 +2322,9 @@ fn build_scene(vm: &mut Vm, keep: bool) -> Scene {
                 .any(|&m| widgets::scene_changed(engine(vm), m))
         {
             all.extend(g.items.iter().cloned());
+            if on_plate && all.len() > start {
+                over_units.push(start..all.len());
+            }
             new.insert(f.0, g);
             continue;
         }
@@ -2397,6 +2430,9 @@ fn build_scene(vm: &mut Vm, keep: bool) -> Scene {
                 )
             });
         all.extend(items.iter().cloned());
+        if on_plate && all.len() > start {
+            over_units.push(start..all.len());
+        }
         if keep && !volatile {
             new.insert(
                 f.0,
@@ -2416,13 +2452,21 @@ fn build_scene(vm: &mut Vm, keep: bool) -> Scene {
     // (the names over the units, behind the UI, T534)
     if world.is_some() {
         let names = crate::unitnames::items(vm, f64::from(width), f64::from(height));
+        let n = names.len();
         items.splice(0..0, names);
+        for r in &mut over_units {
+            *r = r.start + n..r.end + n;
+        }
+        if n > 0 {
+            over_units.insert(0, 0..n);
+        }
     }
     Scene {
         width,
         height,
         items,
         world,
+        over_units,
     }
 }
 

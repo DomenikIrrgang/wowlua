@@ -197,7 +197,11 @@ another tool's speedscope file reads as the tree of its samples (decision T495).
 
 The scene is what the screen shows, as data (decision T309): every visible
 region in draw order, in screen pixels (top-left origin, UIParent's scale
-applied), each with the widget it belongs to. It is built from the engine's
+applied), each with the widget it belongs to; the items standing over units
+as the game's camera sees them (the nameplates' and the names over units)
+are told apart, so a view of the world from another camera can leave them
+out, and each unit of the world carries its index (decision T546). It is
+built from the engine's
 state on request (a screenshot, a viewer's frame). Each frame's items are
 kept from one scene to the next and laid out again only when something
 they show changed (decision T542): a widget changed by a method (anything
@@ -811,9 +815,11 @@ For its debugger page (decision T494):
   character, its money and place, the other units with the target,
   focus and group, the CVars changed); items, bags, spells, auras and
   saved variables are not written.
-- `units` tells each unit's threat on the player's target, and
-  `mock.unitAt(index)` is the unit at that place of the list (in
-  `world` scripts).
+- `units` tells each unit's threat on the player's target, whether the
+  player sees it (`sight`: the line between their eyes meets no hill or
+  building; none without a place) and where it faces (`facing`, radians;
+  decision T546), and `mock.unitAt(index)` is the unit at that place of
+  the list (in `world` scripts).
 
 ### 18.12.4 `wowlua screenshot`
 
