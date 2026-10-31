@@ -163,7 +163,7 @@ pub(crate) struct Models {
 #[derive(Clone)]
 pub(crate) struct Posed {
     verts: Vec<MVertex>,
-    /// The triangles' corners: indices into `verts` (T537).
+    /// The triangles' corners: indices into `verts` (T538).
     indices: Vec<u32>,
     draws: Vec<Draw>,
     lo: [f32; 3],
@@ -778,7 +778,7 @@ impl Renderer {
     ) -> Option<WorldModels> {
         // Each unit posed apart, a farther one less often: within 12
         // yards every frame, to 30 yards 20 times a second, beyond 10;
-        // between, its last pose (T537; the game's rate unverified).
+        // between, its last pose (T538; the game's rate unverified).
         let eye = match camera {
             ModelCamera::Scene { position, .. } => *position,
             _ => [0.0; 3],
@@ -953,7 +953,7 @@ impl Renderer {
         };
         // (each vertex posed and placed once, as a visible triangle first
         // uses it: hidden geosets cost nothing, shared corners once; the
-        // cache's stamp tells this part's from earlier ones, T537)
+        // cache's stamp tells this part's from earlier ones, T538)
         self.posed_stamp = self.posed_stamp.wrapping_add(1);
         if self.posed_stamp == 0 {
             self.posed.clear();

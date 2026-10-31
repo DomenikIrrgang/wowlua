@@ -143,7 +143,7 @@ pub struct Shared {
     /// not, over the launch's.
     pub manual: Option<bool>,
     /// The game in the background (`SetForeground`): its frame rate
-    /// `maxFPSBk`'s (decision T537).
+    /// `maxFPSBk`'s (decision T538).
     pub background: bool,
     /// A host's frame hook (`session::run_hosted`): run whenever the
     /// client may have changed, a stop too (decision T494).

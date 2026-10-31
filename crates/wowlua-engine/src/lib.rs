@@ -139,7 +139,7 @@ pub struct Engine {
     /// Each class's lineage (`widgets::lineage`), worked out once: the
     /// documentation's classes do not change.
     pub(crate) lineages: std::cell::RefCell<rustc_hash::FxHashMap<String, std::rc::Rc<[String]>>>,
-    /// The rectangles of the scene being built (decision T537).
+    /// The rectangles of the scene being built (decision T538).
     pub(crate) scene_bounds: std::cell::RefCell<Option<widgets::KnownBounds>>,
     pub world: widgets::World,
     pub timers: clock::Timers,

@@ -390,7 +390,7 @@ fn get_world_frame(vm: &mut Vm, _c: NativeCall) -> Ret {
 // ------------------------------------------------- frame rate, clocks
 
 /// `GetFramerate()`: the frames a second the engine runs at, over the last
-/// second (`clock::framerate`, decision T537; recorded: 166.4 on the
+/// second (`clock::framerate`, decision T538; recorded: 166.4 on the
 /// probing machine).
 fn get_framerate(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(crate::clock::framerate(vm))])

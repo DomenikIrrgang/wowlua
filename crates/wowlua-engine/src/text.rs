@@ -36,7 +36,7 @@ pub struct Row {
 }
 
 /// The recorded fonts' glyphs, by font file (found by its name without a
-/// copy of it: a line's every character looks; decision T537).
+/// copy of it: a line's every character looks; decision T538).
 struct Glyphs {
     rows: rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<(bool, i64), Row>>,
     kern: rustc_hash::FxHashMap<String, rustc_hash::FxHashMap<(i64, char, char), f64>>,
@@ -148,7 +148,7 @@ fn glyph(font: &Font, px: i64, c: char) -> (f64, f64) {
 }
 
 /// A font's glyphs at a pixel size, its tables found once for a run of
-/// characters (decision T537).
+/// characters (decision T538).
 struct Metrics<'a> {
     font: &'a Font,
     px: i64,
@@ -584,7 +584,7 @@ pub fn layout(
     let non_space = crate::widgets::stored_ref(vm, props, "NonSpaceWrap")
         .and_then(|v| v.first().copied())
         .is_some_and(|v| v.truthy());
-    // (a layout depends on these alone: found once, T537)
+    // (a layout depends on these alone: found once, T538)
     let key = LayoutKey {
         file: font.file.clone(),
         size: font.size.to_bits(),
@@ -614,7 +614,7 @@ pub fn layout(
     found
 }
 
-/// What a text's layout depends on (decision T537).
+/// What a text's layout depends on (decision T538).
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct LayoutKey {
     file: String,

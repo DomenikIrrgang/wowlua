@@ -1,4 +1,4 @@
-//! How long a frame of the 3D world takes (decision T537): Northshire's
+//! How long a frame of the 3D world takes (decision T538): Northshire's
 //! start among its 27 test NPCs (T533), the names and nameplates on, the
 //! player running; the engine's frame, the scene and the drawing timed
 //! apart. Run by hand: `cargo test --release -p wowlua-render --test perf

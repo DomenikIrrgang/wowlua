@@ -532,7 +532,7 @@ pub(crate) fn floor(vm: &mut Vm, map: f64, at: [f64; 3]) -> Option<f64> {
         return None;
     }
     // (the world's geometry stays: a place's floor is found once, to the
-    // centimeter, T537)
+    // centimeter, T538)
     let cm = |v: f64| (v * 100.0).round() as i64;
     let key = (map as i64, cm(at[0]), cm(at[1]), cm(at[2]));
     if let Some(found) = crate::engine(vm).world.floors.get(&key) {

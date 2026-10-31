@@ -357,7 +357,7 @@ pub enum Request {
     },
     /// Whether the game is in the foreground (the window the user works
     /// in) or the background, from now on: a realtime session's frame rate
-    /// is `maxFPS`'s or `maxFPSBk`'s (decision T537).
+    /// is `maxFPS`'s or `maxFPSBk`'s (decision T538).
     SetForeground {
         on: bool,
     },

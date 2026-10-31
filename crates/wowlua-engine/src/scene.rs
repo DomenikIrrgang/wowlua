@@ -263,7 +263,7 @@ pub struct Scene {
 /// doodads (`horizonStart`), a doodad while it looks at least `cull`
 /// pixels big (`lodObjectCullSize`; decision T525). It is drawn with
 /// `render_scale` of the screen's pixels each way (`RenderScale`, 0.33 to
-/// 2) and stretched to the screen, the UI over it in full (decision T538).
+/// 2) and stretched to the screen, the UI over it in full (decision T539).
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorldView {
     pub map: u32,
@@ -1332,7 +1332,7 @@ fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
     let count = engine(vm).world.widgets.len();
     let mut frames: Vec<(usize, f64, usize)> = Vec::new();
     // (each widget's visibility and strata found once, its children's
-    // from it, T537)
+    // from it, T538)
     let mut shown: rustc_hash::FxHashMap<usize, bool> = Default::default();
     let mut stratas: rustc_hash::FxHashMap<usize, usize> = Default::default();
     for i in 0..count {

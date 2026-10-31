@@ -44,7 +44,7 @@ pub struct Timers {
     /// The last frame's seconds (`GetTickTime`), none before the first.
     pub tick_time: f64,
     /// The last second's frames' seconds, the newest last (`GetFramerate`,
-    /// decision T537).
+    /// decision T538).
     pub recent: std::collections::VecDeque<f64>,
     /// Game frames run so far (the debugger's and profiler's frame names).
     pub frames_run: u64,
@@ -473,7 +473,7 @@ fn get_tick_time(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(engine(vm).timers.tick_time)])
 }
 
-/// The frames a second the engine runs at (decision T537): the last
+/// The frames a second the engine runs at (decision T538): the last
 /// second's frames over their time, as fast as a realtime session's
 /// frames really come (60 before any frame; unverified: the client's own
 /// averaging).

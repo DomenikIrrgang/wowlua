@@ -1060,7 +1060,7 @@ page changes only when a rule is added, removed or reworded.
 - [clock.rs](../crates/wowlua-engine/src/clock.rs): Handles are userdata whose metatable is hidden (`/stdtest engine`: no methods table to read; that `__metatable` is fa...
 - [clock.rs](../crates/wowlua-engine/src/clock.rs): A timer a running timer sets without a delay waits for the next run of timers (the next frame), so one that sets itse...
 - [clock.rs](../crates/wowlua-engine/src/clock.rs): `GetTickTime()`: the frame's seconds, as its `OnUpdate` got them (unverified: before the first frame, 0).
-- [clock.rs](../crates/wowlua-engine/src/clock.rs): The frames a second the engine runs at (decision T537): the last second's frames over their time, as fast as a realti...
+- [clock.rs](../crates/wowlua-engine/src/clock.rs): The frames a second the engine runs at (decision T538): the last second's frames over their time, as fast as a realti...
 - [clock.rs](../crates/wowlua-engine/src/clock.rs): `C_Timer.NewTimedSignalMap(callback)`: keys scheduled to signal at a time, as Blizzard's documentation describes the...
 
 ### collected (6)
@@ -2455,7 +2455,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - A solid world (decisions T524, T532)
 - Names over units (decision T534)
 - How far the world is drawn (decision T525)
-- Frame rate and render scale (decisions T537, T538)
+- Frame rate and render scale (decisions T538, T539)
 - The camera (decisions T520, T521)
 - The dev tools (0.12.1)
 

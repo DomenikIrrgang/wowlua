@@ -1,4 +1,4 @@
-// The world drawn at RenderScale, stretched to the screen (decision T538):
+// The world drawn at RenderScale, stretched to the screen (decision T539):
 // one triangle over the whole screen.
 
 @group(0) @binding(0) var scaled: texture_2d<f32>;

@@ -267,7 +267,7 @@ struct Batch {
 }
 
 pub struct Renderer {
-    /// The vertices of the part being drawn, posed and placed (T537): each
+    /// The vertices of the part being drawn, posed and placed (T538): each
     /// with the stamp of the part that posed it.
     posed: Vec<(u32, [f32; 3], [f32; 3])>,
     posed_stamp: u32,
@@ -277,7 +277,7 @@ pub struct Renderer {
     emit_stamp: u32,
     /// The world's units' vertices and indices, kept from frame to frame
     /// (their room reused), and the farther units' last poses by unit
-    /// (T537).
+    /// (T538).
     world_verts: Vec<model::MVertex>,
     world_indices: Vec<u32>,
     world_poses: std::collections::HashMap<String, (u32, model::Posed)>,

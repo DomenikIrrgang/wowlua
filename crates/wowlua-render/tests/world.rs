@@ -127,7 +127,7 @@ return y, table.concat(Errors, ', ')",
 }
 
 /// The world is drawn at `RenderScale` of the screen's pixels each way and
-/// stretched to it (decision T538): the whole screen covered, a half
+/// stretched to it (decision T539): the whole screen covered, a half
 /// scale's picture the full one's, coarser; the setting kept to 0.33 to 2.
 #[test]
 fn the_world_is_drawn_at_its_render_scale() {
