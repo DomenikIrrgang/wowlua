@@ -40,7 +40,7 @@ fn displays(rec: &[u8]) -> Option<Vec<u32>> {
             break;
         };
         let count = count as usize;
-        if !(1..=16).contains(&count) || !(total > 0.0 && total <= 100.01 * count as f32) {
+        if !(1..=16).contains(&count) || !(total >= 0.0 && total <= 100.01 * count as f32) {
             continue;
         }
         let ids: Option<Vec<u32>> = (0..count)
@@ -70,6 +70,33 @@ pub fn creature_displays(cache: &[u8]) -> HashMap<u32, Vec<u32>> {
         .collect()
 }
 
+/// A creature record's name (decision T531): the first text of three
+/// letters or more after its bit-packed lengths, ended by a zero.
+fn name(rec: &[u8]) -> Option<String> {
+    let mut start = None;
+    for (i, &c) in rec.iter().enumerate() {
+        let text = c.is_ascii_graphic() || c == b' ' || c >= 0x80;
+        match (start, text, c) {
+            (None, true, _) if c.is_ascii_alphanumeric() || c >= 0x80 => start = Some(i),
+            (Some(s), false, 0) if i - s >= 3 => {
+                return String::from_utf8(rec[s..i].to_vec()).ok();
+            }
+            (Some(_), false, _) => start = None,
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The creatures of a creature cache (decision T531): each one's ID, name
+/// and displays.
+pub fn creatures(cache: &[u8]) -> Vec<(u32, String, Vec<u32>)> {
+    records(cache)
+        .into_iter()
+        .filter_map(|(id, rec)| Some((id, name(rec)?, displays(rec).unwrap_or_default())))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -90,5 +117,9 @@ mod tests {
         cache.extend_from_slice(&rec);
         let d = super::creature_displays(&cache);
         assert_eq!(d.get(&12796), Some(&vec![12678]));
+        assert_eq!(
+            super::creatures(&cache),
+            vec![(12796, "Raider Bork".to_owned(), vec![12678])]
+        );
     }
 }

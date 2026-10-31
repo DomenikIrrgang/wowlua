@@ -124,6 +124,26 @@ pub struct Library {
     objects: HashMap<(u32, i32, i32), Option<std::sync::Arc<crate::obj::Objects>>>,
     /// The buildings read, by their root file.
     buildings: HashMap<u32, Option<std::sync::Arc<Building>>>,
+    /// The creatures the installation knows, read once (decision T531).
+    creatures: Option<Vec<Creature>>,
+}
+
+/// A creature the installation knows (decision T531): from the client's
+/// `Creature` table (with its type, family and classification) or its
+/// creature cache (what the server told it of the creatures it met).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Creature {
+    pub id: u32,
+    pub name: String,
+    pub display: Option<u32>,
+    /// `CreatureType` (1 Beast, 2 Dragonkin, 3 Demon, 4 Elemental, 5
+    /// Giant, 6 Undead, 7 Humanoid, 8 Critter, 9 Mechanical, …).
+    pub kind: Option<u32>,
+    /// `CreatureFamily`'s name ("Wolf").
+    pub family: Option<String>,
+    /// 0 normal, 1 elite, 2 rare elite, 3 world boss, 4 rare, 5
+    /// trivial, 6 minus.
+    pub classification: Option<u32>,
 }
 
 /// A terrain tile read, shared with whoever draws it.
@@ -285,6 +305,57 @@ impl Library {
             });
         self.buildings.insert(file, building.clone());
         building
+    }
+
+    /// The creatures the installation knows (decision T531): its
+    /// `Creature` table's, then its creature caches' it lacks, by ID.
+    pub fn creatures(&mut self, casc: &Casc) -> &[Creature] {
+        if self.creatures.is_none() {
+            let mut all: Vec<Creature> = Vec::new();
+            let families: HashMap<u32, String> = self
+                .table(casc, "CreatureFamily")
+                .map(|t| {
+                    t.rows()
+                        .filter_map(|r| Some((r.id(), r.string("Name_lang")?)))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if let Some(t) = self.table(casc, "Creature") {
+                for r in t.rows() {
+                    let Some(name) = r.string("Name_lang").filter(|n| !n.is_empty()) else {
+                        continue;
+                    };
+                    all.push(Creature {
+                        id: r.id(),
+                        name,
+                        display: r.ints("DisplayID").into_iter().find(|&d| d != 0),
+                        kind: Some(r.int("CreatureType")).filter(|k| *k != 0),
+                        family: families.get(&r.int("CreatureFamily")).cloned(),
+                        classification: Some(r.int("Classification")),
+                    });
+                }
+            }
+            let known: std::collections::HashSet<u32> = all.iter().map(|c| c.id).collect();
+            let mut cached: Vec<Creature> = casc
+                .cache_files("creaturecache.wdb")
+                .iter()
+                .flat_map(|f| crate::wdb::creatures(f))
+                .filter(|(id, _, _)| !known.contains(id))
+                .map(|(id, name, displays)| Creature {
+                    id,
+                    name,
+                    display: displays.first().copied(),
+                    kind: None,
+                    family: None,
+                    classification: None,
+                })
+                .collect();
+            cached.sort_by_key(|c| c.id);
+            cached.dedup_by_key(|c| c.id);
+            all.extend(cached);
+            self.creatures = Some(all);
+        }
+        self.creatures.as_deref().unwrap_or_default()
     }
 
     /// A creature display (`CreatureDisplayInfo` ID).
