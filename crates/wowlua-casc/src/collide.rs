@@ -8,10 +8,11 @@
 //! map's segment through the placement's inverse (a turn and a scale: the
 //! fraction along it is the same).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::Casc;
-use crate::adt::TILE;
+use crate::adt::{CHUNK, TILE};
 use crate::display::{Building, Library};
 
 /// How high a step one walks up: to the knee, where walls begin (yards;
@@ -54,19 +55,74 @@ pub(crate) struct Frame {
     origin: [f64; 3],
 }
 
-/// A tile's solid, read when one first comes near it (a tile places
-/// thousands): a building (with its props), or a prop.
-pub(crate) enum Solid {
-    Building {
-        placement: crate::obj::Building,
-        read: std::sync::OnceLock<Option<(Placed, Vec<Solid>)>>,
-    },
-    Prop {
-        file: u32,
-        frame: Frame,
-        key: (u8, u32, u32),
-        read: std::sync::OnceLock<Option<Placed>>,
-    },
+/// A tile's buildings and props, none read yet: a building when one
+/// first comes within its bounds, a prop when one first comes near where
+/// it stands (a tile places thousands).
+pub(crate) struct Solids {
+    buildings: Vec<TileBuilding>,
+    props: Props,
+}
+
+/// A building, read with its props when one first comes within its
+/// bounds.
+struct TileBuilding {
+    placement: crate::obj::Building,
+    read: std::sync::OnceLock<Option<(Placed, Props)>>,
+}
+
+/// Props by where they stand, in cells of a chunk (33⅓ yards): a query
+/// looks only at the cells around it.
+#[derive(Default)]
+struct Props {
+    cells: HashMap<(i32, i32), Vec<TileProp>>,
+    /// The largest scale among them (how far one may reach).
+    scale: f64,
+}
+
+/// A prop, its model read when one first comes near it.
+struct TileProp {
+    file: u32,
+    frame: Frame,
+    key: (u8, u32, u32),
+    read: std::sync::OnceLock<Option<Placed>>,
+}
+
+impl Props {
+    fn cell(north: f64, west: f64) -> (i32, i32) {
+        (
+            (north / CHUNK).floor() as i32,
+            (west / CHUNK).floor() as i32,
+        )
+    }
+
+    fn add(&mut self, file: u32, frame: Frame, key: (u8, u32, u32)) {
+        self.scale = self.scale.max(frame.scale);
+        let cell = Props::cell(frame.origin[0], frame.origin[1]);
+        self.cells.entry(cell).or_default().push(TileProp {
+            file,
+            frame,
+            key,
+            read: std::sync::OnceLock::new(),
+        });
+    }
+
+    /// The props standing within `reach` yards of a place, give or take
+    /// a model's size.
+    fn near(&self, north: f64, west: f64, reach: f64) -> impl Iterator<Item = &TileProp> {
+        let r = reach + PROP_REACH * self.scale;
+        let (lo, hi) = (
+            Props::cell(north - r, west - r),
+            Props::cell(north + r, west + r),
+        );
+        (lo.0..=hi.0)
+            .flat_map(move |n| (lo.1..=hi.1).map(move |w| (n, w)))
+            .filter_map(|c| self.cells.get(&c))
+            .flatten()
+            .filter(move |p| {
+                (north - p.frame.origin[0]).hypot(west - p.frame.origin[1])
+                    <= reach + PROP_REACH * p.frame.scale
+            })
+    }
 }
 
 /// A solid where it stands: a building or a prop, and its placement.
@@ -302,29 +358,28 @@ impl Library {
 
     /// A map tile's solids, listed once (the last [`SOLIDS_KEPT`] tiles
     /// asked for), none read yet: its buildings and its own props.
-    fn solids(&mut self, casc: &Casc, map: u32, x: i32, y: i32) -> Arc<Vec<Solid>> {
+    fn solids(&mut self, casc: &Casc, map: u32, x: i32, y: i32) -> Arc<Solids> {
         self.solids_asked += 1;
         let asked = self.solids_asked;
         if let Some((when, s)) = self.solids.get_mut(&(map, x, y)) {
             *when = asked;
             return s.clone();
         }
-        let mut out = Vec::new();
+        let mut out = Solids {
+            buildings: Vec::new(),
+            props: Props::default(),
+        };
         if let Some(objects) = self.objects(casc, map, x, y) {
             for b in &objects.buildings {
-                out.push(Solid::Building {
+                out.buildings.push(TileBuilding {
                     placement: b.clone(),
                     read: std::sync::OnceLock::new(),
                 });
             }
             for d in &objects.doodads {
                 let f = crate::obj::placed(d.at, d.rotation, d.scale);
-                out.push(Solid::Prop {
-                    file: d.file,
-                    frame: Frame::of(&f, f64::from(d.scale)),
-                    key: (2, d.unique, 0),
-                    read: std::sync::OnceLock::new(),
-                });
+                let frame = Frame::of(&f, f64::from(d.scale));
+                out.props.add(d.file, frame, (2, d.unique, 0));
             }
         }
         if self.solids.len() >= SOLIDS_KEPT
@@ -347,14 +402,14 @@ impl Library {
         &mut self,
         casc: &Casc,
         b: &crate::obj::Building,
-    ) -> Option<(Placed, Vec<Solid>)> {
+    ) -> Option<(Placed, Props)> {
         let building = self.building(casc, b.file)?;
         let place = crate::obj::placed(b.at, b.rotation, b.scale);
         let mut sets = vec![0usize];
         if b.doodad_set != 0 {
             sets.push(b.doodad_set as usize);
         }
-        let mut props = Vec::new();
+        let mut props = Props::default();
         for set in sets {
             let Some(&(first, count)) = building.root.doodad_sets.get(set) else {
                 continue;
@@ -366,12 +421,8 @@ impl Library {
                 }
                 let local = d.local();
                 let f = |v: [f32; 3]| place(local(v));
-                props.push(Solid::Prop {
-                    file: d.file,
-                    frame: Frame::of(&f, f64::from(d.scale) * f64::from(b.scale)),
-                    key: (1, b.unique, i as u32),
-                    read: std::sync::OnceLock::new(),
-                });
+                let frame = Frame::of(&f, f64::from(d.scale) * f64::from(b.scale));
+                props.add(d.file, frame, (1, b.unique, i as u32));
             }
         }
         Some((Placed::new(building, b), props))
@@ -400,47 +451,35 @@ impl Library {
         for y in cy - r..=cy + r {
             for x in cx - r..=cx + r {
                 let tile = self.solids(casc, map, x, y);
-                let mut todo: Vec<&Solid> = tile.iter().collect();
-                while let Some(s) = todo.pop() {
-                    let p = match s {
-                        Solid::Building { placement, read } => {
-                            let key = (0, placement.unique, 0);
-                            if away(&placement.bounds) > reach || seen.contains(&key) {
-                                continue;
-                            }
-                            let Some((p, props)) =
-                                read.get_or_init(|| self.building_solids(casc, placement))
-                            else {
-                                continue;
-                            };
-                            todo.extend(props.iter());
-                            p
-                        }
-                        Solid::Prop {
-                            file,
-                            frame,
-                            key,
-                            read,
-                        } => {
-                            let far = (north - frame.origin[0]).hypot(west - frame.origin[1]);
-                            if far > reach + PROP_REACH * frame.scale || seen.contains(key) {
-                                continue;
-                            }
-                            let placed = read.get_or_init(|| {
-                                self.prop(casc, *file)
-                                    .map(|prop| Placed::prop(prop, *frame, *key))
-                            });
-                            let Some(p) = placed else {
-                                continue;
-                            };
-                            if away(&p.bounds) > reach {
-                                continue;
-                            }
-                            p
-                        }
-                    };
-                    if seen.insert(p.key) {
+                let mut props = vec![&tile.props];
+                for b in &tile.buildings {
+                    let key = (0, b.placement.unique, 0);
+                    if away(&b.placement.bounds) > reach || !seen.insert(key) {
+                        continue;
+                    }
+                    let read = b
+                        .read
+                        .get_or_init(|| self.building_solids(casc, &b.placement));
+                    if let Some((p, its)) = read {
                         out.push(p.clone());
+                        props.push(its);
+                    }
+                }
+                for group in props {
+                    for prop in group.near(north, west, reach) {
+                        if seen.contains(&prop.key) {
+                            continue;
+                        }
+                        let read = prop.read.get_or_init(|| {
+                            self.prop(casc, prop.file)
+                                .map(|mesh| Placed::prop(mesh, prop.frame, prop.key))
+                        });
+                        if let Some(p) = read
+                            && away(&p.bounds) <= reach
+                        {
+                            seen.insert(p.key);
+                            out.push(p.clone());
+                        }
                     }
                 }
             }

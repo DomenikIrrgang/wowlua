@@ -155,7 +155,7 @@ pub struct Creature {
 type SharedTile = std::sync::Arc<crate::adt::Tile>;
 
 /// A terrain tile's solids, listed (decision T532).
-type TileSolids = std::sync::Arc<Vec<crate::collide::Solid>>;
+type TileSolids = std::sync::Arc<crate::collide::Solids>;
 
 /// A building (a WMO) with its groups (decision T523).
 #[derive(Clone, Debug, PartialEq)]
