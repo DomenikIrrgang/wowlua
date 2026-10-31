@@ -70,7 +70,18 @@ fn a_frame_of_northshire() {
     wowlua_engine::controls::install(&mut vm, "mock");
     wowlua_engine::clientdata::set(&mut vm, data);
     wowlua_engine::set_world(&mut vm, true);
-    run(&mut vm, PEOPLE);
+    // (PERF_ALONE: the player alone, what the units cost apart)
+    let people = if std::env::var_os("PERF_ALONE").is_some() {
+        PEOPLE
+            .split("local displays")
+            .next()
+            .unwrap_or(PEOPLE)
+            .to_string()
+            + "MoveForwardStart(GetTime())"
+    } else {
+        PEOPLE.to_string()
+    };
+    run(&mut vm, &people);
     let mut assets = wowlua_render::client::ClientAssets::new(Some(casc), &[]);
     let mut r = wowlua_render::Renderer::new_blocking().expect("a GPU");
     let (mut engine, mut scene_t, mut draw) = (Duration::ZERO, Duration::ZERO, Duration::ZERO);

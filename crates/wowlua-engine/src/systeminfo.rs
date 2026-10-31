@@ -389,13 +389,11 @@ fn get_world_frame(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 // ------------------------------------------------- frame rate, clocks
 
-/// `GetFramerate()`: frames a second by the last frame's length, 60
-/// before any frame (recorded: 166.4 on the probing machine; unverified:
-/// the client's averaging).
+/// `GetFramerate()`: the frames a second the engine runs at, over the last
+/// second (`clock::framerate`, decision T537; recorded: 166.4 on the
+/// probing machine).
 fn get_framerate(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let tick = engine(vm).timers.tick_time;
-    let fps = if tick > 0.0 { 1.0 / tick } else { 60.0 };
-    Ok(vec![Value::Num(fps)])
+    Ok(vec![Value::Num(crate::clock::framerate(vm))])
 }
 
 /// `GetServerTime()`: the clock's epoch seconds (as `time()`).
