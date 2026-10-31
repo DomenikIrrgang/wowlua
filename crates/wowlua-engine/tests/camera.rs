@@ -162,6 +162,33 @@ fn a_point_of_the_screen_is_a_place_of_the_world() {
     );
 }
 
+/// A host's own camera finds the place under a point as it sees the
+/// screen (decision T547): from 40 yards straight above the player, north
+/// up, the middle is the player's place and the right is east (west is
+/// +x).
+#[test]
+fn a_host_s_camera_finds_the_place_under_a_point() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "mock.moveTo({ world = { y = 5, x = 7, z = 0 }, facing = 0 })",
+    );
+    let (w, h) = (1920.0, 1080.0);
+    let above = ([5.0, 7.0, 40.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0], 1.5);
+    let (y, x, z) =
+        wowlua_engine::camera::ground_seen(&mut vm, w / 2.0, h / 2.0, above).expect("a place");
+    assert!(
+        (y - 5.0).abs() < 1e-6 && (x - 7.0).abs() < 1e-6 && z == 0.0,
+        "{y} {x} {z}"
+    );
+    let (y, x, _) =
+        wowlua_engine::camera::ground_seen(&mut vm, w * 0.75, h / 2.0, above).expect("a place");
+    assert!((y - 5.0).abs() < 1e-6 && x < 7.0 - 1.0, "{y} {x}");
+    // (the game's camera stays as it was: behind the player)
+    let (sx, _) = wowlua_engine::camera::project(&mut vm, (25.0, 7.0, 0.0), w, h).expect("seen");
+    assert!(sx.abs() < 1.0, "{sx}");
+}
+
 /// The player at (0, 0) facing north with the 3D world on; a vendor (an
 /// interactive NPC) 10 yards north, a hostile wolf 12; every name and
 /// plate setting off; the plate events in `Log`.

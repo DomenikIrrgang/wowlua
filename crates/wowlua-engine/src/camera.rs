@@ -245,11 +245,50 @@ pub fn wheel(vm: &mut Vm, steps: f64) {
 /// player's feet; none for a point above that level or the player at no
 /// place.
 pub fn ground_at(vm: &mut Vm, x: f64, y: f64) -> Option<(f64, f64, f64)> {
+    let e = eye(vm)?;
+    ground_through(vm, x, y, &e)
+}
+
+/// A host's own camera (decision T547): its eye, the way it looks and its
+/// up (north, west, up yards), its field of view across (radians).
+pub type HostCamera = ([f64; 3], [f64; 3], [f64; 3], f64);
+
+/// [`ground_at`] as a host's own camera sees the screen (decision T547);
+/// the game's camera left alone.
+pub fn ground_seen(vm: &mut Vm, x: f64, y: f64, camera: HostCamera) -> Option<(f64, f64, f64)> {
+    let (at, look, up, fov) = camera;
+    let unit = |a: [f64; 3]| {
+        let l = (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt().max(1e-9);
+        [a[0] / l, a[1] / l, a[2] / l]
+    };
+    let cross = |a: [f64; 3], b: [f64; 3]| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
+    let l = unit(look);
+    let r = unit(cross(l, up));
+    let u = cross(r, l);
+    let t = |a: [f64; 3]| (a[0], a[1], a[2]);
+    let e = Eye {
+        at: t(at),
+        look: t(l),
+        right: t(r),
+        up: t(u),
+        fov,
+    };
+    ground_through(vm, x, y, &e)
+}
+
+/// Where the line from `e` through a point of the screen meets the world
+/// ([`ground_at`]).
+fn ground_through(vm: &mut Vm, x: f64, y: f64, e: &Eye) -> Option<(f64, f64, f64)> {
     let (w, h) = {
         let s = &engine(vm).screen;
         (s.width, s.height)
     };
-    let e = eye(vm)?;
     let map = crate::character::player_world(vm)?.3;
     let focal = w / 2.0 / (e.fov / 2.0).tan();
     let (sx, sy) = ((x - w / 2.0) / focal, (h / 2.0 - y) / focal);
