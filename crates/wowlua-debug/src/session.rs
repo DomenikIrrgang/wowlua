@@ -379,7 +379,7 @@ const MAX_FRAME_MS: f64 = 250.0;
 const DISPLAY_HZ: f64 = 60.0;
 
 /// How long a realtime frame lasts at least (milliseconds), as the game's
-/// settings pace it (decision T537): `maxFPS` in the foreground,
+/// settings pace it (decision T538): `maxFPS` in the foreground,
 /// `maxFPSBk` in the background (0: no limit), with `vsync` on at most
 /// the display's rate.
 fn frame_ms(vm: &mut wowlua_vm::Vm, background: bool) -> f64 {
@@ -466,7 +466,7 @@ fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<Strin
             ClockMode::Realtime => {
                 // (a frame as long as it really took, as the game's: a slow
                 // frame moves the world as far as its time, not less;
-                // decision T537)
+                // decision T538)
                 let now = Instant::now();
                 let ms = last_frame
                     .map_or(FRAME_MS, |t| (now - t).as_secs_f64() * 1000.0)

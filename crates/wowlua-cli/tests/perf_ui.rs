@@ -1,5 +1,5 @@
 //! How long a frame of an addon's session takes with Blizzard's UI
-//! (decision T540): the package at `PERF_PACKAGE` loaded as a debug session
+//! (decision T541): the package at `PERF_PACKAGE` loaded as a debug session
 //! loads it (`test.blizzard-ui`, its `test.profile` world), the 3D world on
 //! from the installation, the camera zoomed out (`PERF_ZOOM` steps, 50 by
 //! default) over the profile's units; the engine's frame and the scene

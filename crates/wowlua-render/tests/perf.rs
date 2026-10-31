@@ -1,9 +1,9 @@
-//! How long a frame of the 3D world takes (decision T537): Northshire's
+//! How long a frame of the 3D world takes (decision T538): Northshire's
 //! start among its 27 test NPCs (T533), the names and nameplates on, the
 //! player running; the engine's frame, the scene, the drawing (the CPU's
 //! part, as Studio's window pays it: posing and encoding the frame) and
 //! the GPU's time after it timed apart, each frame drawn with its units
-//! posed on the GPU and again on the CPU (T539). Run by hand: `cargo test --release -p wowlua-render --test perf
+//! posed on the GPU and again on the CPU (T540). Run by hand: `cargo test --release -p wowlua-render --test perf
 //! -- --ignored --nocapture`.
 
 use std::time::{Duration, Instant};
@@ -95,7 +95,7 @@ fn a_frame_of_northshire() {
     }))
     .expect("a device");
     // (each frame drawn twice: its units posed on the GPU, then on the
-    // CPU as on WebGL; T539)
+    // CPU as on WebGL; T540)
     let name = adapter.get_info().name;
     let mut renderers = [
         wowlua_render::Renderer::with_device(device.clone(), queue.clone(), name.clone()),

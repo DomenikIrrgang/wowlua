@@ -147,7 +147,7 @@ pub struct World {
     /// in order, each once (`World::updates`).
     pub updating: Vec<usize>,
     /// The widgets ever given an `OnSizeChanged` script or hook: the ones
-    /// a layout change looks at (decision T540), in order, each once.
+    /// a layout change looks at (decision T541), in order, each once.
     pub size_watching: Vec<usize>,
     /// The widgets that ever registered for events: the ones an event
     /// looks at.
@@ -290,7 +290,7 @@ pub struct World {
     pub cvars: Cvars,
     /// The floors found under places of the world (map, north, west, up
     /// in centimeters): the world's geometry stays, so a place's floor
-    /// does (decision T537).
+    /// does (decision T538).
     pub floors: HashMap<(i64, i64, i64, i64), Option<f64>>,
     /// The CVars' defaults (the client's, for camelot), in its order.
     pub cvar_defaults: Vec<(String, String)>,
@@ -2843,7 +2843,7 @@ fn unplaced_size(vm: &Vm, id: WidgetId, w: f64, h: f64) -> (f64, f64) {
 /// The stored arguments of setter `stem`, read without interning (for the
 /// layout, which only reads the world).
 /// Argument `i` (from 0) of what setter `stem` stored, without the list
-/// (decision T540).
+/// (decision T541).
 pub(crate) fn stored_arg(vm: &Vm, props: TableRef, stem: &str, i: usize) -> Option<Value> {
     let key = vm.heap.interned(stem.as_bytes())?;
     let Value::Table(list) = vm.heap.table(props).get(Value::Str(key)) else {
@@ -3106,7 +3106,7 @@ fn anchor(point: &str) -> (f64, f64) {
 /// height); otherwise the size set, placed by the axis's first point.
 pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64)> {
     // (while a scene is built, its rectangles worked out once: the layout
-    // does not change meanwhile, T537)
+    // does not change meanwhile, T538)
     if let Ok(mut held) = engine(vm).scene_bounds.try_borrow_mut()
         && let Some(known) = held.as_mut()
     {
@@ -3116,7 +3116,7 @@ pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64
 }
 
 /// While `f` builds a scene, the rectangles it asks for worked out once
-/// (decision T537).
+/// (decision T538).
 pub fn with_scene_bounds<T>(vm: &mut Vm, f: impl FnOnce(&mut Vm) -> T) -> T {
     *engine(vm).scene_bounds.borrow_mut() = Some(KnownBounds::default());
     let out = f(vm);
@@ -4264,14 +4264,14 @@ pub const KIND_KNOWN: u8 = 1;
 pub const KIND_REGION: u8 = 2;
 /// Of a frame's class.
 pub const KIND_FRAME: u8 = 4;
-/// A font string (decision T540).
+/// A font string (decision T541).
 pub const KIND_FONT_STRING: u8 = 8;
-/// A mask texture (decision T540).
+/// A mask texture (decision T541).
 pub const KIND_MASK: u8 = 16;
 
 /// A widget's kind (`KIND_*`): its class's, which never changes, found the
 /// first time it is asked (the scene asks of every widget each frame;
-/// decision T537).
+/// decision T538).
 pub fn kind(e: &Engine, id: WidgetId) -> u8 {
     let w = &e.world.widgets[id.0];
     let k = w.kind.get();
@@ -4294,7 +4294,7 @@ pub fn kind(e: &Engine, id: WidgetId) -> u8 {
 }
 
 /// The CVars set, in the order they were (a session lists them so), found
-/// by their name in any case at once (decision T537).
+/// by their name in any case at once (decision T538).
 #[derive(Clone, Debug, Default)]
 pub struct Cvars {
     list: Vec<(String, String)>,

@@ -160,7 +160,7 @@ Talked = false",
 }
 
 /// `GetFramerate` answers the frames a second the engine runs at
-/// (decision T537): the last second's frames over their time.
+/// (decision T538): the last second's frames over their time.
 #[test]
 fn the_framerate_is_the_engines() {
     let mut vm = vm();

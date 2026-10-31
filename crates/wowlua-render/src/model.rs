@@ -5,7 +5,7 @@
 //! Model files are read once and kept with the sequences read so far;
 //! each frame poses them on the CPU (bones, then skinning) and draws one
 //! vertex buffer. The 3D world's units are skinned on the GPU instead
-//! (decision T539): each model file's vertices uploaded once, a frame's
+//! (decision T540): each model file's vertices uploaded once, a frame's
 //! bones and its batches' records each frame.
 
 use std::collections::HashMap;
@@ -29,7 +29,7 @@ pub(crate) struct MVertex {
     shaders: u32,
 }
 
-/// A model file's vertex as it is, for the GPU to pose (decision T539).
+/// A model file's vertex as it is, for the GPU to pose (decision T540).
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct SVertex {
@@ -194,7 +194,7 @@ pub(crate) struct Models {
     /// By blend mode, depth writing, and skinned on the GPU.
     pipelines: HashMap<(u16, bool, bool), wgpu::RenderPipeline>,
     /// What skinning on the GPU binds (its records and bones) and its
-    /// pipelines' layout; none where the GPU cannot (decision T539), not
+    /// pipelines' layout; none where the GPU cannot (decision T540), not
     /// known yet before the first world.
     skin_layout: Option<Option<(wgpu::BindGroupLayout, wgpu::PipelineLayout)>>,
     /// Model files' vertices and indices on the GPU, by file.
@@ -223,14 +223,14 @@ pub(crate) struct Models {
 #[derive(Clone)]
 pub(crate) struct Posed {
     verts: Vec<MVertex>,
-    /// The triangles' corners: indices into `verts` (T537).
+    /// The triangles' corners: indices into `verts` (T538).
     indices: Vec<u32>,
     draws: Vec<Draw>,
     lo: [f32; 3],
     hi: [f32; 3],
     portrait: Option<(Vec3, Vec3, f32)>,
     own_camera: Option<(Vec3, Vec3, f32)>,
-    /// What the GPU poses (the world's units, decision T539).
+    /// What the GPU poses (the world's units, decision T540).
     skinned: Option<Skinned>,
 }
 
@@ -464,7 +464,7 @@ impl Renderer {
     }
 
     /// The pipeline of an M2 blend mode, writing depth or not, its vertices
-    /// posed already or `skinned` on the GPU (decision T539).
+    /// posed already or `skinned` on the GPU (decision T540).
     fn model_pipeline(
         &mut self,
         blend: u16,
@@ -528,7 +528,7 @@ impl Renderer {
             })
     }
 
-    /// Whether the GPU poses the world's units (decision T539): it needs
+    /// Whether the GPU poses the world's units (decision T540): it needs
     /// storage buffers in the vertex stage, which WebGL lacks. Their
     /// layouts are made on the first call.
     fn skinning(&mut self) -> bool {
@@ -567,7 +567,7 @@ impl Renderer {
     }
 
     /// Poses the 3D world's units on the CPU even where the GPU could (as
-    /// on WebGL): to compare the two (decision T539).
+    /// on WebGL): to compare the two (decision T540).
     pub fn skin_on_the_cpu(&mut self) {
         self.models.skin_layout = Some(None);
     }
@@ -942,7 +942,7 @@ impl Renderer {
     ) -> Option<WorldModels> {
         // Each unit posed apart, a farther one less often: within 12
         // yards every frame, to 30 yards 20 times a second, beyond 10;
-        // between, its last pose (T537; the game's rate unverified).
+        // between, its last pose (T538; the game's rate unverified).
         let eye = match camera {
             ModelCamera::Scene { position, .. } => *position,
             _ => [0.0; 3],
@@ -960,7 +960,7 @@ impl Renderer {
         p.verts.clear();
         p.indices.clear();
         // (posed on the GPU where it can: the bones of every unit's parts
-        // together, each batch's record pointing at its own; T539)
+        // together, each batch's record pointing at its own; T540)
         let skinning = self.skinning();
         let mut bones: Vec<Mat4> = Vec::new();
         let mut skin_draws: Vec<SkinDraw> = Vec::new();
@@ -1125,7 +1125,7 @@ impl Renderer {
 
     /// Draws the world's models into its pass: the ones posed on the CPU,
     /// then the ones the GPU poses (each batch its record, the draw's
-    /// instance; decision T539).
+    /// instance; decision T540).
     pub(crate) fn record_models<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>, m: &'a WorldModels) {
         pass.set_bind_group(0, &m.group, &[]);
         if let (Some(vertices), Some(indices)) = (&m.vertices, &m.indices) {
@@ -1206,7 +1206,7 @@ impl Renderer {
             Some(b) if part.skinned && b.pose.len() >= m.bones.len() => b.pose.clone(),
             _ => m.pose_facing(seq, time, Some(toward)),
         };
-        // (posed on the GPU: its bones once, its batches as records; T539)
+        // (posed on the GPU: its bones once, its batches as records; T540)
         let bone_base = self.models.skinned_out.as_mut().map(|out| {
             let base = out.bones.len() as u32;
             out.bones.extend_from_slice(&pose);
@@ -1217,7 +1217,7 @@ impl Renderer {
         }
         // (each vertex posed and placed once, as a visible triangle first
         // uses it: hidden geosets cost nothing, shared corners once; the
-        // cache's stamp tells this part's from earlier ones, T537)
+        // cache's stamp tells this part's from earlier ones, T538)
         self.posed_stamp = self.posed_stamp.wrapping_add(1);
         if self.posed_stamp == 0 {
             self.posed.clear();

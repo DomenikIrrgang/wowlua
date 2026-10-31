@@ -17,7 +17,7 @@ struct Globals {
 @group(1) @binding(2) var tex3: texture_2d<f32>;
 @group(1) @binding(3) var samp: sampler;
 
-// A batch the GPU poses (decision T539): where its part stands, its two
+// A batch the GPU poses (decision T540): where its part stands, its two
 // texture transforms, its color, and its flags, shaders, first bone and
 // bone count.
 struct Record {
@@ -75,7 +75,7 @@ fn vs(v: In) -> Out {
 }
 
 // The vertex posed by its bones and placed as its batch's record says (the
-// record is the draw's instance), then as `vs` (decision T539).
+// record is the draw's instance), then as `vs` (decision T540).
 @vertex
 fn vs_skinned(v: Skinned, @builtin(instance_index) i: u32) -> Out {
     let r = records[i];

@@ -941,7 +941,7 @@ NPCs off.
    lanterns and crates disappear (wowlua: where they look smaller than 18
    pixels).
 
-## Frame rate and render scale (decisions T537, T538)
+## Frame rate and render scale (decisions T538, T539)
 
 1. **The render scale's limits**: enter
    `/run SetCVar("RenderScale","0.1") print(GetCVar("RenderScale"))`,

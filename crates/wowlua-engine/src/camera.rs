@@ -40,7 +40,7 @@ pub struct Camera {
     pub view: Option<View>,
     /// The eye last found, and what it followed (the player's place and
     /// facing, the view, the field of view, the world on): found again
-    /// only when one changed (decision T537).
+    /// only when one changed (decision T538).
     pub eye: Option<([u64; 10], Eye)>,
     pub views: [Option<View>; 5],
     /// The view `SetView`, `NextView` and `PrevView` went to last (from 0).

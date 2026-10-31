@@ -263,7 +263,7 @@ pub struct Scene {
 /// doodads (`horizonStart`), a doodad while it looks at least `cull`
 /// pixels big (`lodObjectCullSize`; decision T525). It is drawn with
 /// `render_scale` of the screen's pixels each way (`RenderScale`, 0.33 to
-/// 2) and stretched to the screen, the UI over it in full (decision T538).
+/// 2) and stretched to the screen, the UI over it in full (decision T539).
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorldView {
     pub map: u32,
@@ -1278,7 +1278,7 @@ fn layer_of(vm: &Vm, id: WidgetId) -> (usize, i32) {
     // on `ARTWORK`, as a fresh one's `GetDrawLayer` answers in the client
     // (recorded; a button's `ButtonText`, outside any `<Layer>`, was drawn
     // under its normal texture: the Legacy challenges' categories). Read
-    // without copies: every region asks each frame (T540).
+    // without copies: every region asks each frame (T541).
     let fallback = if widgets::kind(engine(vm), id) & widgets::KIND_FONT_STRING != 0 {
         3
     } else {
@@ -1332,7 +1332,7 @@ fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
     let mut frames: Vec<(usize, f64, usize)> = Vec::new();
     // (walked from the widgets without a parent through the shown ones
     // alone: a hidden frame's widgets, most of a large UI's, are never
-    // looked at; a frame's strata its own, else its parent's; T540)
+    // looked at; a frame's strata its own, else its parent's; T541)
     let mut stack: Vec<(usize, usize)> = engine(vm)
         .world
         .widgets

@@ -90,7 +90,7 @@ pub(crate) struct World {
     /// The placements' matrices of a draw, and the buffer's size.
     instances: Option<(wgpu::Buffer, u64)>,
     /// What stretches the world drawn at another scale to the screen, and
-    /// the texture it is drawn into (decision T538).
+    /// the texture it is drawn into (decision T539).
     stretch: Option<Stretch>,
     scaled: Option<Scaled>,
 }
@@ -432,7 +432,7 @@ impl Renderer {
     }
 
     /// Draws the world into `view`: at `RenderScale` of its pixels each
-    /// way, stretched to it (decision T538).
+    /// way, stretched to it (decision T539).
     pub(crate) fn draw_world(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
@@ -796,7 +796,7 @@ impl Renderer {
             ],
         };
         // The units as their models, posed for this camera (T526): those
-        // the camera can see (4 yards' room around each, T537).
+        // the camera can see (4 yards' room around each, T538).
         let (tan_x, tan_y) = ((w.fov / 2.0).tan(), (f64::from(fov_y) / 2.0).tan());
         let right = [
             w.look[1] * w.up[2] - w.look[2] * w.up[1],
@@ -893,7 +893,7 @@ impl Renderer {
             multiview_mask: None,
         });
         // (what the camera can see: a ball of `reach` yards about a middle,
-        // within the view's four sides; T537)
+        // within the view's four sides; T538)
         let side = [
             w.look[1] * w.up[2] - w.look[2] * w.up[1],
             w.look[2] * w.up[0] - w.look[0] * w.up[2],
@@ -1050,7 +1050,7 @@ struct GpuGroup {
     indices: wgpu::Buffer,
     batches: Vec<GpuBatch>,
     /// Its middle and how far it reaches from it, in the building's own
-    /// space (what the view must see of it, T537).
+    /// space (what the view must see of it, T538).
     middle: [f32; 3],
     reach: f32,
 }

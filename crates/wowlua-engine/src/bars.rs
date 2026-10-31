@@ -301,7 +301,7 @@ fn follow_timer(vm: &mut Vm, id: WidgetId) {
 }
 
 /// Each frame: the shown timer bars' values follow their durations (a
-/// hidden one's when it is read: `GetValue`, `GetMinMaxValues`; T540).
+/// hidden one's when it is read: `GetValue`, `GetMinMaxValues`; T541).
 pub fn update_timers(vm: &mut Vm) {
     for id in engine(vm).world.timer_bars.clone() {
         if widgets::visible(engine(vm), id) {

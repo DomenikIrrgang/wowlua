@@ -127,7 +127,7 @@ return y, table.concat(Errors, ', ')",
 }
 
 /// The world is drawn at `RenderScale` of the screen's pixels each way and
-/// stretched to it (decision T538): the whole screen covered, a half
+/// stretched to it (decision T539): the whole screen covered, a half
 /// scale's picture the full one's, coarser; the setting kept to 0.33 to 2.
 #[test]
 fn the_world_is_drawn_at_its_render_scale() {
@@ -182,7 +182,7 @@ mock.advanceFrames(2, 1000 / 60)",
 }
 
 /// The world's units posed on the GPU look as posed on the CPU (decision
-/// T539): Northshire's start among six NPCs, the same picture.
+/// T540): Northshire's start among six NPCs, the same picture.
 #[test]
 fn the_gpu_poses_the_units_as_the_cpu_does() {
     let Some((mut vm, casc)) = session_and_casc() else {
