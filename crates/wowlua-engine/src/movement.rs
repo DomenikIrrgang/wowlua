@@ -68,15 +68,27 @@ pub struct Movement {
     pub autorun: bool,
     /// `ToggleRun`: walking instead of running.
     pub walking: bool,
+    /// The right mouse button held over the world (decision T536): the
+    /// turn keys strafe, as in the game.
+    pub mouselook: bool,
 }
 
 impl Movement {
     /// How it goes: forward (1), back (-1); left (1), right (-1).
-    fn way(&self) -> (f64, f64) {
+    pub fn way(&self) -> (f64, f64) {
         let ahead =
             f64::from(u8::from(self.forward || self.autorun)) - f64::from(u8::from(self.backward));
-        let side = f64::from(u8::from(self.strafe_left)) - f64::from(u8::from(self.strafe_right));
+        let mut side =
+            f64::from(u8::from(self.strafe_left)) - f64::from(u8::from(self.strafe_right));
+        if self.mouselook {
+            side = (side + self.turn_keys()).clamp(-1.0, 1.0);
+        }
         (ahead, side)
+    }
+
+    /// The turn keys held: left (1), right (-1).
+    fn turn_keys(&self) -> f64 {
+        f64::from(u8::from(self.turn_left)) - f64::from(u8::from(self.turn_right))
     }
 
     /// Whether the player goes anywhere (turning in place is not moving).
@@ -84,8 +96,35 @@ impl Movement {
         self.way() != (0.0, 0.0)
     }
 
-    fn turn(&self) -> f64 {
-        f64::from(u8::from(self.turn_left)) - f64::from(u8::from(self.turn_right))
+    /// How it turns: left (1), right (-1); not while the right button
+    /// makes the turn keys strafe.
+    pub fn turn(&self) -> f64 {
+        if self.mouselook {
+            return 0.0;
+        }
+        self.turn_keys()
+    }
+
+    /// The player's model as it goes (decision T536): its animation
+    /// (`AnimationData`: 0 standing, 4 walking, 5 running, 11 and 12
+    /// shuffling left and right as it turns in place, 13 walking
+    /// backwards) and how far it turns from the facing (radians, left
+    /// positive): toward where it goes, or walking backwards the way it
+    /// faces away from.
+    pub fn pose(&self) -> (u32, f64) {
+        let (ahead, side) = self.way();
+        if ahead == 0.0 && side == 0.0 {
+            let shuffle = match self.turn() {
+                t if t > 0.0 => 11,
+                t if t < 0.0 => 12,
+                _ => 0,
+            };
+            return (shuffle, 0.0);
+        }
+        if ahead < 0.0 {
+            return (13, side.atan2(ahead) - std::f64::consts::PI);
+        }
+        (if self.walking { 4 } else { 5 }, side.atan2(ahead))
     }
 }
 

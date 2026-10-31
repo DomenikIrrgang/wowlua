@@ -268,3 +268,57 @@ return r(y), r(x)"
     );
     assert_eq!(out, ["9.5", "0.0"]);
 }
+
+/// The player's model in the 3D world: its animation and facing.
+fn pose(vm: &mut Vm) -> (u32, f64) {
+    let world = wowlua_engine::scene::build(vm).world.expect("the world on");
+    let me = world.units.first().expect("the player");
+    (me.animation, (me.facing * 100.0).round() / 100.0)
+}
+
+/// The player's model moves as it goes (decision T536): running ahead,
+/// turned toward a strafe, walking backwards facing ahead, shuffling as
+/// it turns in place; the right button held makes the turn keys strafe.
+#[test]
+fn the_model_moves_as_the_player_goes() {
+    let mut vm = vm();
+    wowlua_engine::set_world(&mut vm, true);
+    run(&mut vm, START);
+    let mut seen = Vec::new();
+    for (start, stop) in [
+        ("MoveForwardStart()", "MoveForwardStop()"),
+        ("StrafeLeftStart()", "StrafeLeftStop()"),
+        ("MoveBackwardStart()", "MoveBackwardStop()"),
+        ("TurnRightStart()", "TurnRightStop()"),
+    ] {
+        run(&mut vm, &format!("mock.moveTo({{ facing = 0 }}) {start}"));
+        seen.push(pose(&mut vm));
+        run(&mut vm, stop);
+    }
+    assert_eq!(
+        seen,
+        [(5, 0.0), (5, 1.57), (13, 0.0), (12, 0.0)],
+        "run, strafe left, back, turn right"
+    );
+    // (the right button held over the world: the turn key strafes)
+    run(
+        &mut vm,
+        "mock.moveTo({ world = { y = 0, x = 0, z = 0 }, facing = 0 })",
+    );
+    let (w, h) = {
+        let s = &wowlua_engine::engine(&vm).screen;
+        (s.width, s.height)
+    };
+    wowlua_engine::play::mouse_down(&mut vm, w / 2.0, h / 4.0, true);
+    let out = run(
+        &mut vm,
+        "TurnLeftStart()
+mock.advanceFrames(60, 1000 / 60)
+TurnLeftStop()
+local y, x = UnitPosition('player')
+return string.format('%.1f', y), string.format('%.1f', x), string.format('%.1f', GetPlayerFacing())",
+    );
+    wowlua_engine::play::mouse_up(&mut vm, w / 2.0, h / 4.0, true);
+    // (7 yards west in a second, still facing north)
+    assert_eq!(out, ["0.0", "7.0", "0.0"]);
+}
