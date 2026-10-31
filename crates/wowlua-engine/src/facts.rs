@@ -337,8 +337,18 @@ fn instance_info(vm: &mut Vm, _c: NativeCall) -> Ret {
     ])
 }
 
+/// `GetRealmName()`: the player's realm, as the world gives it (the
+/// character's `realm`), else "Realm" (decision T537).
 fn realm_name(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![vm.str("Realm")])
+    let realm = crate::social::player_realm_name(vm);
+    Ok(vec![vm.str(&realm)])
+}
+
+/// `GetNormalizedRealmName()`: the player's realm without spaces and hyphens
+/// (decision T537).
+fn normalized_realm_name(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let realm = crate::social::player_realm(vm);
+    Ok(vec![vm.str(&realm)])
 }
 
 /// `GetPhysicalScreenSize()`: the screen's pixels (decision T237).
@@ -887,7 +897,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetPhysicalScreenSize", physical_screen_size),
         ("GetRealmName", realm_name),
         // The same without spaces: the placeholder has none.
-        ("GetNormalizedRealmName", realm_name),
+        ("GetNormalizedRealmName", normalized_realm_name),
         ("GetScreenHeight", screen_height),
         ("GetScreenWidth", screen_width),
         ("C_VideoOptions.SetGameWindowSize", set_game_window_size),

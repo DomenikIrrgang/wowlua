@@ -52,6 +52,35 @@ return Ambiguate('Someone-' .. realm, 'none'), Ambiguate('Someone-Elsewhere', 'n
     );
 }
 
+/// The realm the world gives the player: `GetRealmName` as it is,
+/// `GetNormalizedRealmName` without spaces and hyphens, both as
+/// `UnitFullName` and the player's own chat name have it (T537).
+#[test]
+fn the_realm_functions_give_the_players_realm() {
+    let mut vm = vm();
+    assert_eq!(
+        run(&mut vm, "return GetRealmName(), GetNormalizedRealmName()"),
+        ["Realm", "Realm"]
+    );
+    run(
+        &mut vm,
+        "mock.setPlayer({ name = 'P', realm = 'Some Realm-Name', class = 'WARRIOR' })",
+    );
+    assert_eq!(
+        run(
+            &mut vm,
+            "return GetRealmName(), GetNormalizedRealmName(), select(2, UnitFullName('player')),
+    Ambiguate('Someone-' .. GetNormalizedRealmName(), 'none')"
+        ),
+        [
+            "Some Realm-Name",
+            "SomeRealmName",
+            "Some Realm-Name",
+            "Someone"
+        ]
+    );
+}
+
 #[test]
 fn a_guild_but_no_friends() {
     let mut vm = vm();

@@ -76,14 +76,19 @@ fn text(vm: &Vm, v: Value) -> Option<String> {
     }
 }
 
-/// The player's realm as `GetNormalizedRealmName` gives it (the engine's
-/// placeholder "Realm" when the world gives none; no spaces).
-fn player_realm(vm: &Vm) -> String {
+/// The player's realm as `GetRealmName` gives it: the world's, else the
+/// engine's placeholder "Realm".
+pub(crate) fn player_realm_name(vm: &Vm) -> String {
     engine(vm).units.list[units::PLAYER.0]
         .realm
         .clone()
         .unwrap_or_else(|| "Realm".into())
-        .replace([' ', '-'], "")
+}
+
+/// The player's realm as `GetNormalizedRealmName` gives it (no spaces or
+/// hyphens).
+pub(crate) fn player_realm(vm: &Vm) -> String {
+    player_realm_name(vm).replace([' ', '-'], "")
 }
 
 /// A `Voice…` CVar as a number, else its recorded default.
