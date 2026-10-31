@@ -24,6 +24,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A creature the client's cache knows from a newer client now shows its model (its displays were missed).
 - A world profile's units' `npcId` was ignored; it now names the creature, as `npcID` does in a test.
 
 ## 0.13.7 (2026-10-30)

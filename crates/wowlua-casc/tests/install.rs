@@ -788,3 +788,33 @@ fn the_buildings_are_solid() {
     );
     assert!(through.is_some(), "a line through the abbey");
 }
+
+/// The creatures each client knows (decision T531): its `Creature`
+/// table's and its creature cache's, by name; the classic client's cache
+/// knows the Black Hawkstrider it met.
+#[test]
+fn knows_the_creatures_met() {
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let storage = FsStorage { root: root.clone() };
+    for (product, version) in Casc::products(&storage) {
+        let casc = Casc::open(Box::new(FsStorage { root: root.clone() }), &product).expect("opens");
+        let mut lib = wowlua_casc::display::Library::default();
+        let all = lib.creatures(&casc);
+        let named = all.iter().filter(|c| !c.name.is_empty()).count();
+        eprintln!(
+            "{product} {version}: {} creatures known, {named} named, first {:?}",
+            all.len(),
+            all.first().map(|c| &c.name)
+        );
+        if product == "wow_classic" {
+            assert!(
+                all.iter()
+                    .any(|c| c.name == "Black Hawkstrider" && c.display.is_some()),
+                "{product}"
+            );
+        }
+    }
+}
