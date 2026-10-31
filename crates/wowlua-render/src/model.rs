@@ -805,7 +805,7 @@ impl Renderer {
             } else {
                 100
             };
-            let moment = if period == 0 { ms } else { ms / period };
+            let moment = ms.checked_div(period).unwrap_or(ms);
             let key = format!(
                 "{}|{:?}|{}|{}|{}|{}",
                 source_key(&actor.source),
