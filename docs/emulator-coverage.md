@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,170 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,171 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,170 rules unverified: each rests on Blizzard's
+The engine's code marks 1,171 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -993,12 +993,13 @@ page changes only when a rule is added, removed or reworded.
 - [buttons.rs](../crates/wowlua-engine/src/buttons.rs): The state textures shown as the button's state has them (SuuUI probe trees: of 380 state textures of enabled, uncheck...
 - [buttons.rs](../crates/wowlua-engine/src/buttons.rs): The layer a state's texture is drawn in (SuuUI probe trees: XML's `<HighlightTexture>` in HIGHLIGHT, `<CheckedTexture...
 
-### camera (7)
+### camera (8)
 
 - [camera.rs](../crates/wowlua-engine/src/camera.rs): The camera's pivot: this high above the player's feet (yards; unverified).
 - [camera.rs](../crates/wowlua-engine/src/camera.rs): The furthest zoom before `cameraDistanceMaxZoomFactor` (yards; unverified).
 - [camera.rs](../crates/wowlua-engine/src/camera.rs): The steepest pitch either way (unverified).
 - [camera.rs](../crates/wowlua-engine/src/camera.rs): Where a place shows on a screen `width` by `height` (its center's offset, right and up, in the screen's units), or no...
+- [camera.rs](../crates/wowlua-engine/src/camera.rs): How far the camera turns for a pixel the mouse moves (radians, times `mouseSpeed`; unverified).
 - [camera.rs](../crates/wowlua-engine/src/camera.rs): `CameraZoomIn(yards)`, `CameraZoomOut(yards)`: at once (unverified: the client glides there).
 - [camera.rs](../crates/wowlua-engine/src/camera.rs): `SetView(n)`: the camera where `SaveView(n)` left it (a view never saved: as it is; unverified).
 - [camera.rs](../crates/wowlua-engine/src/camera.rs): `CenterCamera()`: the camera behind the player again (unverified).
