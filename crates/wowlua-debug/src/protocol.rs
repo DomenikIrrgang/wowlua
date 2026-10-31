@@ -198,10 +198,12 @@ pub enum Input {
         steps: f64,
     },
     /// A click on the 3D world at a point (screen pixels, top left origin):
-    /// the unit there targeted.
+    /// the unit there targeted; `right`, talked to (decision T530).
     ClickWorld {
         x: f64,
         y: f64,
+        #[serde(default)]
+        right: bool,
     },
     /// A chat line as the user types it: a slash command (`/wdemo`).
     Slash {

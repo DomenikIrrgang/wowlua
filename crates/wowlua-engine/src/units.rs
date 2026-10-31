@@ -103,6 +103,9 @@ pub struct Unit {
     pub listed_dead: bool,
     /// What its corpse holds (`kill({ loot })`): items and counts.
     pub loot: Vec<(i64, f64)>,
+    /// What it drops (its data's `loot`, decision T530): its corpse's
+    /// when a kill names none.
+    pub drops: Vec<(i64, f64)>,
     /// A creature's type and family: their names and IDs
     /// (`UnitCreatureType`, `UnitCreatureFamily`; none for players).
     pub creature_type: Option<(String, f64)>,
@@ -505,6 +508,7 @@ pub fn install(vm: &mut Vm) {
         incoming_heals: Vec::new(),
         listed_dead: false,
         loot: Vec::new(),
+        drops: Vec::new(),
         creature_type: None,
         creature_family: None,
         role: None,
@@ -867,6 +871,7 @@ fn clone_unit(u: &Unit) -> Unit {
         faction_group: u.faction_group.clone(),
         classification: u.classification.clone(),
         loot: u.loot.clone(),
+        drops: u.drops.clone(),
         threat_others: u.threat_others.clone(),
         absorbs: u.absorbs,
         heal_absorbs: u.heal_absorbs,
@@ -2364,6 +2369,25 @@ fn unit_from(
         incoming_heals: Vec::new(),
         listed_dead: false,
         loot: Vec::new(),
+        drops: {
+            let mut drops = Vec::new();
+            if let Value::Table(list) = get(vm, "loot") {
+                let n = vm.heap.table(list).border();
+                for k in 1..=n {
+                    if let Value::Table(item) = vm.heap.table(list).get(Value::Num(k as f64)) {
+                        let (k_id, k_count) = (vm.str("id"), vm.str("count"));
+                        if let Value::Num(id) = vm.heap.table(item).get(k_id) {
+                            let count = match vm.heap.table(item).get(k_count) {
+                                Value::Num(c) => c,
+                                _ => 1.0,
+                            };
+                            drops.push((id as i64, count));
+                        }
+                    }
+                }
+            }
+            drops
+        },
         creature_type: match get(vm, "creatureType") {
             Value::Str(s) => Some((
                 String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
@@ -2419,7 +2443,8 @@ fn unit_from(
         },
         acts: {
             let a = get(vm, "actions");
-            crate::unitacts::acts_of(vm, a)?
+            let attack = get(vm, "attack");
+            crate::unitacts::acts_of(vm, a, attack)?
         },
         born: vm.clock.elapsed_ms / 1000.0,
         subgroup: None,
@@ -3623,6 +3648,14 @@ pub(crate) fn clear_target(vm: &mut Vm) {
 /// in the same frame; and `UNIT_HEALTH` last. The unit is dead before any.
 /// Unverified: what decides the order.
 pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
+    // (a kill naming no loot: the unit's drops, T530)
+    let lootable = {
+        let u = &mut engine_mut(vm).units.list[me.0];
+        if u.loot.is_empty() && !u.drops.is_empty() {
+            u.loot = u.drops.clone();
+        }
+        lootable || !u.loot.is_empty()
+    };
     // A corpse is out of combat and targets no one, but the player it
     // fought until the player leaves combat (recorded: its
     // `targettarget` told when the player retargets it to loot, its

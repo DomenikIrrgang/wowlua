@@ -66,9 +66,15 @@ fn number(vm: &mut Vm, t: TableRef, k: &str) -> Option<f64> {
 /// A unit's `actions` (a world profile's, `spawnUnit`'s, `update`'s): a
 /// list of `{ at | every | within, do = "attack" | "cast" | "face",
 /// damage?, speed?, spell?, castTime? }`.
-pub fn acts_of(vm: &mut Vm, v: Value) -> Result<Vec<Act>, String> {
+pub fn acts_of(vm: &mut Vm, v: Value, attack: Value) -> Result<Vec<Act>, String> {
     let Value::Table(list) = v else {
         return Ok(Vec::new());
+    };
+    // (the unit's `attack`: its swings' damage and speed where an action
+    // says none, decision T530)
+    let (damage, speed) = match attack {
+        Value::Table(a) => (number(vm, a, "damage"), number(vm, a, "speed")),
+        _ => (None, None),
     };
     let mut acts = Vec::new();
     for i in 1.. {
@@ -92,8 +98,8 @@ pub fn acts_of(vm: &mut Vm, v: Value) -> Result<Vec<Act>, String> {
         };
         let what = match what.as_str() {
             "attack" => What::Attack {
-                damage: number(vm, t, "damage").unwrap_or(10.0),
-                speed: number(vm, t, "speed").unwrap_or(2.0).max(0.1),
+                damage: number(vm, t, "damage").or(damage).unwrap_or(10.0),
+                speed: number(vm, t, "speed").or(speed).unwrap_or(2.0).max(0.1),
             },
             "cast" => What::Cast {
                 spell: number(vm, t, "spell").ok_or("actions: a cast needs its `spell`")?,

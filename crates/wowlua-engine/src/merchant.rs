@@ -85,6 +85,51 @@ pub struct Merchant {
     /// The goods' filter `SetMerchantFilter` chose (none: the recorded
     /// default).
     pub filter: Option<f64>,
+    /// Vendors by NPC (`defineVendor`, decision T530): their window opens
+    /// when the player talks to them.
+    pub vendors: std::collections::HashMap<usize, TableRef>,
+}
+
+/// `mock.defineVendor(npc, data)`: the NPC is a vendor of `data`
+/// (`openMerchant`'s table; decision T530); talking to it opens its
+/// window, the server's answer a round trip later.
+pub fn control_define(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(npc) = units::handle_of(vm, c.arg(1)) else {
+        return Err(vm.error("defineVendor: an NPC expected"));
+    };
+    let Value::Table(t) = c.arg(2) else {
+        return Err(vm.error("defineVendor: a table of the vendor's data expected"));
+    };
+    crate::widgets::keep(vm, Value::Table(t));
+    merchant_mut(vm).vendors.insert(npc.0, t);
+    Ok(vec![])
+}
+
+/// Whether an NPC is a vendor (`defineVendor`).
+pub fn has(vm: &Vm, npc: units::UnitId) -> bool {
+    merchant(vm).vendors.contains_key(&npc.0)
+}
+
+/// The player talks to a vendor: its window a round trip later.
+pub fn interact(vm: &mut Vm, npc: units::UnitId) {
+    let delay = crate::clock::server_delay(vm);
+    let later = vm.native_with(
+        "vendorOpens",
+        vendor_opens as wowlua_vm::NativeFn,
+        vec![Value::Num(npc.0 as f64)],
+    );
+    crate::clock::after_engine(vm, delay, later);
+}
+
+fn vendor_opens(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Num(n) = c.upvals[0] else {
+        return Ok(vec![]);
+    };
+    let npc = units::UnitId(n as usize);
+    if let Some(data) = merchant(vm).vendors.get(&npc.0).copied() {
+        open(vm, data, Some(npc))?;
+    }
+    Ok(vec![])
 }
 
 fn field(vm: &mut Vm, t: TableRef, key: &str) -> Value {
