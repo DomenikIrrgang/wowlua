@@ -1806,10 +1806,13 @@ pub fn protected(e: &Engine, id: WidgetId) -> bool {
 
 /// The widget and its descendants, children before their parent (deepest
 /// first, siblings in creation order).
-fn subtree(e: &Engine, id: WidgetId) -> Vec<WidgetId> {
+/// A widget and those under it through shown ones, children first.
+fn shown_subtree(e: &Engine, id: WidgetId) -> Vec<WidgetId> {
     fn visit(e: &Engine, id: WidgetId, out: &mut Vec<WidgetId>) {
         for &c in &e.world.widgets[id.0].children {
-            visit(e, c, out);
+            if e.world.widgets[c.0].shown {
+                visit(e, c, out);
+            }
         }
         out.push(id);
     }
@@ -1822,16 +1825,36 @@ fn subtree(e: &Engine, id: WidgetId) -> Vec<WidgetId> {
 /// visibility changed, children before their parent (`/stdtest engine`:
 /// "g- c- p-", "g+ c+").
 pub fn set_shown(vm: &mut Vm, id: WidgetId, shown: bool) {
-    if engine(vm).world.widgets[id.0].shown != shown {
-        reorder(engine_mut(vm));
+    // (shown or hidden as it is: nothing is shown or hidden, no script
+    // runs; a hidden widget's focus still goes; T545)
+    if engine(vm).world.widgets[id.0].shown == shown {
+        if !shown {
+            crate::input::drop_hidden_focus(vm);
+        }
+        return;
     }
-    mark(engine_mut(vm), id);
-    let before: Vec<(WidgetId, bool)> = subtree(engine(vm), id)
-        .into_iter()
-        .map(|w| (w, visible(engine(vm), w)))
-        .collect();
+    reorder(engine_mut(vm));
+    // (the widgets whose visibility changes: it and those under it
+    // through shown ones, while its parent shows; children first, T545)
+    let changing = match engine(vm).world.widgets[id.0].parent {
+        Some(p) if !visible(engine(vm), p) => Vec::new(),
+        _ => shown_subtree(engine(vm), id),
+    };
+    let was = !shown;
+    // (a hiding widget's frames and regions are no longer drawn: it alone
+    // is marked, for its parent's; a showing one's are marked, T545)
+    if !shown {
+        mark_alone(engine_mut(vm), id);
+    }
     engine_mut(vm).world.widgets[id.0].shown = shown;
-    for (w, was) in before {
+    if shown {
+        let e = engine_mut(vm);
+        if let Some(m) = e.world.scene_marks.get_mut(id.0) {
+            *m = false;
+        }
+        mark(e, id);
+    }
+    for w in changing {
         let now = visible(engine(vm), w);
         if now != was {
             run_script(vm, w, if now { "OnShow" } else { "OnHide" }, &[]);
@@ -4360,19 +4383,61 @@ pub fn mark(e: &mut Engine, id: WidgetId) {
     if world.widgets.get(id.0).is_some_and(|w| w.class == "Font") {
         world.scene_epoch += 1;
     }
-    // (the widgets under it, and those anchored to or masked by these;
-    // a marked widget's are marked: the walk stops there)
-    let mut stack = vec![id.0];
-    while let Some(i) = stack.pop() {
+    // (the shown widgets under it, and those anchored to or masked by
+    // these: a hidden one draws nothing, nor do its, and showing it marks
+    // them, but what is anchored to it moves with it; a marked widget's
+    // are marked: the walk stops there; T545)
+    let mut stack: Vec<(usize, Option<bool>)> = vec![(id.0, None)];
+    let mut hidden_seen: rustc_hash::FxHashSet<usize> = Default::default();
+    while let Some((i, shown)) = stack.pop() {
+        let shown = shown.unwrap_or_else(|| visible_in(world, i));
+        if !shown {
+            if hidden_seen.insert(i)
+                && let Some(by) = world.anchored_by.get(i)
+            {
+                stack.extend(by.iter().map(|&j| (j, None)));
+            }
+            continue;
+        }
         match world.scene_marks.get_mut(i) {
             Some(m) if !*m => *m = true,
             _ => continue,
         }
-        stack.extend(world.widgets[i].children.iter().map(|c| c.0));
+        stack.extend(
+            world.widgets[i]
+                .children
+                .iter()
+                .map(|c| (c.0, Some(world.widgets[c.0].shown))),
+        );
         if let Some(by) = world.anchored_by.get(i) {
-            stack.extend(by.iter().copied());
+            stack.extend(by.iter().map(|&j| (j, None)));
         }
     }
+}
+
+/// The widget alone changed (T545): it hides, so what is under it is no
+/// longer drawn.
+fn mark_alone(e: &mut Engine, id: WidgetId) {
+    let world = &mut e.world;
+    if world.scene_marks.len() < world.widgets.len() {
+        world.scene_marks.resize(world.widgets.len(), true);
+    }
+    if let Some(m) = world.scene_marks.get_mut(id.0) {
+        *m = true;
+    }
+}
+
+/// [`visible`] of the world.
+fn visible_in(world: &World, i: usize) -> bool {
+    let mut cur = Some(i);
+    while let Some(c) = cur {
+        let w = &world.widgets[c];
+        if !w.shown {
+            return false;
+        }
+        cur = w.parent.map(|p| p.0);
+    }
+    true
 }
 
 /// `id` moves or changes with `target` (anchored to it, masked by it):

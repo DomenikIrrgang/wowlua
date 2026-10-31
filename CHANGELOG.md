@@ -31,7 +31,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
-- **A faster 3D world**: frames with many units, names and nameplates draw many times faster (Northshire among its test NPCs: 50 ms to about 2 ms a frame), the units' models are posed on the graphics card, and a debug session's frames take far less time with a large UI: hidden frames cost nothing each frame, and what didn't change since the last frame isn't laid out again (SuuUI with Blizzard's UI: 13 ms to 1.8 ms a frame).
+- **A faster 3D world**: frames with many units, names and nameplates draw many times faster (Northshire among its test NPCs: 50 ms to about 2 ms a frame), the units' models are posed on the graphics card, and a debug session's frames take far less time with a large UI: hidden frames cost nothing each frame, and what didn't change since the last frame isn't laid out again (SuuUI with Blizzard's UI: 13 ms to 1.2 ms a frame).
 - In a debug session, each frame moves time as far as it really took: your character runs at its speed however fast the frames come. Before, every frame counted 1/60 s, so a slow frame rate slowed the game down.
 
 ### Fixed
