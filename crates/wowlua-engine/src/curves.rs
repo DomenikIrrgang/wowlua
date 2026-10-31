@@ -1129,7 +1129,13 @@ fn write_font_string(vm: &mut Vm, id: WidgetId) -> Result<(), LuaError> {
             let key = vm.str(k);
             rgba.push(vm.heap.table(color).get(key));
         }
-        widgets::store(vm, fs, "TextColor", &rgba);
+        let props = engine(vm).world.widgets[fs.0].props;
+        let same = widgets::stored_args(vm, props, "TextColor").is_some_and(|old| {
+            old.len() == rgba.len() && old.iter().zip(&rgba).all(|(a, b)| a.raw_eq(*b))
+        });
+        if !same {
+            widgets::store(vm, fs, "TextColor", &rgba);
+        }
     }
     set_prop(vm, id, "lastUpdate", Value::Num(crate::clock::now(vm)));
     Ok(())

@@ -20,6 +20,7 @@ const UNDRESSED: &str = "\u{0}undressed";
 const UNDRESSED_SLOTS: &str = "\u{0}undressedslots";
 
 fn set_prop(vm: &mut Vm, id: WidgetId, key: &str, v: Value) {
+    crate::widgets::mark(crate::engine_mut(vm), id);
     let props = engine(vm).world.widgets[id.0].props;
     let k = vm.str(key);
     let _ = vm.heap.table_mut(props).set(k, v);

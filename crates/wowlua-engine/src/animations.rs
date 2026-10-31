@@ -383,6 +383,7 @@ fn apply_final_alpha(vm: &mut Vm, group: WidgetId) {
         let to = stored_ref_number(vm, a, "ToAlpha").unwrap_or(0.0);
         if let Some(t) = target_of(vm, a) {
             engine_mut(vm).world.widgets[t.0].alpha = to;
+            crate::widgets::mark(crate::engine_mut(vm), t);
         }
     }
 }

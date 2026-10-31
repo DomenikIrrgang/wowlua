@@ -239,11 +239,23 @@ pub struct Model {
     pub time: f64,
 }
 
+/// A drawn thing. Quads and texts are shared: a frame's are kept from
+/// frame to frame while nothing they show changes (decision T542).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Item {
-    Quad(Quad),
-    Text(Text),
+    Quad(std::sync::Arc<Quad>),
+    Text(std::sync::Arc<Text>),
     Model(Model),
+}
+
+impl Item {
+    pub fn quad(q: Quad) -> Item {
+        Item::Quad(std::sync::Arc::new(q))
+    }
+
+    pub fn text(t: Text) -> Item {
+        Item::Text(std::sync::Arc::new(t))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -460,7 +472,41 @@ thread_local! {
 }
 
 fn effect_of(id: WidgetId) -> crate::animations::Effect {
-    EFFECTS.with(|e| e.borrow().get(&id.0).copied().unwrap_or_default())
+    match EFFECTS.with(|e| e.borrow().get(&id.0).copied()) {
+        Some(effect) => {
+            // (a playing animation changes it each frame)
+            volatile();
+            effect
+        }
+        None => Default::default(),
+    }
+}
+
+thread_local! {
+    /// What the frame's items being laid out read changes by itself (the
+    /// clock, the player's facing, an animation): they are not kept.
+    static VOLATILE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The items being laid out change by themselves (decision T542).
+fn volatile() {
+    VOLATILE.with(|v| v.set(true));
+}
+
+/// A frame's items as the last scene laid them out (decision T542): its
+/// group's frames and their children, which of its frames the mouse was
+/// over. A change to any of them, or to what they are anchored to or
+/// masked by, marks them (`widgets::mark`): they are laid out again.
+#[derive(Default)]
+pub(crate) struct Kept {
+    epoch: u64,
+    groups: rustc_hash::FxHashMap<usize, Group>,
+}
+
+struct Group {
+    members: Vec<usize>,
+    hover: Option<usize>,
+    items: Vec<Item>,
 }
 
 /// Its alpha times its parents', up to one that ignores its parent's (a
@@ -782,6 +828,7 @@ fn compass_turn(vm: &Vm, id: WidgetId) -> f32 {
     if !named {
         return 0.0;
     }
+    volatile();
     let rotates = engine(vm)
         .world
         .cvars
@@ -1333,24 +1380,36 @@ fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
     // (walked from the widgets without a parent through the shown ones
     // alone: a hidden frame's widgets, most of a large UI's, are never
     // looked at; a frame's strata its own, else its parent's; T541)
-    let mut stack: Vec<(usize, usize)> = engine(vm)
+    // (each frame's level from its parent's as `widgets::frame_level`
+    // finds it: its own, else its parent's and one unless it uses its
+    // parent's; T542)
+    let mut stack: Vec<(usize, usize, Option<f64>)> = engine(vm)
         .world
         .widgets
         .iter()
         .enumerate()
         .filter(|(_, w)| w.parent.is_none() && w.shown)
-        .map(|(i, _)| (i, 2))
+        .map(|(i, _)| (i, 2, None))
         .collect();
-    while let Some((i, inherited)) = stack.pop() {
+    while let Some((i, inherited, parent_level)) = stack.pop() {
         let id = WidgetId(i);
         let frame = is_frame(vm, id);
-        let strata = if frame {
-            widgets::own_strata(vm, id).unwrap_or(inherited)
+        let (strata, level) = if frame {
+            let props = engine(vm).world.widgets[i].props;
+            let level = match widgets::stored_arg(vm, props, "FrameLevel", 0) {
+                Some(Value::Num(n)) => n,
+                _ => {
+                    let using = widgets::stored_arg(vm, props, "UsingParentLevel", 0)
+                        .is_some_and(|v| v.truthy());
+                    parent_level.map_or(0.0, |p| if using { p } else { p + 1.0 })
+                }
+            };
+            (widgets::own_strata(vm, id).unwrap_or(inherited), level)
         } else {
-            inherited
+            (inherited, parent_level.unwrap_or(0.0))
         };
         if frame && !engine(vm).world.widgets[i].forbidden {
-            frames.push((strata, widgets::frame_level(vm, id), i));
+            frames.push((strata, level, i));
         }
         let e = engine(vm);
         stack.extend(
@@ -1358,7 +1417,7 @@ fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
                 .children
                 .iter()
                 .filter(|c| e.world.widgets[c.0].shown)
-                .map(|c| (c.0, strata)),
+                .map(|c| (c.0, strata, Some(level))),
         );
     }
     frames.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
@@ -2093,19 +2152,62 @@ fn unit_position_player(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
 pub fn build(vm: &mut Vm) -> Scene {
     let effects = crate::animations::effects(vm);
     EFFECTS.with(|e| *e.borrow_mut() = effects);
-    let scene = widgets::with_scene_bounds(vm, build_scene);
+    let scene = widgets::with_scene_bounds(vm, |vm| build_scene(vm, true));
+    // (a debug build, or WOWLUA_SCENE_CHECK: the kept items checked
+    // against the scene laid out anew, T542)
+    static CHECK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let check = *CHECK.get_or_init(|| std::env::var_os("WOWLUA_SCENE_CHECK").is_some());
+    if cfg!(debug_assertions) || check {
+        let fresh = widgets::with_scene_bounds(vm, |vm| build_scene(vm, false));
+        check_kept(vm, &scene, &fresh);
+    }
     EFFECTS.with(|e| e.borrow_mut().clear());
+    widgets::scene_built(crate::engine_mut(vm));
     scene
 }
 
-fn build_scene(vm: &mut Vm) -> Scene {
+/// Panics where the scene of kept items differs from the one laid out
+/// anew: a change that marked nothing (decision T542).
+fn check_kept(vm: &Vm, kept: &Scene, fresh: &Scene) {
+    if kept == fresh {
+        return;
+    }
+    let widget = |i: &Item| match i {
+        Item::Quad(q) => q.widget,
+        Item::Text(t) => t.widget,
+        Item::Model(m) => m.widget,
+    };
+    let at = kept
+        .items
+        .iter()
+        .zip(&fresh.items)
+        .position(|(a, b)| a != b)
+        .unwrap_or(kept.items.len().min(fresh.items.len()));
+    let describe = |s: &Scene| match s.items.get(at) {
+        Some(i) => match engine(vm).world.widgets.get(widget(i)) {
+            Some(w) => format!("{} {:?}: {i:?}", w.class, w.name),
+            None => format!("{i:?}"),
+        },
+        None => "nothing".into(),
+    };
+    panic!(
+        "the scene's kept items differ from its items laid out anew (a change that \
+         marked nothing, T542) at item {at} of {} and {}:\nkept: {}\nanew: {}",
+        kept.items.len(),
+        fresh.items.len(),
+        describe(kept),
+        describe(fresh)
+    );
+}
+
+fn build_scene(vm: &mut Vm, keep: bool) -> Scene {
     let (width, height) = {
         let s = &engine(vm).screen;
         (s.width.round() as u32, s.height.round() as u32)
     };
     let order = frames_in_order(vm);
     let hover = engine(vm).world.input.mouse_focus;
-    let mut items = Vec::new();
+    let mut all = Vec::new();
     // A frame on its parent's level (`useParentLevel`) is drawn with its
     // parent: their regions sorted together by layer and sublevel (the
     // gossip window's parchment, its own `BACKGROUND`, shows over its
@@ -2115,6 +2217,18 @@ fn build_scene(vm: &mut Vm) -> Scene {
         .filter(|f| merges_into_parent(vm, **f))
         .map(|f| f.0)
         .collect();
+    let epoch = engine(vm).world.scene_epoch;
+    let mut old = if keep {
+        let mut kept = engine(vm).scene_kept.borrow_mut();
+        if kept.epoch != epoch {
+            kept.groups.clear();
+            kept.epoch = epoch;
+        }
+        std::mem::take(&mut kept.groups)
+    } else {
+        Default::default()
+    };
+    let mut new: rustc_hash::FxHashMap<usize, Group> = Default::default();
     for f in order {
         if merged.contains(&f.0) {
             continue;
@@ -2140,6 +2254,27 @@ fn build_scene(vm: &mut Vm) -> Scene {
             .enumerate()
             .flat_map(|(i, cs)| cs.into_iter().map(move |c| (i, c)))
             .collect();
+        // (its kept items, while nothing they show changed: T542)
+        let members: Vec<usize> = group
+            .iter()
+            .map(|g| g.0)
+            .chain(children.iter().map(|(_, c)| c.0))
+            .collect();
+        let hover_at = group.iter().position(|g| Some(*g) == hover);
+        if keep
+            && let Some(g) = old.remove(&f.0)
+            && g.members == members
+            && g.hover == hover_at
+            && !members
+                .iter()
+                .any(|&m| widgets::scene_changed(engine(vm), m))
+        {
+            all.extend(g.items.iter().cloned());
+            new.insert(f.0, g);
+            continue;
+        }
+        let mut items = Vec::new();
+        VOLATILE.with(|v| v.set(false));
         // A message frame's messages are laid out as its lines.
         let messages: Vec<usize> = engine(vm)
             .world
@@ -2178,27 +2313,27 @@ fn build_scene(vm: &mut Vm) -> Scene {
         // A minimap's terrain under its regions, its player arrow over them.
         let minimap = widgets::is_a(engine(vm), &class, "Minimap");
         if minimap {
-            items.extend(minimap_tiles(vm, f).into_iter().map(Item::Quad));
+            items.extend(minimap_tiles(vm, f).into_iter().map(Item::quad));
         }
         for (_, _, text, _, _, r) in regions {
             let id = WidgetId(r);
             if text {
                 if let Some(mut t) = text_item(vm, id, false) {
                     let images = std::mem::take(&mut t.images);
-                    items.push(Item::Text(t));
-                    items.extend(images.into_iter().map(Item::Quad));
+                    items.push(Item::text(t));
+                    items.extend(images.into_iter().map(Item::quad));
                 }
             } else if widgets::kind(engine(vm), id) & widgets::KIND_MASK != 0 {
                 continue;
             } else if let Some(q) = quad_of(vm, id) {
-                items.push(Item::Quad(q));
+                items.push(Item::quad(q));
             }
         }
         if minimap {
             let marks = minimap_blips(vm, f).into_iter().chain(minimap_ping(vm, f));
-            items.extend(marks.map(Item::Quad));
+            items.extend(marks.map(Item::quad));
             if let Some(q) = minimap_arrow(vm, f) {
-                items.push(Item::Quad(q));
+                items.push(Item::quad(q));
             }
         }
         for &g in &group {
@@ -2211,22 +2346,50 @@ fn build_scene(vm: &mut Vm) -> Scene {
             if widgets::is_a(engine(vm), &class, "EditBox")
                 && let Some(t) = text_item(vm, g, true)
             {
-                items.push(Item::Text(t));
+                items.push(Item::text(t));
             }
             if widgets::is_a(engine(vm), &class, "UnitPositionFrame")
                 && let Some(q) = unit_position_player(vm, g)
             {
-                items.push(Item::Quad(q));
+                items.push(Item::quad(q));
             }
             if g == f && !messages.is_empty() {
                 for mut t in message_items(vm, f) {
                     let images = std::mem::take(&mut t.images);
-                    items.push(Item::Text(t));
-                    items.extend(images.into_iter().map(Item::Quad));
+                    items.push(Item::text(t));
+                    items.extend(images.into_iter().map(Item::quad));
                 }
             }
         }
+        // (a minimap, a model, a message frame or a unit's place change by
+        // themselves: laid out each frame)
+        let volatile = VOLATILE.with(std::cell::Cell::get)
+            || minimap
+            || !messages.is_empty()
+            || items.iter().any(|i| matches!(i, Item::Model(_)))
+            || group.iter().any(|g| {
+                widgets::is_a(
+                    engine(vm),
+                    &engine(vm).world.widgets[g.0].class,
+                    "UnitPositionFrame",
+                )
+            });
+        all.extend(items.iter().cloned());
+        if keep && !volatile {
+            new.insert(
+                f.0,
+                Group {
+                    members,
+                    hover: hover_at,
+                    items,
+                },
+            );
+        }
     }
+    if keep {
+        engine(vm).scene_kept.borrow_mut().groups = new;
+    }
+    let mut items = all;
     let world = world_view(vm);
     // (the names over the units, behind the UI, T534)
     if world.is_some() {

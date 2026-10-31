@@ -149,6 +149,15 @@ pub struct World {
     /// The widgets ever given an `OnSizeChanged` script or hook: the ones
     /// a layout change looks at (decision T541), in order, each once.
     pub size_watching: Vec<usize>,
+    /// The widgets changed since the scene was last built, by widget (a
+    /// widget made since counts as changed; decision T542).
+    pub scene_marks: Vec<bool>,
+    /// Bumped when what every text or region shows may have changed (a
+    /// font object, the screen): the scene keeps nothing across it.
+    pub scene_epoch: u64,
+    /// By widget, the widgets anchored to it or masked by it: they move or
+    /// change with it (decision T542; some may be no longer).
+    pub anchored_by: Vec<Vec<usize>>,
     /// The widgets that ever registered for events: the ones an event
     /// looks at.
     pub listening: std::collections::BTreeSet<usize>,
@@ -1094,6 +1103,10 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
         let api = engine(vm).api;
         return Ok(crate::defaults(vm, api, &f.doc));
     }
+    // (a call that may change it: the scene lays it out again, T542)
+    if !reads_only(f.short) {
+        mark(engine_mut(vm), id);
+    }
     let behaviour = engine(vm).method_behaviour(f.name, f.short);
     if let Some(b) = behaviour {
         return b(vm, id, c);
@@ -1118,6 +1131,9 @@ fn undocumented_method(vm: &mut Vm, c: NativeCall) -> Ret {
         return Err(vm.api_arg_error(1, &msg));
     };
     refuse_forbidden(vm, id, &short, None)?;
+    if !reads_only(&short) {
+        mark(engine_mut(vm), id);
+    }
     let behaviour = engine(vm).method_behaviour(&full, &short);
     if let Some(b) = behaviour {
         return b(vm, id, c);
@@ -1801,6 +1817,7 @@ fn subtree(e: &Engine, id: WidgetId) -> Vec<WidgetId> {
 /// visibility changed, children before their parent (`/stdtest engine`:
 /// "g- c- p-", "g+ c+").
 pub fn set_shown(vm: &mut Vm, id: WidgetId, shown: bool) {
+    mark(engine_mut(vm), id);
     let before: Vec<(WidgetId, bool)> = subtree(engine(vm), id)
         .into_iter()
         .map(|w| (w, visible(engine(vm), w)))
@@ -1933,6 +1950,7 @@ fn get_parent(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 }
 
 fn set_parent(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    mark(engine_mut(vm), id);
     let parent = match c.arg(2) {
         Value::Nil => None,
         Value::Str(s) => {
@@ -1993,6 +2011,7 @@ fn get_num_children(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// `CreateFontString`, `CreateTexture`, `CreateMaskTexture`, `CreateLine`:
 /// a region of that class, named and parented.
 fn create_region(vm: &mut Vm, id: WidgetId, c: NativeCall, class: &str) -> Ret {
+    mark(engine_mut(vm), id);
     let name = match vm.opt_str(&c, 2)? {
         Some(s) => {
             let mut n = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
@@ -2407,6 +2426,7 @@ const POINTS: &[&str] = &[
 ];
 
 fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    mark(engine_mut(vm), id);
     let class = engine(vm).world.widgets[id.0].class.clone();
     // Secrets are the values they hide here: the method refused them
     // before, unless allowed (untainted, as Blizzard's aura containers
@@ -2474,6 +2494,7 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         x,
         y,
     });
+    note_anchors(vm, id);
     layout_changed(vm);
     Ok(vec![])
 }
@@ -2484,6 +2505,7 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// 0,0"; its menus' pooled textures are anchored anew after it).
 /// Unverified: what else it resets.
 fn set_to_defaults(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    mark(engine_mut(vm), id);
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.points.clear();
     w.width = 0.0;
@@ -2509,12 +2531,14 @@ fn clear_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 }
 
 fn clear_all_points(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    mark(engine_mut(vm), id);
     engine_mut(vm).world.widgets[id.0].points.clear();
     layout_changed(vm);
     Ok(vec![])
 }
 
 fn set_all_points(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    mark(engine_mut(vm), id);
     let rel = match c.arg(2) {
         Value::Nil => None,
         v => Some(v),
@@ -2531,6 +2555,7 @@ fn set_all_points(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
             y: 0.0,
         });
     }
+    note_anchors(vm, id);
     layout_changed(vm);
     Ok(vec![])
 }
@@ -2698,6 +2723,7 @@ fn set_height(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 
 /// Sets the size; `OnSizeChanged` runs when it changes.
 fn resize(vm: &mut Vm, id: WidgetId, w: Option<f64>, h: Option<f64>) {
+    mark(engine_mut(vm), id);
     let widget = &mut engine_mut(vm).world.widgets[id.0];
     let old = (widget.width, widget.height);
     widget.width = w.unwrap_or(old.0);
@@ -2940,6 +2966,7 @@ fn get_size(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 }
 
 fn set_scale(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    mark(engine_mut(vm), id);
     let s = number_arg(vm, &c, 2)?;
     if s <= 0.0 {
         let class = engine(vm).world.widgets[id.0].class.clone();
@@ -3009,6 +3036,7 @@ fn get_effective_scale(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// `SetIgnoreParentScale(ignore)`: the effective scale its own, or its
 /// parents' too again.
 fn set_ignore_parent_scale(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    mark(engine_mut(vm), id);
     let on = c.arg(2).truthy();
     engine_mut(vm).world.widgets[id.0].ignore_parent_scale = on;
     layout_changed(vm);
@@ -3040,6 +3068,7 @@ fn is_ignoring_parent_alpha(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// alpha from a frame it had set to 1; decision T251). Unverified: what
 /// takes the aspect away again.
 fn set_alpha(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    mark(engine_mut(vm), id);
     let secret = matches!(c.arg(2), Value::Secret(_));
     let a = match vm.hidden(c.arg(2)) {
         Value::Num(n) if secret => n,
@@ -3059,6 +3088,7 @@ fn set_alpha(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// alpha one of the two picks (1 and 0 by default; unverified), a secret
 /// `value` or alpha making the alpha secret, as `SetAlpha` with a secret.
 fn set_alpha_from_boolean(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    mark(engine_mut(vm), id);
     let which = c.arg(2);
     let on = vm.hidden(which).truthy();
     let (picked, default) = if on { (c.arg(3), 1.0) } else { (c.arg(4), 0.0) };
@@ -3538,6 +3568,17 @@ fn set_text_to_fit(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// A widget's text set, kept alive while it is the widget's (its
 /// properties hold it: the collector sees them, not the widget).
 pub fn store_text(vm: &mut Vm, id: WidgetId, text: Option<Value>) {
+    // (the same text again changes nothing: a binding writes its text
+    // each frame, T542)
+    let same = match (engine(vm).world.widgets[id.0].text, text) {
+        (Some(a), Some(b)) => a.raw_eq(b),
+        (None, None) => true,
+        _ => false,
+    };
+    if same {
+        return;
+    }
+    mark(engine_mut(vm), id);
     let props = engine(vm).world.widgets[id.0].props;
     let key = vm.str("\u{0}text");
     let _ = vm
@@ -3795,6 +3836,7 @@ pub(crate) fn set_level(vm: &mut Vm, id: WidgetId, level: f64) {
 /// `frameLevel="500"`, at its inset's level 2). Unverified: a level set
 /// after.
 fn set_using_parent_level(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    mark(engine_mut(vm), id);
     let using = c.arg(2).truthy();
     store(vm, id, "UsingParentLevel", &[Value::Bool(using)]);
     if using {
@@ -3855,11 +3897,12 @@ pub fn strata_name(vm: &mut Vm, id: WidgetId) -> &'static str {
 /// A frame's own strata set (`SetFrameStrata`, its XML's), as a rank.
 pub fn own_strata(vm: &mut Vm, id: WidgetId) -> Option<usize> {
     let props = engine(vm).world.widgets[id.0].props;
-    if let Some(Value::Str(s)) =
-        stored_args(vm, props, "FrameStrata").and_then(|v| v.first().copied())
-    {
-        let s = String::from_utf8_lossy(vm.str_bytes(s)).to_uppercase();
-        return STRATAS.iter().position(|x| *x == s);
+    // (read without copies: each shown frame asks each frame, T542)
+    if let Some(Value::Str(s)) = stored_arg(vm, props, "FrameStrata", 0) {
+        let s = vm.str_bytes(s);
+        return STRATAS
+            .iter()
+            .position(|x| x.as_bytes().eq_ignore_ascii_case(s));
     }
     None
 }
@@ -3993,6 +4036,7 @@ fn copy_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 }
 
 fn set_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    mark(engine_mut(vm), id);
     let class = engine(vm).world.widgets[id.0].class.clone();
     let props = engine(vm).world.widgets[id.0].props;
     let font = match c.arg(2) {
@@ -4204,6 +4248,7 @@ fn is_enabled(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// aspect); the color then reads back secret (unverified: each channel,
 /// and the alpha aspect the documentation also names).
 fn set_vertex_color(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    mark(engine_mut(vm), id);
     let secret = (2..=5).any(|i| matches!(c.arg(i), Value::Secret(_)));
     let mut rgba = [1.0; 4];
     for (i, v) in rgba.iter_mut().enumerate().take(3) {
@@ -4291,6 +4336,87 @@ pub fn kind(e: &Engine, id: WidgetId) -> u8 {
         | if mask { KIND_MASK } else { 0 };
     w.kind.set(k);
     k
+}
+
+/// A widget and the widgets under it changed since the scene was last
+/// built (decision T542): the scene lays their frames' items out again. A
+/// font object's change reaches every text: the scene keeps nothing.
+pub fn mark(e: &mut Engine, id: WidgetId) {
+    let world = &mut e.world;
+    let count = world.widgets.len();
+    if world.scene_marks.len() < count {
+        world.scene_marks.resize(count, true);
+    }
+    if world.widgets.get(id.0).is_some_and(|w| w.class == "Font") {
+        world.scene_epoch += 1;
+    }
+    // (the widgets under it, and those anchored to or masked by these;
+    // a marked widget's are marked: the walk stops there)
+    let mut stack = vec![id.0];
+    while let Some(i) = stack.pop() {
+        match world.scene_marks.get_mut(i) {
+            Some(m) if !*m => *m = true,
+            _ => continue,
+        }
+        stack.extend(world.widgets[i].children.iter().map(|c| c.0));
+        if let Some(by) = world.anchored_by.get(i) {
+            stack.extend(by.iter().copied());
+        }
+    }
+}
+
+/// `id` moves or changes with `target` (anchored to it, masked by it):
+/// marking `target` marks it (decision T542).
+pub(crate) fn depends_on(e: &mut Engine, id: WidgetId, target: WidgetId) {
+    let by = &mut e.world.anchored_by;
+    if by.len() <= target.0 {
+        by.resize(target.0 + 1, Vec::new());
+    }
+    if !by[target.0].contains(&id.0) {
+        by[target.0].push(id.0);
+    }
+}
+
+/// A widget's anchors as they are now, for [`mark`] (T542).
+fn note_anchors(vm: &mut Vm, id: WidgetId) {
+    let relatives: Vec<Value> = engine(vm).world.widgets[id.0]
+        .points
+        .iter()
+        .filter_map(|p| p.relative)
+        .collect();
+    for r in relatives {
+        let target = match r {
+            Value::Str(s) => {
+                let name = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+                let g = vm.get_global(&name);
+                widget_of(vm, g)
+            }
+            v => widget_of(vm, v),
+        };
+        if let Some(t) = target {
+            depends_on(engine_mut(vm), id, t);
+        }
+    }
+}
+
+/// Whether a widget changed since the scene was last built (T542).
+pub fn scene_changed(e: &Engine, i: usize) -> bool {
+    e.world.scene_marks.get(i).copied().unwrap_or(true)
+}
+
+/// The scene was built: nothing changed since.
+pub fn scene_built(e: &mut Engine) {
+    let count = e.world.widgets.len();
+    e.world.scene_marks.clear();
+    e.world.scene_marks.resize(count, false);
+}
+
+/// A method that only reads its widget (`Get…`, `Is…`, `Has…`, `Can…`):
+/// it leaves the scene as it is (T542).
+fn reads_only(short: &str) -> bool {
+    ["Get", "Is", "Has", "Can"]
+        .iter()
+        .any(|p| short.starts_with(p))
 }
 
 /// The CVars set, in the order they were (a session lists them so), found
@@ -4387,6 +4513,7 @@ pub fn drag_move(vm: &mut Vm, d: &Dragging, dx: f64, dy: f64) {
         // (the drag in screen units, rectangles in UIParent's)
         let ui = ui_parent_scale(engine(vm));
         let screen = vm.get_global("UIParent");
+        mark(engine_mut(vm), m);
         let w = &mut engine_mut(vm).world.widgets[m.0];
         w.points = vec![Point {
             point: "BOTTOMLEFT".into(),
@@ -4434,6 +4561,7 @@ pub fn size_by(vm: &mut Vm, grip: WidgetId, dw: f64, dh: f64) {
         // (the drag in screen units, the size in its own)
         let own = effective_scale(engine(vm), f);
         let screen = vm.get_global("UIParent");
+        mark(engine_mut(vm), f);
         let w = &mut engine_mut(vm).world.widgets[f.0];
         let (min_w, min_h, max_w, max_h) = w.resize_bounds.unwrap_or_default();
         let limit = |v: f64, min: f64, max: f64| {
@@ -4684,6 +4812,7 @@ pub type MethodFn = fn(&mut Vm, WidgetId, NativeCall) -> Ret;
 
 /// Stores `args` as setter `stem`'s on a widget's properties.
 pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
+    mark(engine_mut(vm), id);
     if stem == "KeyboardEnabled" {
         insert_sorted(&mut engine_mut(vm).world.keyboard, id.0);
     }
@@ -4731,6 +4860,7 @@ pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
 /// new texture of the button's filling it (the highlight's in layer
 /// HIGHLIGHT, the others' in ARTWORK; unverified: the layers).
 fn button_texture(vm: &mut Vm, id: WidgetId, kind: &str) -> Value {
+    mark(engine_mut(vm), id);
     let props = engine(vm).world.widgets[id.0].props;
     let stem = format!("{kind}Texture");
     if let Some(t) = stored_args(vm, props, &stem).and_then(|v| v.first().copied())
@@ -4762,6 +4892,7 @@ fn button_texture(vm: &mut Vm, id: WidgetId, kind: &str) -> Value {
 
 /// Forgets what a setter stored (`GetX` then answers as before any `SetX`).
 pub(crate) fn unstore(vm: &mut Vm, id: WidgetId, stem: &str) {
+    mark(engine_mut(vm), id);
     let props = engine(vm).world.widgets[id.0].props;
     let key = vm.str(stem);
     let _ = vm.heap.table_mut(props).set(key, Value::Nil);
@@ -4791,6 +4922,7 @@ fn set_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// `SetXTexture(asset)`: a texture widget becomes the button's, a file its
 /// texture's; `SetXAtlas(atlas, …)` the atlas of its texture.
 fn set_button_texture(vm: &mut Vm, id: WidgetId, c: &NativeCall, kind: &str, atlas: bool) -> Ret {
+    mark(engine_mut(vm), id);
     let asset = c.arg(2);
     if !atlas && let Some(new) = widget_of(vm, asset) {
         // The texture it replaces is hidden, back in ARTWORK (SuuUI probe
