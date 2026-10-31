@@ -481,6 +481,11 @@ export type UnitData = {
     actions?: { at?: number, every?: number, within?: number, ["do"]: string, damage?: number, speed?: number, spell?: number, castTime?: number }[],
     --- The creature display the 3D world shows it as (decision T526).
     displayID?: number,
+    --- Its swings' damage and speed where its attack actions say none
+    --- (decision T530).
+    attack?: { damage?: number, speed?: number },
+    --- What its corpse holds when a kill names no loot (decision T530).
+    loot?: { id: number, count?: number }[],
     --- false: an offline player character (`UnitIsConnected` false; the
     --- roster's level 0, zone "Offline").
     online?: boolean,
@@ -588,6 +593,13 @@ export type MerchantItem = { id: number, price?: number, stack?: number, availab
 --- cursor's click on one mends it alone).
 export function openMerchant(data: { name?: string, items?: MerchantItem[], canRepair?: boolean, repairCost?: number, damaged?: number, cached?: boolean, repairMoneyAfter?: number, repairCosts?: { [number]: number } })
     engine().openMerchant(data)
+end
+
+--- The NPC is a vendor (decision T530): `player:interact(npc)` (or a
+--- right-click on it in the world) opens its window, as `openMerchant`'s
+--- `data`, the server's answer a round trip later.
+export function defineVendor(npc: MockUnit, data: { name?: string, items?: MerchantItem[], canRepair?: boolean, repairCost?: number })
+    engine().defineVendor(npc, data)
 end
 
 --- An action on the action bars (`GetActionInfo`'s type, ID and subtype;

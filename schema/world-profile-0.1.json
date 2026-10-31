@@ -497,6 +497,63 @@
             "boolean",
             "null"
           ]
+        },
+        "vendor": {
+          "description": "What it sells (decision T530): its window opens when the player\ntalks to it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnitVendor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "trainer": {
+          "description": "A trainer (decision T530): `{ class }`, the class's services as the\nclient lists them, or `{ services }`, its own."
+        },
+        "gossip": {
+          "description": "Its gossip (decision T530): `{ text, options = { { name, opens } },\navailableQuests }`; an option opens `vendor`, `trainer` or `taxi`."
+        },
+        "service": {
+          "description": "A service it gives (decision T530).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnitService"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attack": {
+          "description": "Its swings' damage and speed where its attack actions say none\n(decision T530).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnitAttack"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "threat": {
+          "description": "The player's threat on it, in percent.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "loot": {
+          "description": "What its corpse holds when a kill names none (decision T530).",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/LootItem"
+          }
         }
       },
       "additionalProperties": true
@@ -720,6 +777,114 @@
           "type": "string",
           "const": "face"
         }
+      ]
+    },
+    "UnitVendor": {
+      "description": "A vendor's goods (decision T530).",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/VendorItem"
+          }
+        },
+        "repairs": {
+          "description": "It repairs the player's gear.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "VendorItem": {
+      "description": "An item a vendor sells: its price (copper, by default the item's) for\n`stack` of it, `available` left (-1: unlimited).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number",
+          "format": "double"
+        },
+        "price": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "stack": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "available": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "UnitService": {
+      "description": "A service an NPC gives (decision T530).",
+      "type": "string",
+      "enum": [
+        "banker",
+        "mailbox",
+        "auctioneer",
+        "flightmaster"
+      ]
+    },
+    "UnitAttack": {
+      "description": "A unit's swings (decision T530).",
+      "type": "object",
+      "properties": {
+        "damage": {
+          "description": "Damage a swing (10).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "speed": {
+          "description": "Seconds between swings (2).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      }
+    },
+    "LootItem": {
+      "description": "An item a corpse holds.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number",
+          "format": "double"
+        },
+        "count": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "required": [
+        "id"
       ]
     },
     "List": {
@@ -1921,6 +2086,63 @@
             "boolean",
             "null"
           ]
+        },
+        "vendor": {
+          "description": "What it sells (decision T530): its window opens when the player\ntalks to it.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnitVendor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "trainer": {
+          "description": "A trainer (decision T530): `{ class }`, the class's services as the\nclient lists them, or `{ services }`, its own."
+        },
+        "gossip": {
+          "description": "Its gossip (decision T530): `{ text, options = { { name, opens } },\navailableQuests }`; an option opens `vendor`, `trainer` or `taxi`."
+        },
+        "service": {
+          "description": "A service it gives (decision T530).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnitService"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attack": {
+          "description": "Its swings' damage and speed where its attack actions say none\n(decision T530).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UnitAttack"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "threat": {
+          "description": "The player's threat on it, in percent.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "loot": {
+          "description": "What its corpse holds when a kill names none (decision T530).",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/LootItem"
+          }
         },
         "target": {
           "description": "The player's target.",

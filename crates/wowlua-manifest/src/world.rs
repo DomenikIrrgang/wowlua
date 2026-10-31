@@ -184,8 +184,75 @@ pub struct UnitData {
     pub zone: Option<String>,
     pub role: Option<String>,
     pub pvp: Option<bool>,
+    /// What it sells (decision T530): its window opens when the player
+    /// talks to it.
+    pub vendor: Option<UnitVendor>,
+    /// A trainer (decision T530): `{ class }`, the class's services as the
+    /// client lists them, or `{ services }`, its own.
+    pub trainer: Option<Value>,
+    /// Its gossip (decision T530): `{ text, options = { { name, opens } },
+    /// availableQuests }`; an option opens `vendor`, `trainer` or `taxi`.
+    pub gossip: Option<Value>,
+    /// A service it gives (decision T530).
+    pub service: Option<UnitService>,
+    /// Its swings' damage and speed where its attack actions say none
+    /// (decision T530).
+    pub attack: Option<UnitAttack>,
+    /// The player's threat on it, in percent.
+    pub threat: Option<f64>,
+    /// What its corpse holds when a kill names none (decision T530).
+    pub loot: Option<Vec<LootItem>>,
     #[serde(flatten)]
     pub other: Rest,
+}
+
+/// A vendor's goods (decision T530).
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitVendor {
+    pub items: Option<Vec<VendorItem>>,
+    /// It repairs the player's gear.
+    pub repairs: Option<bool>,
+}
+
+/// An item a vendor sells: its price (copper, by default the item's) for
+/// `stack` of it, `available` left (-1: unlimited).
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct VendorItem {
+    pub id: f64,
+    pub price: Option<f64>,
+    pub stack: Option<f64>,
+    pub available: Option<f64>,
+}
+
+/// A service an NPC gives (decision T530).
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum UnitService {
+    #[default]
+    Banker,
+    Mailbox,
+    Auctioneer,
+    Flightmaster,
+}
+
+/// A unit's swings (decision T530).
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UnitAttack {
+    /// Damage a swing (10).
+    pub damage: Option<f64>,
+    /// Seconds between swings (2).
+    pub speed: Option<f64>,
+}
+
+/// An item a corpse holds.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LootItem {
+    pub id: f64,
+    pub count: Option<f64>,
 }
 
 /// One of a unit's powers: how much it has (`UnitPower(unit, type)`) and

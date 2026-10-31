@@ -439,6 +439,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ),
         ("defaultedCalls", defaulted_calls),
         ("openMerchant", crate::merchant::control_open),
+        ("defineVendor", crate::merchant::control_define),
         ("setAction", crate::actions::control_set_action),
         ("setChannels", crate::channels::control_set_channels),
         ("setMacros", crate::macros::control_set_macros),

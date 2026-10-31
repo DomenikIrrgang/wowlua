@@ -776,6 +776,63 @@ end
     assert!(out.contains("1 passed, 0 failed"), "{out}");
 }
 
+/// A world profile's units as NPCs (decision T530): a vendor talked to
+/// opens its window, its gossip's option opens its goods, a flight master
+/// has a way to fly.
+#[test]
+fn world_profile_npcs() {
+    let profile = r#"{
+  "items": { "159": { "name": "Refreshing Spring Water", "quality": 1 } },
+  "units": [
+    { "name": "Innkeeper", "reaction": "friendly", "distance": 3, "target": true,
+      "vendor": { "items": [ { "id": 159, "price": 25, "stack": 5 } ], "repairs": true } },
+    { "name": "Guard", "reaction": "friendly", "distance": 4, "focus": true,
+      "vendor": { "items": [ { "id": 159 } ] },
+      "gossip": { "text": "Hail.", "options": [ { "name": "Your goods?", "opens": "vendor" } ] } },
+    { "name": "Gryphon Master", "reaction": "friendly", "distance": 5, "service": "flightmaster" }
+  ]
+}"#;
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "\n"),
+            ("tests/profiles/town.json", profile),
+            (
+                "tests/npcs.test.wowlua",
+                r#"import test, expect, config from "wowlua:test"
+import * as mock from "wowlua:mock"
+config({ profile = "town" })
+
+@test("a vendor opens its window when talked to")
+local function vendor()
+    local npc = mock.unitOf("target")
+    if npc then
+        mock.player:interact(npc)
+    end
+    mock.advanceFrames(60, 1000 / 60)
+    expect(GetMerchantNumItems()).toBe(1)
+    expect(CanMerchantRepair()).toBe(true)
+end
+
+@test("the guard's gossip opens its goods")
+local function guard()
+    local npc = mock.unitOf("focus")
+    if npc then
+        mock.player:interact(npc)
+    end
+    mock.advanceFrames(60, 1000 / 60)
+    expect(C_GossipInfo.GetText()).toBe("Hail.")
+    expect(#C_GossipInfo.GetOptions()).toBe(1)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+}
+
 /// World profiles (decision T213): the character, gear, bags, money,
 /// place, the units around, CVars, bindings and saved variables, loaded
 /// before the addon; changes fire the client's events.
