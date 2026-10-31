@@ -734,6 +734,31 @@ impl Renderer {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+        // (what the camera can see: a ball of `reach` yards about a middle,
+        // within the view's four sides; T537)
+        let side = [
+            w.look[1] * w.up[2] - w.look[2] * w.up[1],
+            w.look[2] * w.up[0] - w.look[0] * w.up[2],
+            w.look[0] * w.up[1] - w.look[1] * w.up[0],
+        ];
+        let (tan_x, tan_y) = ((w.fov / 2.0).tan(), (f64::from(fov_y) / 2.0).tan());
+        let (cos_x, cos_y) = (
+            1.0 / (1.0 + tan_x * tan_x).sqrt(),
+            1.0 / (1.0 + tan_y * tan_y).sqrt(),
+        );
+        let in_view = |middle: [f64; 3], reach: f64| {
+            let d = [
+                middle[0] - w.eye[0],
+                middle[1] - w.eye[1],
+                middle[2] - w.eye[2],
+            ];
+            let along = |a: [f64; 3]| d[0] * a[0] + d[1] * a[1] + d[2] * a[2];
+            let depth = along(w.look);
+            // (a side plane's distance: the ball within it by its reach)
+            depth > -reach
+                && (along(side).abs() - depth * tan_x) * cos_x <= reach
+                && (along(w.up).abs() - depth * tan_y) * cos_y <= reach
+        };
         pass.set_pipeline(&setup.pipeline);
         pass.set_bind_group(0, &setup.globals_group, &[]);
         for (x, y) in detailed {
@@ -751,7 +776,11 @@ impl Renderer {
                 let ahead = rel[0] * w.look[0] + rel[1] * w.look[1] + rel[2] * w.look[2];
                 let far = (rel[0] * rel[0] + rel[1] * rel[1]).sqrt();
                 // (a chunk wholly behind the eye, or past the view distance)
-                if c.count == 0 || ahead < -1.5 * CHUNK || far > w.far + CHUNK {
+                if c.count == 0
+                    || ahead < -1.5 * CHUNK
+                    || far > w.far + CHUNK
+                    || !in_view(c.center, CHUNK)
+                {
                     continue;
                 }
                 pass.set_bind_group(1, &c.group, &[]);
@@ -793,13 +822,28 @@ impl Renderer {
                 &bsetup.opaque
             });
             pass.set_bind_group(0, &setup.globals_group, &[]);
-            for (i, (file, _)) in placed.iter().enumerate() {
+            for (i, (file, m)) in placed.iter().enumerate() {
                 let Some(Some(b)) = self.world.buildings.get(file) else {
                     continue;
                 };
                 let at = i as u64 * 64;
                 pass.set_vertex_buffer(1, instances.slice(at..at + 64));
+                // (the placement's axes: their lengths its scale)
+                let axis = |k: usize| [m[k * 4], m[k * 4 + 1], m[k * 4 + 2]];
+                let scale = (0..3)
+                    .map(|k| {
+                        let a = axis(k);
+                        (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt()
+                    })
+                    .fold(0.0f32, f32::max);
                 for g in &b.groups {
+                    let c = g.middle;
+                    let world = [0, 1, 2].map(|r| {
+                        f64::from(m[12 + r] + m[r] * c[0] + m[4 + r] * c[1] + m[8 + r] * c[2])
+                    });
+                    if !in_view(world, f64::from(g.reach * scale)) {
+                        continue;
+                    }
                     pass.set_vertex_buffer(0, g.vertices.slice(..));
                     pass.set_index_buffer(g.indices.slice(..), wgpu::IndexFormat::Uint16);
                     for batch in g.batches.iter().filter(|b| b.blended == blended) {
@@ -847,6 +891,10 @@ struct GpuGroup {
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     batches: Vec<GpuBatch>,
+    /// Its middle and how far it reaches from it, in the building's own
+    /// space (what the view must see of it, T537).
+    middle: [f32; 3],
+    reach: f32,
 }
 
 /// A building on the GPU: its groups, drawn wherever it is placed.
@@ -1097,10 +1145,18 @@ impl Renderer {
                         blended: m.blend >= 2,
                     });
                 }
+                let (lo, hi) = (g.bounds[0], g.bounds[1]);
+                let half = [
+                    (hi[0] - lo[0]) / 2.0,
+                    (hi[1] - lo[1]) / 2.0,
+                    (hi[2] - lo[2]) / 2.0,
+                ];
                 groups.push(GpuGroup {
                     vertices,
                     indices: index_buffer,
                     batches,
+                    middle: [lo[0] + half[0], lo[1] + half[1], lo[2] + half[2]],
+                    reach: (half[0] * half[0] + half[1] * half[1] + half[2] * half[2]).sqrt(),
                 });
             }
             GpuBuilding { groups }

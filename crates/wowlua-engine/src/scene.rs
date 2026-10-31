@@ -1323,18 +1323,53 @@ fn merges_into_parent(vm: &mut Vm, id: WidgetId) -> bool {
 fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
     let count = engine(vm).world.widgets.len();
     let mut frames: Vec<(usize, f64, usize)> = Vec::new();
+    // (each widget's visibility and strata found once, its children's
+    // from it, T537)
+    let mut shown: rustc_hash::FxHashMap<usize, bool> = Default::default();
+    let mut stratas: rustc_hash::FxHashMap<usize, usize> = Default::default();
     for i in 0..count {
         let id = WidgetId(i);
         let w = &engine(vm).world.widgets[i];
-        if w.forbidden || !is_frame(vm, id) || !widgets::visible(engine(vm), id) {
+        if w.forbidden || !is_frame(vm, id) || !visible_memo(vm, id, &mut shown) {
             continue;
         }
-        let strata = widgets::strata_rank(vm, id);
+        let strata = strata_memo(vm, id, &mut stratas);
         let level = widgets::frame_level(vm, id);
         frames.push((strata, level, i));
     }
     frames.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
     frames.into_iter().map(|(_, _, i)| WidgetId(i)).collect()
+}
+
+/// `widgets::visible`, each widget's answer kept for its children's.
+fn visible_memo(vm: &Vm, id: WidgetId, known: &mut rustc_hash::FxHashMap<usize, bool>) -> bool {
+    if let Some(&v) = known.get(&id.0) {
+        return v;
+    }
+    let w = &engine(vm).world.widgets[id.0];
+    let v = w.shown && w.parent.is_none_or(|p| visible_memo(vm, p, known));
+    known.insert(id.0, v);
+    v
+}
+
+/// `widgets::strata_rank`, each widget's answer kept for its children's.
+fn strata_memo(
+    vm: &mut Vm,
+    id: WidgetId,
+    known: &mut rustc_hash::FxHashMap<usize, usize>,
+) -> usize {
+    if let Some(&s) = known.get(&id.0) {
+        return s;
+    }
+    let s = match widgets::own_strata(vm, id) {
+        Some(s) => s,
+        None => match engine(vm).world.widgets[id.0].parent {
+            Some(p) => strata_memo(vm, p, known),
+            None => 2,
+        },
+    };
+    known.insert(id.0, s);
+    s
 }
 
 fn mouse_enabled(vm: &Vm, id: WidgetId) -> bool {

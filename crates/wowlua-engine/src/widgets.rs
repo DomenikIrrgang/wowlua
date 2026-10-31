@@ -3831,6 +3831,18 @@ pub fn strata_name(vm: &mut Vm, id: WidgetId) -> &'static str {
 
 /// A frame's strata as a rank (`STRATAS`): its own, else its parent's
 /// (`PARENT`, or none set), `MEDIUM` at the top.
+/// A frame's own strata set (`SetFrameStrata`, its XML's), as a rank.
+pub fn own_strata(vm: &mut Vm, id: WidgetId) -> Option<usize> {
+    let props = engine(vm).world.widgets[id.0].props;
+    if let Some(Value::Str(s)) =
+        stored_args(vm, props, "FrameStrata").and_then(|v| v.first().copied())
+    {
+        let s = String::from_utf8_lossy(vm.str_bytes(s)).to_uppercase();
+        return STRATAS.iter().position(|x| *x == s);
+    }
+    None
+}
+
 pub fn strata_rank(vm: &mut Vm, id: WidgetId) -> usize {
     let mut cur = Some(id);
     while let Some(w) = cur {
