@@ -89,6 +89,24 @@ pub(crate) struct World {
     identity: Option<wgpu::Buffer>,
     /// The placements' matrices of a draw, and the buffer's size.
     instances: Option<(wgpu::Buffer, u64)>,
+    /// What stretches the world drawn at another scale to the screen, and
+    /// the texture it is drawn into (decision T538).
+    stretch: Option<Stretch>,
+    scaled: Option<Scaled>,
+}
+
+struct Stretch {
+    pipeline: wgpu::RenderPipeline,
+    layout: wgpu::BindGroupLayout,
+    sampler: wgpu::Sampler,
+}
+
+/// The world drawn at `RenderScale`: its texture's view, what binds it to
+/// the stretch and its size.
+struct Scaled {
+    view: wgpu::TextureView,
+    group: wgpu::BindGroup,
+    size: (u32, u32),
 }
 
 fn texture_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -413,15 +431,155 @@ impl Renderer {
         self.world.tiles.insert((map, x, y), gpu);
     }
 
-    /// Draws the world into `view` (cleared to the sky first), with a
-    /// depth buffer of its size: the tiles within the view distance, the
-    /// chunks in front of the camera.
+    /// Draws the world into `view`: at `RenderScale` of its pixels each
+    /// way, stretched to it (decision T538).
     pub(crate) fn draw_world(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         width: u32,
         height: u32,
+        w: &WorldView,
+        assets: &mut dyn Assets,
+    ) {
+        let scale = w.render_scale;
+        let size = (
+            ((f64::from(width) * scale).round() as u32).max(1),
+            ((f64::from(height) * scale).round() as u32).max(1),
+        );
+        if size == (width, height) {
+            self.draw_world_at(encoder, view, width, height, height, w, assets);
+            return;
+        }
+        let scaled = self.scaled_target(size);
+        self.draw_world_at(encoder, &scaled.0, size.0, size.1, height, w, assets);
+        let stretch = self.world.stretch.as_ref().expect("the stretch");
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("world stretched"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        pass.set_pipeline(&stretch.pipeline);
+        pass.set_bind_group(0, &scaled.1, &[]);
+        pass.draw(0..3, 0..1);
+    }
+
+    /// The texture the world is drawn into at `size`, made again when the
+    /// size changes, and its binding to the stretch.
+    fn scaled_target(&mut self, size: (u32, u32)) -> (wgpu::TextureView, wgpu::BindGroup) {
+        let d = &self.device;
+        let stretch = self.world.stretch.get_or_insert_with(|| {
+            let layout = d.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("world stretch"),
+                entries: &[texture_entry(0), sampler_entry(1)],
+            });
+            let pipeline_layout = d.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("world stretch"),
+                bind_group_layouts: &[Some(&layout)],
+                immediate_size: 0,
+            });
+            let shader = d.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("world stretch"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("stretch.wgsl").into()),
+            });
+            let pipeline = d.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("world stretch"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs"),
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs"),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: crate::FORMAT,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            });
+            let sampler = d.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("world stretch"),
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                ..Default::default()
+            });
+            Stretch {
+                pipeline,
+                layout,
+                sampler,
+            }
+        });
+        if self.world.scaled.as_ref().is_none_or(|s| s.size != size) {
+            let texture = d.create_texture(&wgpu::TextureDescriptor {
+                label: Some("world scaled"),
+                size: wgpu::Extent3d {
+                    width: size.0,
+                    height: size.1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: crate::FORMAT,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            let group = d.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("world scaled"),
+                layout: &stretch.layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&stretch.sampler),
+                    },
+                ],
+            });
+            self.world.scaled = Some(Scaled { view, group, size });
+        }
+        let s = self.world.scaled.as_ref().expect("the scaled target");
+        (s.view.clone(), s.group.clone())
+    }
+
+    /// Draws the world into `view` (cleared to the sky first), with a
+    /// depth buffer of its size: the tiles within the view distance, the
+    /// chunks in front of the camera. A doodad's size in pixels is
+    /// measured on a screen `screen_height` tall (the world's scale does
+    /// not change which are drawn).
+    #[allow(clippy::too_many_arguments)]
+    fn draw_world_at(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        width: u32,
+        height: u32,
+        screen_height: u32,
         w: &WorldView,
         assets: &mut dyn Assets,
     ) {
@@ -493,7 +651,7 @@ impl Renderer {
         let aspect = width as f32 / height.max(1) as f32;
         let fov_y = 2.0 * ((w.fov as f32 / 2.0).tan() / aspect).atan();
         // (how many pixels a yard is, a yard away)
-        let focal = f64::from(height) / 2.0 / f64::from((fov_y / 2.0).tan());
+        let focal = f64::from(screen_height) / 2.0 / f64::from((fov_y / 2.0).tan());
         // The buildings the tiles place within the objects' distance, each
         // once (one standing on several tiles is placed by each).
         let mut placed: Vec<(u32, [f32; 16])> = Vec::new();

@@ -163,7 +163,7 @@ no game running. Add launch configurations to `.vscode/launch.json`:
 | `addon` | `true` runs the addon itself, logged in, instead of a test file |
 | `flavor` | The flavor to run; without it, the package's only flavor, or VS Code asks which |
 | `profile` | A world profile to start in: `tests/profiles/<name>.json`, a character with its gear and bags and the world around it |
-| `clock` | `realtime` (the default: a game frame every 1/60 s) or `manual` (time stands still until asked) |
+| `clock` | `realtime` (the default: frames as fast as the game's `maxFPS` and `vsync` settings let them, time moving as it does) or `manual` (time stands still until asked) |
 | `stopOnEntry` | Stop before the first line runs |
 | `debugBlizzardUI` | Step into Blizzard's UI code too |
 | `wowluaPath` | The `wowlua` command for this configuration, over the `wowlua.path` setting |

@@ -473,12 +473,6 @@ fn get_tick_time(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(engine(vm).timers.tick_time)])
 }
 
-/// `GetFramerate()`: the frames a second the last frame's time makes (60
-/// before the first: `mock.nextFrame`'s default).
-fn get_framerate(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(framerate(vm))])
-}
-
 /// The frames a second the engine runs at (decision T537): the last
 /// second's frames over their time, as fast as a realtime session's
 /// frames really come (60 before any frame; unverified: the client's own
@@ -686,7 +680,6 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
         ("GetTime", get_time),
         ("GetTickTime", get_tick_time),
-        ("GetFramerate", get_framerate),
         ("GetTimePreciseSec", get_time),
         ("C_Timer.After", after),
         ("C_Timer.NewTimer", new_timer),

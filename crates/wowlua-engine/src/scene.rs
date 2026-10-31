@@ -261,7 +261,9 @@ pub struct Scene {
 /// `detail` yards the terrain in full (`terrainLodDist`), beyond it its
 /// tiles' minimap pictures; within `objects` yards the buildings and
 /// doodads (`horizonStart`), a doodad while it looks at least `cull`
-/// pixels big (`lodObjectCullSize`; decision T525).
+/// pixels big (`lodObjectCullSize`; decision T525). It is drawn with
+/// `render_scale` of the screen's pixels each way (`RenderScale`, 0.33 to
+/// 2) and stretched to the screen, the UI over it in full (decision T538).
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorldView {
     pub map: u32,
@@ -273,6 +275,7 @@ pub struct WorldView {
     pub detail: f64,
     pub objects: f64,
     pub cull: f64,
+    pub render_scale: f64,
     /// The units within `objects` yards, the player first (decision T526).
     pub units: Vec<WorldUnit>,
     /// The clock (seconds): how far into their animations.
@@ -369,6 +372,10 @@ fn world_view(vm: &mut Vm) -> Option<WorldView> {
     let detail = setting(vm, "terrainLodDist", 500.0).min(far);
     let objects = setting(vm, "horizonStart", 1900.0).min(far);
     let cull = setting(vm, "lodObjectCullSize", 18.0);
+    let render_scale = match setting(vm, "RenderScale", 1.0) {
+        s if s.is_finite() => s.clamp(0.33, 2.0),
+        _ => 1.0,
+    };
     let units = world_units(vm, [e.at.0, e.at.1, e.at.2], objects);
     let time = vm.clock.elapsed_ms / 1000.0;
     let v = |a: (f64, f64, f64)| [a.0, a.1, a.2];
@@ -382,6 +389,7 @@ fn world_view(vm: &mut Vm) -> Option<WorldView> {
         detail,
         objects,
         cull,
+        render_scale,
         units,
         time,
     })
