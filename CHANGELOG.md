@@ -38,6 +38,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 - A creature the client's cache knows from a newer client now shows its model (its displays were missed).
 - A world profile's units' `npcId` was ignored; it now names the creature, as `npcID` does in a test.
+- `GetRealmName` and `GetNormalizedRealmName` always gave `Realm` in a test; they now give your character's realm from the world profile or `mock.setPlayer`, as `UnitFullName` and chat already did (`GetNormalizedRealmName` without spaces and hyphens).
 
 ## 0.13.7 (2026-10-30)
 
