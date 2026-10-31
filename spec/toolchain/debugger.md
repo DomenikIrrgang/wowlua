@@ -203,7 +203,9 @@ they show changed (decision T542): a widget changed by a method (anything
 but its `Get…`, `Is…`, `Has…` and `Can…`) or by the engine, the widgets
 under it and those anchored to it or masked by it; a font object or the
 screen changing lays everything out again; a minimap, a model, a message
-frame and what an animation plays are laid out each time. A debug build,
+frame and what an animation plays are laid out each time. The frames'
+order is kept too, until a frame is shown or hidden, made, reparented or
+re-layered (decision T543). A debug build,
 or `WOWLUA_SCENE_CHECK=1`, lays every scene out anew as well and stops on
 a difference.
 

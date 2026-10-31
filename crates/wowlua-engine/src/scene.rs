@@ -501,6 +501,9 @@ fn volatile() {
 pub(crate) struct Kept {
     epoch: u64,
     groups: rustc_hash::FxHashMap<usize, Group>,
+    /// The frames in drawing order, and those drawn on their parent's
+    /// level, while `scene_order_valid` (decision T543).
+    order: Option<(Vec<WidgetId>, std::collections::HashSet<usize>)>,
 }
 
 struct Group {
@@ -2205,19 +2208,38 @@ fn build_scene(vm: &mut Vm, keep: bool) -> Scene {
         let s = &engine(vm).screen;
         (s.width.round() as u32, s.height.round() as u32)
     };
-    let order = frames_in_order(vm);
     let hover = engine(vm).world.input.mouse_focus;
     let mut all = Vec::new();
-    // A frame on its parent's level (`useParentLevel`) is drawn with its
-    // parent: their regions sorted together by layer and sublevel (the
-    // gossip window's parchment, its own `BACKGROUND`, shows over its
-    // inset's marble, the inset's `BACKGROUND` -5, as in game).
-    let merged: std::collections::HashSet<usize> = order
-        .iter()
-        .filter(|f| merges_into_parent(vm, **f))
-        .map(|f| f.0)
-        .collect();
     let epoch = engine(vm).world.scene_epoch;
+    // (the frames' order as the last scene found it, while no frame was
+    // shown, hidden, made, reparented or re-layered: T543)
+    let kept_order = if keep && engine(vm).world.scene_order_valid {
+        let kept = engine(vm).scene_kept.borrow();
+        kept.order.clone().filter(|_| kept.epoch == epoch)
+    } else {
+        None
+    };
+    let (order, merged) = match kept_order {
+        Some(o) => o,
+        None => {
+            let order = frames_in_order(vm);
+            // A frame on its parent's level (`useParentLevel`) is drawn
+            // with its parent: their regions sorted together by layer and
+            // sublevel (the gossip window's parchment, its own
+            // `BACKGROUND`, shows over its inset's marble, the inset's
+            // `BACKGROUND` -5, as in game).
+            let merged: std::collections::HashSet<usize> = order
+                .iter()
+                .filter(|f| merges_into_parent(vm, **f))
+                .map(|f| f.0)
+                .collect();
+            if keep {
+                engine(vm).scene_kept.borrow_mut().order = Some((order.clone(), merged.clone()));
+                crate::engine_mut(vm).world.scene_order_valid = true;
+            }
+            (order, merged)
+        }
+    };
     let mut old = if keep {
         let mut kept = engine(vm).scene_kept.borrow_mut();
         if kept.epoch != epoch {

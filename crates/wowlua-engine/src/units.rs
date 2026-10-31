@@ -4794,6 +4794,7 @@ fn show_nameplate(vm: &mut Vm, me: UnitId) -> Result<usize, wowlua_vm::LuaError>
         );
         let id = widgets::widget_of(vm, frame).expect("a widget");
         engine_mut(vm).world.widgets[id.0].frame = true;
+        crate::widgets::reorder(crate::engine_mut(vm));
         crate::widgets::mark(crate::engine_mut(vm), id);
         engine_mut(vm).units.nameplate_frames.push(id);
         fire(vm, "NAME_PLATE_CREATED", &[frame]);

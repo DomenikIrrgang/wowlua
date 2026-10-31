@@ -158,6 +158,9 @@ pub struct World {
     /// By widget, the widgets anchored to it or masked by it: they move or
     /// change with it (decision T542; some may be no longer).
     pub anchored_by: Vec<Vec<usize>>,
+    /// The scene's order of frames still holds: no frame was shown,
+    /// hidden, made, reparented or re-layered since (decision T543).
+    pub scene_order_valid: bool,
     /// The widgets that ever registered for events: the ones an event
     /// looks at.
     pub listening: std::collections::BTreeSet<usize>,
@@ -676,6 +679,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
     let world = &mut engine_mut(vm).world;
     w.forbidden = forbidden;
     world.widgets.push(w);
+    world.scene_order_valid = false;
     if let Some(p) = parent {
         world.widgets[p.0].children.push(id);
     }
@@ -903,6 +907,7 @@ pub fn create_frame(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(id) = widget_of(vm, frame) {
         let w = &mut engine_mut(vm).world.widgets[id.0];
         w.frame = true;
+        w.kind.set(0);
         // Blizzard's secure templates are protected (unverified without
         // their XML).
         w.protected = templates
@@ -1817,6 +1822,9 @@ fn subtree(e: &Engine, id: WidgetId) -> Vec<WidgetId> {
 /// visibility changed, children before their parent (`/stdtest engine`:
 /// "g- c- p-", "g+ c+").
 pub fn set_shown(vm: &mut Vm, id: WidgetId, shown: bool) {
+    if engine(vm).world.widgets[id.0].shown != shown {
+        reorder(engine_mut(vm));
+    }
     mark(engine_mut(vm), id);
     let before: Vec<(WidgetId, bool)> = subtree(engine(vm), id)
         .into_iter()
@@ -1950,6 +1958,7 @@ fn get_parent(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 }
 
 fn set_parent(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    reorder(engine_mut(vm));
     mark(engine_mut(vm), id);
     let parent = match c.arg(2) {
         Value::Nil => None,
@@ -3836,6 +3845,7 @@ pub(crate) fn set_level(vm: &mut Vm, id: WidgetId, level: f64) {
 /// `frameLevel="500"`, at its inset's level 2). Unverified: a level set
 /// after.
 fn set_using_parent_level(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    reorder(engine_mut(vm));
     mark(engine_mut(vm), id);
     let using = c.arg(2).truthy();
     store(vm, id, "UsingParentLevel", &[Value::Bool(using)]);
@@ -4399,6 +4409,14 @@ fn note_anchors(vm: &mut Vm, id: WidgetId) {
     }
 }
 
+/// The frames' order changed: the scene orders them again (T543).
+pub fn reorder(e: &mut Engine) {
+    e.world.scene_order_valid = false;
+}
+
+/// The setters whose values order the frames (T543).
+const ORDER_STEMS: [&str; 3] = ["FrameStrata", "FrameLevel", "UsingParentLevel"];
+
 /// Whether a widget changed since the scene was last built (T542).
 pub fn scene_changed(e: &Engine, i: usize) -> bool {
     e.world.scene_marks.get(i).copied().unwrap_or(true)
@@ -4812,6 +4830,15 @@ pub type MethodFn = fn(&mut Vm, WidgetId, NativeCall) -> Ret;
 
 /// Stores `args` as setter `stem`'s on a widget's properties.
 pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
+    if ORDER_STEMS.contains(&stem) {
+        let props = engine(vm).world.widgets[id.0].props;
+        let same = stored_ref(vm, props, stem).is_some_and(|old| {
+            old.len() == args.len() && old.iter().zip(args).all(|(a, b)| a.raw_eq(*b))
+        });
+        if !same {
+            reorder(engine_mut(vm));
+        }
+    }
     mark(engine_mut(vm), id);
     if stem == "KeyboardEnabled" {
         insert_sorted(&mut engine_mut(vm).world.keyboard, id.0);
@@ -4892,6 +4919,9 @@ fn button_texture(vm: &mut Vm, id: WidgetId, kind: &str) -> Value {
 
 /// Forgets what a setter stored (`GetX` then answers as before any `SetX`).
 pub(crate) fn unstore(vm: &mut Vm, id: WidgetId, stem: &str) {
+    if ORDER_STEMS.contains(&stem) {
+        reorder(engine_mut(vm));
+    }
     mark(engine_mut(vm), id);
     let props = engine(vm).world.widgets[id.0].props;
     let key = vm.str(stem);
