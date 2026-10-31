@@ -52,6 +52,8 @@ pub struct Point {
 pub struct Widget {
     /// The class whose methods it has (`Frame`, `Button`, `FontString`).
     pub class: String,
+    /// Its class's kind, found once ([`kind`]): 0 not yet.
+    pub kind: std::cell::Cell<u8>,
     /// The Lua object (a script object's: the engine's own record, its
     /// userdata is [`Widget::object`]).
     pub table: TableRef,
@@ -618,6 +620,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         keep(vm, Value::Table(t));
     }
     let w = Widget {
+        kind: std::cell::Cell::new(0),
         class: class.to_string(),
         table,
         object: None,
@@ -4204,6 +4207,31 @@ pub fn mouse_by_default(e: &Engine, class: &str) -> bool {
     ]
     .iter()
     .any(|kind| is_a(e, class, kind))
+}
+
+/// A widget's kind is known.
+pub const KIND_KNOWN: u8 = 1;
+/// A region (a texture, a font string, a line, a mask).
+pub const KIND_REGION: u8 = 2;
+/// Of a frame's class.
+pub const KIND_FRAME: u8 = 4;
+
+/// A widget's kind (`KIND_*`): its class's, which never changes, found the
+/// first time it is asked (the scene asks of every widget each frame;
+/// decision T537).
+pub fn kind(e: &Engine, id: WidgetId) -> u8 {
+    let w = &e.world.widgets[id.0];
+    let k = w.kind.get();
+    if k != 0 {
+        return k;
+    }
+    let region = ["Texture", "FontString", "Line", "MaskTexture"]
+        .iter()
+        .any(|base| is_a(e, &w.class, base));
+    let frame = is_a(e, &w.class, "Frame");
+    let k = KIND_KNOWN | if region { KIND_REGION } else { 0 } | if frame { KIND_FRAME } else { 0 };
+    w.kind.set(k);
+    k
 }
 
 /// The CVars set, in the order they were (a session lists them so), found

@@ -160,7 +160,8 @@ pub(crate) struct Models {
 }
 
 /// Actors posed: what [`Renderer::pose_actors`] gives.
-struct Posed {
+#[derive(Clone)]
+pub(crate) struct Posed {
     verts: Vec<MVertex>,
     /// The triangles' corners: indices into `verts` (T537).
     indices: Vec<u32>,
@@ -180,7 +181,8 @@ pub(crate) struct WorldModels {
 }
 
 /// A batch to draw: its indices' range and how.
-struct Draw {
+#[derive(Clone)]
+pub(crate) struct Draw {
     blend: u16,
     depth_write: bool,
     tex: [usize; 3],
@@ -774,9 +776,68 @@ impl Renderer {
         light: ([f32; 3], [f32; 3], [f32; 3]),
         assets: &mut dyn Assets,
     ) -> Option<WorldModels> {
-        let p = self.pose_actors(actors, camera, ms, assets);
+        // Each unit posed apart, a farther one less often: within 12
+        // yards every frame, to 30 yards 20 times a second, beyond 10;
+        // between, its last pose (T537; the game's rate unverified).
+        let eye = match camera {
+            ModelCamera::Scene { position, .. } => *position,
+            _ => [0.0; 3],
+        };
+        let mut p = Posed {
+            verts: std::mem::take(&mut self.world_verts),
+            indices: std::mem::take(&mut self.world_indices),
+            draws: Vec::new(),
+            lo: [f32::MAX; 3],
+            hi: [f32::MIN; 3],
+            portrait: None,
+            own_camera: None,
+        };
+        p.verts.clear();
+        p.indices.clear();
+        let mut kept = std::mem::take(&mut self.world_poses);
+        let mut fresh = HashMap::new();
+        for actor in actors {
+            let far = dot(sub(actor.position, eye), sub(actor.position, eye)).sqrt();
+            let period = if far < 12.0 {
+                0
+            } else if far < 30.0 {
+                50
+            } else {
+                100
+            };
+            let moment = if period == 0 { ms } else { ms / period };
+            let key = format!(
+                "{}|{:?}|{}|{}|{}|{}",
+                source_key(&actor.source),
+                actor.position.map(f32::to_bits),
+                actor.yaw.to_bits(),
+                actor.animation,
+                actor.scale.to_bits(),
+                period
+            );
+            let one = match kept.remove(&key) {
+                Some((at, one)) if period != 0 && at == moment => one,
+                _ => self.pose_actors(std::slice::from_ref(actor), camera, ms, assets),
+            };
+            let (vbase, ibase) = (p.verts.len() as u32, p.indices.len() as u32);
+            p.verts.extend_from_slice(&one.verts);
+            p.indices.extend(one.indices.iter().map(|i| i + vbase));
+            p.draws.extend(one.draws.iter().map(|d| Draw {
+                start: d.start + ibase,
+                end: d.end + ibase,
+                ..d.clone()
+            }));
+            if period != 0 {
+                fresh.insert(key, (moment, one));
+            }
+        }
+        // (the poses of units no longer drawn go)
+        self.world_poses = fresh;
+        drop(kept);
         self.models.sprites.clear();
         if p.verts.is_empty() {
+            self.world_verts = p.verts;
+            self.world_indices = p.indices;
             return None;
         }
         let view_proj = m2::mul(&proj, &view);
@@ -819,6 +880,9 @@ impl Renderer {
         for d in &p.draws {
             self.model_pipeline(d.blend.min(7), d.depth_write);
         }
+        // (the lists kept for the next frame's, their room with them)
+        self.world_verts = p.verts;
+        self.world_indices = p.indices;
         Some(WorldModels {
             vertices,
             indices,

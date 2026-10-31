@@ -158,3 +158,15 @@ Talked = false",
     assert_eq!(out, ["Wolf"]);
     assert!(nearer < zoom, "{zoom} {nearer}");
 }
+
+/// `GetFramerate` answers the frames a second the engine runs at
+/// (decision T537): the last second's frames over their time.
+#[test]
+fn the_framerate_is_the_engines() {
+    let mut vm = vm();
+    wowlua_engine::clock::advance_frames(&mut vm, 60, 1000.0 / 30.0);
+    let slow = run(&mut vm, "return math.floor(GetFramerate() + 0.5)");
+    wowlua_engine::clock::advance_frames(&mut vm, 120, 1000.0 / 60.0);
+    let fast = run(&mut vm, "return math.floor(GetFramerate() + 0.5)");
+    assert_eq!([slow, fast], [["30"], ["60"]]);
+}

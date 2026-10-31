@@ -275,6 +275,12 @@ pub struct Renderer {
     /// the batch's stamp.
     emitted: Vec<(u32, u32)>,
     emit_stamp: u32,
+    /// The world's units' vertices and indices, kept from frame to frame
+    /// (their room reused), and the farther units' last poses by unit
+    /// (T537).
+    world_verts: Vec<model::MVertex>,
+    world_indices: Vec<u32>,
+    world_poses: std::collections::HashMap<String, (u32, model::Posed)>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipelines: Vec<wgpu::RenderPipeline>,
@@ -539,6 +545,9 @@ impl Renderer {
             posed_stamp: 0,
             emitted: Vec::new(),
             emit_stamp: 0,
+            world_verts: Vec::new(),
+            world_indices: Vec::new(),
+            world_poses: std::collections::HashMap::new(),
             missing: 0,
             atlas_tex: 0,
             models: model::Models::default(),

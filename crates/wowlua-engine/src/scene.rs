@@ -1294,18 +1294,14 @@ fn layer_of(vm: &Vm, id: WidgetId) -> (usize, i32) {
 /// Whether a widget is a region (drawn by its frame), by its type: XML
 /// builds regions as it builds frames.
 fn is_region(vm: &Vm, id: WidgetId) -> bool {
-    let e = engine(vm);
-    let class = &e.world.widgets[id.0].class;
-    ["Texture", "FontString", "Line", "MaskTexture"]
-        .iter()
-        .any(|k| widgets::is_a(e, class, k))
+    widgets::kind(engine(vm), id) & widgets::KIND_REGION != 0
 }
 
 /// Whether a widget is a frame (drawn in the strata's order).
 fn is_frame(vm: &Vm, id: WidgetId) -> bool {
     let e = engine(vm);
-    let w = &e.world.widgets[id.0];
-    !is_region(vm, id) && (w.frame || widgets::is_a(e, &w.class, "Frame"))
+    let k = widgets::kind(e, id);
+    k & widgets::KIND_REGION == 0 && (e.world.widgets[id.0].frame || k & widgets::KIND_FRAME != 0)
 }
 
 /// Whether a frame is drawn with its parent: it uses its parent's level

@@ -43,6 +43,9 @@ pub struct Timers {
     advancing: Option<f64>,
     /// The last frame's seconds (`GetTickTime`), none before the first.
     pub tick_time: f64,
+    /// The last second's frames' seconds, the newest last (`GetFramerate`,
+    /// decision T537).
+    pub recent: std::collections::VecDeque<f64>,
     /// Game frames run so far (the debugger's and profiler's frame names).
     pub frames_run: u64,
 }
@@ -384,6 +387,13 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
         engine_answers(vm, end_ms);
         tick(vm, end_ms - vm.clock.elapsed_ms);
         engine_mut(vm).timers.tick_time = ms / 1000.0;
+        {
+            let recent = &mut engine_mut(vm).timers.recent;
+            recent.push_back(ms / 1000.0);
+            while recent.len() > 1 && recent.iter().sum::<f64>() - recent[0] >= 1.0 {
+                recent.pop_front();
+            }
+        }
         widgets::run_size_changes(vm);
         let count = engine(vm).world.widgets.len();
         let elapsed = Value::Num(ms / 1000.0);
@@ -466,8 +476,20 @@ fn get_tick_time(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// `GetFramerate()`: the frames a second the last frame's time makes (60
 /// before the first: `mock.nextFrame`'s default).
 fn get_framerate(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let t = engine(vm).timers.tick_time;
-    Ok(vec![Value::Num(if t > 0.0 { 1.0 / t } else { 60.0 })])
+    Ok(vec![Value::Num(framerate(vm))])
+}
+
+/// The frames a second the engine runs at (decision T537): the last
+/// second's frames over their time, as fast as a realtime session's
+/// frames really come (60 before any frame; unverified: the client's own
+/// averaging).
+pub fn framerate(vm: &Vm) -> f64 {
+    let recent = &engine(vm).timers.recent;
+    let seconds: f64 = recent.iter().sum();
+    if recent.is_empty() || seconds <= 0.0 {
+        return 60.0;
+    }
+    recent.len() as f64 / seconds
 }
 
 // ------------------------------------------------------- timed signal maps

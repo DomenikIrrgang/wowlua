@@ -36,16 +36,28 @@ pub struct Row {
     pub advances: Vec<f64>,
 }
 
+/// The recorded fonts' glyphs, by font file (found by its name without a
+/// copy of it: a line's every character looks; decision T537).
 struct Glyphs {
-    rows: HashMap<(String, bool, i64), Row>,
-    kern: HashMap<(String, i64, char, char), f64>,
+    rows: HashMap<String, HashMap<(bool, i64), Row>>,
+    kern: HashMap<String, HashMap<(i64, char, char), f64>>,
+}
+
+impl Glyphs {
+    fn row(&self, file: &str, outline: bool, px: i64) -> Option<&Row> {
+        self.rows.get(file)?.get(&(outline, px))
+    }
+
+    fn kern(&self, file: &str, px: i64, a: char, b: char) -> Option<f64> {
+        self.kern.get(file)?.get(&(px, a, b)).copied()
+    }
 }
 
 fn glyphs() -> &'static Glyphs {
     static GLYPHS: OnceLock<Glyphs> = OnceLock::new();
     GLYPHS.get_or_init(|| {
-        let mut rows = HashMap::new();
-        let mut kern = HashMap::new();
+        let mut rows: HashMap<String, HashMap<(bool, i64), Row>> = HashMap::new();
+        let mut kern: HashMap<String, HashMap<(i64, char, char), f64>> = HashMap::new();
         for line in include_str!("../data/camelot-glyphs.txt").lines() {
             if line.starts_with('#') {
                 continue;
@@ -59,13 +71,15 @@ fn glyphs() -> &'static Glyphs {
                     if let (Some(a), Some(b), Ok(px), Ok(d)) =
                         (c.next(), c.next(), px.parse(), delta.parse())
                     {
-                        kern.insert((font.to_ascii_lowercase(), px, a, b), d);
+                        kern.entry(font.to_ascii_lowercase())
+                            .or_default()
+                            .insert((px, a, b), d);
                     }
                 }
                 [font, flags, px, height, widths, advances] => {
                     if let (Ok(px), Ok(height)) = (px.parse::<i64>(), height.parse::<f64>()) {
-                        rows.insert(
-                            (font.to_ascii_lowercase(), *flags == "OUTLINE", px),
+                        rows.entry(font.to_ascii_lowercase()).or_default().insert(
+                            (*flags == "OUTLINE", px),
                             Row {
                                 height,
                                 widths: nums(widths),
@@ -136,7 +150,7 @@ fn glyph(font: &Font, px: i64, c: char) -> (f64, f64) {
     let g = glyphs();
     let i = c as u32;
     let ascii = (32..=126).contains(&i);
-    let recorded = g.rows.contains_key(&(font.file.clone(), font.outline, 12));
+    let recorded = g.row(&font.file, font.outline, 12).is_some();
     if !(recorded && ascii && (8..=45).contains(&px))
         && let Some(client) = &font.client
         && let Ok(size) = u32::try_from(px)
@@ -173,16 +187,15 @@ pub fn pixel(vm: &Vm, id: WidgetId) -> f32 {
 /// recorded ones is scaled by.
 fn row(font: &Font, px: i64) -> (&'static Row, f64) {
     let g = glyphs();
-    let file = if g.rows.contains_key(&(font.file.clone(), font.outline, 12)) {
-        font.file.clone()
+    let file = if g.row(&font.file, font.outline, 12).is_some() {
+        font.file.as_str()
     } else {
-        "frizqt__.ttf".to_string()
+        "frizqt__.ttf"
     };
     let near = px.clamp(8, 45);
     let row = g
-        .rows
-        .get(&(file.clone(), font.outline, near))
-        .or_else(|| g.rows.get(&(file, false, near)))
+        .row(file, font.outline, near)
+        .or_else(|| g.row(file, false, near))
         .expect("the recorded fonts' rows");
     (row, px as f64 / near as f64)
 }
@@ -343,7 +356,7 @@ fn line_px(font: &Font, px: i64, line: &str) -> f64 {
     };
     let g = glyphs();
     for pair in chars.windows(2) {
-        if let Some(d) = g.kern.get(&(font.file.clone(), px, pair[0], pair[1])) {
+        if let Some(d) = g.kern(&font.file, px, pair[0], pair[1]) {
             total += d;
         }
     }
@@ -392,7 +405,7 @@ fn advance_px(font: &Font, px: i64, chars: &[char]) -> f64 {
     let mut total: f64 = chars.iter().map(|&c| glyph(font, px, c).0).sum();
     let g = glyphs();
     for pair in chars.windows(2) {
-        if let Some(d) = g.kern.get(&(font.file.clone(), px, pair[0], pair[1])) {
+        if let Some(d) = g.kern(&font.file, px, pair[0], pair[1]) {
             total += d;
         }
     }
@@ -682,7 +695,7 @@ pub fn glyph_line_of(font: &Font, px: i64, line: &str) -> GlyphLine {
             None => glyph(font, px, c).0,
         };
         if let Some(&next) = chars.get(i + 1)
-            && let Some(d) = g.kern.get(&(font.file.clone(), px, c, next))
+            && let Some(d) = g.kern(&font.file, px, c, next)
         {
             x += d;
         }

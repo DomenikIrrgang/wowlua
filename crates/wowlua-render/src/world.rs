@@ -637,10 +637,27 @@ impl Renderer {
                 w.far as f32,
             ],
         };
-        // The units as their models, posed for this camera (T526).
+        // The units as their models, posed for this camera (T526): those
+        // the camera can see (4 yards' room around each, T537).
+        let (tan_x, tan_y) = ((w.fov / 2.0).tan(), (f64::from(fov_y) / 2.0).tan());
+        let right = [
+            w.look[1] * w.up[2] - w.look[2] * w.up[1],
+            w.look[2] * w.up[0] - w.look[0] * w.up[2],
+            w.look[0] * w.up[1] - w.look[1] * w.up[0],
+        ];
+        let seen = |at: [f64; 3]| {
+            let d = [at[0] - w.eye[0], at[1] - w.eye[1], at[2] + 1.0 - w.eye[2]];
+            let along = |a: [f64; 3]| d[0] * a[0] + d[1] * a[1] + d[2] * a[2];
+            let depth = along(w.look);
+            const ROOM: f64 = 4.0;
+            depth > -ROOM
+                && along(right).abs() <= depth.max(0.0) * tan_x + ROOM
+                && along(w.up).abs() <= depth.max(0.0) * tan_y + ROOM
+        };
         let actors: Vec<wowlua_engine::scene::Actor> = w
             .units
             .iter()
+            .filter(|u| seen(u.at))
             .map(|u| wowlua_engine::scene::Actor {
                 source: u.source.clone(),
                 position: f32s(u.at),
