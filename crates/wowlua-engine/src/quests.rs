@@ -247,6 +247,15 @@ pub fn control_interact(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(npc) = units::handle_of(vm, c.arg(2)) else {
         return Err(vm.error("interact: an NPC to talk to expected"));
     };
+    talk_to(vm, npc);
+    Ok(vec![])
+}
+
+/// The player talks to an NPC (`player:interact`, a right-click on it in
+/// the world, decision T530): too far, the client's error; else its
+/// gossip, its vendor's window (T530), its mailbox, bank or auction house,
+/// or its quest dialog.
+pub fn talk_to(vm: &mut Vm, npc: UnitId) {
     // Too far (recorded at 9.9 yards): the client's error at once.
     if engine(vm).units.list[npc.0]
         .distance
@@ -263,23 +272,27 @@ pub fn control_interact(vm: &mut Vm, c: NativeCall) -> Ret {
         };
         let text = vm.str(&text);
         fire(vm, "UI_ERROR_MESSAGE", &[Value::Num(code), text]);
-        return Ok(vec![]);
+        return;
     }
     if crate::gossip::has(vm, npc) {
         crate::gossip::interact(vm, npc);
-        return Ok(vec![]);
+        return;
+    }
+    if crate::merchant::has(vm, npc) {
+        crate::merchant::interact(vm, npc);
+        return;
     }
     if crate::mail::has(vm, npc) {
         crate::mail::interact(vm, npc);
-        return Ok(vec![]);
+        return;
     }
     if crate::bank::has(vm, npc) {
         crate::bank::interact(vm, npc);
-        return Ok(vec![]);
+        return;
     }
     if crate::auction::has(vm, npc) {
         crate::auction::interact(vm, npc);
-        return Ok(vec![]);
+        return;
     }
     let delay = crate::clock::server_delay(vm);
     let later = vm.native_with(
@@ -288,7 +301,6 @@ pub fn control_interact(vm: &mut Vm, c: NativeCall) -> Ret {
         vec![Value::Num(npc.0 as f64)],
     );
     crate::clock::after_engine(vm, delay, later);
-    Ok(vec![])
 }
 
 fn giver_of(vm: &mut Vm, t: TableRef) -> Option<UnitId> {

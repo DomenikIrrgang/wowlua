@@ -215,7 +215,7 @@ pub fn input(vm: &mut Vm, input: &Input) -> Result<(), String> {
             wowlua_engine::camera::wheel(vm, *steps);
             Ok(())
         }
-        Input::ClickWorld { x, y } => {
+        Input::ClickWorld { x, y, right } => {
             // (a frame there takes the click, as in the game; the world
             // only what no frame covers)
             let frame = wowlua_engine::scene::hit_test(vm, *x, *y).filter(|f| {
@@ -229,6 +229,10 @@ pub fn input(vm: &mut Vm, input: &Input) -> Result<(), String> {
             if let Some(unit) = wowlua_engine::camera::unit_at(vm, *x, *y) {
                 inp::as_user(vm, |vm| {
                     wowlua_engine::units::set_player_target(vm, Some(unit));
+                    // (the right button talks to it, as in the game)
+                    if *right {
+                        wowlua_engine::quests::talk_to(vm, unit);
+                    }
                 });
             }
             Ok(())

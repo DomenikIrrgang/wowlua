@@ -87,6 +87,40 @@ each(profile.units, function(_, data)
     if data.nameplate then
         unit:showNameplate({ entering = true })
     end
+    -- What it is to the player (decision T530): a vendor, a class trainer,
+    -- gossip, a service.
+    if type(data.vendor) == "table" then
+        local v = data.vendor
+        mock.defineVendor(unit, { name = data.name, items = v.items, canRepair = v.repairs })
+    end
+    if type(data.trainer) == "table" then
+        mock.defineTrainer(unit, data.trainer)
+    end
+    local gossip = data.gossip
+    if data.service == "flightmaster" and type(gossip) ~= "table" then
+        gossip = { options = { { name = "Show me where I can fly.", opens = "taxi" } } }
+    end
+    if type(gossip) == "table" then
+        each(gossip.options, function(_, o)
+            if o.opens == "vendor" and type(data.vendor) == "table" then
+                o.opens = "merchant"
+                o.merchant = { name = data.name, items = data.vendor.items, canRepair = data.vendor.repairs }
+            end
+        end)
+        mock.defineGossip(unit, gossip)
+    end
+    if data.service == "flightmaster" then
+        mock.defineTaxi(unit, data.taxi or {})
+    elseif data.service == "banker" then
+        mock.defineBank(unit, data.bank or {})
+    elseif data.service == "mailbox" then
+        mock.defineMailbox(unit, data.mailbox or {})
+    elseif data.service == "auctioneer" then
+        mock.defineAuctionHouse(unit, data.auctionHouse or {})
+    end
+    if type(data.threat) == "number" then
+        unit:setThreat(data.threat)
+    end
     each(data.auras, function(_, aura)
         unit:applyAura(aura)
     end)
