@@ -2439,7 +2439,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - The other clients' answers (decisions T510, T511)
 - Answered on the beta's last day (2026-10-24)
 - Moving and facing (decisions T516, T519)
-- A solid world (decision T524)
+- A solid world (decisions T524, T532)
 - How far the world is drawn (decision T525)
 - The camera (decisions T520, T521)
 - The dev tools (0.12.1)

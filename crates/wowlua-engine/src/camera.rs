@@ -139,9 +139,10 @@ pub fn eye(vm: &mut Vm) -> Option<Eye> {
         x - look.1 * v.distance,
         z + PIVOT - look.2 * v.distance,
     );
-    // (in front of what stands between it and the player, T524)
+    // (in front of what stands between it and the player, T524: the
+    // terrain and the buildings, not the props, T532)
     let pivot = [y, x, z + PIVOT];
-    if let Some(f) = crate::clientdata::hit(vm, map, pivot, [at.0, at.1, at.2]) {
+    if let Some(f) = crate::clientdata::hit(vm, map, pivot, [at.0, at.1, at.2], false) {
         let keep = (f - NEAR / v.distance.max(NEAR)).max(0.0);
         at = (
             pivot[0] + (at.0 - pivot[0]) * keep,
@@ -239,7 +240,7 @@ pub fn ground_at(vm: &mut Vm, x: f64, y: f64) -> Option<(f64, f64, f64)> {
         e.at.2 + d.2 * reach,
     ];
     let from = [e.at.0, e.at.1, e.at.2];
-    if let Some(f) = crate::clientdata::hit(vm, map, from, end) {
+    if let Some(f) = crate::clientdata::hit(vm, map, from, end, false) {
         return Some((
             from[0] + (end[0] - from[0]) * f,
             from[1] + (end[1] - from[1]) * f,

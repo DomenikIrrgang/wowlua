@@ -646,6 +646,25 @@ fn u32s(b: &[u8]) -> Vec<u32> {
         .collect()
 }
 
+/// A model's collision mesh (decision T532): its corners and its
+/// triangles (three corners each), in the model's own space, from the
+/// header's collision arrays; none for a model without one (grass,
+/// flowers, small props).
+pub fn collision(data: &[u8]) -> Option<(Vec<Vec3>, Vec<u16>)> {
+    let d = if data.starts_with(b"MD20") {
+        data
+    } else {
+        chunks(data).into_iter().find(|(tag, _)| tag == b"MD21")?.1
+    };
+    if !d.starts_with(b"MD20") {
+        return None;
+    }
+    let r = R(d);
+    let indices = r.u16s(216);
+    let corners = r.list(224, 12, |r, o| r.vec3(o));
+    (indices.len() >= 3 && !corners.is_empty()).then_some((corners, indices))
+}
+
 impl Model {
     /// Reads a model file (`MD21` chunked, or a bare `MD20`).
     pub fn parse(data: &[u8]) -> Option<Model> {

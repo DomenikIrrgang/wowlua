@@ -893,7 +893,7 @@ Unverified numbers and answers from M13's movement and ranges. A paladin
    and walk away from it until a button's hotkey turns red. Answers the
    slots told and their values (wowlua: each slot's `false true` once).
 
-## A solid world (decision T524)
+## A solid world (decisions T524, T532)
 
 1. **Line of sight**: enter
    `/run local f=CreateFrame("Frame") f:RegisterEvent("UI_ERROR_MESSAGE") f:SetScript("OnEvent",function(_,_,c,t) print(c,t) end)`,
@@ -901,7 +901,11 @@ Unverified numbers and answers from M13's movement and ranges. A paladin
    in range. Answers the code and text (wowlua: 57, "Target not in line of
    sight").
 2. **A step's height**: walk onto a crate or a ledge and note the highest
-   one you step onto without jumping (wowlua: 2 yards).
+   one you step onto without jumping (wowlua: 0.6 yards, to the knee).
+3. **The camera and the trees**: zoom the camera out, then turn it so a
+   tree's trunk stands between it and your character. Note whether the
+   camera moves in front of the trunk, as it does for a wall (wowlua: it
+   does not).
 
 ## How far the world is drawn (decision T525)
 

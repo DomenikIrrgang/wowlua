@@ -126,6 +126,11 @@ pub struct Library {
     buildings: HashMap<u32, Option<std::sync::Arc<Building>>>,
     /// The creatures the installation knows, read once (decision T531).
     creatures: Option<Vec<Creature>>,
+    /// The props' collision meshes read, by model file (decision T532).
+    pub(crate) props: HashMap<u32, Option<std::sync::Arc<crate::collide::Prop>>>,
+    /// Each map tile's solids, gathered when last asked for.
+    pub(crate) solids: HashMap<(u32, i32, i32), (u64, TileSolids)>,
+    pub(crate) solids_asked: u64,
 }
 
 /// A creature the installation knows (decision T531): from the client's
@@ -148,6 +153,9 @@ pub struct Creature {
 
 /// A terrain tile read, shared with whoever draws it.
 type SharedTile = std::sync::Arc<crate::adt::Tile>;
+
+/// A terrain tile's solids, listed (decision T532).
+type TileSolids = std::sync::Arc<Vec<crate::collide::Solid>>;
 
 /// A building (a WMO) with its groups (decision T523).
 #[derive(Clone, Debug, PartialEq)]
@@ -441,24 +449,40 @@ impl Library {
     /// A creature's (`Creature` ID) first display: the client's table's,
     /// else its creature cache's (what the server told it).
     pub fn creature(&mut self, casc: &Casc, id: u32) -> Option<Display> {
-        let own = self
-            .table(casc, "Creature")
-            .and_then(|t| t.row(id))
-            .and_then(|r| r.ints("DisplayID").into_iter().find(|&d| d != 0));
-        let display = match own {
-            Some(d) => d,
-            None => {
-                let cache = self.creature_cache.get_or_insert_with(|| {
-                    let mut all = HashMap::new();
-                    for f in casc.cache_files("creaturecache.wdb") {
-                        all.extend(crate::wdb::creature_displays(&f));
-                    }
-                    all
-                });
-                *cache.get(&id)?.first()?
-            }
-        };
+        let display = self.creature_display_id(casc, id)?;
         self.creature_display(casc, display)
+    }
+
+    /// How wide a creature display's body is, a radius in yards (decision
+    /// T532): half its model data's collision width (`CollisionWidth`; a
+    /// human male's 0.611, the 0.306 radius the game's servers know) at
+    /// the display's scale.
+    pub fn body_radius(&mut self, casc: &Casc, display: u32) -> Option<f64> {
+        let (model, scale) = {
+            let r = self.table(casc, "CreatureDisplayInfo")?.row(display)?;
+            (r.int("ModelID"), r.float("CreatureModelScale"))
+        };
+        let width = self
+            .table(casc, "CreatureModelData")?
+            .row(model)?
+            .float("CollisionWidth");
+        let scale = if scale > 0.0 { scale } else { 1.0 };
+        (width > 0.0).then(|| f64::from(width * scale) / 2.0)
+    }
+
+    /// A race's and sex's character display (`ChrModel`'s).
+    pub fn character_display(&mut self, casc: &Casc, race: u32, sex: u32) -> Option<u32> {
+        let chr_model = self
+            .table(casc, "ChrRaceXChrModel")?
+            .rows_where("ChrRacesID", race)
+            .iter()
+            .find(|r| r.int("Sex") == sex)?
+            .int("ChrModelID");
+        let display = self
+            .table(casc, "ChrModel")?
+            .row(chr_model)?
+            .int("DisplayID");
+        (display != 0).then_some(display)
     }
 
     /// A model file by itself.

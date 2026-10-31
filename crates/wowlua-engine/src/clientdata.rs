@@ -180,14 +180,20 @@ pub trait ClientData: Send + Sync {
     fn floor(&self, _map: u32, _at: [f64; 3]) -> Option<f64> {
         None
     }
-    /// Where the line between two places first meets the terrain or a
-    /// building (0 to 1 along it); none for a clear line (decision T524).
-    fn hit(&self, _map: u32, _a: [f64; 3], _b: [f64; 3]) -> Option<f64> {
+    /// Where the line between two places first meets the terrain, a
+    /// building or, with `props`, a prop (0 to 1 along it); none for a
+    /// clear line (decisions T524, T532).
+    fn hit(&self, _map: u32, _a: [f64; 3], _b: [f64; 3], _props: bool) -> Option<f64> {
         None
     }
     /// How far one walks from a place toward another before a wall (0 to
-    /// 1; decision T524).
-    fn walk(&self, _map: u32, _a: [f64; 3], _b: [f64; 3]) -> Option<f64> {
+    /// 1; decisions T524, T532), one's body `radius` yards wide.
+    fn walk(&self, _map: u32, _a: [f64; 3], _b: [f64; 3], _radius: f64) -> Option<f64> {
+        None
+    }
+    /// How wide a model's body is, a radius in yards (decision T532): its
+    /// model data's collision width.
+    fn body(&self, _source: &crate::scene::ModelSource) -> Option<f64> {
         None
     }
     /// A spell as the client's tables (and its hotfixes) have it
@@ -530,22 +536,31 @@ pub(crate) fn floor(vm: &Vm, map: f64, at: [f64; 3]) -> Option<f64> {
 
 /// Where the line between two places first meets the world while it is
 /// on (decision T524); none for a clear line, or the world off.
-pub(crate) fn hit(vm: &Vm, map: f64, a: [f64; 3], b: [f64; 3]) -> Option<f64> {
+pub(crate) fn hit(vm: &Vm, map: f64, a: [f64; 3], b: [f64; 3], props: bool) -> Option<f64> {
     if !crate::engine(vm).world_on {
         return None;
     }
-    data(vm)?.hit(u32::try_from(map as i64).ok()?, a, b)
+    data(vm)?.hit(u32::try_from(map as i64).ok()?, a, b, props)
 }
 
-/// How far one walks between two places before a wall while the world is
-/// on (decision T524); all the way while it is off.
-pub(crate) fn walk(vm: &Vm, map: f64, a: [f64; 3], b: [f64; 3]) -> f64 {
+/// How far one walks between two places before a wall, one's body
+/// `radius` yards wide, while the world is on (decisions T524, T532); all
+/// the way while it is off.
+pub(crate) fn walk(vm: &Vm, map: f64, a: [f64; 3], b: [f64; 3], radius: f64) -> f64 {
     if !crate::engine(vm).world_on {
         return 1.0;
     }
     data(vm)
-        .and_then(|d| d.walk(u32::try_from(map as i64).ok()?, a, b))
+        .and_then(|d| d.walk(u32::try_from(map as i64).ok()?, a, b, radius))
         .unwrap_or(1.0)
+}
+
+/// How wide a model's body is while the world is on (decision T532).
+pub(crate) fn body(vm: &Vm, source: &crate::scene::ModelSource) -> Option<f64> {
+    if !crate::engine(vm).world_on {
+        return None;
+    }
+    data(vm)?.body(source)
 }
 
 /// The UI camera the client's tables give an item on a character of a
