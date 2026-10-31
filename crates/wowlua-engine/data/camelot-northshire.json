@@ -1,0 +1,1360 @@
+{
+  "position": {
+    "mapID": 1429,
+    "zone": "Elwynn Forest",
+    "subZone": "Northshire Valley",
+    "world": {
+      "y": -8949.95,
+      "x": -132.49,
+      "z": 0,
+      "instanceID": 0
+    },
+    "facing": 0
+  },
+  "money": 500000,
+  "units": [
+    {
+      "name": "Test Vendor: Cloth",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1261,
+      "world": {
+        "y": -8938.0,
+        "x": -116.0,
+        "z": 0
+      },
+      "facing": 4.085,
+      "vendor": {
+        "items": [
+          {
+            "id": 6242,
+            "price": 1217
+          },
+          {
+            "id": 2578,
+            "price": 1120
+          },
+          {
+            "id": 10047,
+            "price": 822
+          },
+          {
+            "id": 4309,
+            "price": 1133
+          },
+          {
+            "id": 4312,
+            "price": 1186
+          },
+          {
+            "id": 2569,
+            "price": 437
+          },
+          {
+            "id": 4308,
+            "price": 225
+          },
+          {
+            "id": 3224,
+            "price": 142
+          },
+          {
+            "id": 6202,
+            "price": 179
+          },
+          {
+            "id": 4310,
+            "price": 902
+          },
+          {
+            "id": 4786,
+            "price": 1393
+          },
+          {
+            "id": 2584,
+            "price": 711
+          },
+          {
+            "id": 2308,
+            "price": 1338
+          },
+          {
+            "id": 15944,
+            "price": 2051
+          },
+          {
+            "id": 15926,
+            "price": 3210
+          },
+          {
+            "id": 5069,
+            "price": 1466
+          },
+          {
+            "id": 5071,
+            "price": 2216
+          },
+          {
+            "id": 5212,
+            "price": 3361
+          }
+        ],
+        "repairs": true
+      }
+    },
+    {
+      "name": "Test Vendor: Leather",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1276,
+      "world": {
+        "y": -8938.0,
+        "x": -120.0,
+        "z": 0
+      },
+      "facing": 3.949,
+      "vendor": {
+        "items": [
+          {
+            "id": 2311,
+            "price": 751
+          },
+          {
+            "id": 4243,
+            "price": 2308
+          },
+          {
+            "id": 2300,
+            "price": 962
+          },
+          {
+            "id": 4246,
+            "price": 625
+          },
+          {
+            "id": 6379,
+            "price": 1223
+          },
+          {
+            "id": 4242,
+            "price": 1739
+          },
+          {
+            "id": 2974,
+            "price": 1962
+          },
+          {
+            "id": 2309,
+            "price": 1085
+          },
+          {
+            "id": 2307,
+            "price": 975
+          },
+          {
+            "id": 7281,
+            "price": 421
+          },
+          {
+            "id": 763,
+            "price": 293
+          },
+          {
+            "id": 2312,
+            "price": 905
+          },
+          {
+            "id": 4239,
+            "price": 357
+          },
+          {
+            "id": 4701,
+            "price": 1263
+          }
+        ],
+        "repairs": true
+      }
+    },
+    {
+      "name": "Test Vendor: Mail & Shields",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1277,
+      "world": {
+        "y": -8938.0,
+        "x": -124.0,
+        "z": 0
+      },
+      "facing": 3.759,
+      "vendor": {
+        "items": [
+          {
+            "id": 2977,
+            "price": 2382
+          },
+          {
+            "id": 6730,
+            "price": 1490
+          },
+          {
+            "id": 2864,
+            "price": 3150
+          },
+          {
+            "id": 2851,
+            "price": 282
+          },
+          {
+            "id": 2857,
+            "price": 991
+          },
+          {
+            "id": 3473,
+            "price": 1498
+          },
+          {
+            "id": 6350,
+            "price": 1478
+          },
+          {
+            "id": 2854,
+            "price": 1127
+          },
+          {
+            "id": 3472,
+            "price": 357
+          },
+          {
+            "id": 3652,
+            "price": 1820
+          },
+          {
+            "id": 6203,
+            "price": 608
+          },
+          {
+            "id": 1189,
+            "price": 2500
+          }
+        ],
+        "repairs": true
+      }
+    },
+    {
+      "name": "Test Vendor: Weapons",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1288,
+      "world": {
+        "y": -8938.0,
+        "x": -128.0,
+        "z": 0
+      },
+      "facing": 3.501,
+      "vendor": {
+        "items": [
+          {
+            "id": 3489,
+            "price": 2860
+          },
+          {
+            "id": 3488,
+            "price": 2400
+          },
+          {
+            "id": 1913,
+            "price": 742
+          },
+          {
+            "id": 6214,
+            "price": 1864
+          },
+          {
+            "id": 4777,
+            "price": 7040
+          },
+          {
+            "id": 4765,
+            "price": 2877
+          },
+          {
+            "id": 4766,
+            "price": 2407
+          },
+          {
+            "id": 7955,
+            "price": 1208
+          },
+          {
+            "id": 3487,
+            "price": 4540
+          },
+          {
+            "id": 4302,
+            "price": 732
+          },
+          {
+            "id": 3225,
+            "price": 548
+          },
+          {
+            "id": 7166,
+            "price": 973
+          },
+          {
+            "id": 8180,
+            "price": 1203
+          },
+          {
+            "id": 11303,
+            "price": 3184
+          },
+          {
+            "id": 4577,
+            "price": 1784
+          },
+          {
+            "id": 4362,
+            "price": 938
+          },
+          {
+            "id": 15945,
+            "price": 3351
+          }
+        ],
+        "repairs": true
+      }
+    },
+    {
+      "name": "Test Vendor: General Goods",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1287,
+      "world": {
+        "y": -8938.0,
+        "x": -132.0,
+        "z": 0
+      },
+      "facing": 3.183,
+      "vendor": {
+        "items": [
+          {
+            "id": 159,
+            "price": 25,
+            "stack": 5
+          },
+          {
+            "id": 1179,
+            "price": 125,
+            "stack": 5
+          },
+          {
+            "id": 117,
+            "price": 25,
+            "stack": 5
+          },
+          {
+            "id": 4540,
+            "price": 25,
+            "stack": 5
+          },
+          {
+            "id": 4541,
+            "price": 125,
+            "stack": 5
+          },
+          {
+            "id": 2287,
+            "price": 125,
+            "stack": 5
+          },
+          {
+            "id": 414,
+            "price": 125,
+            "stack": 5
+          },
+          {
+            "id": 4536,
+            "price": 25,
+            "stack": 5
+          },
+          {
+            "id": 4604,
+            "price": 25,
+            "stack": 5
+          },
+          {
+            "id": 787,
+            "price": 25,
+            "stack": 5
+          },
+          {
+            "id": 118,
+            "price": 20
+          },
+          {
+            "id": 858,
+            "price": 100
+          },
+          {
+            "id": 2455,
+            "price": 40
+          },
+          {
+            "id": 4496,
+            "price": 500
+          },
+          {
+            "id": 5571,
+            "price": 1000
+          },
+          {
+            "id": 4498,
+            "price": 2500
+          },
+          {
+            "id": 856,
+            "price": 3500
+          },
+          {
+            "id": 2512,
+            "price": 10,
+            "stack": 200
+          },
+          {
+            "id": 2515,
+            "price": 50,
+            "stack": 200
+          },
+          {
+            "id": 2516,
+            "price": 10,
+            "stack": 200
+          },
+          {
+            "id": 2519,
+            "price": 50,
+            "stack": 200
+          },
+          {
+            "id": 6256,
+            "price": 23
+          },
+          {
+            "id": 2901,
+            "price": 10
+          },
+          {
+            "id": 7005,
+            "price": 10
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Vendor: Reagents & Trade Goods",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1285,
+      "world": {
+        "y": -8938.0,
+        "x": -136.0,
+        "z": 0
+      },
+      "facing": 2.856,
+      "vendor": {
+        "items": [
+          {
+            "id": 17020,
+            "price": 1000
+          },
+          {
+            "id": 17026,
+            "price": 1000
+          },
+          {
+            "id": 17028,
+            "price": 700
+          },
+          {
+            "id": 21177,
+            "price": 3000,
+            "stack": 20
+          },
+          {
+            "id": 5565,
+            "price": 5000,
+            "available": 3
+          },
+          {
+            "id": 17031,
+            "price": 1000,
+            "available": 3
+          },
+          {
+            "id": 17032,
+            "price": 2000,
+            "available": 3
+          },
+          {
+            "id": 2320,
+            "price": 10
+          },
+          {
+            "id": 2321,
+            "price": 100
+          },
+          {
+            "id": 2604,
+            "price": 50
+          },
+          {
+            "id": 6260,
+            "price": 50
+          },
+          {
+            "id": 2324,
+            "price": 25
+          },
+          {
+            "id": 2678,
+            "price": 10,
+            "stack": 5
+          },
+          {
+            "id": 4289,
+            "price": 50
+          },
+          {
+            "id": 4470,
+            "price": 38
+          },
+          {
+            "id": 2880,
+            "price": 100
+          },
+          {
+            "id": 3371,
+            "price": 20,
+            "stack": 5
+          },
+          {
+            "id": 3372,
+            "price": 200,
+            "stack": 5
+          },
+          {
+            "id": 6217,
+            "price": 124
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Repairs",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1280,
+      "world": {
+        "y": -8938.0,
+        "x": -140.0,
+        "z": 0
+      },
+      "facing": 2.581,
+      "vendor": {
+        "items": [
+          {
+            "id": 2901,
+            "price": 10
+          },
+          {
+            "id": 5956,
+            "price": 18
+          },
+          {
+            "id": 2880,
+            "price": 100
+          },
+          {
+            "id": 7005,
+            "price": 10
+          }
+        ],
+        "repairs": true
+      }
+    },
+    {
+      "name": "Test Innkeeper",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1440,
+      "world": {
+        "y": -8938.0,
+        "x": -144.0,
+        "z": 0
+      },
+      "facing": 2.375,
+      "vendor": {
+        "items": [
+          {
+            "id": 159,
+            "price": 25,
+            "stack": 5
+          },
+          {
+            "id": 1179,
+            "price": 125,
+            "stack": 5
+          },
+          {
+            "id": 4540,
+            "price": 25,
+            "stack": 5
+          },
+          {
+            "id": 4541,
+            "price": 125,
+            "stack": 5
+          },
+          {
+            "id": 2287,
+            "price": 125,
+            "stack": 5
+          },
+          {
+            "id": 414,
+            "price": 125,
+            "stack": 5
+          }
+        ]
+      },
+      "gossip": {
+        "text": "Welcome! Rest here a while, or buy something for the road.",
+        "options": [
+          {
+            "name": "Let me browse your goods.",
+            "icon": 1,
+            "opens": "vendor"
+          },
+          {
+            "name": "Make this inn your home.",
+            "icon": 5
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Trainer: Warrior",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1289,
+      "world": {
+        "y": -8931.0,
+        "x": -116.0,
+        "z": 0
+      },
+      "facing": 3.858,
+      "trainer": {
+        "class": "WARRIOR"
+      },
+      "gossip": {
+        "text": "Ready to learn more of the warrior's ways?",
+        "options": [
+          {
+            "name": "I would like to train.",
+            "icon": 3,
+            "opens": "trainer"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Trainer: Paladin",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1290,
+      "world": {
+        "y": -8931.0,
+        "x": -120.0,
+        "z": 0
+      },
+      "facing": 3.724,
+      "trainer": {
+        "class": "PALADIN"
+      },
+      "gossip": {
+        "text": "Ready to learn more of the paladin's ways?",
+        "options": [
+          {
+            "name": "I would like to train.",
+            "icon": 3,
+            "opens": "trainer"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Trainer: Hunter",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1543,
+      "world": {
+        "y": -8931.0,
+        "x": -124.0,
+        "z": 0
+      },
+      "facing": 3.563,
+      "trainer": {
+        "class": "HUNTER"
+      },
+      "gossip": {
+        "text": "Ready to learn more of the hunter's ways?",
+        "options": [
+          {
+            "name": "I would like to train.",
+            "icon": 3,
+            "opens": "trainer"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Trainer: Rogue",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1291,
+      "world": {
+        "y": -8931.0,
+        "x": -128.0,
+        "z": 0
+      },
+      "facing": 3.374,
+      "trainer": {
+        "class": "ROGUE"
+      },
+      "gossip": {
+        "text": "Ready to learn more of the rogue's ways?",
+        "options": [
+          {
+            "name": "I would like to train.",
+            "icon": 3,
+            "opens": "trainer"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Trainer: Priest",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1295,
+      "world": {
+        "y": -8931.0,
+        "x": -132.0,
+        "z": 0
+      },
+      "facing": 3.167,
+      "trainer": {
+        "class": "PRIEST"
+      },
+      "gossip": {
+        "text": "Ready to learn more of the priest's ways?",
+        "options": [
+          {
+            "name": "I would like to train.",
+            "icon": 3,
+            "opens": "trainer"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Trainer: Shaman",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1832,
+      "world": {
+        "y": -8931.0,
+        "x": -136.0,
+        "z": 0
+      },
+      "facing": 2.958,
+      "trainer": {
+        "class": "SHAMAN"
+      },
+      "gossip": {
+        "text": "Ready to learn more of the shaman's ways?",
+        "options": [
+          {
+            "name": "I would like to train.",
+            "icon": 3,
+            "opens": "trainer"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Trainer: Mage",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1296,
+      "world": {
+        "y": -8931.0,
+        "x": -140.0,
+        "z": 0
+      },
+      "facing": 2.764,
+      "trainer": {
+        "class": "MAGE"
+      },
+      "gossip": {
+        "text": "Ready to learn more of the mage's ways?",
+        "options": [
+          {
+            "name": "I would like to train.",
+            "icon": 3,
+            "opens": "trainer"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Trainer: Warlock",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1527,
+      "world": {
+        "y": -8931.0,
+        "x": -144.0,
+        "z": 0
+      },
+      "facing": 2.596,
+      "trainer": {
+        "class": "WARLOCK"
+      },
+      "gossip": {
+        "text": "Ready to learn more of the warlock's ways?",
+        "options": [
+          {
+            "name": "I would like to train.",
+            "icon": 3,
+            "opens": "trainer"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Trainer: Druid",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1890,
+      "world": {
+        "y": -8931.0,
+        "x": -148.0,
+        "z": 0
+      },
+      "facing": 2.456,
+      "trainer": {
+        "class": "DRUID"
+      },
+      "gossip": {
+        "text": "Ready to learn more of the druid's ways?",
+        "options": [
+          {
+            "name": "I would like to train.",
+            "icon": 3,
+            "opens": "trainer"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Banker",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1292,
+      "world": {
+        "y": -8954.0,
+        "x": -104.0,
+        "z": 0
+      },
+      "facing": 4.854,
+      "service": "banker",
+      "bank": {}
+    },
+    {
+      "name": "Test Auctioneer",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1297,
+      "world": {
+        "y": -8950.0,
+        "x": -104.0,
+        "z": 0
+      },
+      "facing": 4.714,
+      "service": "auctioneer",
+      "auctionHouse": {
+        "browse": [
+          {
+            "itemKey": {
+              "itemID": 2589,
+              "itemLevel": 0,
+              "itemSuffix": 0,
+              "battlePetSpeciesID": 0
+            },
+            "minPrice": 12,
+            "totalQuantity": 140,
+            "containsOwnerItem": false
+          },
+          {
+            "itemKey": {
+              "itemID": 2592,
+              "itemLevel": 0,
+              "itemSuffix": 0,
+              "battlePetSpeciesID": 0
+            },
+            "minPrice": 30,
+            "totalQuantity": 60,
+            "containsOwnerItem": false
+          },
+          {
+            "itemKey": {
+              "itemID": 2770,
+              "itemLevel": 0,
+              "itemSuffix": 0,
+              "battlePetSpeciesID": 0
+            },
+            "minPrice": 9,
+            "totalQuantity": 80,
+            "containsOwnerItem": false
+          },
+          {
+            "itemKey": {
+              "itemID": 2447,
+              "itemLevel": 0,
+              "itemSuffix": 0,
+              "battlePetSpeciesID": 0
+            },
+            "minPrice": 15,
+            "totalQuantity": 40,
+            "containsOwnerItem": false
+          },
+          {
+            "itemKey": {
+              "itemID": 765,
+              "itemLevel": 0,
+              "itemSuffix": 0,
+              "battlePetSpeciesID": 0
+            },
+            "minPrice": 10,
+            "totalQuantity": 55,
+            "containsOwnerItem": false
+          },
+          {
+            "itemKey": {
+              "itemID": 2578,
+              "itemLevel": 0,
+              "itemSuffix": 0,
+              "battlePetSpeciesID": 0
+            },
+            "minPrice": 2400,
+            "totalQuantity": 1,
+            "containsOwnerItem": false
+          },
+          {
+            "itemKey": {
+              "itemID": 4243,
+              "itemLevel": 0,
+              "itemSuffix": 0,
+              "battlePetSpeciesID": 0
+            },
+            "minPrice": 4800,
+            "totalQuantity": 2,
+            "containsOwnerItem": false
+          },
+          {
+            "itemKey": {
+              "itemID": 3488,
+              "itemLevel": 0,
+              "itemSuffix": 0,
+              "battlePetSpeciesID": 0
+            },
+            "minPrice": 5000,
+            "totalQuantity": 1,
+            "containsOwnerItem": false
+          }
+        ],
+        "deposit": 60,
+        "nextAuctionID": 1000
+      }
+    },
+    {
+      "name": "Test Postmaster",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1298,
+      "world": {
+        "y": -8946.0,
+        "x": -104.0,
+        "z": 0
+      },
+      "facing": 4.575,
+      "service": "mailbox",
+      "mailbox": {
+        "letters": [
+          {
+            "sender": "wowlua",
+            "subject": "Welcome to Northshire",
+            "money": 100000,
+            "daysLeft": 30,
+            "textCreated": true,
+            "text": "A little gold to try the vendors with.",
+            "items": [
+              {
+                "id": 4496,
+                "count": 1
+              }
+            ]
+          },
+          {
+            "sender": "Auction House",
+            "subject": "Auction successful: Linen Cloth",
+            "money": 1140,
+            "daysLeft": 29,
+            "auction": true,
+            "invoice": {
+              "type": "seller",
+              "itemName": "Linen Cloth",
+              "playerName": "Buyer",
+              "bid": 1200,
+              "buyout": 1200,
+              "deposit": 60,
+              "consignment": 60
+            }
+          },
+          {
+            "sender": "Test Postmaster",
+            "subject": "Read me",
+            "daysLeft": 3,
+            "wasRead": false,
+            "textCreated": true,
+            "text": "A letter about to expire."
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Flight Master",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1299,
+      "world": {
+        "y": -8942.0,
+        "x": -104.0,
+        "z": 0
+      },
+      "facing": 4.44,
+      "service": "flightmaster",
+      "taxi": {
+        "mapID": 1415,
+        "nodes": [
+          {
+            "name": "Stormwind, Elwynn",
+            "nodeID": 2,
+            "x": 0.4409,
+            "y": 0.6946,
+            "state": 0,
+            "cost": 0,
+            "routes": 1
+          },
+          {
+            "name": "Sentinel Hill, Westfall",
+            "nodeID": 4,
+            "x": 0.4251,
+            "y": 0.7711,
+            "state": 1,
+            "cost": 1600,
+            "routes": 1
+          },
+          {
+            "name": "Lakeshire, Redridge",
+            "nodeID": 5,
+            "x": 0.5179,
+            "y": 0.72,
+            "state": 1,
+            "cost": 1600,
+            "routes": 1
+          },
+          {
+            "name": "Ironforge, Dun Morogh",
+            "nodeID": 6,
+            "x": 0.4874,
+            "y": 0.5237,
+            "state": 1,
+            "cost": 3500,
+            "routes": 1
+          },
+          {
+            "name": "Menethil Harbor, Wetlands",
+            "nodeID": 7,
+            "x": 0.4768,
+            "y": 0.4798,
+            "state": 1,
+            "cost": 4400,
+            "routes": 1
+          },
+          {
+            "name": "Thelsamar, Loch Modan",
+            "nodeID": 8,
+            "x": 0.5378,
+            "y": 0.5492,
+            "state": 1,
+            "cost": 3500,
+            "routes": 1
+          },
+          {
+            "name": "Darkshire, Duskwood",
+            "nodeID": 12,
+            "x": 0.4904,
+            "y": 0.7663,
+            "state": 1,
+            "cost": 1700,
+            "routes": 1
+          },
+          {
+            "name": "Southshore, Hillsbrad",
+            "nodeID": 14,
+            "x": 0.4692,
+            "y": 0.3485,
+            "state": 1,
+            "cost": 6900,
+            "routes": 1
+          },
+          {
+            "name": "Refuge Pointe, Arathi",
+            "nodeID": 16,
+            "x": 0.526,
+            "y": 0.371,
+            "state": 1,
+            "cost": 6700,
+            "routes": 1
+          },
+          {
+            "name": "Booty Bay, Stranglethorn",
+            "nodeID": 19,
+            "x": 0.4414,
+            "y": 0.9349,
+            "state": 1,
+            "cost": 4800,
+            "routes": 1
+          },
+          {
+            "name": "Aerie Peak, The Hinterlands",
+            "nodeID": 43,
+            "x": 0.5114,
+            "y": 0.3061,
+            "state": 1,
+            "cost": 7900,
+            "routes": 1
+          },
+          {
+            "name": "Nethergarde Keep, Blasted Lands",
+            "nodeID": 45,
+            "x": 0.5522,
+            "y": 0.7917,
+            "state": 1,
+            "cost": 3000,
+            "routes": 1
+          },
+          {
+            "name": "Chillwind Camp, Western Plaguelands",
+            "nodeID": 66,
+            "x": 0.4952,
+            "y": 0.2785,
+            "state": 1,
+            "cost": 8400,
+            "routes": 1
+          },
+          {
+            "name": "Light's Hope Chapel, Eastern Plaguelands",
+            "nodeID": 67,
+            "x": 0.6063,
+            "y": 0.2214,
+            "state": 1,
+            "cost": 10000,
+            "routes": 1
+          },
+          {
+            "name": "Morgan's Vigil, Burning Steppes",
+            "nodeID": 71,
+            "x": 0.5323,
+            "y": 0.6746,
+            "state": 1,
+            "cost": 1900,
+            "routes": 1
+          },
+          {
+            "name": "Thorium Point, Searing Gorge",
+            "nodeID": 74,
+            "x": 0.4877,
+            "y": 0.5974,
+            "state": 1,
+            "cost": 2200,
+            "routes": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Gossip",
+      "level": 30,
+      "reaction": "friendly",
+      "displayId": 1300,
+      "world": {
+        "y": -8958.0,
+        "x": -104.0,
+        "z": 0
+      },
+      "facing": 4.988,
+      "gossip": {
+        "text": "I have nothing to sell, only things to say.",
+        "options": [
+          {
+            "name": "Tell me about Northshire.",
+            "icon": 0
+          },
+          {
+            "name": "Where can I train?",
+            "icon": 0
+          },
+          {
+            "name": "Goodbye.",
+            "icon": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "Test Target Dummy",
+      "level": 1,
+      "reaction": "hostile",
+      "displayId": 163,
+      "health": 1000000,
+      "maxHealth": 1000000,
+      "nameplate": true,
+      "world": {
+        "y": -8960.0,
+        "x": -150.0,
+        "z": 0
+      },
+      "facing": 1.05,
+      "classification": "normal"
+    },
+    {
+      "name": "Test Kobold",
+      "level": 3,
+      "reaction": "hostile",
+      "displayId": 365,
+      "health": 80,
+      "maxHealth": 80,
+      "nameplate": true,
+      "world": {
+        "y": -8964.0,
+        "x": -146.0,
+        "z": 0
+      },
+      "facing": 0.766,
+      "attack": {
+        "damage": 4,
+        "speed": 2
+      },
+      "loot": [
+        {
+          "id": 2589,
+          "count": 2
+        },
+        {
+          "id": 4540,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "name": "Test Wolf",
+      "level": 2,
+      "reaction": "hostile",
+      "displayId": 903,
+      "health": 60,
+      "maxHealth": 60,
+      "nameplate": true,
+      "world": {
+        "y": -8964.0,
+        "x": -154.0,
+        "z": 0
+      },
+      "facing": 0.992,
+      "attack": {
+        "damage": 3,
+        "speed": 1.6
+      },
+      "loot": [
+        {
+          "id": 750,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "name": "Test Boar",
+      "level": 4,
+      "reaction": "hostile",
+      "displayId": 193,
+      "health": 110,
+      "maxHealth": 110,
+      "nameplate": true,
+      "world": {
+        "y": -8968.0,
+        "x": -150.0,
+        "z": 0
+      },
+      "facing": 0.77,
+      "attack": {
+        "damage": 6,
+        "speed": 2
+      },
+      "loot": [
+        {
+          "id": 769,
+          "count": 1
+        }
+      ]
+    },
+    {
+      "name": "Test Elite Bear",
+      "level": 10,
+      "reaction": "hostile",
+      "displayId": 706,
+      "health": 1200,
+      "maxHealth": 1200,
+      "nameplate": true,
+      "world": {
+        "y": -8972.0,
+        "x": -158.0,
+        "z": 0
+      },
+      "facing": 0.858,
+      "classification": "elite",
+      "attack": {
+        "damage": 25,
+        "speed": 2.5
+      },
+      "loot": [
+        {
+          "id": 2308,
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

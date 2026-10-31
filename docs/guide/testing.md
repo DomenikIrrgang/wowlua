@@ -383,6 +383,22 @@ the game and turn it into one.
    WoW installation, leaves out your character's name and realm and writes
    `tests/profiles/raid.json`. `wowlua profile snapshot raid`
 
+wowlua also has a profile of its own for WoW Forever: `northshire`. Name it
+as you'd name yours, with `config({ profile = "northshire" })` or
+`test.profile`; a `tests/profiles/northshire.json` of your own comes first.
+It starts the fresh level 1 character, with 50 gold, at Northshire's start
+among test NPCs of every kind:
+
+- vendors of cloth, leather, mail and shields, and weapons, selling the
+  game's own items with their stats (when your WoW installation answers the
+  game data), and of general goods and of reagents, a repairer and an
+  innkeeper;
+- a trainer of each class;
+- a banker, an auctioneer with items for sale, a postmaster with letters,
+  and a flight master with the Alliance's flight paths;
+- an NPC with gossip, and a target dummy, a kobold, a wolf, a boar and an
+  elite bear to fight.
+
 A profile can also set the screen: `"screen": { "width": 2560, "height":
 1440, "uiScale": 0.8 }` draws at 2560 by 1440 with "Use UI Scale" at 80%,
 over `test.screen` in `wowlua.json`. The UI scale takes the game's slider's

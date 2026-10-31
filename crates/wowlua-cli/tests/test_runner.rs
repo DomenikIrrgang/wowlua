@@ -833,6 +833,63 @@ end
     assert!(out.contains("2 passed, 0 failed"), "{out}");
 }
 
+/// A built-in world profile (decision T533): a package without one of
+/// that name names wowlua's (`northshire`), its check finds it there, and
+/// a test starts in it: the fresh character with its money, beside test
+/// vendors, trainers and services.
+#[test]
+fn the_built_in_northshire_profile() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "\n"),
+            (
+                "tests/npcs.test.wowlua",
+                r#"import test, expect, config from "wowlua:test"
+import * as mock from "wowlua:mock"
+config({ profile = "northshire" })
+
+@test("northshire's cloth vendor sells its gear and repairs")
+local function cloth()
+    expect(GetMoney()).toBe(500000)
+    expect(UnitClass("player")).toBe("Warrior")
+    local npc = mock.unitAt(1)
+    mock.player:target(npc)
+    expect(UnitName("target")).toBe("Test Vendor: Cloth")
+    mock.moveTo({ world = { y = -8939.5, x = -116, z = 0, instanceID = 0 }, facing = 0 })
+    if npc then
+        mock.player:interact(npc)
+    end
+    mock.advanceFrames(60, 1000 / 60)
+    expect(GetMerchantNumItems()).toBe(18)
+    expect(CanMerchantRepair()).toBe(true)
+end
+
+@test("northshire's warrior trainer offers its training")
+local function trainer()
+    local npc = mock.unitAt(9)
+    mock.player:target(npc)
+    expect(UnitName("target")).toBe("Test Trainer: Warrior")
+    mock.moveTo({ world = { y = -8932.5, x = -116, z = 0, instanceID = 0 }, facing = 0 })
+    if npc then
+        mock.player:interact(npc)
+    end
+    mock.advanceFrames(60, 1000 / 60)
+    expect(C_GossipInfo.GetOptions()[1].name).toBe("I would like to train.")
+end
+"#,
+            ),
+        ],
+    );
+    let out = wowlua(dir.path()).arg("check").output().unwrap();
+    let text =
+        String::from_utf8_lossy(&out.stderr).into_owned() + &String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success() && !text.contains("E4402"), "{text}");
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+}
+
 /// World profiles (decision T213): the character, gear, bags, money,
 /// place, the units around, CVars, bindings and saved variables, loaded
 /// before the addon; changes fire the client's events.
