@@ -454,6 +454,14 @@
           ],
           "format": "double"
         },
+        "displayId": {
+          "description": "The creature display it shows in the 3D world (decision T526).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
         "classification": {
           "type": [
             "string",
@@ -1864,6 +1872,14 @@
           ]
         },
         "npcId": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "displayId": {
+          "description": "The creature display it shows in the 3D world (decision T526).",
           "type": [
             "number",
             "null"

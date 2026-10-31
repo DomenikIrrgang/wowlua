@@ -8,6 +8,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 - **Units have places**: a unit's `world = { y, x, z }` and `facing` in `mock.spawnUnit`, `unit:update` and world profiles. When your character has a place, a unit's distance follows the two places: a unit given only a distance stands that far in front of you, `mock.moveTo` and a unit's new `world` change the distances your range checks see (`CheckInteractDistance`, `UnitInRange`, spell ranges), and `unit:setDistance` moves the unit. `UnitPosition` answers a unit's height too.
 - **Your character moves**: the game's movement functions the key bindings call (`MoveForwardStart`, `TurnLeftStart`, `ToggleRun`, `ToggleAutoRun`, …) move and turn your character each frame at the game's speeds, telling `PLAYER_STARTED_MOVING` and `PLAYER_STOPPED_MOVING`; the units' distances follow. A debug session can hold a key down and let it go (`wowlua/input`'s `keyDown` and `keyUp`).
+- **Units in the 3D world**: with `--world`, your character and the units stand in the world as their models, walking, running or lying dead; a unit shows its data's `displayID` (or `npcID`'s creature).
 - **Trees and props in the 3D world**: with `--world`, the zone's trees, rocks, fences and props stand where the game places them, outside and in the buildings.
 - **Solid buildings**: with `--world`, your character and the units stand on buildings' floors and are stopped by their walls, the camera stays in front of walls, and a spell at a target behind a wall or a hill is refused ("Target not in line of sight").
 - **Buildings in the 3D world**: with `--world`, the zone's buildings (the abbey, inns, towers) stand on the terrain where the game places them.
@@ -18,6 +19,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - **Units act**: a unit's `actions` in a world profile or `mock.spawnUnit` make it attack you while in reach, cast a spell every few seconds or turn to you when you come near (`{ at = 0, ["do"] = "attack", damage = 50 }`, `{ every = 8, ["do"] = "cast", spell = 133 }`, `{ within = 10, ["do"] = "face" }`).
 - **Units walk**: `unit:patrol(path)`, `unit:follow()`, `unit:approach()`, `unit:flee()`, `unit:moveTo(place)` and `unit:stop()`, or a unit's `movement` in a world profile, make it walk on its own, its distance to you following.
 - A debug session tells what the game's chat windows show (`wowlua/chatLines`: each line's text and colour, your addon's prints too) and sends a chat message as the player would type it (`wowlua/input` with `chat`: your addons get its `CHAT_MSG_SAY`, `CHAT_MSG_PARTY`, …), for wowlua Studio's chat tab.
+
+### Fixed
+
+- A world profile's units' `npcId` was ignored; it now names the creature, as `npcID` does in a test.
 
 ## 0.13.7 (2026-10-30)
 

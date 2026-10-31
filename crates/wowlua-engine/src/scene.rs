@@ -273,6 +273,87 @@ pub struct WorldView {
     pub detail: f64,
     pub objects: f64,
     pub cull: f64,
+    /// The units within `objects` yards, the player first (decision T526).
+    pub units: Vec<WorldUnit>,
+    /// The clock (seconds): how far into their animations.
+    pub time: f64,
+}
+
+/// A unit as the 3D world shows it (decision T526): its model, where it
+/// stands (north, west, up), its facing and animation (`AnimationData`: 0
+/// standing, 1 dead, 4 walking, 5 running).
+#[derive(Clone, Debug, PartialEq)]
+pub struct WorldUnit {
+    pub source: ModelSource,
+    pub at: [f64; 3],
+    pub facing: f64,
+    pub animation: u32,
+}
+
+/// The units the 3D world shows within `reach` yards of the eye: the
+/// player as their character, the others by their data's display
+/// (`displayID`) or creature (`npcID`); none for a unit at no place or
+/// of neither.
+fn world_units(vm: &mut Vm, eye: [f64; 3], reach: f64) -> Vec<WorldUnit> {
+    let mut out = Vec::new();
+    let near = |p: (f64, f64, f64)| (p.0 - eye[0]).hypot(p.1 - eye[1]) <= reach;
+    if let Some(at) = crate::character::place_of(vm, crate::units::PLAYER)
+        && near(at)
+    {
+        let look = look_of(vm, "player");
+        let m = engine(vm).world.movement.clone();
+        let animation = match (m.moving(), m.walking) {
+            (false, _) => 0,
+            (true, true) => 4,
+            (true, false) => 5,
+        };
+        if look.race > 0 {
+            out.push(WorldUnit {
+                source: ModelSource::Character(look),
+                at: [at.0, at.1, at.2],
+                facing: crate::unitinfo::player_facing(vm),
+                animation,
+            });
+        }
+    }
+    let count = engine(vm).units.list.len();
+    for i in 0..count {
+        let id = crate::units::UnitId(i);
+        if id == crate::units::PLAYER {
+            continue;
+        }
+        let (alive, model, dead, walking) = {
+            let u = &engine(vm).units.list[i];
+            (
+                u.alive_in_world && u.world.is_some(),
+                // (a display its data names, else its creature's)
+                u.display
+                    .map(ModelSource::Display)
+                    .or(u.npc.map(ModelSource::Creature)),
+                u.dead,
+                u.walk.clone(),
+            )
+        };
+        let Some(source) = model.filter(|_| alive) else {
+            continue;
+        };
+        let Some(at) = crate::character::place_of(vm, id).filter(|p| near(*p)) else {
+            continue;
+        };
+        let animation = match (dead, walking) {
+            (true, _) => 1,
+            (false, Some(crate::movement::Walk::Patrol { .. })) => 4,
+            (false, Some(_)) => 5,
+            (false, None) => 0,
+        };
+        out.push(WorldUnit {
+            source,
+            at: [at.0, at.1, at.2],
+            facing: crate::character::unit_facing(vm, id).unwrap_or(0.0),
+            animation,
+        });
+    }
+    out
 }
 
 /// The world's view while it is on and the player is at a place.
@@ -291,6 +372,8 @@ fn world_view(vm: &mut Vm) -> Option<WorldView> {
     let detail = setting(vm, "terrainLodDist", 500.0).min(far);
     let objects = setting(vm, "horizonStart", 1900.0).min(far);
     let cull = setting(vm, "lodObjectCullSize", 18.0);
+    let units = world_units(vm, [e.at.0, e.at.1, e.at.2], objects);
+    let time = vm.clock.elapsed_ms / 1000.0;
     let v = |a: (f64, f64, f64)| [a.0, a.1, a.2];
     Some(WorldView {
         map: map as u32,
@@ -302,6 +385,8 @@ fn world_view(vm: &mut Vm) -> Option<WorldView> {
         detail,
         objects,
         cull,
+        units,
+        time,
     })
 }
 

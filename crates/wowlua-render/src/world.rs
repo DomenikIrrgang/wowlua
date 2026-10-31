@@ -650,6 +650,54 @@ impl Renderer {
                 w.far as f32,
             ],
         };
+        // The units as their models, posed for this camera (T526).
+        let actors: Vec<wowlua_engine::scene::Actor> = w
+            .units
+            .iter()
+            .map(|u| wowlua_engine::scene::Actor {
+                source: u.source.clone(),
+                position: f32s(u.at),
+                yaw: u.facing as f32,
+                pitch: 0.0,
+                roll: 0.0,
+                fixed_axes: false,
+                scale: 1.0,
+                alpha: 1.0,
+                animation: u.animation,
+                variation: 0,
+            })
+            .collect();
+        let models = (!actors.is_empty())
+            .then(|| {
+                let right = {
+                    let (l, u) = (f32s(w.look), f32s(w.up));
+                    [
+                        l[1] * u[2] - l[2] * u[1],
+                        l[2] * u[0] - l[0] * u[2],
+                        l[0] * u[1] - l[1] * u[0],
+                    ]
+                };
+                let camera = wowlua_engine::scene::ModelCamera::Scene {
+                    position: f32s(w.eye),
+                    forward: f32s(w.look),
+                    right,
+                    up: f32s(w.up),
+                    fov: fov_y,
+                    near: NEAR,
+                    far: w.far as f32,
+                };
+                let sun = globals.sun;
+                self.world_models(
+                    &actors,
+                    &camera,
+                    (w.time * 1000.0) as u32,
+                    globals.view,
+                    globals.proj,
+                    ([-sun[0], -sun[1], -sun[2]], [0.55; 3], [0.65; 3]),
+                    assets,
+                )
+            })
+            .flatten();
         let setup = self.world.setup.as_ref().expect("the world's setup");
         self.queue
             .write_buffer(&setup.globals, 0, bytemuck::bytes_of(&globals));
@@ -705,6 +753,9 @@ impl Renderer {
                 pass.set_bind_group(1, &c.group, &[]);
                 pass.draw_indexed(c.start..c.start + c.count, 0, 0..1);
             }
+        }
+        if let Some(m) = &models {
+            self.record_models(&mut pass, m);
         }
         // The distant tiles: their coarse meshes, as they are.
         if let (Some(bsetup), Some(identity)) = (

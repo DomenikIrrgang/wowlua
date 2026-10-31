@@ -34,6 +34,12 @@ pub enum Reaction {
 
 pub struct Unit {
     pub guid: String,
+    /// The creature it is (its data's `npcID`): the 3D world shows it as
+    /// that creature's model (decision T526); none, no model.
+    pub npc: Option<u32>,
+    /// The creature display it shows (its data's `displayID`): the 3D
+    /// world's model before its creature's (decision T526).
+    pub display: Option<u32>,
     pub name: String,
     pub realm: Option<String>,
     /// WoW Forever's characters' last name: `UnitName`'s second value there
@@ -464,6 +470,8 @@ fn all_class_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
 pub fn install(vm: &mut Vm) {
     let player = Unit {
         guid: "Player-4621-0A000001".into(),
+        npc: None,
+        display: None,
         name: "Player".into(),
         realm: None,
         last_name: None,
@@ -848,6 +856,8 @@ impl Unit {
 fn clone_unit(u: &Unit) -> Unit {
     Unit {
         guid: u.guid.clone(),
+        npc: u.npc,
+        display: u.display,
         name: u.name.clone(),
         realm: u.realm.clone(),
         last_name: u.last_name.clone(),
@@ -2235,7 +2245,15 @@ fn unit_from(
         u.next_guid += 1;
         u.next_guid
     };
-    let npc = num(vm, "npcID", 1000.0 + n as f64);
+    // (a test's `npcID`, a world profile's `npcId`)
+    let given = match get(vm, "npcID") {
+        Value::Nil => get(vm, "npcId"),
+        v => v,
+    };
+    let npc = match given {
+        Value::Num(id) => id,
+        _ => 1000.0 + n as f64,
+    };
     let default_guid = if let Some(g) = player_guid {
         g
     } else if player {
@@ -2289,8 +2307,22 @@ fn unit_from(
         (true, Some(f)) if f.eq_ignore_ascii_case("Horde") => "Orc",
         (true, _) => "Human",
     };
+    let named_npc = match given {
+        Value::Num(n) if n > 0.0 => Some(n as u32),
+        _ => None,
+    };
+    let display = match get(vm, "displayID") {
+        Value::Nil => get(vm, "displayId"),
+        v => v,
+    };
+    let display = match display {
+        Value::Num(d) if d > 0.0 => Some(d as u32),
+        _ => None,
+    };
     Ok(Unit {
         guid: text(vm, "guid", &default_guid),
+        npc: named_npc,
+        display,
         name: text(vm, "name", "Unit"),
         realm: match get(vm, "realm") {
             Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
