@@ -116,6 +116,10 @@ pub struct Widget {
     /// was made, or its strata or level changed (decision T587). Of two
     /// frames at the same strata and level the later is drawn on top.
     pub placed: u64,
+    /// When it was last raised as a top-level frame (shown or clicked;
+    /// decision T586), 0 never: it and what is in it are drawn above the
+    /// rest of its strata, the one raised last on top, its level kept.
+    pub raised: u64,
 }
 
 /// A line a chat window showed (decision T514).
@@ -167,6 +171,8 @@ pub struct World {
     pub scene_order_valid: bool,
     /// The next frame's place stamp (decision T587).
     pub next_placed: u64,
+    /// The next top-level frame's raise stamp (decision T586).
+    pub next_raised: u64,
     /// The widgets that ever registered for events: the ones an event
     /// looks at.
     pub listening: std::collections::BTreeSet<usize>,
@@ -680,6 +686,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         scroll_parent: None,
         created: vm.caller_place(1),
         placed: 0,
+        raised: 0,
     };
     let mut w = w;
     // Secure code's widgets are forbidden; their names are the addons'
@@ -1871,7 +1878,7 @@ pub fn set_shown(vm: &mut Vm, id: WidgetId, shown: bool) {
         if now != was {
             // (a top-level frame comes to the front as it shows: T586)
             if now {
-                crate::widgetops::raise_shown(vm, w);
+                raise_toplevel(vm, w);
             }
             run_script(vm, w, if now { "OnShow" } else { "OnHide" }, &[]);
         }
@@ -1999,6 +2006,24 @@ fn get_parent(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![e.world.widgets[id.0].parent.map_or(Value::Nil, |p| {
         Value::Table(e.world.widgets[p.0].table)
     })])
+}
+
+/// A top-level frame (`SetToplevel(true)`, `toplevel="true"`) raised
+/// (decision T586): drawn, with what is in it, above the rest of its strata,
+/// its level kept; others not.
+pub(crate) fn raise_toplevel(vm: &mut Vm, id: WidgetId) {
+    let props = engine(vm).world.widgets[id.0].props;
+    let toplevel = stored_args(vm, props, "Toplevel")
+        .and_then(|v| v.first().copied())
+        .is_some_and(|v| v.truthy());
+    if !toplevel {
+        return;
+    }
+    let e = engine_mut(vm);
+    e.world.next_raised += 1;
+    e.world.widgets[id.0].raised = e.world.next_raised;
+    reorder(e);
+    mark(e, id);
 }
 
 fn set_parent(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
@@ -3270,7 +3295,8 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
     }
     let s = layout_scale(e, id);
     // A scroll child without points of its own sits at its scroll frame's
-    // top left (unverified: the scroll offsets are not applied).
+    // top left, moved by its scroll offsets: up by the vertical one, left
+    // by the horizontal (decision T589).
     if w.points.is_empty() {
         let (width, height) = (w.width * s, w.height * s);
         // A slider's thumb without points: where the slider puts it, along
@@ -3300,7 +3326,14 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
         }
         let p = w.scroll_parent?;
         let r = bounds_in(vm, p, depth + 1, known)?;
-        return Some((r.0, r.1 + r.3 - height, width, height));
+        let props = e.world.widgets[p.0].props;
+        let offset = |stem: &str| match stored_ref(vm, props, stem).and_then(|v| v.first().copied())
+        {
+            Some(Value::Num(n)) => n * layout_scale(e, p),
+            _ => 0.0,
+        };
+        let (across, down) = (offset("HorizontalScroll"), offset("VerticalScroll"));
+        return Some((r.0 - across, r.1 + r.3 - height + down, width, height));
     }
     // Each point's place on the screen, and which edges it sets.
     let mut left = None;
@@ -3919,7 +3952,11 @@ pub(crate) fn set_level(vm: &mut Vm, id: WidgetId, level: f64) {
             if let Some(Value::Num(n)) =
                 stored_args(vm, props, "FrameLevel").and_then(|v| v.first().copied())
             {
+                // (moved with it, it keeps its place among the frames of its
+                // level: T587)
+                let placed = engine(vm).world.widgets[child.0].placed;
                 store(vm, child, "FrameLevel", &[Value::Num((n + delta).max(0.0))]);
+                engine_mut(vm).world.widgets[child.0].placed = placed;
             }
             stack.extend(engine(vm).world.widgets[child.0].children.iter().copied());
         }

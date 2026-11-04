@@ -1629,22 +1629,27 @@ fn merges_into_parent(vm: &mut Vm, id: WidgetId) -> bool {
 
 /// The visible frames, in draw order (back to front).
 fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
-    let mut frames: Vec<(usize, f64, usize)> = Vec::new();
+    // (strata, the top-level frame raised it is in, level, the frame: T586)
+    let mut frames: Vec<(usize, u64, f64, usize)> = Vec::new();
     // (walked from the widgets without a parent through the shown ones
     // alone: a hidden frame's widgets, most of a large UI's, are never
     // looked at; a frame's strata its own, else its parent's; T541)
     // (each frame's level from its parent's as `widgets::frame_level`
     // finds it: its own, else its parent's and one unless it uses its
     // parent's; T542)
-    let mut stack: Vec<(usize, usize, Option<f64>)> = engine(vm)
+    let mut stack: Vec<(usize, usize, Option<f64>, u64)> = engine(vm)
         .world
         .widgets
         .iter()
         .enumerate()
         .filter(|(_, w)| w.parent.is_none() && w.shown)
-        .map(|(i, _)| (i, 2, None))
+        .map(|(i, _)| (i, 2, None, 0))
         .collect();
-    while let Some((i, inherited, parent_level)) = stack.pop() {
+    while let Some((i, inherited, parent_level, group)) = stack.pop() {
+        let group = match engine(vm).world.widgets[i].raised {
+            0 => group,
+            r => r,
+        };
         let id = WidgetId(i);
         let frame = is_frame(vm, id);
         let (strata, level) = if frame {
@@ -1662,7 +1667,7 @@ fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
             (inherited, parent_level.unwrap_or(0.0))
         };
         if frame && !engine(vm).world.widgets[i].forbidden {
-            frames.push((strata, level, i));
+            frames.push((strata, group, level, i));
         }
         let e = engine(vm);
         stack.extend(
@@ -1670,18 +1675,21 @@ fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
                 .children
                 .iter()
                 .filter(|c| e.world.widgets[c.0].shown)
-                .map(|c| (c.0, strata, Some(level))),
+                .map(|c| (c.0, strata, Some(level), group)),
         );
     }
     // (at the same strata and level, the frame placed later on top: T587)
     let e = engine(vm);
     let placed = |i: usize| e.world.widgets[i].placed;
+    // (the raised top-level frames above the rest of their strata, the
+    // last raised on top: T586)
     frames.sort_by(|a, b| {
         a.0.cmp(&b.0)
-            .then(a.1.total_cmp(&b.1))
-            .then(placed(a.2).cmp(&placed(b.2)))
+            .then(a.1.cmp(&b.1))
+            .then(a.2.total_cmp(&b.2))
+            .then(placed(a.3).cmp(&placed(b.3)))
     });
-    frames.into_iter().map(|(_, _, i)| WidgetId(i)).collect()
+    frames.into_iter().map(|(_, _, _, i)| WidgetId(i)).collect()
 }
 
 fn mouse_enabled(vm: &Vm, id: WidgetId) -> bool {

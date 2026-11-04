@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,187 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,185 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,187 rules unverified: each rests on Blizzard's
+The engine's code marks 1,185 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2265,14 +2265,13 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine/src/units.rs): `UnitIsHumanPlayer(unit)`: a player's character (unverified: as `UnitIsPlayer`).
 - [units.rs](../crates/wowlua-engine/src/units.rs): Not casting or channeling: no values.
 
-### widgetops (4)
+### widgetops (3)
 
 - [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): Unverified, none recorded: which frames `Raise` counts (the shown ones of the strata here) and the level cap (10000),...
-- [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): The top-level frames a click on `id` raises (decision T586): it and the top-level frames it is in, the outermost first.
 - [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): A button's `Clear…Texture()`: the state's texture emptied (no file or atlas, hidden) but still the button's, `Get…Tex...
 - [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): Methods of what the engine draws or keeps nothing of: model cameras, lights and animation kits, the browser and the s...
 
-### widgets (51)
+### widgets (50)
 
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): As `/stdtest engine` recorded on WoW Forever 1.60.1 (fixture `tests/client/forever-camelot-engine.lua`, checked by `w...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Edit boxes Lua set the text of this frame: `OnTextChanged(false)` runs once each after the frame's `OnUpdate`, not at...
@@ -2305,7 +2304,6 @@ page changes only when a rule is added, removed or reworded.
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A region's size: as laid out when its points give it one (two opposite points, `SetAllPoints`), else as set (unverifi...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `SetAlpha(alpha)`: a secret too, even from tainted code (the API documentation: `AllowedWhenTainted`, adding the alph...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `SetAlphaFromBoolean(value [, alphaIfTrue [, alphaIfFalse]])`: the alpha one of the two picks (1 and 0 by default; un...
-- [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A scroll child without points of its own sits at its scroll frame's top left (unverified: the scroll offsets are not...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `SetStatusBarTexture(asset)`: a texture widget becomes the bar's, a file its texture's file; an atlas's name its text...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A button's text goes to its font string, made if it has none (unverified: the client makes one so).
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `fontString:SetTextToFit([text])`: its text set as `SetText` sets it (the documented `text`; Blizzard's menus' entrie...
@@ -2480,6 +2478,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - The world's shading (decisions T584, T585)
 - Frames of the same level (decision T587)
 - The mouse wheel over frames (decision T588)
+- Top-level frames (decision T586)
 
 ## In-game regressions
 

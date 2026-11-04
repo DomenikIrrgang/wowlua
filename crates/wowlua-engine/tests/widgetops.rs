@@ -52,11 +52,12 @@ return raised, childRaised, a:GetFrameLevel(), b:GetFrameLevel()",
     assert_eq!(r, ["8", "9", "0", "7"]);
 }
 
-/// A top-level frame comes to the front of its strata as it shows and as
-/// it (or a frame in it) is clicked (decision T586): SuuUI's bags, shown
-/// over its damage meter's windows (a level deeper, in another frame).
+/// A top-level frame keeps its level as it shows and as it is clicked
+/// (decision T586; probed on TBC Anniversary: shown, it stayed at 1 under a
+/// frame at 500). Raised above that frame, SuuUI's bags drew their
+/// background over their slots (Blizzard's item buttons, at level 10).
 #[test]
-fn a_top_level_frame_comes_to_the_front_shown_and_clicked() {
+fn a_top_level_frame_keeps_its_level_shown_and_clicked() {
     let mut vm = vm();
     let r = run(
         &mut vm,
@@ -78,9 +79,8 @@ plain:Hide()
 plain:Show()
 return before, meterRow:GetFrameLevel(), shown, clicked, plain:GetFrameLevel()",
     );
-    // Shown above the meter's row (3), clicked above the plain frame's 40;
-    // a frame that is not top-level stays where it is as it shows.
-    assert_eq!(r, ["1", "3", "4", "41", "40"]);
+    // Shown and clicked at its level; the others at theirs.
+    assert_eq!(r, ["1", "3", "1", "1", "40"]);
 }
 
 /// Of two frames at the same strata and level, the one placed later is on
@@ -115,6 +115,121 @@ end",
     run(&mut vm, "Red:SetFrameLevel(49) Red:SetFrameLevel(50)");
     let changed = on_top(&mut vm);
     assert_eq!([made, same, changed], ["Blue", "Blue", "Red"]);
+}
+
+/// A top-level frame shown or clicked is drawn, with what is in it, above
+/// the rest of its strata, its level kept (decision T586; probed on TBC
+/// Anniversary: a top-level window at level 2, shown, over another's
+/// window at 3; plain, under it).
+#[test]
+fn a_top_level_frame_shown_or_clicked_is_drawn_on_top() {
+    let mut vm = vm();
+    let on_top = |vm: &mut Vm| {
+        let (k, _) = wowlua_engine::scene::pixel_scale(vm);
+        let id = wowlua_engine::scene::hit_test(vm, 50.0 * k, 50.0 * k).expect("a frame");
+        wowlua_engine::engine(vm).world.widgets[id.0]
+            .name
+            .clone()
+            .unwrap_or_default()
+    };
+    run(
+        &mut vm,
+        "local root = CreateFrame('Frame', nil, UIParent)
+root:SetAllPoints()
+local holder = CreateFrame('Frame', nil, root)
+holder:SetAllPoints()
+local blue = CreateFrame('Frame', 'Blue', holder)
+blue:SetSize(100, 100)
+blue:SetPoint('TOPLEFT')
+blue:EnableMouse(true)
+local red = CreateFrame('Frame', 'Red', root)
+red:SetSize(100, 100)
+red:SetPoint('TOPLEFT')
+red:EnableMouse(true)
+red:Hide()
+red:Show()",
+    );
+    let plain = on_top(&mut vm);
+    let levels = run(
+        &mut vm,
+        "Red:SetToplevel(true) Red:Hide() Red:Show()
+return Red:GetFrameLevel(), Blue:GetFrameLevel()",
+    );
+    let shown = on_top(&mut vm);
+    run(&mut vm, "Blue:SetToplevel(true) Blue:Hide() Blue:Show()");
+    let other = on_top(&mut vm);
+    run(&mut vm, "mock.click(Red)");
+    let clicked = on_top(&mut vm);
+    assert_eq!(
+        (plain, levels, shown, other, clicked),
+        (
+            "Blue".into(),
+            vec!["2".to_string(), "3".into()],
+            "Red".into(),
+            "Blue".into(),
+            "Red".into()
+        )
+    );
+}
+
+/// Frames moved with their parent's level keep their places among the
+/// frames of their level (decision T587): a window's level set higher
+/// keeps its slots over its background.
+#[test]
+fn frames_moved_with_their_parent_keep_their_order() {
+    let mut vm = vm();
+    let on_top = |vm: &mut Vm| {
+        let (k, _) = wowlua_engine::scene::pixel_scale(vm);
+        let id = wowlua_engine::scene::hit_test(vm, 50.0 * k, 50.0 * k).expect("a frame");
+        wowlua_engine::engine(vm).world.widgets[id.0]
+            .name
+            .clone()
+            .unwrap_or_default()
+    };
+    run(
+        &mut vm,
+        "local other = CreateFrame('Frame', nil, UIParent)
+other:SetFrameLevel(30)
+other:SetSize(10, 10)
+other:SetPoint('BOTTOMRIGHT')
+local bags = CreateFrame('Frame', 'Bags', UIParent)
+bags:SetSize(100, 100)
+bags:SetPoint('TOPLEFT')
+for _, name in ipairs({ 'Background', 'Slot' }) do
+    local f = CreateFrame('Frame', name, bags)
+    f:SetAllPoints()
+    f:SetFrameLevel(5)
+    f:EnableMouse(true)
+end
+bags:SetFrameLevel(40)",
+    );
+    assert_eq!(on_top(&mut vm), "Slot");
+}
+
+/// A scroll frame's offsets move its scroll child (decision T589): up by
+/// the vertical, left by the horizontal, what is anchored in it with it.
+/// SuuUI's settings moved their scroll bar but not their rows.
+#[test]
+fn a_scroll_frames_offsets_move_its_child() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local scroll = CreateFrame('ScrollFrame', nil, UIParent)
+scroll:SetSize(200, 100)
+scroll:SetPoint('TOPLEFT', 50, -50)
+local child = CreateFrame('Frame', nil, scroll)
+child:SetSize(200, 500)
+scroll:SetScrollChild(child)
+local row = CreateFrame('Frame', nil, child)
+row:SetSize(200, 20)
+row:SetPoint('TOPLEFT', 0, -60)
+local top, rowTop = child:GetTop(), row:GetTop()
+scroll:SetVerticalScroll(40)
+local scrolledTop, scrolledRow = child:GetTop(), row:GetTop()
+scroll:SetHorizontalScroll(10)
+return scroll:GetTop() - top, scrolledTop - top, scrolledRow - rowTop, scroll:GetLeft() - child:GetLeft()",
+    );
+    assert_eq!(r, ["0", "40", "40", "10"]);
 }
 
 #[test]
