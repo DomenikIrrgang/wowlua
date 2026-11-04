@@ -3270,7 +3270,8 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
     }
     let s = layout_scale(e, id);
     // A scroll child without points of its own sits at its scroll frame's
-    // top left (unverified: the scroll offsets are not applied).
+    // top left, moved by its scroll offsets: up by the vertical one, left
+    // by the horizontal (decision T589).
     if w.points.is_empty() {
         let (width, height) = (w.width * s, w.height * s);
         // A slider's thumb without points: where the slider puts it, along
@@ -3300,7 +3301,14 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
         }
         let p = w.scroll_parent?;
         let r = bounds_in(vm, p, depth + 1, known)?;
-        return Some((r.0, r.1 + r.3 - height, width, height));
+        let props = e.world.widgets[p.0].props;
+        let offset = |stem: &str| match stored_ref(vm, props, stem).and_then(|v| v.first().copied())
+        {
+            Some(Value::Num(n)) => n * layout_scale(e, p),
+            _ => 0.0,
+        };
+        let (across, down) = (offset("HorizontalScroll"), offset("VerticalScroll"));
+        return Some((r.0 - across, r.1 + r.3 - height + down, width, height));
     }
     // Each point's place on the screen, and which edges it sets.
     let mut left = None;

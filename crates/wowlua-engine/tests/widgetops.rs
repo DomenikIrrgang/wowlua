@@ -117,6 +117,32 @@ end",
     assert_eq!([made, same, changed], ["Blue", "Blue", "Red"]);
 }
 
+/// A scroll frame's offsets move its scroll child (decision T589): up by
+/// the vertical, left by the horizontal, what is anchored in it with it.
+/// SuuUI's settings moved their scroll bar but not their rows.
+#[test]
+fn a_scroll_frames_offsets_move_its_child() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local scroll = CreateFrame('ScrollFrame', nil, UIParent)
+scroll:SetSize(200, 100)
+scroll:SetPoint('TOPLEFT', 50, -50)
+local child = CreateFrame('Frame', nil, scroll)
+child:SetSize(200, 500)
+scroll:SetScrollChild(child)
+local row = CreateFrame('Frame', nil, child)
+row:SetSize(200, 20)
+row:SetPoint('TOPLEFT', 0, -60)
+local top, rowTop = child:GetTop(), row:GetTop()
+scroll:SetVerticalScroll(40)
+local scrolledTop, scrolledRow = child:GetTop(), row:GetTop()
+scroll:SetHorizontalScroll(10)
+return scroll:GetTop() - top, scrolledTop - top, scrolledRow - rowTop, scroll:GetLeft() - child:GetLeft()",
+    );
+    assert_eq!(r, ["0", "40", "40", "10"]);
+}
+
 #[test]
 fn an_edit_box_inserts_in_place_of_its_selection() {
     let mut vm = vm();

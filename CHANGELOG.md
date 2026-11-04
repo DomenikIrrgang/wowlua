@@ -33,6 +33,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A scroll frame's scroll child moves with its scroll (`SetVerticalScroll`, `SetHorizontalScroll`): its rows scroll on the screen, not only its scroll bar, as SuuUI's settings window's did.
 - The mouse wheel reaches a frame that takes only the wheel (`EnableMouseWheel`, an `OnMouseWheel` script) over a frame that takes the mouse: SuuUI's settings navigation scrolls again in wowlua Studio's game, instead of the camera zooming.
 - Of two frames at the same strata and level, the one whose level was set last is drawn and clicked on top, not the one made last: SuuUI's character window shows its chosen tab's label ("Stats") again.
 - A top-level frame (`SetToplevel(true)`) comes to the front of its strata when it is shown or clicked, as in the game: a bag window no longer opens under other windows of its strata.
