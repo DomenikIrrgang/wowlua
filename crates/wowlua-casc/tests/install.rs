@@ -466,6 +466,9 @@ fn spells_read_as_the_client_shows_them() {
                 .replace("\\\"", "\"")
                 .replace("\\r", "\r")
                 .replace("\\n", "\n");
+            if NEWER_DESCRIPTIONS.contains(&id) {
+                continue;
+            }
             match tables.describe(id, &caster) {
                 Some(d) if d == recorded => same += 1,
                 Some(_) if tables.describe(id, &more) != tables.describe(id, &caster) => {
@@ -478,8 +481,13 @@ fn spells_read_as_the_client_shows_them() {
     }
     eprintln!("{same} the same, {by_power} where power counts, {unknown} unknown");
     assert!(differ.is_empty(), "{}", differ.join("\n"));
-    assert!(same >= 200, "{same}");
+    assert!(same >= 190, "{same}");
 }
+
+/// What 70755 changed since the recordings: Rake's and Pounce's damage
+/// (until the trainers are recorded again: tests/ingame/PROBES.md, "The
+/// Camelot update").
+const NEWER_DESCRIPTIONS: &[u32] = &[1822, 1823, 1824, 9005, 9823, 9827, 9904];
 
 /// camelot's spells' power costs as the client's `GetSpellPowerCost`
 /// answers them in the trainers' recordings: each cost's power type and
@@ -490,9 +498,11 @@ fn spells_read_as_the_client_shows_them() {
 ///
 /// `NEWER_COSTS`: what 70707's server changed (its hotfixes) since the
 /// recordings (70425): the paladin's blessings cost nothing, Holy Shield
-/// less (until the trainers are recorded again: tests/ingame/PROBES.md,
-/// "The Camelot update").
-const NEWER_COSTS: &[u32] = &[1038, 19977, 19978, 19979, 20927, 20928, 25890];
+/// less; 70755's tables two more spells' costs (until the trainers are
+/// recorded again: tests/ingame/PROBES.md, "The Camelot update").
+const NEWER_COSTS: &[u32] = &[
+    1038, 19977, 19978, 19979, 20927, 20928, 25890, 1239242, 1239243,
+];
 
 #[test]
 fn spell_costs_read_as_the_client_answers_them() {

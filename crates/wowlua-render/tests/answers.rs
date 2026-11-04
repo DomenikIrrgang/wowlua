@@ -26,6 +26,17 @@ const NEWER: &[&str] = &[
     "GetSpellBaseCooldown(1240047)",
     "GetSpellBaseCooldown(400640)",
     "C_Traits.GetTraitCurrencyForAchievement(4225, 64283)",
+    // 70755's tables: these spells' base cooldowns (Slam's ranks and others)
+    "GetSpellBaseCooldown(11604)",
+    "GetSpellBaseCooldown(11605)",
+    "GetSpellBaseCooldown(1239242)",
+    "GetSpellBaseCooldown(1239243)",
+    "GetSpellBaseCooldown(1240193)",
+    "GetSpellBaseCooldown(1464)",
+    "GetSpellBaseCooldown(437009)",
+    "GetSpellBaseCooldown(8820)",
+    // and achievement 64283, no longer in them
+    "C_AchievementInfo.IsValidAchievement(64283)",
 ];
 
 fn check(prefix: &str, at_least: usize) {
@@ -63,15 +74,16 @@ fn maps() {
 #[test]
 fn achievements() {
     for (prefix, at_least) in [
-        ("GetAchievementInfo(", 311),
-        ("GetAchievementCategory(", 311),
+        // (70755 dropped one of the 311 recorded)
+        ("GetAchievementInfo(", 310),
+        ("GetAchievementCategory(", 310),
         ("GetCategoryInfo(", 55),
         ("GetCategoryList(", 2),
         ("GetStatisticsCategoryList(", 2),
-        ("GetPreviousAchievement(", 311),
-        ("GetNextAchievement(", 311),
-        ("C_AchievementInfo.", 622),
-        ("C_Traits.GetTraitCurrencyForAchievement(", 311),
+        ("GetPreviousAchievement(", 310),
+        ("GetNextAchievement(", 310),
+        ("C_AchievementInfo.", 620),
+        ("C_Traits.GetTraitCurrencyForAchievement(", 310),
     ] {
         check(prefix, at_least);
     }
