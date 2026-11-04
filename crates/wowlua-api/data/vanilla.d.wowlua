@@ -68127,6 +68127,7 @@ declare namespace Enum
         const Standard: 0
         const LeftNpeArea: 1
         const MaxLevel: 2
+        const SubscriptionPeriod: 3
     end
     namespace ForbiddenAspect
         const SetToDefaults: 1

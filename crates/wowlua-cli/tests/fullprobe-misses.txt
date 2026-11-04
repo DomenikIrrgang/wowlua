@@ -1,7 +1,7 @@
 # The full probe's answers the engine does not give as the client did, by
 # function: written by its test with WOWLUA_COVERAGE_WRITE=1, read by
 # `cargo xtask coverage-report`.
-matched	33081
+matched	33065
 total	33727
 BNGetInfo	1
 C_ActionBar.IsActionInRange	2
@@ -150,6 +150,8 @@ C_TaxiMap.GetTaxiNodesForMap	2
 C_Texture.GetAtlasElementID	1
 C_Texture.GetAtlasElements	1
 C_Texture.GetAtlasID	1
+C_Texture.GetTitleIconTexture	9
+C_Texture.IsTitleIconTextureReady	7
 C_TooltipInfo.GetAction	2
 C_TooltipInfo.GetBagItem	4
 C_TooltipInfo.GetInventoryItem	5
@@ -200,7 +202,6 @@ C_UnitAuras.GetRefreshExtendedDuration	9
 C_UnitAuras.GetUnitAuraInstanceIDs	7
 C_UnitAuras.GetUnitAuras	8
 C_UnitAuras.IsAuraFilteredOutByInstanceID	3
-C_VideoOptions.GetCurrentGameWindowSize	1
 C_VideoOptions.GetDefaultGameWindowSize	1
 C_VideoOptions.GetGameWindowSizes	3
 C_VoiceChat.GetAvailableInputDevices	1
@@ -237,6 +238,7 @@ GetNextAchievement	1
 GetNextCompleatedTutorial	1
 GetNumBindings	8
 GetNumCompletedAchievements	1
+GetNumDeclensionSets	1
 GetNumModifiedClickActions	8
 GetNumUnspentPvpTalents	8
 GetPlayerFacing	1

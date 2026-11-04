@@ -515,3 +515,26 @@ return at25, at60, next:GetLeft(), next:GetHeight()",
     );
     assert_eq!(r, ["150", "220", "300", "20"]);
 }
+
+/// The strings dump a flavor's declarations name can be older than its UI
+/// code (WoW Forever 70755's settings use `OPTIONS_MENU_QUEST_POIS_TEXT`);
+/// what the installed client has besides is set after the dump, and the
+/// dump's own strings keep theirs (decision T590).
+#[test]
+fn strings_the_dump_lacks_come_from_the_installed_client() {
+    let interface = tree(
+        "newerstrings",
+        &[("AddOns/Blizzard_Base/Blizzard_Base.toc", "## Title: Base\n")],
+    );
+    let strings = interface.parent().unwrap().join("GlobalStrings.lua");
+    std::fs::write(&strings, "OPTIONS_MENU_QUEST_POIS_TOOLTIP = \"Mine\";\n").unwrap();
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, Some(&strings));
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let r = run(
+        &mut vm,
+        "return OPTIONS_MENU_QUEST_POIS_TEXT, OPTIONS_MENU_QUEST_POIS_TOOLTIP",
+    );
+    assert_eq!(r, ["Show Quest POIs & Blobs", "Mine"]);
+}

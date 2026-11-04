@@ -18,21 +18,21 @@ that client answered. The other flavors have their API documentation, the same
 engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
-- **API functions:** 5,110 of the 5,113 documented camelot functions have
+- **API functions:** 5,110 of the 5,114 documented camelot functions have
   behaviour (99.9%): 1,058 modelled, 353 answered from recordings, 3,699 by a
-  documentation-based fill-in. Of all 7,178 C functions the client has,
+  documentation-based fill-in. Of all 7,179 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
   (100.0%).
-- **Full probe:** 33,081 of the client's 33,727 answers given as the client gave
-  them (98.1%).
+- **Full probe:** 33,065 of the client's 33,727 answers given as the client gave
+  them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
 - **Unverified rules:** 1,185 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| camelot | 5,113 | 5,110 (99.9%) | 353 | 1,477 | 1,477 (100.0%) | all |
+| camelot | 5,114 | 5,110 (99.9%) | 353 | 1,477 | 1,477 (100.0%) | all |
 | standard | 4,871 | 4,523 (92.9%) | 0 | 1,438 | 1,431 (99.5%) | none |
 | vanilla | 3,221 | 2,909 (90.3%) | 0 | 1,360 | 1,349 (99.2%) | none |
 | tbc | 3,221 | 2,909 (90.3%) | 0 | 1,360 | 1,349 (99.2%) | none |
@@ -66,7 +66,7 @@ ones together):
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
 | `C_AchievementInfo` | 6 | 0 | 2 | 4 | 0 |
 | `C_AchievementTelemetry` | 3 | 0 | 0 | 3 | 0 |
-| `C_ActionBar` | 72 | 22 | 11 | 39 | 0 |
+| `C_ActionBar` | 73 | 22 | 11 | 39 | 1 |
 | `C_AddOnProfiler` | 10 | 1 | 0 | 9 | 0 |
 | `C_AddOns` | 29 | 23 | 0 | 6 | 0 |
 | `C_AdventureJournal` | 8 | 0 | 1 | 7 | 0 |
@@ -346,13 +346,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,178 | 1,671 | 436 | 5,068 | 3 |
+| **All** | 7,179 | 1,671 | 436 | 5,068 | 4 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,113 | 1,058 | 353 | 3,699 | 3 |
+| Blizzard's API documentation | 5,114 | 1,058 | 353 | 3,699 | 4 |
 | the client's other C functions (`/stdtest inventory`) | 2,065 | 613 | 83 | 1,369 | 0 |
 | the engine's own, in neither list | 15 | 14 | 0 | 1 | 0 |
 
@@ -554,7 +554,7 @@ locally and CI skips them.
 
 | Comparison | Matched | Of | Ratio |
 |------------|--------:|---:|------:|
-| Full probe (`/stdtest engine fullprobe`: every C function with many arguments) | 33,081 | 33,727 | 98.1% |
+| Full probe (`/stdtest engine fullprobe`: every C function with many arguments) | 33,065 | 33,727 | 98.0% |
 | Answers battery (`/stdtest engine answers`: the calls Blizzard's UI makes) | 6,129 | 6,229 | 98.4% |
 | Method probe (`/stdtest engine methodprobe`: every widget method) | 8,399 | 13,049 | 64.4% |
 | Maps (`/stdtest engine maps`: each map's data) | 3,028 | 3,028 | 100.0% |
@@ -614,7 +614,7 @@ read-back counts for its setter), from the test's misses
 
 | Namespace | Answers | Matched | Ratio |
 |-----------|--------:|--------:|------:|
-| `(globals)` | 9,705 | 9,590 | 98.8% |
+| `(globals)` | 9,705 | 9,589 | 98.8% |
 | `C_AccountInfo` | 18 | 18 | 100.0% |
 | `C_AccountServices` | 57 | 57 | 100.0% |
 | `C_AccountStore` | 61 | 61 | 100.0% |
@@ -807,7 +807,7 @@ read-back counts for its setter), from the test's misses
 | `C_TalkingHead` | 32 | 32 | 100.0% |
 | `C_TaskQuest` | 129 | 129 | 100.0% |
 | `C_TaxiMap` | 27 | 25 | 92.6% |
-| `C_Texture` | 58 | 55 | 94.8% |
+| `C_Texture` | 58 | 39 | 67.2% |
 | `C_TimerunningUI` | 1 | 1 | 100.0% |
 | `C_TooltipComparison` | 21 | 21 | 100.0% |
 | `C_TooltipInfo` | 1,268 | 1,178 | 92.9% |
@@ -828,7 +828,7 @@ read-back counts for its setter), from the test's misses
 | `C_UIFileAsset` | 18 | 17 | 94.4% |
 | `C_UIWidgetManager` | 242 | 242 | 100.0% |
 | `C_UnitAuras` | 563 | 475 | 84.4% |
-| `C_VideoOptions` | 28 | 23 | 82.1% |
+| `C_VideoOptions` | 28 | 24 | 85.7% |
 | `C_VignetteInfo` | 54 | 54 | 100.0% |
 | `C_VoiceChat` | 224 | 221 | 98.7% |
 | `C_WarbandScene` | 22 | 21 | 95.5% |

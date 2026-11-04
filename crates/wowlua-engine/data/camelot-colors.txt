@@ -1,4 +1,4 @@
-# The installed client 1.60.1.70707's GlobalColor table (`cargo xtask types gen`,
+# The installed client 1.60.1.70755's GlobalColor table (`cargo xtask types gen`,
 # decision T554): name<TAB>AARRGGBB, by name as the client answers them.
 ACCOUNT_WIDE_FONT_COLOR	FF00CCFF
 ACHIEVEMENT_COLOR	FFFFFF00

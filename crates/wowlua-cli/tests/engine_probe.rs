@@ -269,6 +269,10 @@ const NEWER_BUILD: &[&str] = &[
     "probe.constants.LevelConstsExposed_Camelot.MIN_ACHIEVEMENT_LEVEL",
     "probe.constants.LevelConstsExposed_Camelot.MIN_RES_SICKNESS_LEVEL",
     "probe.constants.LevelConstsExposed_Camelot.MIN_TALENT_LEVEL",
+    // 70755: a subscription interstitial added (`SubscriptionPeriod`)
+    "probe.enums.SubscriptionInterstitialType.SubscriptionPeriod",
+    "probe.enums.SubscriptionInterstitialTypeMeta.MaxValue",
+    "probe.enums.SubscriptionInterstitialTypeMeta.NumValues",
 ];
 
 /// Results that depend on the character, the moment, the session or
@@ -1963,8 +1967,13 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
 /// atlas tables gained 5, decision T238).
 // (33,082 until `BNGetInfo()` followed the later recording, decision
 // T350: the full probe's run got nothing, the answers battery's a day
-// later the account; Battle.net's state, the engine answers the account)
-const FULLPROBE_MATCHED: usize = 33081;
+// later the account; Battle.net's state, the engine answers the account;
+// 33,081 until 1.60.1.70755's documentation gave
+// `C_Texture.GetTitleIconTexture` a fourth argument, `[, subIcon]` (16 of
+// its and `IsTitleIconTextureReady`'s usage errors), and
+// `GetNumDeclensionSets` took the part type 2 the recording's client
+// refused; one more of `GetCurrentGameWindowSize`'s matched)
+const FULLPROBE_MATCHED: usize = 33065;
 
 #[test]
 fn the_engine_answers_the_full_probe_as_the_client_did() {

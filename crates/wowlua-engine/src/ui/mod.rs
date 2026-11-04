@@ -1308,6 +1308,36 @@ fn load_global_strings(vm: &mut Vm, path: &Path) {
     }
 }
 
+/// The installed client's global strings that the strings dump the
+/// declarations name lacks (decision T590), set where the global is still
+/// nil: an installed client's own strings, loaded before, keep theirs.
+fn newer_strings(vm: &mut Vm, flavor: &str) {
+    let text = match flavor {
+        "camelot" => include_str!("../../data/camelot-newer-strings.txt"),
+        _ => return,
+    };
+    for line in text.lines().filter(|l| !l.starts_with('#')) {
+        let Some((name, _)) = line.split_once(" = ") else {
+            continue;
+        };
+        if !matches!(vm.get_global(name), Value::Nil) {
+            continue;
+        }
+        match vm.load(line.as_bytes(), "@GlobalStrings.lua") {
+            Ok(f) => {
+                if vm.call(f, &[]).is_err() {
+                    engine_mut(vm)
+                        .world
+                        .ui
+                        .errors
+                        .push(format!("GlobalStrings.lua: {name}"));
+                }
+            }
+            Err(e) => engine_mut(vm).world.ui.errors.push(e),
+        }
+    }
+}
+
 /// Loads the flavor's Blizzard addons from `interface` (a folder holding
 /// `AddOns/Blizzard_*`), as secure code, after the client's global strings
 /// (`GlobalStrings.lua`: `NAME = "text"` lines) if given; `ADDON_LOADED`
@@ -1395,6 +1425,7 @@ pub fn load(vm: &mut Vm, interface: &Path, global_strings: Option<&Path>) -> Rep
     }
     if let Some(path) = global_strings {
         load_global_strings(vm, path);
+        newer_strings(vm, &flavor);
     }
     // What only Blizzard's code sees; its EnvironmentCleanup.lua removes it.
     for s in engine(vm).secure_tables.clone() {

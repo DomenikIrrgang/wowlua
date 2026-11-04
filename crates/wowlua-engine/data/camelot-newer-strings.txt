@@ -1,0 +1,31 @@
+# Global strings of the installed camelot client (1.60.1.70755, its
+# GlobalStrings.lua) that Ketho's BlizzardInterfaceResources dump the
+# declarations name lacks (decision T590): set after that dump, where the
+# global is still nil. Delete a line once the dump has it.
+CLASSIC_TURN_STRAFE_KEYBINDINGS_BUTTON_TEXT = "Classic Turn/Strafe Keys";
+COMMUNITIES_INVITE_MANAGER_REVOKE_INVITE = "Revoke";
+CONFIRM_DESTROY_CHARACTER_COMMUNITY_UNPROMPTED = "Are you sure you want to delete the community \"%s\"? This can't be undone.";
+CONFIRM_DESTROY_COMMUNITY_UNPROMPTED = "Are you sure you want to delete the group \"%s\"? This can't be undone.";
+CR_HIT_OFFHAND_TOOLTIP = "Increases |cFFFFFFFFOff-Hand Melee|r hit chance by %.2f%%";
+CR_PET_DODGE_BASE_STAT_TOOLTIP = "Increases chance to |cFFFFFFFFDodge|r by %.2f%%\n\n|cFFBCBCBCDodging nullifies the attack|r\n\n|cFFBCBCBCFor Players, only Melee attacks from the front may be Dodged\n\nFor Creatures, Melee attacks may be Dodged from any direction|r";
+CR_PET_EXPERTISE_TOOLTIP = "Increase the chance |cFFFFFFFFMelee|r attacks are not |cFFFFFFFFDodged|r or |cFFFFFFFFParried|r\n\nIncreased by 100% of |cFFFFFFFFMaster's Expertise|r\n\n|cFFFF5A5ARaid Boss|r|cffBCBCBC chance to:\n  6.50%% Dodge\n16.50%% Parry\n\n|r|cFF52E31EEqual-Level Creature|r|cffBCBCBC chance to:\n  5.00%% Dodge\n  5.00%% Parry|r";
+CURRENT_SETTING_TEXT_CLASSIC_LABEL = "|cnNORMAL_FONT_COLOR:Current setting:|r |cnHIGHLIGHT_FONT_COLOR:Classic|r";
+CURRENT_SETTING_TEXT_ENHANCED_LABEL = "|cnNORMAL_FONT_COLOR:Current setting:|r |cnHIGHLIGHT_FONT_COLOR:Enhanced|r";
+DIALOG_CONFIRMATION_PROMPT_GAMEPAD = "Press the button sequence to confirm.";
+DIALOG_CONFIRMATION_PROMPT_MKB = "Type \"%s\" into the field to confirm.";
+ENHANCED_TURN_STRAFE_KEYBINDINGS_BUTTON_TEXT = "Enhanced Turn/Strafe Keys";
+EXPANSION_NAME_FOREVER0 = "Forever";
+LEVEL_UP_CHAR_POINTS = "You have gained %d talent point.";
+OPTIONS_MENU_INTERFACE_TOASTS_TEXT = "Show Interface Toasts";
+OPTIONS_MENU_INTERFACE_TOASTS_TOOLTIP = "Controls which interface toasts will appear";
+OPTIONS_MENU_QUEST_POIS_TEXT = "Show Quest POIs & Blobs";
+OPTIONS_MENU_QUEST_POIS_TOOLTIP = "When checked quest objectives and blobs will display on the map and minimap";
+PRESET_LABEL = "Preset";
+SET_PRESET_OPTION_BUTTON_CLASSIC_LABEL = "Set to Classic";
+SET_PRESET_OPTION_BUTTON_ENHANCED_LABEL = "Set to Enhanced";
+SHARD_TRANSFER_COMBAT = "You can't refresh the world while in combat.";
+SOCIAL_TAB_UNAVAILABLE = "The %s feature is unavailable due to your account's privacy settings. Some social features are restricted.";
+STAT_CATEGORY_COMBAT = "Combat";
+STAT_PET_HIT_TOOLTIP = "Increases |cFFFFFFFFMelee|r and |cFFFFFFFFSpell|r hit chance\n\nIncreased by 100% of |cFFFFFFFFMaster's Hit Chance|r\n\n|cffBCBCBCTo never miss|r |cFFFF5A5ARaid Bosses|r|cffBCBCBC:\n  8.00%% Melee\n17.00%% Spells\n\nTo never miss|r |cFF52E31EEqual-Level Targets|r|cffBCBCBC:\n  5.00%% Melee\n  4.00%% Spells|r";
+STAT_WARLOCK_PET_MANA_REGEN_TOOLTIP = "The amount of |cFFFFFFFFMana|r regenerated every 5 sec\n\nIncreased by %d%% of |cFFFFFFFFMaster's Intellect|r\n\n|cFFBCBCBCImps benefit more from their Master's Intellect than other demons|r";
+STAT_WARLOCK_PET_MANA_TOOLTIP = "Resource used to cast |cFFFFFFFFSpells|r and |cFFFFFFFFAbilities|r\n\n|cFFBCBCBCReplenishes automatically after not spending Mana for 5 sec|r";

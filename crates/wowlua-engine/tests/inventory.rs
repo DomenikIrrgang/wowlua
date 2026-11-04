@@ -91,6 +91,14 @@ fn shown(vm: &mut Vm, name: &str) -> String {
 /// down.
 const MAX_SCALARS_DIFFERENT: usize = 1;
 
+/// Globals whose value the installed client's code changed after the
+/// recording (1.60.1.70755: the druid's bear form's index, the tutorial's
+/// quest), until the probe records them again.
+const NEWER_SCALARS: &[(&str, &str)] = &[
+    ("DRUID_BEAR_FORM", "number 8"),
+    ("TUTORIAL_QUEST_TO_WATCH", "number 28766"),
+];
+
 /// What the installed build's UI code no longer defines since the
 /// inventory was taken (Forever 70425), until it is taken again
 /// (tests/ingame/PROBES.md, "The Camelot update"): 70707's smart
@@ -213,6 +221,9 @@ fn every_function_of_the_client_exists_with_its_kind() {
         let expected = expected.trim_end_matches("\",");
         scalar_total += 1;
         let ours = shown(&mut vm, name);
+        if NEWER_SCALARS.contains(&(name, ours.as_str())) {
+            continue;
+        }
         if ours != expected {
             scalars.push(format!("{name}: client {expected}, ours {ours}"));
         }
