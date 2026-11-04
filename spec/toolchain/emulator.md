@@ -581,7 +581,10 @@ downloaded on first use into a user cache keyed by version (decision T204; about
 45 MB per flavor, once: `$WOWLUA_HOME/cache/blizzard-ui/`, at the commit the
 flavor's declarations name; `WOWLUA_UI_SOURCE` names a local copy instead), for
 each flavor that has test files to run (`build.flavor-files` may give them to
-other flavors). The engine's loader (`wowlua_engine::ui::load`)
+other flavors). The dump can be older than the UI code: the strings an
+installed client of the declarations' build has and the dump lacks are kept
+with the engine (`camelot-newer-strings.txt`) and set after the dump, where
+the global is still nil (decision T590). The engine's loader (`wowlua_engine::ui::load`)
 takes the flavor's `Interface` folder and its global strings:
 
 - **Startup set** (as `/stdtest engine` recorded: the 201 Blizzard addons
