@@ -292,6 +292,17 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
             }
         };
         widgets::fire_event(vm, "GLOBAL_MOUSE_DOWN", &[button]);
+        // (the top-level frames it is in come to the front, the outermost
+        // first: T586)
+        let mut chain = Vec::new();
+        let mut at = Some(id);
+        while let Some(w) = at {
+            chain.push(w);
+            at = engine(vm).world.widgets[w.0].parent;
+        }
+        for w in chain.into_iter().rev() {
+            widgets::raise_toplevel(vm, w);
+        }
         widgets::run_script(vm, id, "OnMouseDown", &[button]);
         if edit_box {
             user_focus(vm, id);

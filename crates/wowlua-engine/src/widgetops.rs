@@ -4,7 +4,8 @@
 //!
 //! - `Frame:Raise()` and `Frame:Lower()`: the frame's level above (below)
 //!   every other shown frame's in its strata, as `GetFrameLevel` answers.
-//!   A top-level frame keeps its level as it shows (decision T586).
+//!   A top-level frame shown or clicked is drawn above the rest of its
+//!   strata, its level kept (decision T586, `widgets::raise_toplevel`).
 //! - An edit box's selection: `HighlightText([start [, end]])` selects
 //!   (the whole text by default; `HighlightText(0, 0)` nothing),
 //!   `ClearHighlightText()` drops it; `Insert(text)` puts the text in place

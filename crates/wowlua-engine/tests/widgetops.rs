@@ -117,6 +117,61 @@ end",
     assert_eq!([made, same, changed], ["Blue", "Blue", "Red"]);
 }
 
+/// A top-level frame shown or clicked is drawn, with what is in it, above
+/// the rest of its strata, its level kept (decision T586; probed on TBC
+/// Anniversary: a top-level window at level 2, shown, over another's
+/// window at 3; plain, under it).
+#[test]
+fn a_top_level_frame_shown_or_clicked_is_drawn_on_top() {
+    let mut vm = vm();
+    let on_top = |vm: &mut Vm| {
+        let (k, _) = wowlua_engine::scene::pixel_scale(vm);
+        let id = wowlua_engine::scene::hit_test(vm, 50.0 * k, 50.0 * k).expect("a frame");
+        wowlua_engine::engine(vm).world.widgets[id.0]
+            .name
+            .clone()
+            .unwrap_or_default()
+    };
+    run(
+        &mut vm,
+        "local root = CreateFrame('Frame', nil, UIParent)
+root:SetAllPoints()
+local holder = CreateFrame('Frame', nil, root)
+holder:SetAllPoints()
+local blue = CreateFrame('Frame', 'Blue', holder)
+blue:SetSize(100, 100)
+blue:SetPoint('TOPLEFT')
+blue:EnableMouse(true)
+local red = CreateFrame('Frame', 'Red', root)
+red:SetSize(100, 100)
+red:SetPoint('TOPLEFT')
+red:EnableMouse(true)
+red:Hide()
+red:Show()",
+    );
+    let plain = on_top(&mut vm);
+    let levels = run(
+        &mut vm,
+        "Red:SetToplevel(true) Red:Hide() Red:Show()
+return Red:GetFrameLevel(), Blue:GetFrameLevel()",
+    );
+    let shown = on_top(&mut vm);
+    run(&mut vm, "Blue:SetToplevel(true) Blue:Hide() Blue:Show()");
+    let other = on_top(&mut vm);
+    run(&mut vm, "mock.click(Red)");
+    let clicked = on_top(&mut vm);
+    assert_eq!(
+        (plain, levels, shown, other, clicked),
+        (
+            "Blue".into(),
+            vec!["2".to_string(), "3".into()],
+            "Red".into(),
+            "Blue".into(),
+            "Red".into()
+        )
+    );
+}
+
 /// Frames moved with their parent's level keep their places among the
 /// frames of their level (decision T587): a window's level set higher
 /// keeps its slots over its background.

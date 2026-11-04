@@ -1300,8 +1300,9 @@ mouse above it.
 
 Recorded on TBC Anniversary (2026-11-04); again on WoW Forever from its
 launch, the same steps. Whether a top-level frame raises its level as it
-shows, as it is clicked, and what `Raise()` does. Each line in the chat,
-one after another.
+shows, as it is clicked, and what `Raise()` does; then whether it is drawn
+above another frame's window of a higher level (steps 11 to 17). Each
+line in the chat, one after another.
 
 1. `/run X=CreateFrame("Frame",nil,UIParent) X:SetSize(10,10) X:SetPoint("CENTER") X:SetFrameLevel(500)`
 2. `/run T=CreateFrame("Frame",nil,UIParent) T:SetSize(10,10) T:SetPoint("CENTER") T:SetToplevel(true) T:Hide() T:Show() print("shown", T:GetFrameLevel())`
@@ -1326,3 +1327,19 @@ one after another.
 10. **SuuUI's bags** (WoW Forever with SuuUI): open the bags, then `/run print(SuuUIBags:GetFrameLevel(), SuuUIBag2Slot1 and SuuUIBag2Slot1:GetFrameLevel(), SuuUIDamageMeter:GetFrameLevel())`
 
     WoW Forever: (to do)
+11. `/run R=CreateFrame("Frame",nil,UIParent) R:SetAllPoints() M=CreateFrame("Frame",nil,R) M:SetAllPoints()`
+12. `/run W=CreateFrame("Frame",nil,M) W:SetSize(200,200) W:SetPoint("CENTER") local t=W:CreateTexture() t:SetAllPoints() t:SetColorTexture(0,0,1)`
+13. `/run B=CreateFrame("Frame",nil,R) B:SetSize(200,200) B:SetPoint("CENTER",60,60) local t=B:CreateTexture() t:SetAllPoints() t:SetColorTexture(1,0,0) B:Hide() B:Show() print(W:GetFrameLevel(),B:GetFrameLevel())`
+
+    Seen: red or blue on top. wowlua: "3 2", blue. TBC Anniversary:
+    (to do). WoW Forever: (to do)
+14. `/run B:SetToplevel(true) B:Hide() B:Show()`
+
+    Seen: red or blue on top. wowlua: red. TBC Anniversary (the same
+    window made top-level before it showed): red, answering 2. WoW
+    Forever: (to do)
+15. `/run B:EnableMouse(true) W:EnableMouse(true) W:SetToplevel(true) W:Hide() W:Show()`, then click the red square where they do not overlap
+
+    Seen: red or blue on top after the show, then after the click.
+    wowlua: blue, then red. TBC Anniversary: (to do). WoW Forever: (to do)
+16. `/run R:Hide()`
