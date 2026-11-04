@@ -117,6 +117,42 @@ end",
     assert_eq!([made, same, changed], ["Blue", "Blue", "Red"]);
 }
 
+/// Frames moved with their parent's level keep their places among the
+/// frames of their level (decision T587): SuuUI's bags, raised as they
+/// show (T586), kept their slots over their background.
+#[test]
+fn frames_moved_with_their_parent_keep_their_order() {
+    let mut vm = vm();
+    let on_top = |vm: &mut Vm| {
+        let (k, _) = wowlua_engine::scene::pixel_scale(vm);
+        let id = wowlua_engine::scene::hit_test(vm, 50.0 * k, 50.0 * k).expect("a frame");
+        wowlua_engine::engine(vm).world.widgets[id.0]
+            .name
+            .clone()
+            .unwrap_or_default()
+    };
+    run(
+        &mut vm,
+        "local other = CreateFrame('Frame', nil, UIParent)
+other:SetFrameLevel(30)
+other:SetSize(10, 10)
+other:SetPoint('BOTTOMRIGHT')
+local bags = CreateFrame('Frame', 'Bags', UIParent)
+bags:SetToplevel(true)
+bags:SetSize(100, 100)
+bags:SetPoint('TOPLEFT')
+bags:Hide()
+for _, name in ipairs({ 'Background', 'Slot' }) do
+    local f = CreateFrame('Frame', name, bags)
+    f:SetAllPoints()
+    f:SetFrameLevel(5)
+    f:EnableMouse(true)
+end
+bags:Show()",
+    );
+    assert_eq!(on_top(&mut vm), "Slot");
+}
+
 /// A scroll frame's offsets move its scroll child (decision T589): up by
 /// the vertical, left by the horizontal, what is anchored in it with it.
 /// SuuUI's settings moved their scroll bar but not their rows.

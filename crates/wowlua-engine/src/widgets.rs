@@ -3927,7 +3927,11 @@ pub(crate) fn set_level(vm: &mut Vm, id: WidgetId, level: f64) {
             if let Some(Value::Num(n)) =
                 stored_args(vm, props, "FrameLevel").and_then(|v| v.first().copied())
             {
+                // (moved with it, it keeps its place among the frames of its
+                // level: T587)
+                let placed = engine(vm).world.widgets[child.0].placed;
                 store(vm, child, "FrameLevel", &[Value::Num((n + delta).max(0.0))]);
+                engine_mut(vm).world.widgets[child.0].placed = placed;
             }
             stack.extend(engine(vm).world.widgets[child.0].children.iter().copied());
         }

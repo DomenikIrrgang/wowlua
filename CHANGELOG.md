@@ -33,6 +33,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A window brought to the front keeps its own frames in their order: SuuUI's bag slots no longer draw behind the bag window's background.
 - A scroll frame's scroll child moves with its scroll (`SetVerticalScroll`, `SetHorizontalScroll`): its rows scroll on the screen, not only its scroll bar, as SuuUI's settings window's did.
 - The mouse wheel reaches a frame that takes only the wheel (`EnableMouseWheel`, an `OnMouseWheel` script) over a frame that takes the mouse: SuuUI's settings navigation scrolls again in wowlua Studio's game, instead of the camera zooming.
 - Of two frames at the same strata and level, the one whose level was set last is drawn and clicked on top, not the one made last: SuuUI's character window shows its chosen tab's label ("Stats") again.
