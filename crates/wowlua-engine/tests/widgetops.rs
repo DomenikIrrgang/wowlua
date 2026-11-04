@@ -52,11 +52,12 @@ return raised, childRaised, a:GetFrameLevel(), b:GetFrameLevel()",
     assert_eq!(r, ["8", "9", "0", "7"]);
 }
 
-/// A top-level frame comes to the front of its strata as it shows and as
-/// it (or a frame in it) is clicked (decision T586): SuuUI's bags, shown
-/// over its damage meter's windows (a level deeper, in another frame).
+/// A top-level frame keeps its level as it shows and as it is clicked
+/// (decision T586; probed on TBC Anniversary: shown, it stayed at 1 under a
+/// frame at 500). Raised above that frame, SuuUI's bags drew their
+/// background over their slots (Blizzard's item buttons, at level 10).
 #[test]
-fn a_top_level_frame_comes_to_the_front_shown_and_clicked() {
+fn a_top_level_frame_keeps_its_level_shown_and_clicked() {
     let mut vm = vm();
     let r = run(
         &mut vm,
@@ -78,9 +79,8 @@ plain:Hide()
 plain:Show()
 return before, meterRow:GetFrameLevel(), shown, clicked, plain:GetFrameLevel()",
     );
-    // Shown above the meter's row (3), clicked above the plain frame's 40;
-    // a frame that is not top-level stays where it is as it shows.
-    assert_eq!(r, ["1", "3", "4", "41", "40"]);
+    // Shown and clicked at its level; the others at theirs.
+    assert_eq!(r, ["1", "3", "1", "1", "40"]);
 }
 
 /// Of two frames at the same strata and level, the one placed later is on
@@ -118,8 +118,8 @@ end",
 }
 
 /// Frames moved with their parent's level keep their places among the
-/// frames of their level (decision T587): SuuUI's bags, raised as they
-/// show (T586), kept their slots over their background.
+/// frames of their level (decision T587): a window's level set higher
+/// keeps its slots over its background.
 #[test]
 fn frames_moved_with_their_parent_keep_their_order() {
     let mut vm = vm();
@@ -138,17 +138,15 @@ other:SetFrameLevel(30)
 other:SetSize(10, 10)
 other:SetPoint('BOTTOMRIGHT')
 local bags = CreateFrame('Frame', 'Bags', UIParent)
-bags:SetToplevel(true)
 bags:SetSize(100, 100)
 bags:SetPoint('TOPLEFT')
-bags:Hide()
 for _, name in ipairs({ 'Background', 'Slot' }) do
     local f = CreateFrame('Frame', name, bags)
     f:SetAllPoints()
     f:SetFrameLevel(5)
     f:EnableMouse(true)
 end
-bags:Show()",
+bags:SetFrameLevel(40)",
     );
     assert_eq!(on_top(&mut vm), "Slot");
 }

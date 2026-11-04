@@ -1295,3 +1295,34 @@ mouse above it.
    Seen: does the chat print "S wheel", or does the camera zoom? wowlua:
    the camera zooms. Seen: (to do)
 6. **Gone**: `/run W:Hide() B:Hide()`
+
+## Top-level frames (decision T586)
+
+Recorded on TBC Anniversary (2026-11-04); again on WoW Forever from its
+launch, the same steps. Whether a top-level frame raises its level as it
+shows, as it is clicked, and what `Raise()` does. Each line in the chat,
+one after another.
+
+1. `/run X=CreateFrame("Frame",nil,UIParent) X:SetSize(10,10) X:SetPoint("CENTER") X:SetFrameLevel(500)`
+2. `/run T=CreateFrame("Frame",nil,UIParent) T:SetSize(10,10) T:SetPoint("CENTER") T:SetToplevel(true) T:Hide() T:Show() print("shown", T:GetFrameLevel())`
+
+   TBC Anniversary: "shown 1". WoW Forever: (to do)
+3. `/run T:Raise() print("raised", T:GetFrameLevel())`
+
+   TBC Anniversary: "raised 1". WoW Forever: (to do)
+4. `/run X:SetToplevel(true) T:Hide() T:Show() print("shown2", T:GetFrameLevel())`
+
+   TBC Anniversary: "shown2 1". WoW Forever: (to do)
+5. **A click**: `/run T:SetSize(200,200) T:EnableMouse(true) local t=T:CreateTexture() t:SetAllPoints() t:SetColorTexture(0,1,0)`, then click the green square, then `/run print("clicked", T:GetFrameLevel())`
+
+   TBC Anniversary: (to do). WoW Forever: (to do)
+6. `/run A=CreateFrame("Frame",nil,UIParent) A:SetSize(200,200) A:SetPoint("CENTER") A:SetFrameLevel(50) local t=A:CreateTexture() t:SetAllPoints() t:SetColorTexture(1,0,0)`
+7. `/run B=CreateFrame("Frame",nil,UIParent) B:SetSize(200,200) B:SetPoint("CENTER",60,60) B:SetFrameLevel(50) local u=B:CreateTexture() u:SetAllPoints() u:SetColorTexture(0,0,1)`
+8. `/run A:Raise() print("A", A:GetFrameLevel())`
+
+   Seen: the level printed, and red or blue on top where they overlap.
+   TBC Anniversary: "A 50", blue on top. WoW Forever: (to do)
+9. **Gone**: `/run X:Hide() T:Hide() A:Hide() B:Hide()`
+10. **SuuUI's bags** (WoW Forever with SuuUI): open the bags, then `/run print(SuuUIBags:GetFrameLevel(), SuuUIBag2Slot1 and SuuUIBag2Slot1:GetFrameLevel(), SuuUIDamageMeter:GetFrameLevel())`
+
+    WoW Forever: (to do)
