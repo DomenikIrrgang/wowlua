@@ -1394,3 +1394,13 @@ engine to close, with the steps that would record the game's answer.
    0.6.4. To check in wowlua: whether a click on an addon-made container
    item button taints the use there too (SuuUI's bag tests click items
    without an error).
+6. **Tagged mobs.** wowlua answers `UnitIsTapDenied` with a fixed `false`
+   (a blank, `crates/wowlua-engine/src/blanks.rs`), and no mock tags a mob
+   for someone else, so SuuUI's grey for a mob another player tagged was
+   tested with a stand-in. In the game the tag changes with `UNIT_FACTION`
+   (ElvUI's oUF redraws on it), a tagger's death too. Steps (another
+   player's mob targeted, then them dying or leaving):
+   - `/run print("tap", UnitIsTapDenied("target"), UnitPlayerControlled("target"))`
+   - `/run local f=CreateFrame("Frame") f:RegisterUnitEvent("UNIT_FACTION","target") f:SetScript("OnEvent",function(_,e,u) print(e,u,UnitIsTapDenied("target")) end)`
+
+     Seen: does `UNIT_FACTION` come when the tag goes? (to do)
