@@ -28,6 +28,9 @@ struct Cli {
 
 #[derive(Args, Debug, Clone)]
 pub struct GlobalArgs {
+    /// `wowlua mcp`: adopt a plain addon in memory (decision T592).
+    #[arg(skip)]
+    pub adopt: bool,
     /// Use a specific wowlua.json
     #[arg(long, global = true, value_name = "PATH")]
     pub manifest: Option<PathBuf>,

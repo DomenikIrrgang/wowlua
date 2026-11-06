@@ -6,6 +6,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- **`wowlua mcp` in any addon**: registered once (`claude mcp add --scope user wowlua -- wowlua mcp`), it works in an addon that has no `wowlua.json`, with no setup: the addon is adopted in memory as `wowlua init` would, its files staying where they are and nothing written in its folder. Sessions run it over Blizzard's UI with the libraries in its `libs/` folder, and its builds go to `~/.wowlua/adopted/`.
+
 - World profiles accept `renown`, a map of faction IDs to numeric renown levels, applied before the addon loads.
 - **More for AI agents in `wowlua mcp`**: an agent can now check, format, build and test your package (`check`, `fmt`, `build`, and `test` with the failures' messages and lines, and coverage on request), see which frame is at a point (`pick`) and everything about one frame (`inspect`: anchors, scripts, events, the line that made it), list the world's units (`units`), log the game events (`events`), change the screen size (`set_screen`), save the running world as a world profile (`save_world`) and list the breakpoints with their hits (`breakpoints`). A stop at an error, a blocked action or taint now tells its details.
 - An agent can read wowlua's docs and the standard library's reference through `wowlua mcp` (`wowlua_docs`, `wowlua_reference`): the docs and modules of exactly the wowlua it runs, with no web access needed.
@@ -33,6 +35,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `wowlua mcp` started in a folder without an addon no longer quits (which agents' clients show only as a closed connection); its tools say why there is nothing to run.
+- An asset under `libs/`, such as a library's textures, no longer fails the build with E4311 when no dependency writes the same file.
 - A top-level frame (`SetToplevel(true)`) is drawn above the rest of its strata when it is shown or clicked, its frame level unchanged, as in the game: SuuUI's bags open in front of its damage meter with their slots in front of their background.
 - A frame whose level moves with its parent's keeps its place among the frames of its level.
 - A scroll frame's scroll child moves with its scroll (`SetVerticalScroll`, `SetHorizontalScroll`): its rows scroll on the screen, not only its scroll bar, as SuuUI's settings window's did.
