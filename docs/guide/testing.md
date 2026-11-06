@@ -263,7 +263,9 @@ end
 
 `mock.waitFor` returns the event's arguments. `mock.waitFrames`,
 `mock.waitSeconds` and `mock.waitUntil` wait the same way, each frame running
-`OnUpdate` and the timers that are due. A wait longer than 10 virtual seconds
+`OnUpdate` and the timers that are due. `mock.advanceTime` runs only the
+timers: code that waits for an `OnUpdate`, as Blizzard's aura containers do
+before they show their auras, needs frames (`mock.nextFrame()` or a wait). A wait longer than 10 virtual seconds
 fails the test and says what it waited for; `config({ timeout = … })` or
 `@test(name, { timeout = … })` changes the limit.
 

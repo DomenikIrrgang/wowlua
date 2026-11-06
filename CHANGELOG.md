@@ -46,6 +46,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `GetNumRegions()` counts a frame's current regions, including hidden regions, rather than returning a fresh frame's recorded count.
 - `DisableDrawLayer` and `EnableDrawLayer` hide and restore a frame's draw layers without changing its regions' shown state or its child frames' layers.
 - Clearing texture artwork with file ID `0` no longer draws missing-texture placeholders.
+- A frame's `OnUpdate` follows `SetOnUpdateMode`: `Enum.OnUpdateMode.Disabled` stops it, `RunWhenVisibleOnce` and `RunOnce` run it once, and `RunOnce` and `RunAlways` run it while the frame is hidden too. Before, every shown frame's `OnUpdate` ran each frame, whatever its mode.
 
 ## 0.13.8 (2026-11-01)
 

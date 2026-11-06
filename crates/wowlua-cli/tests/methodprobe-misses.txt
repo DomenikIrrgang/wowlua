@@ -1,7 +1,7 @@
 # The method probe's answers the engine does not give as the client did, by
 # function: written by its test with WOWLUA_COVERAGE_WRITE=1, read by
 # `cargo xtask coverage-report`.
-matched	8399
+matched	8473
 total	13049
 Alpha:GetDebugName	1
 Alpha:GetInheritableForbiddenAspects	1
@@ -9,7 +9,6 @@ Alpha:GetOrder	1
 Alpha:GetToAlpha	1
 Alpha:HasScript	1
 Alpha:HasSecretAspect	1
-Alpha:HasSecretValues	1
 Alpha:IsObjectType	1
 Alpha:IsStopped	1
 Alpha:SetFromAlpha	5
@@ -21,7 +20,6 @@ Animation:GetScript	24
 Animation:HasAnyAccessRestrictions	1
 Animation:HasScript	2
 Animation:HasSecretAspect	1
-Animation:HasSecretValues	1
 Animation:HookScript	12
 Animation:IsObjectType	2
 Animation:IsStopped	1
@@ -47,7 +45,6 @@ AnimationGroup:GetScript	24
 AnimationGroup:HasAnyAccessRestrictions	1
 AnimationGroup:HasScript	2
 AnimationGroup:HasSecretAspect	1
-AnimationGroup:HasSecretValues	1
 AnimationGroup:HookScript	12
 AnimationGroup:IsObjectType	2
 AnimationGroup:SetAnimationSpeedMultiplier	1
@@ -70,7 +67,6 @@ ArchaeologyDigSiteFrame:GetSourceLocation	1
 ArchaeologyDigSiteFrame:GetTop	1
 ArchaeologyDigSiteFrame:HasScript	1
 ArchaeologyDigSiteFrame:HasSecretAspect	1
-ArchaeologyDigSiteFrame:HasSecretValues	1
 ArchaeologyDigSiteFrame:IsDrawLayerEnabled	1
 ArchaeologyDigSiteFrame:IsObjectType	1
 ArchaeologyDigSiteFrame:ShouldButtonPassThrough	1
@@ -90,7 +86,6 @@ Button:GetSourceLocation	1
 Button:GetTop	1
 Button:HasScript	1
 Button:HasSecretAspect	1
-Button:HasSecretValues	1
 Button:IsDrawLayerEnabled	1
 Button:IsObjectType	1
 Button:RegisterForClicks	2
@@ -149,7 +144,6 @@ CheckButton:GetSourceLocation	1
 CheckButton:GetTop	1
 CheckButton:HasScript	1
 CheckButton:HasSecretAspect	1
-CheckButton:HasSecretValues	1
 CheckButton:IsDrawLayerEnabled	1
 CheckButton:IsObjectType	1
 CheckButton:SetCheckedTexture	2
@@ -177,7 +171,6 @@ CinematicModel:GetTop	1
 CinematicModel:HasAnimation	1
 CinematicModel:HasScript	1
 CinematicModel:HasSecretAspect	1
-CinematicModel:HasSecretValues	1
 CinematicModel:IsDrawLayerEnabled	1
 CinematicModel:IsObjectType	1
 CinematicModel:SetAnimOffset	1
@@ -206,7 +199,6 @@ ColorSelect:GetSourceLocation	1
 ColorSelect:GetTop	1
 ColorSelect:HasScript	1
 ColorSelect:HasSecretAspect	1
-ColorSelect:HasSecretValues	1
 ColorSelect:IsDrawLayerEnabled	1
 ColorSelect:IsObjectType	1
 ColorSelect:SetColorAlpha	1
@@ -234,7 +226,6 @@ ContainedAlertFrame:GetSourceLocation	1
 ContainedAlertFrame:GetTop	1
 ContainedAlertFrame:HasScript	1
 ContainedAlertFrame:HasSecretAspect	1
-ContainedAlertFrame:HasSecretValues	1
 ContainedAlertFrame:IsDrawLayerEnabled	1
 ContainedAlertFrame:IsObjectType	1
 ContainedAlertFrame:ShouldButtonPassThrough	1
@@ -243,7 +234,6 @@ ControlPoint:GetInheritableForbiddenAspects	3
 ControlPoint:GetOrder	1
 ControlPoint:HasAnyAccessRestrictions	1
 ControlPoint:HasSecretAspect	1
-ControlPoint:HasSecretValues	1
 ControlPoint:IsObjectType	2
 ControlPoint:SetOffset	13
 ControlPoint:SetOrder	5
@@ -266,7 +256,6 @@ Cooldown:GetSourceLocation	1
 Cooldown:GetTop	1
 Cooldown:HasScript	1
 Cooldown:HasSecretAspect	1
-Cooldown:HasSecretValues	1
 Cooldown:IsDrawLayerEnabled	1
 Cooldown:IsObjectType	1
 Cooldown:SetBlingTexture	9
@@ -313,7 +302,6 @@ DressUpModel:GetTop	1
 DressUpModel:HasAnimation	1
 DressUpModel:HasScript	1
 DressUpModel:HasSecretAspect	1
-DressUpModel:HasSecretValues	1
 DressUpModel:IsDrawLayerEnabled	1
 DressUpModel:IsObjectType	1
 DressUpModel:IsSlotAllowed	1
@@ -338,7 +326,6 @@ DropdownButton:GetSourceLocation	1
 DropdownButton:GetTop	1
 DropdownButton:HasScript	1
 DropdownButton:HasSecretAspect	1
-DropdownButton:HasSecretValues	1
 DropdownButton:IsDrawLayerEnabled	1
 DropdownButton:IsObjectType	1
 DropdownButton:ShouldButtonPassThrough	1
@@ -359,9 +346,8 @@ EditBox:GetSourceLocation	1
 EditBox:GetTop	1
 EditBox:HasScript	1
 EditBox:HasSecretAspect	1
-EditBox:HasSecretValues	1
 EditBox:HighlightText	2
-EditBox:Insert	5
+EditBox:Insert	2
 EditBox:IsAutoFocus	1
 EditBox:IsDrawLayerEnabled	1
 EditBox:IsObjectType	1
@@ -390,7 +376,7 @@ EditBoxWithFont:AddHistoryLine	2
 EditBoxWithFont:GetFontObject	1
 EditBoxWithFont:GetHighlightColor	1
 EditBoxWithFont:HighlightText	2
-EditBoxWithFont:Insert	5
+EditBoxWithFont:Insert	2
 EditBoxWithFont:IsAutoFocus	1
 EditBoxWithFont:SetAlpha	2
 EditBoxWithFont:SetBlinkSpeed	1
@@ -426,7 +412,6 @@ EventFrame:GetSourceLocation	1
 EventFrame:GetTop	1
 EventFrame:HasScript	1
 EventFrame:HasSecretAspect	1
-EventFrame:HasSecretValues	1
 EventFrame:IsDrawLayerEnabled	1
 EventFrame:IsMouseClickEnabled	1
 EventFrame:IsMouseMotionEnabled	1
@@ -437,7 +422,6 @@ FlipBook:GetInheritableForbiddenAspects	1
 FlipBook:GetOrder	1
 FlipBook:HasScript	1
 FlipBook:HasSecretAspect	1
-FlipBook:HasSecretValues	1
 FlipBook:IsObjectType	1
 FlipBook:IsStopped	1
 FlipBook:SetFlipBookColumns	3
@@ -461,7 +445,6 @@ FogOfWarFrame:GetSourceLocation	1
 FogOfWarFrame:GetTop	1
 FogOfWarFrame:HasScript	1
 FogOfWarFrame:HasSecretAspect	1
-FogOfWarFrame:HasSecretValues	1
 FogOfWarFrame:IsDrawLayerEnabled	1
 FogOfWarFrame:IsObjectType	1
 FogOfWarFrame:SetFogOfWarBackgroundAtlas	4
@@ -491,7 +474,6 @@ FontString:GetTop	1
 FontString:GetUnboundedStringWidthForText	2
 FontString:HasScript	1
 FontString:HasSecretAspect	1
-FontString:HasSecretValues	1
 FontString:IsObjectType	1
 FontString:SetAlpha	2
 FontString:SetAlphaGradient	27
@@ -571,7 +553,7 @@ Frame:CreateTexture	16
 Frame:CreateVectorGraphics	18
 Frame:DesaturateHierarchy	1
 Frame:DisableDrawLayer	3
-Frame:EnableDrawLayer	3
+Frame:EnableDrawLayer	8
 Frame:ExecuteAttribute	2
 Frame:GetAttribute	2
 Frame:GetBottom	1
@@ -589,7 +571,6 @@ Frame:GetTop	1
 Frame:HasAnyAccessRestrictions	1
 Frame:HasScript	2
 Frame:HasSecretAspect	1
-Frame:HasSecretValues	1
 Frame:HookScript	22
 Frame:InterceptStartDrag	2
 Frame:Intersects	2
@@ -632,7 +613,6 @@ Frame:SetIgnoreParentScale	1
 Frame:SetIgnoringChildrenForBounds	1
 Frame:SetIsFrameBuffer	2
 Frame:SetMovable	1
-Frame:SetOnUpdateMode	4
 Frame:SetParent	1
 Frame:SetParentKey	5
 Frame:SetPoint	10
@@ -677,7 +657,6 @@ GameTooltip:GetSourceLocation	1
 GameTooltip:GetTop	1
 GameTooltip:HasScript	1
 GameTooltip:HasSecretAspect	1
-GameTooltip:HasSecretValues	1
 GameTooltip:IsDrawLayerEnabled	1
 GameTooltip:IsObjectType	1
 GameTooltip:IsOwned	3
@@ -715,17 +694,13 @@ Line:GetRight	1
 Line:GetRotation	1
 Line:GetSourceLocation	1
 Line:GetStartPoint	1
-Line:GetTexelSnappingBias	1
-Line:GetTexture	1
 Line:GetTextureSliceMargins	1
 Line:GetTextureSliceMode	1
 Line:GetTop	1
 Line:GetVertexOffset	1
 Line:HasScript	1
 Line:HasSecretAspect	1
-Line:HasSecretValues	1
 Line:IsObjectType	1
-Line:IsSnappingToPixelGrid	1
 Line:SetEndPoint	11
 Line:SetHitRectThickness	2
 Line:SetStartPoint	11
@@ -739,7 +714,6 @@ LineScale:GetScaleFrom	1
 LineScale:GetScaleTo	1
 LineScale:HasScript	1
 LineScale:HasSecretAspect	1
-LineScale:HasSecretValues	1
 LineScale:IsObjectType	1
 LineScale:IsStopped	1
 LineTranslation:GetDebugName	1
@@ -747,7 +721,6 @@ LineTranslation:GetInheritableForbiddenAspects	1
 LineTranslation:GetOrder	1
 LineTranslation:HasScript	1
 LineTranslation:HasSecretAspect	1
-LineTranslation:HasSecretValues	1
 LineTranslation:IsObjectType	1
 LineTranslation:IsStopped	1
 MaskTexture:GetBottom	1
@@ -759,17 +732,13 @@ MaskTexture:GetRadialProgressBarPercent	1
 MaskTexture:GetRight	1
 MaskTexture:GetRotation	1
 MaskTexture:GetSourceLocation	1
-MaskTexture:GetTexelSnappingBias	1
-MaskTexture:GetTexture	1
 MaskTexture:GetTextureSliceMargins	1
 MaskTexture:GetTextureSliceMode	1
 MaskTexture:GetTop	1
 MaskTexture:GetVertexOffset	1
 MaskTexture:HasScript	1
 MaskTexture:HasSecretAspect	1
-MaskTexture:HasSecretValues	1
 MaskTexture:IsObjectType	1
-MaskTexture:IsSnappingToPixelGrid	1
 MaskTexture:ShouldButtonPassThrough	1
 MessageFrame:AddMessage	30
 MessageFrame:GetAttribute	1
@@ -789,7 +758,6 @@ MessageFrame:GetTop	1
 MessageFrame:HasMessageByID	3
 MessageFrame:HasScript	1
 MessageFrame:HasSecretAspect	1
-MessageFrame:HasSecretValues	1
 MessageFrame:IsDrawLayerEnabled	1
 MessageFrame:IsObjectType	1
 MessageFrame:ResetMessageFadeByID	3
@@ -847,7 +815,6 @@ Model:GetSourceLocation	1
 Model:GetTop	1
 Model:HasScript	1
 Model:HasSecretAspect	1
-Model:HasSecretValues	1
 Model:IsDrawLayerEnabled	1
 Model:IsObjectType	1
 Model:ReplaceIconTexture	2
@@ -911,7 +878,6 @@ ModelScene:GetSourceLocation	1
 ModelScene:GetTop	1
 ModelScene:HasScript	1
 ModelScene:HasSecretAspect	1
-ModelScene:HasSecretValues	1
 ModelScene:IsDrawLayerEnabled	1
 ModelScene:IsLightVisible	1
 ModelScene:IsObjectType	1
@@ -955,7 +921,6 @@ ModelSceneActor:GetModelUnitGUID	1
 ModelSceneActor:GetObjectType	1
 ModelSceneActor:HasAnyAccessRestrictions	1
 ModelSceneActor:HasSecretAspect	1
-ModelSceneActor:HasSecretValues	1
 ModelSceneActor:IsObjectType	2
 ModelSceneActor:IsSlotAllowed	2
 ModelSceneActor:IsSlotVisible	2
@@ -1009,7 +974,6 @@ MovieFrame:GetSourceLocation	1
 MovieFrame:GetTop	1
 MovieFrame:HasScript	1
 MovieFrame:HasSecretAspect	1
-MovieFrame:HasSecretValues	1
 MovieFrame:IsDrawLayerEnabled	1
 MovieFrame:IsObjectType	1
 MovieFrame:ShouldButtonPassThrough	1
@@ -1029,7 +993,6 @@ OffScreenFrame:GetSourceLocation	1
 OffScreenFrame:GetTop	1
 OffScreenFrame:HasScript	1
 OffScreenFrame:HasSecretAspect	1
-OffScreenFrame:HasSecretValues	1
 OffScreenFrame:IsDrawLayerEnabled	1
 OffScreenFrame:IsObjectType	1
 OffScreenFrame:IsSnapshotValid	2
@@ -1042,7 +1005,6 @@ Path:GetMaxControlPointOrder	1
 Path:GetOrder	1
 Path:HasScript	1
 Path:HasSecretAspect	1
-Path:HasSecretValues	1
 Path:IsObjectType	1
 Path:IsStopped	1
 Path:SetCurveType	3
@@ -1068,14 +1030,13 @@ PlayerModel:GetTop	1
 PlayerModel:HasAnimation	3
 PlayerModel:HasScript	1
 PlayerModel:HasSecretAspect	1
-PlayerModel:HasSecretValues	1
 PlayerModel:IsDrawLayerEnabled	1
 PlayerModel:IsObjectType	1
 PlayerModel:PlayAnimKit	2
 PlayerModel:SetAnimation	12
 PlayerModel:SetCamDistanceScale	1
 PlayerModel:SetCreature	3
-PlayerModel:SetDisplayInfo	9
+PlayerModel:SetDisplayInfo	3
 PlayerModel:SetItem	4
 PlayerModel:SetItemAppearance	3
 PlayerModel:SetKeepModelOnHide	1
@@ -1099,7 +1060,6 @@ QuestPOIFrame:GetTooltipIndex	3
 QuestPOIFrame:GetTop	1
 QuestPOIFrame:HasScript	1
 QuestPOIFrame:HasSecretAspect	1
-QuestPOIFrame:HasSecretValues	1
 QuestPOIFrame:IsDrawLayerEnabled	1
 QuestPOIFrame:IsObjectType	1
 QuestPOIFrame:SetBorderAlpha	4
@@ -1117,7 +1077,6 @@ Rotation:GetInheritableForbiddenAspects	1
 Rotation:GetOrder	1
 Rotation:HasScript	1
 Rotation:HasSecretAspect	1
-Rotation:HasSecretValues	1
 Rotation:IsObjectType	1
 Rotation:IsStopped	1
 Rotation:SetDegrees	1
@@ -1131,7 +1090,6 @@ Scale:GetScaleFrom	1
 Scale:GetScaleTo	1
 Scale:HasScript	1
 Scale:HasSecretAspect	1
-Scale:HasSecretValues	1
 Scale:IsObjectType	1
 Scale:IsStopped	1
 Scale:SetOrigin	7
@@ -1152,7 +1110,6 @@ ScenarioPOIFrame:GetSourceLocation	1
 ScenarioPOIFrame:GetTop	1
 ScenarioPOIFrame:HasScript	1
 ScenarioPOIFrame:HasSecretAspect	1
-ScenarioPOIFrame:HasSecretValues	1
 ScenarioPOIFrame:IsDrawLayerEnabled	1
 ScenarioPOIFrame:IsObjectType	1
 ScenarioPOIFrame:ShouldButtonPassThrough	1
@@ -1171,7 +1128,6 @@ ScrollFrame:GetSourceLocation	1
 ScrollFrame:GetTop	1
 ScrollFrame:HasScript	1
 ScrollFrame:HasSecretAspect	1
-ScrollFrame:HasSecretValues	1
 ScrollFrame:IsDrawLayerEnabled	1
 ScrollFrame:IsObjectType	1
 ScrollFrame:SetHorizontalScroll	3
@@ -1192,7 +1148,6 @@ ScrollingMessageFrame:GetSourceLocation	1
 ScrollingMessageFrame:GetTop	1
 ScrollingMessageFrame:HasScript	1
 ScrollingMessageFrame:HasSecretAspect	1
-ScrollingMessageFrame:HasSecretValues	1
 ScrollingMessageFrame:IsDrawLayerEnabled	1
 ScrollingMessageFrame:IsObjectType	1
 ScrollingMessageFrame:ShouldButtonPassThrough	1
@@ -1220,7 +1175,6 @@ SimpleHTML:GetTextColor	7
 SimpleHTML:GetTop	1
 SimpleHTML:HasScript	1
 SimpleHTML:HasSecretAspect	1
-SimpleHTML:HasSecretValues	1
 SimpleHTML:IsDrawLayerEnabled	1
 SimpleHTML:IsObjectType	1
 SimpleHTML:SetFont	23
@@ -1272,7 +1226,6 @@ Slider:GetSourceLocation	1
 Slider:GetTop	1
 Slider:HasScript	1
 Slider:HasSecretAspect	1
-Slider:HasSecretValues	1
 Slider:IsDrawLayerEnabled	1
 Slider:IsObjectType	1
 Slider:SetEnabled	1
@@ -1298,7 +1251,6 @@ StatusBar:GetSourceLocation	1
 StatusBar:GetTop	1
 StatusBar:HasScript	1
 StatusBar:HasSecretAspect	1
-StatusBar:HasSecretValues	1
 StatusBar:IsDrawLayerEnabled	1
 StatusBar:IsObjectType	1
 StatusBar:SetColorFill	7
@@ -1346,7 +1298,6 @@ TabardModel:GetUpperEmblemTexture	3
 TabardModel:HasAnimation	1
 TabardModel:HasScript	1
 TabardModel:HasSecretAspect	1
-TabardModel:HasSecretValues	1
 TabardModel:IsDrawLayerEnabled	1
 TabardModel:IsObjectType	1
 TabardModel:ShouldButtonPassThrough	1
@@ -1361,19 +1312,15 @@ Texture:GetRadialProgressBarPercent	1
 Texture:GetRight	1
 Texture:GetRotation	1
 Texture:GetSourceLocation	1
-Texture:GetTexelSnappingBias	1
-Texture:GetTexture	1
 Texture:GetTextureSliceMargins	1
 Texture:GetTextureSliceMode	1
 Texture:GetTop	1
 Texture:GetVertexOffset	1
 Texture:HasScript	1
 Texture:HasSecretAspect	1
-Texture:HasSecretValues	1
 Texture:IsObjectType	1
-Texture:IsSnappingToPixelGrid	1
 Texture:RemoveMaskTexture	3
-Texture:SetAtlas	27
+Texture:SetAtlas	26
 Texture:SetBlendMode	3
 Texture:SetColorTexture	7
 Texture:SetDesaturation	6
@@ -1390,7 +1337,7 @@ Texture:SetSVG	5
 Texture:SetSpriteSheetCell	8
 Texture:SetTexCoord	12
 Texture:SetTexelSnappingBias	6
-Texture:SetTexture	26
+Texture:SetTexture	20
 Texture:SetTextureSliceMargins	16
 Texture:SetTextureSliceMode	3
 Texture:SetVertexColor	7
@@ -1404,7 +1351,6 @@ TextureCoordTranslation:GetOffset	1
 TextureCoordTranslation:GetOrder	1
 TextureCoordTranslation:HasScript	1
 TextureCoordTranslation:HasSecretAspect	1
-TextureCoordTranslation:HasSecretValues	1
 TextureCoordTranslation:IsObjectType	1
 TextureCoordTranslation:IsStopped	1
 TextureCoordTranslation:SetOffset	30
@@ -1413,7 +1359,6 @@ Translation:GetInheritableForbiddenAspects	1
 Translation:GetOrder	1
 Translation:HasScript	1
 Translation:HasSecretAspect	1
-Translation:HasSecretValues	1
 Translation:IsObjectType	1
 Translation:IsStopped	1
 Translation:SetOffset	13
@@ -1433,7 +1378,6 @@ UnitPositionFrame:GetSourceLocation	1
 UnitPositionFrame:GetTop	1
 UnitPositionFrame:HasScript	1
 UnitPositionFrame:HasSecretAspect	1
-UnitPositionFrame:HasSecretValues	1
 UnitPositionFrame:IsDrawLayerEnabled	1
 UnitPositionFrame:IsObjectType	1
 UnitPositionFrame:SetPlayerPingScale	3
@@ -1446,7 +1390,6 @@ VertexColor:GetInheritableForbiddenAspects	1
 VertexColor:GetOrder	1
 VertexColor:HasScript	1
 VertexColor:HasSecretAspect	1
-VertexColor:HasSecretValues	1
 VertexColor:IsObjectType	1
 VertexColor:IsStopped	1
 VertexColor:SetEndColor	3

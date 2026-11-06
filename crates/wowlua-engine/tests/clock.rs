@@ -86,6 +86,72 @@ return n, string.format('%.1f', total)",
     assert_eq!(r, ["3", "0.3"]);
 }
 
+/// `SetOnUpdateMode` (decision T594): 0 never runs, 1 while shown, 2 once
+/// while shown, 3 once even hidden, 4 always; a run-once mode is back to 0
+/// before its script runs, which may ask for another run.
+#[test]
+fn on_update_runs_by_its_mode() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local log = {}
+local function make(name, mode, shown)
+    local f = CreateFrame('Frame')
+    f:SetShown(shown)
+    f:SetScript('OnUpdate', function(self)
+        log[#log + 1] = name .. self:GetOnUpdateMode()
+    end)
+    f:SetOnUpdateMode(mode)
+    return f
+end
+local fresh = CreateFrame('Frame'):GetOnUpdateMode()
+make('off', 0, true)
+make('shown', 1, true)
+local once = make('once', 2, true)
+make('hiddenonce', 2, false)
+make('anyonce', 3, false)
+make('always', 4, false)
+mock.nextFrame()
+log[#log + 1] = '|'
+mock.nextFrame()
+log[#log + 1] = '|'
+once:SetOnUpdateMode(Enum.OnUpdateMode.RunWhenVisibleOnce)
+mock.nextFrame()
+return fresh, table.concat(log, ' ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "1",
+            "shown1 once0 anyonce0 always4 | shown1 always4 | shown1 once0 always4"
+        ]
+    );
+}
+
+/// `SetOnUpdateMode`'s arguments as the client answered the method probe:
+/// no number is 0; none, or past 0 to 4, the usage error, the mode kept.
+#[test]
+fn on_update_mode_checks_its_argument() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame')
+f:SetOnUpdateMode(3)
+local ok, err = pcall(f.SetOnUpdateMode, f, 5)
+local kept = f:GetOnUpdateMode()
+local okNone = pcall(f.SetOnUpdateMode, f)
+f:SetOnUpdateMode('x')
+return tostring(ok), err, kept, tostring(okNone), f:GetOnUpdateMode()",
+    );
+    assert_eq!(r[0], "false");
+    assert!(
+        r[1].contains("Usage: self:SetOnUpdateMode(onUpdateMode)"),
+        "{}",
+        r[1]
+    );
+    assert_eq!(r[2..], ["3", "false", "0"]);
+}
+
 /// An `OnUpdate` given during a frame: a widget after the one running gets
 /// its turn in that frame, one before it and one made in it the next.
 #[test]
