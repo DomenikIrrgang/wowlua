@@ -384,6 +384,11 @@ pub struct InitRequest {
     /// folder's siblings: a `move-folders` member and the addon it is moved
     /// out of. `..\<name>\` TOC lines resolve to them.
     pub neighbors: Vec<Neighbor>,
+    /// Adopt in place, in memory (`wowlua mcp` in a plain addon, decision
+    /// T592): files stay where they are, the manifest and the interface
+    /// pins go to [`InitReport::manifest`] and [`InitReport::pins`] and
+    /// nothing is written.
+    pub in_place: bool,
 }
 
 /// An AddOn next to the one being adopted once packaged.
@@ -413,6 +418,19 @@ pub struct InitReport {
     pub member_pins: Vec<(String, BTreeMap<String, Vec<u32>>)>,
     /// External addons from `move-folders` (AddOn name → source).
     pub external_addons: Vec<(String, Value)>,
+    /// [`InitRequest::in_place`]: the manifest, not written.
+    pub manifest: Option<Value>,
+    /// [`InitRequest::in_place`]: the interface numbers the TOCs list.
+    pub pins: BTreeMap<String, Vec<u32>>,
+}
+
+/// `rel` under the source folder (`""` in place: the package root).
+fn under(src_dir: &str, rel: &str) -> String {
+    if src_dir.is_empty() {
+        rel.to_string()
+    } else {
+        format!("{src_dir}/{rel}")
+    }
 }
 
 const ASSET_EXTENSIONS: &[&str] = &[
@@ -437,6 +455,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         Err(e) => {
             // A repository of several addons.
             if request.inherited.is_none()
+                && !request.in_place
                 && request.from_toc.is_none()
                 && !request.no_pkgmeta
                 && let Some(meta) =
@@ -459,9 +478,11 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         }
         None => Vec::new(),
     };
-    // Folders `move-folders` turns into addons of their own.
+    // Folders `move-folders` turns into addons of their own (not in place:
+    // they would be written).
     let members: Vec<(String, String)> = pkgmeta
         .as_ref()
+        .filter(|_| !request.in_place)
         .map(|m| member_folders(dir, m, &tocs[0].1))
         .unwrap_or_default();
     if let Some(m) = pkgmeta.as_mut() {
@@ -473,7 +494,11 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         ));
     }
     let addon_name = tocs[0].1.clone();
-    let src_dir = source_dir_for(dir);
+    let src_dir = if request.in_place {
+        ""
+    } else {
+        source_dir_for(dir)
+    };
     let mut report = InitReport {
         addon_name: addon_name.clone(),
         external_addons,
@@ -804,8 +829,8 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     to_move.sort();
 
     // Move into src/ (git mv inside a repository).
-    let in_git = vcs::inside_work_tree(dir);
-    for rel in &to_move {
+    let in_git = !request.in_place && vcs::inside_work_tree(dir);
+    for rel in to_move.iter().filter(|_| !request.in_place) {
         let dest = format!("{src_dir}/{rel}");
         if let Some(parent) = dir.join(&dest).parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
@@ -819,11 +844,13 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         }
         report.moved += 1;
     }
-    remove_empty_dirs(dir, &to_move);
+    if !request.in_place {
+        remove_empty_dirs(dir, &to_move);
+    }
 
     // Rewrite absolute in-game paths to moved files.
     let moved_lower: BTreeSet<String> = to_move.iter().map(|p| p.to_ascii_lowercase()).collect();
-    for rel in &to_move {
+    for rel in to_move.iter().filter(|_| !request.in_place) {
         let lower = rel.to_ascii_lowercase();
         if !(lower.ends_with(".lua") || lower.ends_with(".xml")) {
             continue;
@@ -848,7 +875,12 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     // (majority, saved variables united); bulk `X-` data goes to TOC data
     // files; metadata that differs per flavor becomes `flavor-overrides`.
     let structural = structural_toc(&views);
-    let toc_data = extract_toc_data(dir, &views)?;
+    // (In place nothing is written: the data stays in the manifest.)
+    let toc_data = if request.in_place {
+        None
+    } else {
+        extract_toc_data(dir, &views)?
+    };
     let metadata = flavor_metadata(&views, &all_flavors, toc_data.is_some());
     let mut warnings = Vec::new();
     // Paths of external lines in the other AddOn's output.
@@ -1001,7 +1033,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             .iter()
             .map(|(path, (flavors, locales))| {
                 let mut entry = Map::new();
-                entry.insert("path".into(), format!("{src_dir}/{path}").into());
+                entry.insert("path".into(), under(src_dir, path).into());
                 if let Some(locales) = locales {
                     entry.insert("locales".into(), json!(locales));
                 }
@@ -1041,7 +1073,7 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             build.insert("external-files".into(), Value::Array(entries));
         }
         if !shared.is_empty() {
-            let paths: Vec<String> = shared.iter().map(|p| format!("{src_dir}/{p}")).collect();
+            let paths: Vec<String> = shared.iter().map(|p| under(src_dir, p)).collect();
             build.insert("shared-files".into(), json!(paths));
         }
         if build.is_empty() {
@@ -1050,15 +1082,28 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
     }
     report.warnings.extend(warnings);
 
-    // Lua/XML files no TOC loads stay where they are; say so.
-    let left: Vec<String> = ignore::WalkBuilder::new(dir)
-        .hidden(true)
-        .require_git(false)
-        .build()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
-        .filter_map(|e| fsutil::relative_slash(e.path(), dir))
+    // Lua/XML files no TOC loads stay where they are; say so. In place they
+    // are excluded, so they come from the build's own source discovery: a
+    // file git ignores but tracks is a source too (decision T592).
+    let candidates: Vec<String> = if request.in_place {
+        crate::sources::discover_sources(dir, "", "dist", &globset::GlobSet::empty())
+            .into_iter()
+            .map(|s| s.rel)
+            .collect()
+    } else {
+        ignore::WalkBuilder::new(dir)
+            .hidden(true)
+            .require_git(false)
+            .build()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
+            .filter_map(|e| fsutil::relative_slash(e.path(), dir))
+            .collect()
+    };
+    let left: Vec<String> = candidates
+        .into_iter()
         .filter(|rel| !rel.starts_with(&format!("{src_dir}/")) && !rel.starts_with("dist/"))
+        .filter(|rel| !to_move.contains(rel))
         .filter(|rel| !crate::build::is_bindings_file(rel))
         .filter(|rel| external_of(rel).is_none())
         .filter(|rel| {
@@ -1086,9 +1131,6 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
         )));
     }
 
-    std::fs::write(dir.join(MANIFEST_FILE), pretty(&manifest))
-        .map_err(|e| Diagnostic::plain_error(format!("cannot write `{MANIFEST_FILE}`: {e}")))?;
-
     // The lockfile pins the interface numbers the TOCs list, so the
     // generated TOCs keep them (`wowlua types sync` moves them on).
     let mut pins: BTreeMap<String, Vec<u32>> = BTreeMap::new();
@@ -1104,6 +1146,29 @@ pub fn init_package(request: &InitRequest) -> Result<InitReport, Diagnostic> {
             }
         }
     }
+    if request.in_place {
+        // The files no TOC loads, and the externals' checkouts (dependencies
+        // now), are no sources.
+        let mut exclude: Vec<String> = left.iter().map(|rel| globset::escape(rel)).collect();
+        exclude.extend(
+            externals
+                .iter()
+                .map(|e| format!("{}/**", globset::escape(&e.dir))),
+        );
+        if !exclude.is_empty()
+            && let Some(build) = manifest
+                .as_object_mut()
+                .map(|m| m.entry("build").or_insert_with(|| json!({})))
+                .and_then(Value::as_object_mut)
+        {
+            build.insert("exclude".into(), json!(exclude));
+        }
+        report.manifest = Some(manifest);
+        report.pins = pins;
+        return Ok(report);
+    }
+    std::fs::write(dir.join(MANIFEST_FILE), pretty(&manifest))
+        .map_err(|e| Diagnostic::plain_error(format!("cannot write `{MANIFEST_FILE}`: {e}")))?;
     write_pins(dir, pins, &mut report)?;
     Ok(report)
 }
@@ -1254,12 +1319,12 @@ fn convert_pkgmeta(
             .iter()
             .any(|m| m.starts_with(&format!("{lower}/")));
         if moved_lower.contains(&lower) {
-            out.push(format!("{src_dir}/{p}"));
+            out.push(under(src_dir, &p));
         } else if dir.join(&p).is_dir() || moved_inside {
             if dir.join(&p).is_dir() {
                 out.push(format!("{p}/**"));
             }
-            if moved_inside {
+            if moved_inside && !src_dir.is_empty() {
                 out.push(format!("{src_dir}/{p}/**"));
             }
         } else {
@@ -1684,6 +1749,7 @@ fn init_members(
             inherited.games.clear();
         }
         match init_package(&InitRequest {
+            in_place: false,
             dir: dir.join(rel),
             from_toc: None,
             from_pkgmeta: false,
@@ -2206,12 +2272,12 @@ fn order_entry(
     if let Some(external) = external_paths.get(p) {
         Some(external.clone())
     } else if p.contains('[') {
-        Some(format!("{src_dir}/{p}"))
+        Some(under(src_dir, p))
     } else {
         moved
             .iter()
             .find(|m| m.eq_ignore_ascii_case(p))
-            .map(|m| format!("{src_dir}/{m}"))
+            .map(|m| under(src_dir, m))
     }
 }
 
@@ -3309,7 +3375,9 @@ fn adopted_manifest(
     }
 
     let mut build = Map::new();
-    if src_dir != "src" {
+    if src_dir.is_empty() {
+        build.insert("src".into(), ".".into());
+    } else if src_dir != "src" {
         build.insert("src".into(), src_dir.into());
     }
     if !assets.is_empty() {
@@ -3328,7 +3396,7 @@ fn adopted_manifest(
         .filter_map(|(path, set)| {
             let actual = moved.iter().find(|m| m.eq_ignore_ascii_case(path))?;
             let ordered: Vec<&String> = flavors.iter().filter(|f| set.contains(*f)).collect();
-            Some((format!("{src_dir}/{actual}"), json!(ordered)))
+            Some((under(src_dir, actual), json!(ordered)))
         })
         .collect();
     if !restricted.is_empty() {

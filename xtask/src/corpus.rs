@@ -584,6 +584,7 @@ fn check_addon(rel: &str, work: &Path) -> Result<AddonReport> {
         inherited: None,
         addon_name: None,
         neighbors: Vec::new(),
+        in_place: false,
     });
     if let Err(e) = report {
         out.failures

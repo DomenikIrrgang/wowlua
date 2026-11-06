@@ -339,7 +339,131 @@ fn a_package_that_does_not_load_says_why() {
         .output()
         .unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success());
+    // It serves all the same (decision T593); stdin is closed.
+    assert!(out.status.success(), "{stderr}");
     assert!(stderr.contains("E4102"), "{stderr}");
     assert!(!stderr.contains("no wowlua.json found"), "{stderr}");
+}
+
+fn spawn_mcp(root: &std::path::Path, home: &std::path::Path) -> Mcp {
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin("wowlua"))
+        .arg("mcp")
+        .current_dir(root)
+        .env("NO_COLOR", "1")
+        .env("WOWLUA_HOME", home)
+        .env("WOWLUA_WOW_PATH", home.join("no-wow-here"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut m = Mcp {
+        stdin: child.stdin.take().unwrap(),
+        stdout: BufReader::new(child.stdout.take().unwrap()),
+        child,
+        id: 0,
+    };
+    let init = m.call("initialize", json!({ "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "test", "version": "0" } }));
+    assert_eq!(init["serverInfo"]["name"], "wowlua");
+    m
+}
+
+/// The files under `dir`, relative, sorted.
+fn listing(dir: &std::path::Path) -> Vec<String> {
+    let mut out: Vec<String> = walkdir(dir)
+        .into_iter()
+        .map(|p| {
+            p.strip_prefix(dir)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/")
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+fn walkdir(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    for entry in fs::read_dir(dir).unwrap().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            out.extend(walkdir(&path));
+        } else {
+            out.push(path);
+        }
+    }
+    out
+}
+
+/// A plain addon, a TOC and no wowlua.json, is adopted in place, in memory
+/// (decision T592): the tools work on its files as they are, files no TOC
+/// loads are no sources, `.pkgmeta` externals checked out are used as they
+/// are, builds go to `$WOWLUA_HOME/adopted/`, and nothing is written in the
+/// addon.
+#[test]
+fn a_plain_addon_is_adopted_in_memory() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Plain");
+    for (path, text) in [
+        (
+            "Plain.toc",
+            "## Interface: 110200\n## Title: Plain\n## SavedVariables: PlainDB\nlibs\\LibStub\\LibStub.lua\nCore.lua\n",
+        ),
+        ("libs/LibStub/LibStub.lua", "LibStub = LibStub or {}\n"),
+        ("libs/LibGlow/Textures/glow.tga", "tga"),
+        (
+            ".pkgmeta",
+            "package-as: Plain\nexternals:\n  libs/LibStub: https://repos.curseforge.com/wow/libstub/trunk\n",
+        ),
+        ("Core.lua", "PlainDB = PlainDB or {}\nlocal x = 1\n"),
+        // No TOC loads it: no source (it does not even parse).
+        ("tools/scratch.lua", "this is not ( lua\n"),
+        // Nor one git ignores but tracks (which the build would take).
+        (".gitignore", "/stub.lua\n"),
+        ("stub.lua", "this is not ( lua either\n"),
+    ] {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+    for args in [&["init", "-q"][..], &["add", "-f", "stub.lua"]] {
+        let ok = Command::new("git")
+            .args(args)
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+    let before = listing(&root);
+    let mut m = spawn_mcp(&root, home.path());
+    let checked = m.ok("check", json!({}));
+    assert!(checked.contains("Checked Plain"), "{checked}");
+    let built = m.ok("build", json!({}));
+    assert!(built.contains("adopted"), "{built}");
+    let out = walkdir(&home.path().join("adopted"));
+    assert!(
+        out.iter()
+            .any(|p| p.ends_with("libs/LibGlow/Textures/glow.tga")),
+        "{out:?}"
+    );
+    assert!(out.iter().any(|p| p.ends_with("Plain.toc")), "{out:?}");
+    drop(m);
+    assert_eq!(listing(&root), before);
+}
+
+/// Without an addon the server serves all the same; the tools say why
+/// (decision T593).
+#[test]
+fn without_an_addon_the_tools_say_why() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let mut m = spawn_mcp(dir.path(), home.path());
+    let (text, failed, _) = m.tool("start_session", json!({ "addon": true }));
+    assert!(failed);
+    assert!(text.contains("no wowlua.json found"), "{text}");
+    let docs = m.ok("wowlua_docs", json!({}));
+    assert!(docs.contains("guide/"), "{docs}");
 }

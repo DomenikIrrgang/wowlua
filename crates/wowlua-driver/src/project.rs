@@ -45,6 +45,9 @@ pub struct LoadOptions {
     /// Every member of the workspace, from a member's folder too (the
     /// language server's checks of a whole workspace).
     pub all_members: bool,
+    /// `wowlua mcp`: a plain addon (a TOC, no `wowlua.json`) in `cwd` is
+    /// adopted in place, in memory (decision T592).
+    pub adopt: bool,
 }
 
 /// A progress callback: status word and message.
@@ -621,6 +624,9 @@ pub fn load_projects(session: &mut Session, options: &LoadOptions) -> Option<Vec
         None => find_manifest(&options.cwd),
     };
     let Some(path) = found else {
+        if options.adopt && has_toc(&options.cwd) {
+            return adopted_project(session, options, &options.cwd).map(|p| vec![p]);
+        }
         session.push(no_manifest(options));
         return None;
     };
@@ -675,6 +681,83 @@ pub fn standalone_project(
     })
 }
 
+/// Whether `dir` holds a TOC file.
+fn has_toc(dir: &Path) -> bool {
+    crate::host::read_dir(dir).is_ok_and(|entries| {
+        entries
+            .iter()
+            .any(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("toc")))
+    })
+}
+
+/// The plain addon at `root` (a TOC, no `wowlua.json`) adopted in place,
+/// in memory, for `wowlua mcp` (decision T592): its files stay where they
+/// are, the lockfile stays in memory and builds go to
+/// `$WOWLUA_HOME/adopted/`, so nothing is written in the addon. `.pkgmeta`
+/// externals become dependencies only when a checkout of one is missing;
+/// otherwise the addon loads the libraries it has, from the TOC files.
+fn adopted_project(session: &mut Session, options: &LoadOptions, root: &Path) -> Option<Project> {
+    let pkgmeta = crate::pkgmeta::read_project(root, None).ok().flatten();
+    let missing = pkgmeta.as_ref().is_some_and(|m| {
+        m.externals
+            .iter()
+            .any(|e| !crate::host::exists(root.join(&e.dir)))
+    });
+    let request = crate::scaffold::InitRequest {
+        dir: root.to_path_buf(),
+        from_toc: None,
+        from_pkgmeta: false,
+        pkgmeta_file: None,
+        no_pkgmeta: !missing,
+        inherited: None,
+        addon_name: None,
+        neighbors: Vec::new(),
+        in_place: true,
+    };
+    let report = match crate::scaffold::init_package(&request) {
+        Ok(report) => report,
+        Err(error) => {
+            session.push(error.with_note(
+                "this addon has no wowlua.json, so wowlua adopts it in memory, as `wowlua init` would",
+            ));
+            return None;
+        }
+    };
+    let mut manifest = report.manifest?;
+    let out = wowlua_pkg::cache::wowlua_home()?
+        .join("adopted")
+        .join(format!(
+            "{}-{}",
+            report.addon_name,
+            wowlua_pkg::cache::key(&root.to_string_lossy())
+        ));
+    if let Some(m) = manifest.as_object_mut() {
+        let build = m.entry("build").or_insert_with(|| serde_json::json!({}));
+        build["out"] = out.to_string_lossy().into_owned().into();
+        // In the game a plain addon always runs over Blizzard's UI.
+        m.insert("test".into(), serde_json::json!({ "blizzard-ui": true }));
+        // Sessions start on the first flavor: camelot when targeted, the one
+        // whose Blizzard UI loads for now (emulator §17.7).
+        // ponytail: drop once every flavor's FrameXML loads.
+        if let Some(flavors) = m
+            .get_mut("flavors")
+            .and_then(serde_json::Value::as_object_mut)
+            && let Some(camelot) = flavors.shift_remove("camelot")
+        {
+            flavors.shift_insert(0, "camelot".into(), camelot);
+        }
+    }
+    let flavors: Vec<String> = report.pins.keys().cloned().collect();
+    let mut pinned = lockfile::required(None, &flavors, &[]);
+    pinned.flavor_table.interfaces = report.pins;
+    let options = LoadOptions {
+        lock_in_memory: true,
+        ..options.clone()
+    };
+    let path = root.join(wowlua_manifest::MANIFEST_FILE);
+    load_single_text(session, &options, &path, manifest.to_string(), Some(pinned))
+}
+
 /// A package outside any workspace.
 fn load_single(session: &mut Session, options: &LoadOptions, path: &Path) -> Option<Project> {
     let text = match crate::host::read_to_string(path) {
@@ -687,8 +770,23 @@ fn load_single(session: &mut Session, options: &LoadOptions, path: &Path) -> Opt
             return None;
         }
     };
+    load_single_text(session, options, path, text, None)
+}
+
+/// [`load_single`] with the manifest's text; `pins` stands for the lockfile
+/// when there is none on disk.
+fn load_single_text(
+    session: &mut Session,
+    options: &LoadOptions,
+    path: &Path,
+    text: String,
+    pins: Option<Lockfile>,
+) -> Option<Project> {
     let manifest = parse_manifest(session, options, path, text)?;
-    let pinned = read_lock(session, &manifest.root)?;
+    let pinned = match pins {
+        Some(lock) => Some(lock),
+        None => read_lock(session, &manifest.root)?,
+    };
     let explicit = explicit_interfaces(&manifest);
     let pinned_flavors: Vec<String> = manifest
         .flavors

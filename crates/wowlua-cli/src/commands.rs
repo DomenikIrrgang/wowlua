@@ -32,8 +32,13 @@ pub(crate) fn load_options(out: &Output, global: &GlobalArgs) -> LoadOptions {
         status: Some(out.status_sink()),
         bundled: false,
         all_members: false,
+        adopt: global.adopt || std::env::var_os(ADOPT_ENV).is_some(),
     }
 }
+
+/// Set for the commands `wowlua mcp` runs: they adopt a plain addon in
+/// memory too (decision T592).
+pub(crate) const ADOPT_ENV: &str = "WOWLUA_ADOPT";
 
 /// Loads the selected projects with the command's features (`--features`,
 /// `--no-default-features`; spec Manifest §9.6).
@@ -1395,8 +1400,22 @@ pub fn with_suite(
 ) -> Result<(), String> {
     let mut session = Session::new();
     let Some(projects) = load_projects(global, &mut session, &load_options(out, global)) else {
+        // Why, for a client that never sees the printed errors (an agent).
+        let why: Vec<String> = session
+            .diagnostics
+            .iter()
+            .filter(|d| d.is_error())
+            .map(|d| {
+                let help = d
+                    .help
+                    .as_ref()
+                    .map(|h| format!(" ({h})"))
+                    .unwrap_or_default();
+                format!("{}{help}", d.message)
+            })
+            .collect();
         out.flush(&mut session);
-        return Err("the package does not load (its errors are above)".into());
+        return Err(format!("the package does not load: {}", why.join("; ")));
     };
     let Some(project) = projects
         .into_iter()
@@ -2130,6 +2149,7 @@ pub fn init(
         inherited: None,
         addon_name: None,
         neighbors: Vec::new(),
+        in_place: false,
     };
     match scaffold::init_package(&request) {
         Ok(report) => {
