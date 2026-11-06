@@ -1404,3 +1404,13 @@ engine to close, with the steps that would record the game's answer.
    - `/run local f=CreateFrame("Frame") f:RegisterUnitEvent("UNIT_FACTION","target") f:SetScript("OnEvent",function(_,e,u) print(e,u,UnitIsTapDenied("target")) end)`
 
      Seen: does `UNIT_FACTION` come when the tag goes? (to do)
+7. **The pet journal.** wowlua's client has no pets: `C_PetJournal` is
+   fixed to "none" (`crates/wowlua-engine/src/collections.rs`: no
+   `GetPetInfoByIndex`, no `mock.setPets`), so SuuUI's Pets tab was tested
+   with a stand-in journal. WoW Forever has companion pets with fanfare
+   gifts. To record (a character with a few pets, one a gift if possible):
+   - `/run local n,o=C_PetJournal.GetNumPets() print(n,o,C_PetJournal.GetNumPetsNeedingFanfare())`
+   - `/run print(C_PetJournal.GetPetInfoByIndex(1))`
+   - `/run local _,s=C_PetJournal.GetPetInfoByIndex(1) print(C_PetJournal.GetPetModelSceneInfoBySpeciesID(s), select(12, C_PetJournal.GetPetInfoBySpeciesID(s)))`
+
+     Seen: (to do)
