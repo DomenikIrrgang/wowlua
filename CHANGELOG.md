@@ -33,6 +33,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- The LibStub that `mock.provideLibrary` sets up has a minor version, so a real LibStub loaded after it upgrades it instead of failing with "attempt to compare nil with number".
 - A top-level frame (`SetToplevel(true)`) is drawn above the rest of its strata when it is shown or clicked, its frame level unchanged, as in the game: SuuUI's bags open in front of its damage meter with their slots in front of their background.
 - A frame whose level moves with its parent's keeps its place among the frames of its level.
 - A scroll frame's scroll child moves with its scroll (`SetVerticalScroll`, `SetHorizontalScroll`): its rows scroll on the screen, not only its scroll bar, as SuuUI's settings window's did.
