@@ -1343,3 +1343,54 @@ line in the chat, one after another.
     Seen: red or blue on top after the show, then after the click.
     wowlua: blue, then red. TBC Anniversary: (to do). WoW Forever: (to do)
 16. `/run R:Hide()`
+
+## Found with SuuUI on WoW Forever (2026-11-06)
+
+Where SuuUI's tests passed in wowlua and the game did otherwise (found in
+game, from SuuUI's error log and screenshots, 70755). Each is a gap in the
+engine to close, with the steps that would record the game's answer.
+
+1. **A frame anchored before its parent had a place is never placed.**
+   SuuUI's bags: the window's Bags/Bank switch, its toggles and their
+   labels, anchored (through a row frame) while the window had no position
+   yet, were shown (`IsShown`, `IsVisible` true) but `GetLeft` and `GetTop`
+   gave nil, and nothing was drawn, on the first open after a reload. On
+   the second open (the row anchored again) they had a place. wowlua: the
+   row placed and drawn at once. Steps:
+   - `/run P=CreateFrame("Frame",nil,UIParent) P:SetSize(200,30) R=CreateFrame("Frame",nil,P) R:SetSize(1,30) C=CreateFrame("Frame",nil,R) C:SetSize(40,20) C:SetPoint("LEFT",R,"LEFT",50,0) local t=C:CreateTexture() t:SetAllPoints() t:SetColorTexture(1,0,0)`
+   - `/run R:SetPoint("TOPLEFT",P,"TOPLEFT") P:SetPoint("CENTER") print("C", C:GetLeft(), C:GetTop())`
+
+     Seen: numbers, or nil and no red box? wowlua: numbers. Seen: (to do)
+   - `/run R:ClearAllPoints() R:SetPoint("TOPLEFT",P,"TOPLEFT") print("C again", C:GetLeft())`, then `/run P:Hide()`
+2. **Text measures taller in the game.** SuuUI's own fonts (Figtree
+   caption 11, label 12, body 13) wrap and stand taller in the game than
+   wowlua measures them: two lines of a toy's description ran into the
+   card's bottom row, and the character window's skill details (the game's
+   side pane rows given SuuUI's font) ran past the window. wowlua: both
+   fitted. Steps (the numbers to compare with the engine's):
+   - `/run local f=UIParent:CreateFontString(nil,"OVERLAY") f:SetFont("Interface\\AddOns\\SuuUI\\Media\\Fonts\\Figtree-Medium.ttf",11,"") f:SetWidth(160) f:SetText("Throw a handful into the campfire, transforming it into a violet flame.") print(f:GetStringHeight(), f:GetNumLines(), f:GetUnboundedStringWidth())`
+
+     Seen: (to do)
+3. **A text's height can be a secret.** In a post-hook of a character
+   window side pane's `LayoutRows` (Skills, Reputation or PvP rank), a
+   wrapped row's `Label:GetStringHeight()` was a secret number ("attempt to
+   perform numeric conversion on a secret number value (execution tainted
+   by 'SuuUI')"). wowlua: a plain number. Which pane and text: unknown; SuuUI
+   now reads it through `secret.asNumber`.
+4. **`SetPassThroughButtons` on an addon's own button, in combat.** SuuUI's
+   world map made a map pin (its own `Button`) while the map opened in a
+   fight and set `SetPassThroughButtons("RightButton")`: "Blocked in combat:
+   UNKNOWN()". The minimap's and the guild window's code had found the same
+   before. To check in wowlua: whether the engine blocks it in combat
+   (SuuUI's tests never did it in combat, so nothing showed).
+5. **Using a bag item from an addon-made item button.** SuuUI's bags make
+   their slots with `CreateFrame("ItemButton", name, parent,
+   "ContainerFrameItemButtonTemplate")` from SuuUI's code. A right-click on
+   one runs the template's `ContainerFrameItemButton_OnClick`, which calls
+   the button's mixin methods (`self:GetBagID()`): written as SuuUI's while
+   it made the button, they taint the click, and `C_Container.
+   UseContainerItem` was refused ("Blocked in combat: UseContainerItem()",
+   and out of combat "Forbidden: UseContainerItem()"). In SuuUI's log since
+   0.6.4. To check in wowlua: whether a click on an addon-made container
+   item button taints the use there too (SuuUI's bag tests click items
+   without an error).
