@@ -2328,7 +2328,8 @@ impl Renderer {
         let slot = match self.model_slots.get(self.model_slot_next).copied() {
             Some(s) => {
                 self.textures[s] = tex;
-                self.bind_groups.retain(|k, _| k.0 != s && k.1 != s);
+                self.bind_groups
+                    .retain(|k, _| k.0 != s && !k.1.contains(&s));
                 s
             }
             None => {

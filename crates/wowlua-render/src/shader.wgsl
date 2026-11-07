@@ -1,5 +1,6 @@
-// The UI's quads: a texture times the vertex color, a mask's alpha, and
-// the client's per-texture switches.
+// The UI's quads: a texture times the vertex color, its masks' alphas (up
+// to three, as the client allows; the unused ones white), and the client's
+// per-texture switches.
 
 struct Screen {
     size: vec2<f32>,
@@ -8,24 +9,30 @@ struct Screen {
 
 @group(0) @binding(0) var<uniform> screen: Screen;
 @group(1) @binding(0) var tex: texture_2d<f32>;
-@group(1) @binding(1) var mask: texture_2d<f32>;
-@group(1) @binding(2) var samp: sampler;
+@group(1) @binding(1) var mask0: texture_2d<f32>;
+@group(1) @binding(2) var mask1: texture_2d<f32>;
+@group(1) @binding(3) var mask2: texture_2d<f32>;
+@group(1) @binding(4) var samp: sampler;
 
 struct In {
     @location(0) pos: vec2<f32>,
     @location(1) uv: vec2<f32>,
     @location(2) color: vec4<f32>,
-    @location(3) mask_uv: vec2<f32>,
+    @location(3) mask_uv0: vec2<f32>,
+    @location(4) mask_uv1: vec2<f32>,
+    @location(5) mask_uv2: vec2<f32>,
     // 1: desaturated, 2: alpha key.
-    @location(4) flags: u32,
+    @location(6) flags: u32,
 };
 
 struct Out {
     @builtin(position) pos: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) color: vec4<f32>,
-    @location(2) mask_uv: vec2<f32>,
-    @location(3) @interpolate(flat) flags: u32,
+    @location(2) mask_uv0: vec2<f32>,
+    @location(3) mask_uv1: vec2<f32>,
+    @location(4) mask_uv2: vec2<f32>,
+    @location(5) @interpolate(flat) flags: u32,
 };
 
 @vertex
@@ -35,7 +42,9 @@ fn vs(v: In) -> Out {
     o.pos = vec4<f32>(ndc, 0.0, 1.0);
     o.uv = v.uv;
     o.color = v.color;
-    o.mask_uv = v.mask_uv;
+    o.mask_uv0 = v.mask_uv0;
+    o.mask_uv1 = v.mask_uv1;
+    o.mask_uv2 = v.mask_uv2;
     o.flags = v.flags;
     return o;
 }
@@ -43,8 +52,10 @@ fn vs(v: In) -> Out {
 @fragment
 fn fs(i: Out) -> @location(0) vec4<f32> {
     var c = textureSample(tex, samp, i.uv) * i.color;
-    let m = textureSample(mask, samp, i.mask_uv);
-    c.a = c.a * m.a;
+    // The masks intersect: each pixel takes every mask's alpha.
+    c.a = c.a * textureSample(mask0, samp, i.mask_uv0).a
+        * textureSample(mask1, samp, i.mask_uv1).a
+        * textureSample(mask2, samp, i.mask_uv2).a;
     if (i.flags & 1u) != 0u {
         let g = dot(c.rgb, vec3<f32>(0.299, 0.587, 0.114));
         c = vec4<f32>(g, g, g, c.a);

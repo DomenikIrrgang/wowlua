@@ -241,3 +241,62 @@ m:SetDisplayInfo(7)
         .expect("drawn");
     assert_eq!(r.texture_count(), count);
 }
+
+/// Masks of 16 pixels by file ID: 10 opaque, 11 its left half, 12 its top
+/// half.
+struct MaskAssets;
+
+impl wowlua_render::Assets for MaskAssets {
+    fn image(&mut self, image: &scene::Image) -> Option<wowlua_render::Rgba> {
+        let shape: fn(u32, u32) -> bool = match image {
+            scene::Image::FileId(10) => |_, _| true,
+            scene::Image::FileId(11) => |x, _| x < 8,
+            scene::Image::FileId(12) => |_, y| y < 8,
+            _ => return None,
+        };
+        let pixels = (0..16 * 16)
+            .flat_map(|i| [255, 255, 255, if shape(i % 16, i / 16) { 255 } else { 0 }])
+            .collect();
+        Some(wowlua_render::Rgba {
+            width: 16,
+            height: 16,
+            pixels,
+        })
+    }
+    fn font(&mut self, _: &str) -> Option<Vec<u8>> {
+        None
+    }
+}
+
+/// A texture's masks intersect, whichever comes first: the opaque one
+/// cuts nothing, the left and top halves leave the top left quarter.
+#[test]
+fn a_texture_takes_every_one_of_its_masks() {
+    let mut r = match Renderer::new_blocking() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("skipped: {e}");
+            return;
+        }
+    };
+    let mut vm = vm("local f = CreateFrame('Frame', nil, UIParent)
+f:SetSize(200, 100)
+f:SetPoint('TOPLEFT', 10, -10)
+local t = f:CreateTexture(nil, 'ARTWORK')
+t:SetAllPoints()
+t:SetColorTexture(1, 0, 0)
+for _, id in ipairs({ 10, 11, 12 }) do
+  local m = f:CreateMaskTexture()
+  m:SetAllPoints()
+  m:SetTexture(id)
+  t:AddMaskTexture(m)
+end
+");
+    let s = scene::build(&mut vm);
+    let img = r.render_blocking(&s, 1.0, None, &mut MaskAssets).unwrap();
+    let red = |x: f32, y: f32| px(&img, 10.0 + x, 10.0 + y)[0] > 250;
+    assert!(red(50.0, 25.0), "the top left quarter");
+    assert!(!red(150.0, 25.0), "the top right: the left mask cuts it");
+    assert!(!red(50.0, 75.0), "the bottom left: the top mask cuts it");
+    assert!(!red(150.0, 75.0));
+}
