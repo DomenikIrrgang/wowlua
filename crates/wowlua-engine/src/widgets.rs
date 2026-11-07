@@ -2097,7 +2097,7 @@ fn set_draw_layer_enabled(vm: &mut Vm, id: WidgetId, c: NativeCall, enabled: boo
     let name = vm.check_str(&c, 2)?;
     let layer = crate::scene::LAYERS
         .iter()
-        .position(|layer| layer.as_bytes() == vm.str_bytes(name))
+        .position(|layer| layer.as_bytes().eq_ignore_ascii_case(vm.str_bytes(name)))
         .ok_or_else(|| c_error(vm, "Invalid draw layer", false))?;
     let props = engine(vm).world.widgets[id.0].props;
     let disabled = match stored_arg(vm, props, "DisabledDrawLayers", 0) {
@@ -2147,12 +2147,8 @@ fn create_region(vm: &mut Vm, id: WidgetId, c: NativeCall, class: &str) -> Ret {
             Value::Num(n) => n,
             _ => 0.0,
         };
-        store(
-            vm,
-            rid,
-            "DrawLayer",
-            &[Value::Str(layer), Value::Num(sublevel)],
-        );
+        let layer = crate::scene::layer_name(vm, Value::Str(layer));
+        store(vm, rid, "DrawLayer", &[layer, Value::Num(sublevel)]);
     }
     // `CreateFontString(name, layer, inherits)`: a font object's font, or
     // a template.
@@ -3669,7 +3665,8 @@ fn set_draw_layer(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         Value::Num(n) => n,
         _ => 0.0,
     };
-    store(vm, id, "DrawLayer", &[c.arg(2), Value::Num(sublevel)]);
+    let layer = crate::scene::layer_name(vm, c.arg(2));
+    store(vm, id, "DrawLayer", &[layer, Value::Num(sublevel)]);
     Ok(vec![])
 }
 
