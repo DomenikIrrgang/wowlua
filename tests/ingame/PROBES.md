@@ -1414,3 +1414,51 @@ engine to close, with the steps that would record the game's answer.
    - `/run local _,s=C_PetJournal.GetPetInfoByIndex(1) print(C_PetJournal.GetPetModelSceneInfoBySpeciesID(s), select(12, C_PetJournal.GetPetInfoBySpeciesID(s)))`
 
      Seen: (to do)
+8. **Pet favourites and the locked journal.** Recorded in game
+   (2026-11-07, 70755): `C_PetJournal.SetFavorite(petID, v)` takes 1 or 0
+   (also "1"); `true`, `false` or a method call raise
+   `Usage: SetFavorite(petID, bool)`, as does a nil petID. While the
+   account is logged in on two clients, `C_PetJournal.IsJournalUnlocked()`
+   is false and `SetFavorite` takes the call without an error and changes
+   nothing (`PetIsFavorite` stays false). Mount and toy favourites are not
+   locked then: `C_MountJournal.GetIsFavorite(i)` gave `false true` and
+   `C_ToyBox.SetIsFavorite` changed the toy. For wowlua's pet journal when it
+   comes (item 7): numbers only, and a lock a test can set. The steps (a pet
+   summoned):
+   - `/run local g=C_PetJournal.GetSummonedPetGUID() print(C_PetJournal.IsJournalUnlocked(), pcall(C_PetJournal.SetFavorite, g, 1))`
+   - `/run local g=C_PetJournal.GetSummonedPetGUID() print(pcall(C_PetJournal.SetFavorite, g, true))`
+   - `/run print(C_PetJournal.PetIsFavorite(C_PetJournal.GetSummonedPetGUID()))`
+
+     Seen (two clients): `false true`, then `false Usage: SetFavorite(petID, bool)`, then `false`.
+9. **A bag's family.** wowlua's `C_Container.GetContainerNumFreeSlots(bag)`
+   answers family 0 for every bag (`crates/wowlua-engine/src/character.rs`),
+   so SuuUI's sort with a profession bag (a leatherworking bag in the
+   reagent slot, found in game: the sort put other reagents in it and the
+   game refused) was tested with a faked family. Steps (a profession bag in
+   a bag slot or the reagent slot):
+   - `/run for b=1,5 do print(b, C_Container.GetContainerNumFreeSlots(b)) end`
+   - `/run for b=1,5 do local s=C_Container.ContainerIDToInventoryID(b) local id=GetInventoryItemID("player",s) print(b, id, id and C_Item.GetItemFamily(id)) end`
+
+     Seen: the family per bag, and which bags the reagent slot takes? (to do)
+10. **Secret group finder results.** Forever handed a search result's
+    `activityIDs` over as a secret (SuuUI's ForeverLFG on
+    `LFG_LIST_SEARCH_RESULT_UPDATED`: `bad argument #1 to 'ipairs' (table
+    expected, got secret)`, 2026-11-06); wowlua's results have no secrets.
+    Steps (after a search in the group finder):
+    - `/run local _,ids=C_LFGList.GetSearchResults() local i=C_LFGList.GetSearchResultInfo(ids[1]) print(issecretvalue(i.activityIDs), issecretvalue(i.numMembers), issecretvalue(i.comment), issecretvalue(i.leaderName))`
+
+      Seen: which fields are secret, and when (in combat, an update)? (to do)
+11. **Combat blocks wowlua let through.** SuuUI's Collections window holds
+    secure buttons, so it is protected. Opened in a fight through a secure
+    toggle, its OnShow moved a frame its secure buttons hang on
+    (`ClearAllPoints`, `SetPoint`): the game blocked both, wowlua's tests
+    did not. Escape closed it through `UISpecialFrames` (tainted by addon
+    entries): the game blocked its `Hide()`, wowlua's tests did not. Fixed in
+    SuuUI (moved only out of combat; Escape bound through a secure handler).
+    To check: whether wowlua restricts a frame that protected frames are
+    anchored to, and whether `CloseWindows` runs tainted when an addon put
+    its window in `UISpecialFrames`. Steps (out of combat, then in a fight):
+    - `/run W=CreateFrame("Frame","ProbeWin",UIParent) W:SetSize(100,100) W:SetPoint("CENTER") A=CreateFrame("Frame",nil,W) A:SetSize(10,10) A:SetPoint("TOP") B=CreateFrame("Button",nil,W,"SecureActionButtonTemplate") B:SetSize(10,10) B:SetPoint("TOP",A,"BOTTOM") tinsert(UISpecialFrames,"ProbeWin")`
+    - in a fight: `/run print(pcall(A.ClearAllPoints, A))`, then press Escape
+
+      Seen: blocked messages for `ClearAllPoints` and `ProbeWin:Hide()`? (to do)
