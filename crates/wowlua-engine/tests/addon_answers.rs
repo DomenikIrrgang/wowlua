@@ -170,6 +170,25 @@ return two, t:GetNumMaskTextures(), t:GetMaskTexture(1) == m2, tostring(tile), t
     assert_eq!(r, ["2", "1", "true", "false", "true"]);
 }
 
+/// A texture takes three masks; a fourth is an error (decision T596), a
+/// mask it has already is not.
+#[test]
+fn a_texture_takes_three_masks() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame')
+local t = f:CreateTexture()
+local m = {}
+for i = 1, 4 do m[i] = f:CreateMaskTexture() end
+for i = 1, 3 do t:AddMaskTexture(m[i]) end
+t:AddMaskTexture(m[2])
+local ok, err = pcall(t.AddMaskTexture, t, m[4])
+return t:GetNumMaskTextures(), tostring(ok), tostring(err):match('at most 3') ~= nil",
+    );
+    assert_eq!(r, ["3", "false", "true"]);
+}
+
 /// An addon's texture copied by its ID (`b:SetTexture(a:GetTexture())`)
 /// still shows the addon's file.
 #[test]
