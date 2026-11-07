@@ -532,6 +532,32 @@ return table.concat(HelperLog, ' ')",
 }
 
 #[test]
+fn a_blizzard_addon_whose_toc_differs_in_case_bootstraps() {
+    let interface = tree(
+        "toc-case",
+        &[
+            (
+                "AddOns/Blizzard_BarbershopUI/Blizzard_BarberShopUI.toc",
+                "## LoadOnDemand: 1\nBoot.lua [Bootstrap]\nLater.lua\n",
+            ),
+            (
+                "AddOns/Blizzard_BarbershopUI/Boot.lua",
+                "function ShowIt() end\n",
+            ),
+            (
+                "AddOns/Blizzard_BarbershopUI/Later.lua",
+                "LaterLoaded = true\n",
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let r = run(&mut vm, "return type(ShowIt), tostring(LaterLoaded)");
+    assert_eq!(r, ["function", "nil"]);
+}
+
+#[test]
 fn blizzard_addons_loaded_while_an_addon_loads() {
     let interface = tree(
         "lod-while-loading",

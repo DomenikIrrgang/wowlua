@@ -33,6 +33,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- On Linux and macOS, Blizzard's barber shop functions (`ShowBarberShopFrame`, `HideBarberShopFrame`, `BarberShopFrame_LoadUI`) exist as in the game: wowlua now finds a Blizzard addon's TOC whatever the case of its name, as Windows does.
 - A top-level frame (`SetToplevel(true)`) is drawn above the rest of its strata when it is shown or clicked, its frame level unchanged, as in the game: SuuUI's bags open in front of its damage meter with their slots in front of their background.
 - A frame whose level moves with its parent's keeps its place among the frames of its level.
 - A scroll frame's scroll child moves with its scroll (`SetVerticalScroll`, `SetHorizontalScroll`): its rows scroll on the screen, not only its scroll bar, as SuuUI's settings window's did.
