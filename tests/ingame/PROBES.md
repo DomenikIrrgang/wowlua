@@ -1472,3 +1472,16 @@ engine to close, with the steps that would record the game's answer.
     - `/run print(C_Container.GetContainerItemID(0,1), C_Container.GetContainerItemID(0,3))`
 
       Seen: nil and the item's ID (moved); wowlua: the item's ID and nil. (to confirm)
+13. **A hunter pet's happiness.** wowlua's pets follow classic's UI code,
+    unverified: `C_PetInfo.GetPetHappiness()` gives the mood (1 unhappy, 2
+    content, 3 happy), the damage in percent (75, 100, 125) and a loyalty
+    rate of 0, for any pet; `C_PetInfo.GetPetLoyalty()` a loyalty name.
+    SuuUI's pet frame shows the mood (2026-11-07) and keeps the last one if
+    it reads secret. To record: the values, a non-hunter's pet, and secrets
+    in a fight. Steps (a hunter, the pet out, out of combat):
+    - `/run print(C_PetInfo.GetPetHappiness())`
+    - `/run print(C_PetInfo.GetPetLoyalty())`
+    - in a fight: `/run local h,d,r=C_PetInfo.GetPetHappiness() print(issecretvalue(h), issecretvalue(d), issecretvalue(r))`
+    - as a warlock with a demon out: `/run print(C_PetInfo.GetPetHappiness())`
+
+      Seen: (to do)
