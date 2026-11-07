@@ -1462,3 +1462,13 @@ engine to close, with the steps that would record the game's answer.
     - in a fight: `/run print(pcall(A.ClearAllPoints, A))`, then press Escape
 
       Seen: blocked messages for `ClearAllPoints` and `ProbeWin:Hide()`? (to do)
+12. **An item put on an empty slot of its own bag.** In wowlua,
+    `C_Container.PickupContainerItem(0, 1)` then `PickupContainerItem(0, 3)`
+    (slot 3 empty) empties the cursor but leaves the item in slot 1, also
+    frames later; in the game it moves to slot 3. SuuUI's drag-and-drop test
+    (2026-11-07) checks the slots' calls instead. Steps (an item in backpack
+    slot 1, slot 3 empty):
+    - `/run C_Container.PickupContainerItem(0,1) C_Container.PickupContainerItem(0,3)`
+    - `/run print(C_Container.GetContainerItemID(0,1), C_Container.GetContainerItemID(0,3))`
+
+      Seen: nil and the item's ID (moved); wowlua: the item's ID and nil. (to confirm)
