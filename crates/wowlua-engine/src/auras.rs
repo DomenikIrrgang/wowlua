@@ -36,6 +36,14 @@ pub struct Aura {
     pub stealable: bool,
     pub boss: bool,
     pub raid: bool,
+    /// The filter categories the data says it is in (`crowdControl`,
+    /// `raidInCombat`, `important`, `bigDefensive`, `externalDefensive`;
+    /// none by default; decision T595).
+    pub crowd_control: bool,
+    pub raid_in_combat: bool,
+    pub important: bool,
+    pub big_defensive: bool,
+    pub external_defensive: bool,
     pub points: Vec<f64>,
     /// Whether the player could apply it (`canApplyAura`; by default an
     /// aura of the player's own).
@@ -123,22 +131,31 @@ pub(crate) fn matches(a: &Aura, filter: &str) -> bool {
     }
     // A word after `!` must not hold (SuuUI probe partyAuras, the player's
     // auras: `HELPFUL|!PLAYER` kept only another's buff, `!CANCELABLE`
-    // none). Buffs are cancelable, debuffs not; no aura is an external or
-    // big defensive; a debuff without a dispel type is not dispellable
-    // (Forbearance). Unverified: buffs that cannot be cancelled, real
-    // defensives, whether the player's class can dispel a typed debuff.
+    // none). The words are `AuraUtil.AuraFilters`'; `INCLUDE_NAME_PLATE_ONLY`
+    // and `MAW` change what is looked at and are not negatable (its
+    // comment). Buffs are cancelable, debuffs not; a debuff without a
+    // dispel type is not dispellable (Forbearance); the categories are the
+    // aura data's (decision T595); a word the client does not know holds,
+    // and not after `!`. Unverified: buffs that cannot be cancelled,
+    // whether the player's class can dispel a typed debuff, unknown words.
     words.iter().all(|w| {
         let (negated, word) = match w.strip_prefix('!') {
             Some(rest) => (true, rest),
             None => (false, w.as_str()),
         };
         let holds = match word {
+            "HELPFUL" | "HARMFUL" | "INCLUDE_NAME_PLATE_ONLY" | "MAW" => return true,
             "PLAYER" => a.source == Some(units::PLAYER),
             "RAID" => a.raid,
             "CANCELABLE" => !a.harmful,
-            "EXTERNAL_DEFENSIVE" | "BIG_DEFENSIVE" => false,
+            "CROWD_CONTROL" => a.crowd_control,
+            "RAID_IN_COMBAT" => a.raid_in_combat,
+            "IMPORTANT" => a.important,
+            "BIG_DEFENSIVE" => a.big_defensive,
+            "EXTERNAL_DEFENSIVE" => a.external_defensive,
             "RAID_PLAYER_DISPELLABLE" => a.harmful && a.dispel_name.is_some(),
-            _ => return true,
+            "DISPELLABLE" => a.dispel_name.is_some(),
+            _ => true,
         };
         holds != negated
     })
@@ -270,6 +287,11 @@ pub fn apply(vm: &mut Vm, me: UnitId, data: TableRef) -> f64 {
         stealable: flag(vm, "stealable"),
         boss: flag(vm, "boss"),
         raid: flag(vm, "raid"),
+        crowd_control: flag(vm, "crowdControl"),
+        raid_in_combat: flag(vm, "raidInCombat"),
+        important: flag(vm, "important"),
+        big_defensive: flag(vm, "bigDefensive"),
+        external_defensive: flag(vm, "externalDefensive"),
         points,
         can_apply: match field(vm, data, "canApplyAura") {
             Value::Bool(b) => Some(b),

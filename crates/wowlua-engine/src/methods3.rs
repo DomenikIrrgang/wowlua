@@ -342,9 +342,6 @@ getters! {
     get_dont_save_position: flag("DontSavePosition", false);
     // `SetHyperlinksEnabled`; off (UI.xsd `hyperlinksEnabled`).
     get_hyperlinks_enabled: flag("HyperlinksEnabled", false);
-    // `SetOnUpdateMode`; `Enum.OnUpdateMode.RunWhenVisible` (UI.xsd
-    // `onUpdateMode`: `visible`).
-    get_on_update_mode: num("OnUpdateMode", 1.0);
     // `SetPropagateMouseClicks` / `SetPropagateMouseMotion`; off.
     can_propagate_mouse_clicks: flag("PropagateMouseClicks", false);
     can_propagate_mouse_motion: flag("PropagateMouseMotion", false);
@@ -1573,7 +1570,6 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ),
         ("Frame:GetHighestFrameLevel", get_highest_frame_level),
         ("Frame:GetHyperlinksEnabled", get_hyperlinks_enabled),
-        ("Frame:GetOnUpdateMode", get_on_update_mode),
         ("Frame:GetRaisedFrameLevel", get_raised_frame_level),
         ("Frame:GetRolesetNames", empty_table),
         ("Frame:SetAlphaGradient", set_alpha_gradient),

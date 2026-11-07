@@ -89,3 +89,47 @@ return onMap, select(2, pcall(C_UnitAuras.GetAuraDataByIndex, 'player', 1, 'HELP
         ]
     );
 }
+
+/// The filter categories are the aura data's (decision T595): an aura is in
+/// a category only when its data says so, so a filter and its `!` split
+/// the auras between them; a word the client does not know holds and does
+/// not after `!`; `INCLUDE_NAME_PLATE_ONLY` is not negatable.
+#[test]
+fn filter_categories_split_the_auras() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local p = mock.player
+p:applyAura({ spellId = 348, name = 'Immolate', harmful = true, dispelName = 'Magic' })
+p:applyAura({ spellId = 118, name = 'Polymorph', harmful = true, crowdControl = true })
+p:applyAura({ spellId = 6788, name = 'Weakened Soul', harmful = true, raidInCombat = true })
+p:applyAura({ spellId = 33206, name = 'Pain Suppression', externalDefensive = true })
+p:applyAura({ spellId = 642, name = 'Divine Shield', bigDefensive = true, important = true })
+local function names(filter)
+    local out = {}
+    for _, a in ipairs(C_UnitAuras.GetUnitAuras('player', filter)) do out[#out + 1] = a.name end
+    return table.concat(out, ',')
+end
+return names('HARMFUL|CROWD_CONTROL'), names('HARMFUL|!CROWD_CONTROL'),
+    names('HARMFUL|RAID_IN_COMBAT'), names('HARMFUL|!RAID_IN_COMBAT|!CROWD_CONTROL'),
+    names('HELPFUL|EXTERNAL_DEFENSIVE'), names('HELPFUL|BIG_DEFENSIVE'), names('HELPFUL|IMPORTANT'),
+    names('HARMFUL|DISPELLABLE'), names('HARMFUL|NO_SUCH_WORD'), names('HARMFUL|!NO_SUCH_WORD'),
+    names('HELPFUL|!INCLUDE_NAME_PLATE_ONLY')",
+    );
+    assert_eq!(
+        r,
+        [
+            "Polymorph",
+            "Immolate,Weakened Soul",
+            "Weakened Soul",
+            "Immolate",
+            "Pain Suppression",
+            "Divine Shield",
+            "Divine Shield",
+            "Immolate",
+            "Immolate,Polymorph,Weakened Soul",
+            "",
+            "Pain Suppression,Divine Shield",
+        ]
+    );
+}
