@@ -995,7 +995,9 @@ impl Renderer {
                     });
                     let tex = self.texture(image, assets);
                     // Its masks' images, rectangles and regions (the build's
-                    // atlas's where the assets know it); white for the rest.
+                    // atlas's where the assets know it). The slots it does
+                    // not use repeat its first mask (white without one), so
+                    // they add nothing to the union.
                     let mut mask = [self.white; MASKS];
                     let mut mask_at: [Option<(Rect, [f32; 4])>; MASKS] = [None; MASKS];
                     for (k, m) in q.masks.iter().take(MASKS).enumerate() {
@@ -1006,6 +1008,10 @@ impl Renderer {
                         };
                         mask[k] = self.texture(image, assets);
                         mask_at[k] = Some((s(m.rect), region));
+                    }
+                    for k in q.masks.len().clamp(1, MASKS)..MASKS {
+                        mask[k] = mask[0];
+                        mask_at[k] = mask_at[0];
                     }
                     let r = snapped(q, s(q.rect));
                     let (cx, cy) = (r.x + r.w / 2.0, r.y + r.h / 2.0);

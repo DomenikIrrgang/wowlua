@@ -170,8 +170,9 @@ return two, t:GetNumMaskTextures(), t:GetMaskTexture(1) == m2, tostring(tile), t
     assert_eq!(r, ["2", "1", "true", "false", "true"]);
 }
 
-/// A texture takes three masks; a fourth is an error (decision T596), a
-/// mask it has already is not.
+/// A texture takes three masks; a fourth is an error, worded as WoW Forever
+/// words it, with the tainting addon's line (decision T596), a mask it has
+/// already is not.
 #[test]
 fn a_texture_takes_three_masks() {
     let mut vm = vm();
@@ -184,9 +185,16 @@ for i = 1, 4 do m[i] = f:CreateMaskTexture() end
 for i = 1, 3 do t:AddMaskTexture(m[i]) end
 t:AddMaskTexture(m[2])
 local ok, err = pcall(t.AddMaskTexture, t, m[4])
-return t:GetNumMaskTextures(), tostring(ok), tostring(err):match('at most 3') ~= nil",
+return t:GetNumMaskTextures(), tostring(ok), tostring(err)",
     );
-    assert_eq!(r, ["3", "false", "true"]);
+    assert_eq!(
+        r,
+        [
+            "3",
+            "false",
+            "Texture:AddMaskTexture(): Texture already has the maximum number of mask textures (3)\nLua Taint: MyAddon"
+        ]
+    );
 }
 
 /// An addon's texture copied by its ID (`b:SetTexture(a:GetTexture())`)

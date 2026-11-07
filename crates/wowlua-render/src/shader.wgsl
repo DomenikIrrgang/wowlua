@@ -1,6 +1,6 @@
-// The UI's quads: a texture times the vertex color, its masks' alphas (up
-// to three, as the client allows; the unused ones white), and the client's
-// per-texture switches.
+// The UI's quads: a texture times the vertex color, the highest of its
+// masks' alphas (up to three, as the client allows; the unused ones repeat
+// the first, white without one), and the client's per-texture switches.
 
 struct Screen {
     size: vec2<f32>,
@@ -52,10 +52,10 @@ fn vs(v: In) -> Out {
 @fragment
 fn fs(i: Out) -> @location(0) vec4<f32> {
     var c = textureSample(tex, samp, i.uv) * i.color;
-    // The masks intersect: each pixel takes every mask's alpha.
-    c.a = c.a * textureSample(mask0, samp, i.mask_uv0).a
-        * textureSample(mask1, samp, i.mask_uv1).a
-        * textureSample(mask2, samp, i.mask_uv2).a;
+    // The masks' union: each pixel takes the highest of their alphas.
+    c.a = c.a * max(textureSample(mask0, samp, i.mask_uv0).a,
+        max(textureSample(mask1, samp, i.mask_uv1).a,
+            textureSample(mask2, samp, i.mask_uv2).a));
     if (i.flags & 1u) != 0u {
         let g = dot(c.rgb, vec3<f32>(0.299, 0.587, 0.114));
         c = vec4<f32>(g, g, g, c.a);

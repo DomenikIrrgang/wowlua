@@ -374,13 +374,17 @@ fn same(a: Value, b: Value) -> bool {
 const MAX_MASKS: usize = 3;
 
 /// `AddMaskTexture(mask)`: added once (unverified: a second add); a fourth
-/// is an error (decision T596; unverified: its wording).
+/// is an error (decision T596, as WoW Forever words it).
 fn add_mask_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let mut list = mask_list(vm, id);
     let mask = c.arg(2);
     if !mask.is_nil() && !list.iter().any(|m| same(*m, mask)) {
         if list.len() >= MAX_MASKS {
-            return Err(vm.error("AddMaskTexture: a texture takes at most 3 mask textures"));
+            return Err(widgets::c_error(
+                vm,
+                "Texture:AddMaskTexture(): Texture already has the maximum number of mask textures (3)",
+                true,
+            ));
         }
         list.push(mask);
         set_mask_list(vm, id, &list);

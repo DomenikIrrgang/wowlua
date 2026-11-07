@@ -268,10 +268,11 @@ impl wowlua_render::Assets for MaskAssets {
     }
 }
 
-/// A texture's masks intersect, whichever comes first: the opaque one
-/// cuts nothing, the left and top halves leave the top left quarter.
+/// A texture's masks join (decision T596; WoW Forever: two ovals, red in
+/// both): the left and top halves leave all but the bottom right quarter,
+/// one mask alone cuts as before.
 #[test]
-fn a_texture_takes_every_one_of_its_masks() {
+fn a_texture_shows_where_any_of_its_masks_does() {
     let mut r = match Renderer::new_blocking() {
         Ok(r) => r,
         Err(e) => {
@@ -285,18 +286,30 @@ f:SetPoint('TOPLEFT', 10, -10)
 local t = f:CreateTexture(nil, 'ARTWORK')
 t:SetAllPoints()
 t:SetColorTexture(1, 0, 0)
-for _, id in ipairs({ 10, 11, 12 }) do
+for _, id in ipairs({ 11, 12 }) do
   local m = f:CreateMaskTexture()
   m:SetAllPoints()
   m:SetTexture(id)
   t:AddMaskTexture(m)
 end
+local g = CreateFrame('Frame', nil, UIParent)
+g:SetSize(200, 100)
+g:SetPoint('TOPLEFT', 10, -210)
+local one = g:CreateTexture(nil, 'ARTWORK')
+one:SetAllPoints()
+one:SetColorTexture(1, 0, 0)
+local m = g:CreateMaskTexture()
+m:SetAllPoints()
+m:SetTexture(11)
+one:AddMaskTexture(m)
 ");
     let s = scene::build(&mut vm);
     let img = r.render_blocking(&s, 1.0, None, &mut MaskAssets).unwrap();
     let red = |x: f32, y: f32| px(&img, 10.0 + x, 10.0 + y)[0] > 250;
     assert!(red(50.0, 25.0), "the top left quarter");
-    assert!(!red(150.0, 25.0), "the top right: the left mask cuts it");
-    assert!(!red(50.0, 75.0), "the bottom left: the top mask cuts it");
-    assert!(!red(150.0, 75.0));
+    assert!(red(150.0, 25.0), "the top right: the top mask shows it");
+    assert!(red(50.0, 75.0), "the bottom left: the left mask shows it");
+    assert!(!red(150.0, 75.0), "the bottom right: neither");
+    assert!(red(50.0, 225.0), "one mask: its left half");
+    assert!(!red(150.0, 225.0), "one mask: not its right half");
 }
