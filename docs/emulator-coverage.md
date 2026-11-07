@@ -2479,6 +2479,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Frames of the same level (decision T587)
 - The mouse wheel over frames (decision T588)
 - Top-level frames (decision T586)
+- Draw layer case (decision T597)
 
 ## In-game regressions
 

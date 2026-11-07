@@ -658,6 +658,21 @@ fn world_view(vm: &mut Vm) -> Option<WorldView> {
 
 pub(crate) const LAYERS: [&str; 5] = ["BACKGROUND", "BORDER", "ARTWORK", "OVERLAY", "HIGHLIGHT"];
 
+/// A draw layer's name as kept: a known one in capitals, whatever case it
+/// was given in, as `GetDrawLayer` answers (decision T597); others as given.
+pub(crate) fn layer_name(vm: &mut Vm, v: Value) -> Value {
+    let known = match v {
+        Value::Str(s) => {
+            let name = vm.heap.str_bytes(s);
+            LAYERS
+                .iter()
+                .find(|l| l.as_bytes().eq_ignore_ascii_case(name))
+        }
+        _ => None,
+    };
+    known.map_or(v, |l| vm.str(l))
+}
+
 /// Screen pixels per UIParent unit, and UIParent's height in its units.
 pub fn pixel_scale(vm: &Vm) -> (f64, f64) {
     let e = engine(vm);
@@ -1589,7 +1604,7 @@ fn layer_of(vm: &Vm, id: WidgetId) -> (usize, i32) {
             let name = vm.heap.str_bytes(s);
             LAYERS
                 .iter()
-                .position(|l| l.as_bytes() == name)
+                .position(|l| l.as_bytes().eq_ignore_ascii_case(name))
                 .unwrap_or(2)
         }
         Some(Value::Nil) | None => fallback,

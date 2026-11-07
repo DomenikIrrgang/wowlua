@@ -1343,3 +1343,15 @@ line in the chat, one after another.
     Seen: red or blue on top after the show, then after the click.
     wowlua: blue, then red. TBC Anniversary: (to do). WoW Forever: (to do)
 16. `/run R:Hide()`
+
+## Draw layer case (decision T597)
+
+On WoW Forever from its launch, each line in the chat. Whether a region's
+layer named in lowercase is answered in capitals, and draws on that layer.
+
+1. `/run F=CreateFrame("Frame",nil,UIParent) F:SetSize(200,40) F:SetPoint("CENTER") A=F:CreateTexture(nil,"artwork",nil,-6) A:SetAllPoints() A:SetColorTexture(1,.73,.1) B=F:CreateTexture(nil,"background",nil,-5) B:SetAllPoints() B:SetColorTexture(0,0,0) print(A:GetDrawLayer()) print(B:GetDrawLayer())`
+
+   Seen: the names and sublevels, and whether the bar is amber (the
+   `artwork` texture over the black `background` one). wowlua:
+   "ARTWORK -6", "BACKGROUND -5", amber. Seen: (to do)
+2. `/run F:Hide()`

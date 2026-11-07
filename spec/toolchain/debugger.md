@@ -223,7 +223,8 @@ a difference.
   its strata or level changed, later; decision T587, unverified), then a
   frame's regions (with those of its children on its level,
   `useParentLevel`, decision T341) by draw layer (`BACKGROUND`, `BORDER`, `ARTWORK`,
-  `OVERLAY`, `HIGHLIGHT` while the mouse is over its button; a region given
+  `OVERLAY`, `HIGHLIGHT` while the mouse is over its button; a layer named
+  in any case, `GetDrawLayer` answering it in capitals, decision T597; a region given
   none, a font string on `OVERLAY` and the others on `ARTWORK`, as the
   client's fresh regions answer, decision T338) and sublevel
   (-8 to 7), font strings after textures (decision T340), then masked textures after unmasked ones (the action
@@ -600,7 +601,8 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   browser requires; native callers block on it.
 - **Drawing**: one batched pass of textured quads in scene order, with the
   client's blend modes, premultiplied alpha, linear filtering and texture
-  coordinates; masks as a second texture; text from a glyph atlas
+  coordinates; a texture's masks (up to three, decision T596) as more
+  textures, their alphas multiplied; text from a glyph atlas
   rasterized from the font at the scene's pixel height, with outlines and
   shadows, each line's baseline its height times the font's ascent over
   its ascent and descent (as the client's page number sits between the

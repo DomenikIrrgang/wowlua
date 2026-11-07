@@ -535,6 +535,25 @@ return layer, sublevel, s:GetText()",
     assert_eq!(r, ["ARTWORK", "0", "Learning"]);
 }
 
+/// A draw layer's name is taken in any case and answered in capitals: a
+/// texture made on `"background"` draws and answers as `BACKGROUND`, not
+/// as the `ARTWORK` an unknown name falls back to (decision T597).
+#[test]
+fn draw_layer_names_are_case_insensitive() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+local t = f:CreateTexture(nil, 'background', nil, -6)
+local h = f:CreateTexture(nil, 'ARTWORK')
+h:SetDrawLayer('highlight')
+f:DisableDrawLayer('overlay')
+local layer, sublevel = t:GetDrawLayer()
+return layer, sublevel, (h:GetDrawLayer())",
+    );
+    assert_eq!(r, ["BACKGROUND", "-6", "HIGHLIGHT"]);
+}
+
 /// UIParent has the screen's scale (768 over 1080 on the default screen,
 /// decision T237): its children lay out and measure in its units; a frame
 /// ignoring its parents' scale at the same scale measures alike, and a
