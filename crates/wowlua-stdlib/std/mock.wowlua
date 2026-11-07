@@ -137,7 +137,9 @@ export interface MockUnit
     --- with `die`).
     function update(data: UnitData)
     --- An aura on it (`UNIT_AURA`), its instance ID; `quiet = true`: there
-    --- already (a snapshot's), untold.
+    --- already (a snapshot's), untold. `crowdControl`, `raidInCombat`,
+    --- `important`, `bigDefensive` and `externalDefensive` put it in the
+    --- aura filters' categories of those names (none by default).
     function applyAura(data: table): number
     --- Removes the aura with that instance ID (`UNIT_AURA`).
     function removeAura(auraInstanceID: number)
