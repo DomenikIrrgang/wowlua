@@ -112,12 +112,12 @@ pub struct Widget {
     /// The Lua line that made it: chunk name and line (an inspector's
     /// "created at", decision T484); none from the client's own loading.
     pub created: Option<(std::rc::Rc<[u8]>, u32)>,
-    /// When it took its place among the frames of its strata and level: it
-    /// was made, or its strata or level changed (decision T587). Of two
-    /// frames at the same strata and level the later is drawn on top.
+    /// When it was made (decision T587): of two frames at the same strata
+    /// and level the later is drawn on top, whatever level, strata or
+    /// showing changed since.
     pub placed: u64,
-    /// When it was last raised as a top-level frame (shown or clicked;
-    /// decision T586), 0 never: it and what is in it are drawn above the
+    /// When it was last raised as a top-level frame (shown; decision
+    /// T586), 0 never: it and what is in it are drawn above the
     /// rest of its strata, the one raised last on top, its level kept.
     pub raised: u64,
 }
@@ -3952,11 +3952,7 @@ pub(crate) fn set_level(vm: &mut Vm, id: WidgetId, level: f64) {
             if let Some(Value::Num(n)) =
                 stored_args(vm, props, "FrameLevel").and_then(|v| v.first().copied())
             {
-                // (moved with it, it keeps its place among the frames of its
-                // level: T587)
-                let placed = engine(vm).world.widgets[child.0].placed;
                 store(vm, child, "FrameLevel", &[Value::Num((n + delta).max(0.0))]);
-                engine_mut(vm).world.widgets[child.0].placed = placed;
             }
             stack.extend(engine(vm).world.widgets[child.0].children.iter().copied());
         }
@@ -5003,11 +4999,6 @@ pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
         });
         if !same {
             reorder(engine_mut(vm));
-            // (it takes its new place last among its strata and level:
-            // T587)
-            let world = &mut engine_mut(vm).world;
-            world.widgets[id.0].placed = world.next_placed;
-            world.next_placed += 1;
         }
     }
     mark(engine_mut(vm), id);

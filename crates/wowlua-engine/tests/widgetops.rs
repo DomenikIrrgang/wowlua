@@ -30,8 +30,10 @@ fn run(vm: &mut Vm, src: &str) -> Vec<String> {
     }
 }
 
+/// `Raise()` keeps the level (decision T586: TBC Anniversary, WoW
+/// Forever); `Lower()` goes below every other frame of the strata.
 #[test]
-fn raise_and_lower_move_a_frame_above_and_below_its_strata() {
+fn raise_keeps_the_level_and_lower_moves_a_frame_below_its_strata() {
     let mut vm = vm();
     let r = run(
         &mut vm,
@@ -47,9 +49,9 @@ local raised, childRaised = a:GetFrameLevel(), child:GetFrameLevel()
 a:Lower()
 return raised, childRaised, a:GetFrameLevel(), b:GetFrameLevel()",
     );
-    // Above b's 7 (not the HIGH strata's 50), its child with it; then
-    // below every other frame of its strata (UIParent's 0 among them).
-    assert_eq!(r, ["8", "9", "0", "7"]);
+    // Raised, at its level, its child at its own; then below every other
+    // frame of its strata (UIParent's 0 among them).
+    assert_eq!(r, ["1", "2", "0", "7"]);
 }
 
 /// A top-level frame keeps its level as it shows and as it is clicked
@@ -83,13 +85,11 @@ return before, meterRow:GetFrameLevel(), shown, clicked, plain:GetFrameLevel()",
     assert_eq!(r, ["1", "3", "1", "1", "40"]);
 }
 
-/// Of two frames at the same strata and level, the one placed later is on
-/// top: made later, or its level changed later (decision T587; a guess
-/// until the probe "Frames of the same level"). SuuUI's character window
-/// sets its tab buttons' level after making the chosen tab's marker at the
-/// same level: the labels on top, as in the game.
+/// Of two frames at the same strata and level, the one made later is on
+/// top, whatever level or showing changed since (decision T587; WoW
+/// Forever, the probe "Frames of the same level").
 #[test]
-fn of_two_frames_at_one_level_the_one_placed_later_is_on_top() {
+fn of_two_frames_at_one_level_the_one_made_later_is_on_top() {
     let mut vm = vm();
     let on_top = |vm: &mut Vm| {
         let (k, _) = wowlua_engine::scene::pixel_scale(vm);
@@ -114,15 +114,23 @@ end",
     let same = on_top(&mut vm);
     run(&mut vm, "Red:SetFrameLevel(49) Red:SetFrameLevel(50)");
     let changed = on_top(&mut vm);
-    assert_eq!([made, same, changed], ["Blue", "Blue", "Red"]);
+    run(&mut vm, "Blue:Hide() Blue:Show()");
+    let blue_shown = on_top(&mut vm);
+    run(&mut vm, "Red:Hide() Red:Show()");
+    let red_shown = on_top(&mut vm);
+    assert_eq!(
+        [made, same, changed, blue_shown, red_shown],
+        ["Blue", "Blue", "Blue", "Blue", "Blue"]
+    );
 }
 
-/// A top-level frame shown or clicked is drawn, with what is in it, above
-/// the rest of its strata, its level kept (decision T586; probed on TBC
-/// Anniversary: a top-level window at level 2, shown, over another's
-/// window at 3; plain, under it).
+/// A top-level frame shown is drawn, with what is in it, above the rest of
+/// its strata, its level kept; clicked, it is not raised (decision T586;
+/// TBC Anniversary and WoW Forever: a top-level window at level 2, shown,
+/// over another's window at 3; plain, under it; Forever: clicked, it stayed
+/// under the top-level window shown after it).
 #[test]
-fn a_top_level_frame_shown_or_clicked_is_drawn_on_top() {
+fn a_top_level_frame_shown_is_drawn_on_top_clicked_it_is_not() {
     let mut vm = vm();
     let on_top = |vm: &mut Vm| {
         let (k, _) = wowlua_engine::scene::pixel_scale(vm);
@@ -167,7 +175,7 @@ return Red:GetFrameLevel(), Blue:GetFrameLevel()",
             vec!["2".to_string(), "3".into()],
             "Red".into(),
             "Blue".into(),
-            "Red".into()
+            "Blue".into()
         )
     );
 }
