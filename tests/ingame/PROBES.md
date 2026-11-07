@@ -1353,5 +1353,6 @@ layer named in lowercase is answered in capitals, and draws on that layer.
 
    Seen: the names and sublevels, and whether the bar is amber (the
    `artwork` texture over the black `background` one). wowlua:
-   "ARTWORK -6", "BACKGROUND -5", amber. Seen: (to do)
+   "ARTWORK -6", "BACKGROUND -5", amber. Seen on WoW Forever 1.60.1
+   (70862), 2026-11-07: "ARTWORK -6", "BACKGROUND -5", amber, as wowlua.
 2. `/run F:Hide()`
