@@ -100,6 +100,66 @@ return before, inside, name, kind, difficulty, difficultyName, size, id, tostrin
 }
 
 #[test]
+fn arena_opponents_on_their_tokens() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('ARENA_OPPONENT_UPDATE')
+f:RegisterEvent('ARENA_PREP_OPPONENT_SPECIALIZATIONS')
+f:RegisterEvent('UNIT_HEALTH')
+f:SetScript('OnEvent', function(_, e, unit, reason)
+    seen[#seen + 1] = e .. ' ' .. tostring(unit) .. ' ' .. tostring(reason)
+end)
+mock.enterInstance('arena')
+mock.prepareArena({ 62, { specID = 265, gender = 3 } })
+local specs = GetNumArenaOpponentSpecs() .. ' ' .. tostring(issecretvalue((GetArenaOpponentSpec(2))))
+local foe = mock.spawnUnit({ name = 'Foe', reaction = 'hostile', health = 100, maxHealth = 100 })
+mock.setArenaOpponent(2, foe)
+local up = table.concat({ GetNumArenaOpponents(), tostring(UnitExists('arena1')), tostring(UnitExists('arena2')), foe:token() }, ' ')
+mock.player:hit(foe, 10)
+mock.setArenaOpponent(2, nil)
+local unseen = table.concat({ GetNumArenaOpponents(), tostring(UnitExists('arena2')) }, ' ')
+mock.setArenaOpponent(2, foe)
+mock.leaveInstance()
+f:SetScript('OnEvent', nil)
+return specs, up, unseen, GetNumArenaOpponents(), GetNumArenaOpponentSpecs(), tostring(UnitExists('arena2')), table.concat(seen, ';')",
+    );
+    assert_eq!(
+        r,
+        [
+            "2 true",
+            "2 false true arena2",
+            "2 false",
+            "0",
+            "0",
+            "false",
+            "ARENA_PREP_OPPONENT_SPECIALIZATIONS nil nil;\
+             ARENA_OPPONENT_UPDATE arena2 seen;\
+             UNIT_HEALTH arena2 nil;\
+             ARENA_OPPONENT_UPDATE arena2 unseen;\
+             ARENA_OPPONENT_UPDATE arena2 seen;\
+             ARENA_OPPONENT_UPDATE arena1 cleared;\
+             ARENA_OPPONENT_UPDATE arena2 cleared",
+        ]
+    );
+}
+
+#[test]
+fn arena_opponent_specs_where_not_secret() {
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "mists").expect("installs");
+    wowlua_engine::controls::install(&mut vm, "mock");
+    let r = run(
+        &mut vm,
+        "mock.prepareArena({ 62, { specID = 265, gender = 3 } })
+return table.concat({ GetArenaOpponentSpec(1) }, ' '), table.concat({ GetArenaOpponentSpec(2) }, ' '), select('#', GetArenaOpponentSpec(3))",
+    );
+    assert_eq!(r, ["62 2", "265 3", "0"]);
+}
+
+#[test]
 fn the_players_pet() {
     let mut vm = vm();
     let r = run(

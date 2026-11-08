@@ -333,6 +333,8 @@ pub struct Units {
     pub group: Vec<UnitId>,
     pub raid: bool,
     pub bosses: Vec<Option<UnitId>>,
+    /// The arena's opponents, on the `arenaN` tokens by slot (none: unseen).
+    pub arena: Vec<Option<UnitId>>,
     /// The player's pet (`pets.rs`).
     pub pet: Option<UnitId>,
     /// Each restriction type's state: 0 inactive, 1 activating, 2 active.
@@ -621,6 +623,11 @@ fn base_token<'a>(u: &Units, t: &'a str) -> Option<(Option<UnitId>, &'a str)> {
             u.bosses.get(n.wrapping_sub(1)).copied().flatten()
         })
     })
+    .or_else(|| {
+        numbered("arena", &|n| {
+            u.arena.get(n.wrapping_sub(1)).copied().flatten()
+        })
+    })
 }
 
 /// The members `partyN` names: the group's others, in a raid those in the
@@ -697,6 +704,11 @@ pub fn tokens_of(u: &Units, id: UnitId) -> Vec<String> {
     for (i, b) in u.bosses.iter().enumerate() {
         if *b == Some(id) {
             out.push(format!("boss{}", i + 1));
+        }
+    }
+    for (i, a) in u.arena.iter().enumerate() {
+        if *a == Some(id) {
+            out.push(format!("arena{}", i + 1));
         }
     }
     out

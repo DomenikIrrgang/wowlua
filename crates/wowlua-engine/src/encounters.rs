@@ -15,6 +15,16 @@
 //! success's `BOSS_KILL`, `ENCOUNTER_END` with each boss's status, the
 //! tokens cleared and `INSTANCE_ENCOUNTER_ENGAGE_UNIT` again.
 //!
+//!
+//! Arenas (decision T602): `mock.prepareArena(specs)`: the opponents'
+//! specializations (`GetNumArenaOpponentSpecs`, `GetArenaOpponentSpec`),
+//! `ARENA_PREP_OPPONENT_SPECIALIZATIONS`; `mock.setArenaOpponent(slot,
+//! unit?)`: the unit on `arenaN`, `ARENA_OPPONENT_UPDATE("arenaN",
+//! "seen")`, or none there, `"unseen"`; `mock.clearArenaOpponents()` (and
+//! leaving the instance): `"cleared"` for each slot, the specializations
+//! forgotten. The reasons are those Blizzard's arena frames handle; when
+//! the client tells each is unverified (`"destroyed"`: never).
+//!
 //! Unverified: the events' order, entering an instance's loading screen
 //! (`PLAYER_ENTERING_WORLD`, the zone's events: `moveTo` tells those), a
 //! boss joining mid-fight, the encounter's own frames (timelines,
@@ -52,6 +62,8 @@ pub struct Active {
 pub struct Encounters {
     pub instance: Option<Instance>,
     pub active: Option<Active>,
+    /// The arena opponents' specializations and genders, by slot.
+    pub arena_specs: Vec<(f64, f64)>,
 }
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
@@ -127,6 +139,7 @@ pub fn control_leave_instance(vm: &mut Vm, _c: NativeCall) -> Ret {
     if engine(vm).world.encounters.active.is_some() {
         end(vm, false);
     }
+    clear_arena(vm);
     let was_in = engine_mut(vm).world.encounters.instance.take().is_some();
     units::set_restriction(vm, units::MAP, false);
     if was_in {
@@ -253,6 +266,91 @@ fn end(vm: &mut Vm, success: bool) {
     fire(vm, "INSTANCE_ENCOUNTER_ENGAGE_UNIT", &[]);
 }
 
+/// `mock.prepareArena(specs)`: each a specialization's ID or `{ specID,
+/// gender }` (`UnitSex`'s; 2 by default).
+pub fn control_prepare_arena(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Table(list) = c.arg(1) else {
+        return Err(vm.error("prepareArena: a list of specializations expected"));
+    };
+    let mut specs = Vec::new();
+    for i in 1..=vm.heap.table(list).border() {
+        match vm.heap.table(list).get(Value::Num(i as f64)) {
+            Value::Num(id) => specs.push((id, 2.0)),
+            Value::Table(t) => {
+                let id = number(vm, Some(t), "specID", 0.0);
+                specs.push((id, number(vm, Some(t), "gender", 2.0)));
+            }
+            _ => return Err(vm.error("prepareArena: a specialization's ID or { specID, gender }")),
+        }
+    }
+    engine_mut(vm).world.encounters.arena_specs = specs;
+    fire(vm, "ARENA_PREP_OPPONENT_SPECIALIZATIONS", &[]);
+    Ok(vec![])
+}
+
+/// `mock.setArenaOpponent(slot, unit?)`: slot 1 to 5.
+pub fn control_set_arena_opponent(vm: &mut Vm, c: NativeCall) -> Ret {
+    let slot = match c.arg(1) {
+        Value::Num(n) if n.fract() == 0.0 && (1.0..=5.0).contains(&n) => n as usize,
+        _ => return Err(vm.error("setArenaOpponent: a slot from 1 to 5 expected")),
+    };
+    let unit = match c.arg(2) {
+        Value::Nil => None,
+        v => match units::handle_of(vm, v) {
+            Some(id) => Some(id),
+            None => return Err(vm.error("setArenaOpponent: a unit or nil expected")),
+        },
+    };
+    let arena = &mut engine_mut(vm).units.arena;
+    if arena.len() < slot {
+        arena.resize(slot, None);
+    }
+    arena[slot - 1] = unit;
+    let token = vm.str(&format!("arena{slot}"));
+    let reason = vm.str(if unit.is_some() { "seen" } else { "unseen" });
+    fire(vm, "ARENA_OPPONENT_UPDATE", &[token, reason]);
+    Ok(vec![])
+}
+
+/// `mock.clearArenaOpponents()`.
+pub fn control_clear_arena_opponents(vm: &mut Vm, _c: NativeCall) -> Ret {
+    clear_arena(vm);
+    Ok(vec![])
+}
+
+fn clear_arena(vm: &mut Vm) {
+    engine_mut(vm).world.encounters.arena_specs.clear();
+    let slots = std::mem::take(&mut engine_mut(vm).units.arena).len();
+    for slot in 1..=slots {
+        let args = [vm.str(&format!("arena{slot}")), vm.str("cleared")];
+        fire(vm, "ARENA_OPPONENT_UPDATE", &args);
+    }
+}
+
+/// `GetNumArenaOpponents()`: the slots an opponent was seen in, unseen
+/// ones too.
+fn num_arena_opponents(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(engine(vm).units.arena.len() as f64)])
+}
+
+fn num_arena_opponent_specs(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(
+        engine(vm).world.encounters.arena_specs.len() as f64,
+    )])
+}
+
+/// `GetArenaOpponentSpec(index)`: the specialization and gender, nothing
+/// for a slot without one.
+fn arena_opponent_spec(vm: &mut Vm, c: NativeCall) -> Ret {
+    let specs = &engine(vm).world.encounters.arena_specs;
+    Ok(match c.arg(1) {
+        Value::Num(n) if n >= 1.0 => specs
+            .get(n as usize - 1)
+            .map_or(vec![], |&(id, g)| vec![Value::Num(id), Value::Num(g)]),
+        _ => vec![],
+    })
+}
+
 /// `IsInInstance()`: in one and its kind; else `false, "none"` (recorded
 /// outside any).
 fn is_in_instance(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -318,6 +416,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("RequestRaidInfo", request_raid_info),
         ("IsInInstance", is_in_instance),
+        ("GetNumArenaOpponents", num_arena_opponents),
+        ("GetNumArenaOpponentSpecs", num_arena_opponent_specs),
+        ("GetArenaOpponentSpec", arena_opponent_spec),
         (
             "C_InstanceEncounter.IsEncounterInProgress",
             is_encounter_in_progress,

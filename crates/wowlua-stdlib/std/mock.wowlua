@@ -947,7 +947,8 @@ export function enterInstance(kind: string?, opts: { name?: string, instanceID?:
     engine().enterInstance(kind, opts)
 end
 
---- Leaves the instance (an encounter under way ends, not won).
+--- Leaves the instance (an encounter under way ends, not won; arena
+--- opponents are cleared).
 export function leaveInstance()
     engine().leaveInstance()
 end
@@ -967,6 +968,28 @@ end
 --- tokens cleared, `INSTANCE_ENCOUNTER_ENGAGE_UNIT`.
 export function endEncounter(success: boolean)
     engine().endEncounter(success)
+end
+
+--- The arena's preparation: the opponents' specializations, each its ID
+--- or `{ specID, gender }` (`UnitSex`'s, 2 by default), for
+--- `GetNumArenaOpponentSpecs` and `GetArenaOpponentSpec`;
+--- `ARENA_PREP_OPPONENT_SPECIALIZATIONS`.
+export function prepareArena(specs: (number | { specID: number, gender?: number })[])
+    engine().prepareArena(specs)
+end
+
+--- An arena opponent seen on `arena<slot>` (1 to 5):
+--- `ARENA_OPPONENT_UPDATE("arenaN", "seen")`; `nil`: out of sight, the
+--- token names none, `"unseen"`. `GetNumArenaOpponents` counts the slots
+--- seen, unseen ones too.
+export function setArenaOpponent(slot: number, unit: MockUnit?)
+    engine().setArenaOpponent(slot, unit)
+end
+
+--- The arena's opponents gone (the match over): `ARENA_OPPONENT_UPDATE`
+--- with `"cleared"` for each slot, the specializations forgotten.
+export function clearArenaOpponents()
+    engine().clearArenaOpponents()
 end
 
 --- A slot of the pet's bar (`mock.setPet`'s `actions`): a spell

@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,110 of the 5,114 documented camelot functions have
-  behaviour (99.9%): 1,060 modelled, 353 answered from recordings, 3,697 by a
+  behaviour (99.9%): 1,061 modelled, 352 answered from recordings, 3,697 by a
   documentation-based fill-in. Of all 7,179 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
@@ -28,11 +28,11 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,194 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,195 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| camelot | 5,114 | 5,110 (99.9%) | 353 | 1,477 | 1,477 (100.0%) | all |
+| camelot | 5,114 | 5,110 (99.9%) | 352 | 1,477 | 1,477 (100.0%) | all |
 | standard | 4,871 | 4,523 (92.9%) | 0 | 1,438 | 1,431 (99.5%) | none |
 | vanilla | 3,221 | 2,909 (90.3%) | 0 | 1,360 | 1,349 (99.2%) | none |
 | tbc | 3,221 | 2,909 (90.3%) | 0 | 1,360 | 1,349 (99.2%) | none |
@@ -60,7 +60,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 770 | 99 | 1,233 | 0 |
+| `(globals)` | 2,102 | 773 | 97 | 1,232 | 0 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -346,14 +346,14 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,179 | 1,674 | 435 | 5,066 | 4 |
+| **All** | 7,179 | 1,677 | 433 | 5,065 | 4 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,114 | 1,060 | 353 | 3,697 | 4 |
-| the client's other C functions (`/stdtest inventory`) | 2,065 | 614 | 82 | 1,369 | 0 |
+| Blizzard's API documentation | 5,114 | 1,061 | 352 | 3,697 | 4 |
+| the client's other C functions (`/stdtest inventory`) | 2,065 | 616 | 81 | 1,368 | 0 |
 | the engine's own, in neither list | 16 | 15 | 0 | 1 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
@@ -376,11 +376,11 @@ The modules that answer, by how many functions and methods:
 | `extras` | fill-in | 1,486 |
 | `widgets` | model | 638 |
 | `globalsinfo` | fill-in | 524 |
-| `content` | fill-in | 520 |
+| `content` | fill-in | 519 |
 | `leftovers2` | fill-in | 388 |
 | `collections` | fill-in | 377 |
 | `social` | fill-in | 373 |
-| `recorded` | recorded | 319 |
+| `recorded` | recorded | 317 |
 | `questinfo` | fill-in | 316 |
 | `systeminfo` | fill-in | 308 |
 | `iteminfo` | fill-in | 228 |
@@ -455,11 +455,11 @@ The modules that answer, by how many functions and methods:
 | `chat` | model | 7 |
 | `damagemeter` | model | 7 |
 | `clientdata` | model | 6 |
+| `encounters` | model | 6 |
 | `inspect` | model | 5 |
 | `achievements` | model | 3 |
 | `conditionals` | model | 3 |
 | `editmode` | model | 3 |
-| `encounters` | model | 3 |
 | `casting` | model | 2 |
 | `ui` | model | 2 |
 | `inventory` | model | 1 |
@@ -849,7 +849,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,194 rules unverified: each rests on Blizzard's
+The engine's code marks 1,195 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1237,9 +1237,10 @@ page changes only when a rule is added, removed or reworded.
 - [editmode.rs](../crates/wowlua-engine/src/editmode.rs): The login sends them (`EDIT_MODE_LAYOUTS_UPDATED(layoutInfo, false)`, recorded with Blizzard's addons loading).
 - [editmode.rs](../crates/wowlua-engine/src/editmode.rs): The default preset's place among the layouts: Blizzard lists its presets first, in `Enum.EditModePresetLayouts` order...
 
-### encounters (5)
+### encounters (6)
 
 - [encounters.rs](../crates/wowlua-engine/src/encounters.rs): A dungeon's or raid's instance and its boss encounters.
+- [encounters.rs](../crates/wowlua-engine/src/encounters.rs): Arenas (decision T602): `mock.prepareArena(specs)`: the opponents' specializations (`GetNumArenaOpponentSpecs`, `GetA...
 - [encounters.rs](../crates/wowlua-engine/src/encounters.rs): Unverified: the events' order, entering an instance's loading screen (`PLAYER_ENTERING_WORLD`, the zone's events: `mo...
 - [encounters.rs](../crates/wowlua-engine/src/encounters.rs): An instance kind's usual difficulty, its name and size (the `DifficultyID` enum's normal ones; unverified for camelot).
 - [encounters.rs](../crates/wowlua-engine/src/encounters.rs): `GetInstanceInfo()` in an instance: its name, kind, difficulty and its name, size, no dynamic difficulty, its ID, the...
