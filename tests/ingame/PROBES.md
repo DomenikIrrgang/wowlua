@@ -1549,8 +1549,9 @@ engine to close, with the steps that would record the game's answer.
 
 wowlua's pet spellbook is modelled on Blizzard's spellbook code
 (`SpellBookPetCategoryMixin`, `SpellBookItemMixin`) and the API
-documentation, none of it seen. With a hunter, the pet out, out of combat,
-the spellbook closed, the cursor empty:
+documentation; seen so far only the toggle forbidden and the pet bar's
+right-click (decision T600, steps 5 and 8). With a hunter, the pet out,
+out of combat, the spellbook closed, the cursor empty:
 
 1. **How many spells, and the token.**
    `/run print(C_SpellBook.HasPetSpells())`
@@ -1577,19 +1578,40 @@ the spellbook closed, the cursor empty:
    allowed value in step 4 (here slot 1):
    `/run local f=CreateFrame("Frame") f:RegisterEvent("PET_BAR_UPDATE") f:SetScript("OnEvent", function(_, e) print(e) f:UnregisterAllEvents() end) C_SpellBook.ToggleSpellBookItemAutoCast(1, 1) print(C_SpellBook.GetSpellBookItemAutoCast(1, 1))`
 
-   wowlua: `PET_BAR_UPDATE`, autocast switched (the pet bar's button too).
-   Seen: (to do)
+   wowlua: forbidden (decision T600): `ADDON_ACTION_FORBIDDEN` with
+   `ToggleSpellBookItemAutoCast()`, autocast unchanged, no `PET_BAR_UPDATE`.
+   Seen: WoW Forever 1.60.1 (2026-11-08), out of combat, from SuuUI's
+   spellbook: "Forbidden: ToggleSpellBookItemAutoCast()" (SuuUI's report of
+   `ADDON_ACTION_FORBIDDEN`). Still to do from this /run line: is anything
+   printed after the refusal (the autocast values), and does the game show
+   its "interface action failed because of an AddOn" message?
 6. **Toggling autocast in combat.** Attack a training dummy, then run the
    line of step 5 again.
 
-   wowlua: allowed. Seen: switched, or "blocked" / `ADDON_ACTION_BLOCKED`?
-   (to do)
-7. **Picking up a pet spell.**
+   wowlua: forbidden as out of combat (`ADDON_ACTION_FORBIDDEN`, not
+   `ADDON_ACTION_BLOCKED`). Seen: (to do; forbidden out of combat already,
+   step 5)
+7. **Setting autocast from /run.** The same slot:
+   `/run local f=CreateFrame("Frame") f:RegisterEvent("ADDON_ACTION_FORBIDDEN") f:SetScript("OnEvent", function(_, e, a, b) print(e, a, b) f:UnregisterAllEvents() end) C_SpellBook.SetSpellBookItemAutoCastEnabled(1, 1, false) print(C_SpellBook.GetSpellBookItemAutoCast(1, 1))`
+
+   wowlua: forbidden like the toggle (`ADDON_ACTION_FORBIDDEN`,
+   `SetSpellBookItemAutoCastEnabled()`; the documentation flags both
+   alike), autocast unchanged. Seen: forbidden too, or switched? (to do)
+8. **Toggling autocast with the pet bar's button.** Bite (or another spell
+   that may autocast) on pet bar slot 4, out of combat, then in combat
+   against a training dummy:
+   `/click PetActionButton4 RightButton`
+
+   wowlua: the slot's autocast switched (`TogglePetAutocast` from the
+   button's secure click), in combat too, nothing refused. Seen: WoW
+   Forever 1.60.1 (2026-11-08): switched, in and out of combat (the way
+   SuuUI switches it).
+9. **Picking up a pet spell.**
    `/run C_SpellBook.PickupSpellBookItem(1, Enum.SpellBookSpellBank.Pet) print(GetCursorInfo())`
    then `/run ClearCursor()`
 
    wowlua: `petaction`, the spell's ID, 1. Seen: (to do)
-8. **The pet's icon.**
+10. **The pet's icon.**
    `/run print(GetPetIcon(), PetHasSpellbook())`
 
    wowlua: the icon `mock.setPet` gives (else the first spell's), `true`.

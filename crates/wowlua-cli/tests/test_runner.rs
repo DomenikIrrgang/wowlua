@@ -1984,8 +1984,11 @@ local function typing()
     local entered: (string | Secret<string>)? = nil
     box:SetScript("OnTextChanged", function(_: EditBox, user: boolean) if user then changes = changes + 1 end end)
     box:SetScript("OnEnterPressed", function(self: EditBox) entered = self:GetText() end)
+    -- Nothing has the keyboard's focus yet: nil, as declared.
+    expect(GetCurrentKeyBoardFocus()).toBe(nil)
     mock.typeText(box, "hello")
     expect(box:HasFocus()).toBe(true)
+    expect(GetCurrentKeyBoardFocus()).toBe(box)
     expect(changes).toBe(5)
     mock.pressKey("ENTER")
     expect(entered).toBe("hello")
@@ -3108,8 +3111,8 @@ end
 }
 
 /// A hunter's pet with Blizzard's UI, without an error: the pet frame, its
-/// happiness, the pet bar (a spell, the commands), the pet sent to attack
-/// and called back, hits, a buff on it, its happiness and experience
+/// happiness, the pet bar (a spell, the commands, its autocast switched
+/// with the right button), the pet sent to attack and called back, hits, a buff on it, its happiness and experience
 /// changing, dismissed. (No recording: the pet is modelled, unverified.)
 #[test]
 fn blizzard_ui_through_a_hunters_pet() {
@@ -3156,6 +3159,14 @@ local function hunter()
     mock.click(G.PetActionButton1)
     mock.nextFrame(5)
     expect(IsPetAttackActive()).toBe(true)
+    -- Autocast switched with the right button, in combat: the user's click and
+    -- a macro's `/click` (decision T600; the spellbook's toggle is forbidden).
+    expect(select(6, GetPetActionInfo(4))).toBe(true)
+    mock.click(G.PetActionButton4, "RightButton")
+    expect(select(6, GetPetActionInfo(4))).toBe(false)
+    mock.slash("/click PetActionButton4 RightButton")
+    expect(select(6, GetPetActionInfo(4))).toBe(true)
+    expect(#mock.refusals()).toBe(0)
     expect(G.PetAttackModeTexture).toBeShown()
     for _ = 1, 3 do
         wolf:swing(boar, 40, { power = 5 })

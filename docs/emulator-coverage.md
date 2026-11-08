@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,193 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,192 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -849,7 +849,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,193 rules unverified: each rests on Blizzard's
+The engine's code marks 1,192 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1861,13 +1861,12 @@ page changes only when a rule is added, removed or reworded.
 - [party.rs](../crates/wowlua-engine/src/party.rs): `C_PartyInfo.IsPartyFull()`: a party of five (recorded: not with two; unverified: full, a raid).
 - [party.rs](../crates/wowlua-engine/src/party.rs): `C_PartyInfo.ConvertToRaid()`: the leader's party a raid (`GROUP_ROSTER_UPDATE`; unverified: its other events and mes...
 
-### pets (8)
+### pets (7)
 
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): The player's pet.
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): Unverified: the events' order and their units, the default bar, the damage percentage by happiness (classic's 125, 10...
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): Its stats (`pet:setStats`); the default character's stand-ins until a test gives them (unverified).
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): The hunter's bar (unverified: classic's layout).
-- [pets.rs](../crates/wowlua-engine/src/pets.rs): `C_SpellBook.ToggleSpellBookItemAutoCast(slot, bank)`: the pet's spell there that may autocast switched, on its bar t...
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): `GetPetIcon()`: the pet's icon, else its first spell's; nil without a pet (the full probe) or either (unverified).
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): `GetPetActionCooldown(slot)`: none, `0, 0, 0` (recorded without a pet, every slot; with one unverified).
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): `GetPetActionSlotUsable(slot)`: an action there, the pet alive; with no pet, any slot (the full probe: -1, 0, 1 and 2...

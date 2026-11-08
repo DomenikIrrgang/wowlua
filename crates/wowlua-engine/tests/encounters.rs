@@ -17,6 +17,18 @@ fn run(vm: &mut Vm, src: &str) -> Vec<String> {
     let f = vm
         .load_as(src.as_bytes(), "@MyAddon/main.lua", "MyAddon")
         .expect("compiles");
+    call(vm, f)
+}
+
+/// Runs `src` as Blizzard's secure code runs.
+fn run_secure(vm: &mut Vm, src: &str) -> Vec<String> {
+    let f = vm.load(src.as_bytes(), "=secure").expect("compiles");
+    call(vm, f)
+}
+
+/// Runs `f` as its own execution (from C: the taint it ends with is not
+/// the next one's).
+fn call(vm: &mut Vm, f: Value) -> Vec<String> {
     let text = |vm: &Vm, v: Value| match v {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
         Value::Num(n) => format!("{n}"),
@@ -24,7 +36,7 @@ fn run(vm: &mut Vm, src: &str) -> Vec<String> {
         Value::Nil => "nil".into(),
         other => format!("{other:?}"),
     };
-    match vm.call(f, &[]) {
+    match vm.call_secure(f, &[]) {
         Ok(r) => r.into_iter().map(|v| text(vm, v)).collect(),
         Err(e) => panic!("{}", text(vm, e.value)),
     }
@@ -133,7 +145,8 @@ return none, UnitName('pet') or 'none', tostring(has), tostring(hunter),
 }
 
 /// The pet's spellbook (decision T599): `spells`, read by slot in the
-/// pet's bank, its autocast shared with the bar, picked up as a pet action.
+/// pet's bank, its autocast shared with the bar, picked up as a pet action;
+/// the book's autocast functions forbidden to the addon (decision T600).
 #[test]
 fn the_pets_spellbook() {
     let mut vm = vm();
@@ -141,8 +154,10 @@ fn the_pets_spellbook() {
         &mut vm,
         "local seen = {}
 local f = CreateFrame('Frame')
-for _, e in ipairs({ 'PET_BAR_UPDATE', 'SPELLS_CHANGED' }) do f:RegisterEvent(e) end
-f:SetScript('OnEvent', function(_, e) seen[#seen + 1] = e end)
+for _, e in ipairs({ 'PET_BAR_UPDATE', 'SPELLS_CHANGED', 'ADDON_ACTION_FORBIDDEN' }) do f:RegisterEvent(e) end
+f:SetScript('OnEvent', function(_, e, addon, action)
+    seen[#seen + 1] = e == 'ADDON_ACTION_FORBIDDEN' and (addon .. ':' .. action) or e
+end)
 local Pet = Enum.SpellBookSpellBank.Pet
 local without = select('#', C_SpellBook.HasPetSpells()) .. ' ' .. tostring(GetPetIcon())
 local wolf = mock.spawnUnit({ name = 'Fang', level = 19, reaction = 'friendly' })
@@ -175,13 +190,14 @@ local function auto(i) local a, e = C_SpellBook.GetSpellBookItemAutoCast(i, Pet)
 local autos = auto(1) .. ' ' .. auto(2) .. ' ' .. auto(3)
 seen = {}
 C_SpellBook.ToggleSpellBookItemAutoCast(1, Pet)
+C_SpellBook.SetSpellBookItemAutoCastEnabled(2, Pet, true)
+local forbidden = table.concat(seen, ' ') .. ' ' .. auto(1) .. ' ' .. auto(2) .. ' ' .. #mock.refusals()
+seen = {}
+TogglePetAutocast(4)
 local toggled = auto(1) .. ' ' .. tostring(select(6, GetPetActionInfo(4)))
 TogglePetAutocast(4)
 local back = auto(1)
-C_SpellBook.ToggleSpellBookItemAutoCast(3, Pet)
-C_SpellBook.ToggleSpellBookItemAutoCast(2, Enum.SpellBookSpellBank.Player)
-C_SpellBook.SetSpellBookItemAutoCastEnabled(2, Pet, true)
-local toggles = table.concat(seen, ' ') .. ' ' .. auto(2) .. ' ' .. auto(3)
+local toggles = table.concat(seen, ' ')
 C_SpellBook.PickupSpellBookItem(2, Pet)
 local cursor = table.concat({ GetCursorInfo() }, ' ')
 ClearCursor()
@@ -189,7 +205,7 @@ mock.setPet(wolf, { hunter = false, icon = 136218 })
 local demon = select(2, C_SpellBook.HasPetSpells()) .. ' ' .. GetPetIcon()
 seen = {}
 mock.setPet(nil)
-return without, default, summoned, given, n .. ' ' .. token, fields, others, autos, toggled, back,
+return without, default, summoned, given, n .. ' ' .. token, fields, others, autos, forbidden, toggled, back,
     toggles, cursor, demon, table.concat(seen, ' '), select('#', C_SpellBook.HasPetSpells())",
     );
     assert_eq!(
@@ -204,13 +220,61 @@ return without, default, summoned, given, n .. ' ' .. token, fields, others, aut
             "Bite Rank 2 132270 true 3 24604 24604 \
              |cff71d5ff|Hspell:17253:0|h[Bite]|h|r nil true 132278",
             "true/true true/false false/false",
+            "MyAddon:ToggleSpellBookItemAutoCast() \
+             MyAddon:SetSpellBookItemAutoCastEnabled() true/true true/false 2",
             "true/false false",
             "true/true",
-            "PET_BAR_UPDATE PET_BAR_UPDATE PET_BAR_UPDATE true/true false/false",
+            "PET_BAR_UPDATE PET_BAR_UPDATE",
             "petaction 2649 2",
             "DEMON 136218",
             "PET_BAR_UPDATE SPELLS_CHANGED",
             "0",
+        ]
+    );
+}
+
+/// Blizzard's (secure) code switches the pet's spellbook autocast, in
+/// combat too: where the spell may autocast, in the pet's bank only, on the
+/// bar as well (decision T600).
+#[test]
+fn secure_code_switches_the_pet_books_autocast() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "local wolf = mock.spawnUnit({ name = 'Fang', level = 19, reaction = 'friendly' })
+mock.setPet(wolf, {
+    actions = { [4] = { spell = 17253, name = 'Bite', icon = 132278, autocast = true } },
+    spells = {
+        { spell = 17253, name = 'Bite', icon = 132278, autocast = true },
+        { spell = 2649, name = 'Growl', icon = 132270, autocast = false },
+        { spell = 24604, name = 'Furious Howl', icon = 132203 },
+    },
+})
+mock.player:enterCombat()",
+    );
+    let r = run_secure(
+        &mut vm,
+        "local seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('PET_BAR_UPDATE')
+f:RegisterEvent('ADDON_ACTION_FORBIDDEN')
+f:SetScript('OnEvent', function(_, e) seen[#seen + 1] = e end)
+local Pet = Enum.SpellBookSpellBank.Pet
+local function auto(i) local a, e = C_SpellBook.GetSpellBookItemAutoCast(i, Pet) return tostring(a) .. '/' .. tostring(e) end
+C_SpellBook.ToggleSpellBookItemAutoCast(1, Pet)
+local toggled = auto(1) .. ' ' .. tostring(select(6, GetPetActionInfo(4)))
+C_SpellBook.ToggleSpellBookItemAutoCast(3, Pet)
+C_SpellBook.ToggleSpellBookItemAutoCast(2, Enum.SpellBookSpellBank.Player)
+C_SpellBook.SetSpellBookItemAutoCastEnabled(2, Pet, true)
+C_SpellBook.SetSpellBookItemAutoCastEnabled(1, Pet, true)
+return toggled, auto(1) .. ' ' .. auto(2) .. ' ' .. auto(3), table.concat(seen, ' ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "true/false false",
+            "true/true true/true false/false",
+            "PET_BAR_UPDATE PET_BAR_UPDATE PET_BAR_UPDATE",
         ]
     );
 }
