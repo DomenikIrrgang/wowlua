@@ -2482,6 +2482,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Frames of the same level (decision T587)
 - The mouse wheel over frames (decision T588)
 - Top-level frames (decision T586)
+- Found with SuuUI on WoW Forever (2026-11-06)
 
 ## In-game regressions
 

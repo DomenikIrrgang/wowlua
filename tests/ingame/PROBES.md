@@ -1366,3 +1366,181 @@ line in the chat, one after another.
     blue, "3 2": a top-level frame clicked is not raised. wowlua now does
     the same (it raised it: red).
 16. `/run R:Hide()`
+
+## Found with SuuUI on WoW Forever (2026-11-06)
+
+Where SuuUI's tests passed in wowlua and the game did otherwise (found in
+game, from SuuUI's error log and screenshots, 70755). Each is a gap in the
+engine to close, with the steps that would record the game's answer.
+
+1. **A frame anchored before its parent had a place is never placed.**
+   SuuUI's bags: the window's Bags/Bank switch, its toggles and their
+   labels, anchored (through a row frame) while the window had no position
+   yet, were shown (`IsShown`, `IsVisible` true) but `GetLeft` and `GetTop`
+   gave nil, and nothing was drawn, on the first open after a reload. On
+   the second open (the row anchored again) they had a place. wowlua: the
+   row placed and drawn at once. Steps:
+   - `/run P=CreateFrame("Frame",nil,UIParent) P:SetSize(200,30) R=CreateFrame("Frame",nil,P) R:SetSize(1,30) C=CreateFrame("Frame",nil,R) C:SetSize(40,20) C:SetPoint("LEFT",R,"LEFT",50,0) local t=C:CreateTexture() t:SetAllPoints() t:SetColorTexture(1,0,0)`
+   - `/run R:SetPoint("TOPLEFT",P,"TOPLEFT") P:SetPoint("CENTER") print("C", C:GetLeft(), C:GetTop())`
+
+     Seen: numbers, or nil and no red box? wowlua: numbers. Seen: (to do)
+   - `/run R:ClearAllPoints() R:SetPoint("TOPLEFT",P,"TOPLEFT") print("C again", C:GetLeft())`, then `/run P:Hide()`
+2. **Text measures taller in the game.** SuuUI's own fonts (Figtree
+   caption 11, label 12, body 13) wrap and stand taller in the game than
+   wowlua measures them: two lines of a toy's description ran into the
+   card's bottom row, and the character window's skill details (the game's
+   side pane rows given SuuUI's font) ran past the window. wowlua: both
+   fitted. Steps (the numbers to compare with the engine's):
+   - `/run local f=UIParent:CreateFontString(nil,"OVERLAY") f:SetFont("Interface\\AddOns\\SuuUI\\Media\\Fonts\\Figtree-Medium.ttf",11,"") f:SetWidth(160) f:SetText("Throw a handful into the campfire, transforming it into a violet flame.") print(f:GetStringHeight(), f:GetNumLines(), f:GetUnboundedStringWidth())`
+
+     Seen: (to do)
+3. **A text's height can be a secret.** In a post-hook of a character
+   window side pane's `LayoutRows` (Skills, Reputation or PvP rank), a
+   wrapped row's `Label:GetStringHeight()` was a secret number ("attempt to
+   perform numeric conversion on a secret number value (execution tainted
+   by 'SuuUI')"). wowlua: a plain number. Which pane and text: unknown; SuuUI
+   now reads it through `secret.asNumber`.
+4. **`SetPassThroughButtons` on an addon's own button, in combat.** SuuUI's
+   world map made a map pin (its own `Button`) while the map opened in a
+   fight and set `SetPassThroughButtons("RightButton")`: "Blocked in combat:
+   UNKNOWN()". The minimap's and the guild window's code had found the same
+   before. To check in wowlua: whether the engine blocks it in combat
+   (SuuUI's tests never did it in combat, so nothing showed).
+5. **Using a bag item from an addon-made item button.** SuuUI's bags make
+   their slots with `CreateFrame("ItemButton", name, parent,
+   "ContainerFrameItemButtonTemplate")` from SuuUI's code. A right-click on
+   one runs the template's `ContainerFrameItemButton_OnClick`, which calls
+   the button's mixin methods (`self:GetBagID()`): written as SuuUI's while
+   it made the button, they taint the click, and `C_Container.
+   UseContainerItem` was refused ("Blocked in combat: UseContainerItem()",
+   and out of combat "Forbidden: UseContainerItem()"). In SuuUI's log since
+   0.6.4. To check in wowlua: whether a click on an addon-made container
+   item button taints the use there too (SuuUI's bag tests click items
+   without an error).
+6. **Tagged mobs.** wowlua answers `UnitIsTapDenied` with a fixed `false`
+   (a blank, `crates/wowlua-engine/src/blanks.rs`), and no mock tags a mob
+   for someone else, so SuuUI's grey for a mob another player tagged was
+   tested with a stand-in. In the game the tag changes with `UNIT_FACTION`
+   (ElvUI's oUF redraws on it), a tagger's death too. Steps (another
+   player's mob targeted, then them dying or leaving):
+   - `/run print("tap", UnitIsTapDenied("target"), UnitPlayerControlled("target"))`
+   - `/run local f=CreateFrame("Frame") f:RegisterUnitEvent("UNIT_FACTION","target") f:SetScript("OnEvent",function(_,e,u) print(e,u,UnitIsTapDenied("target")) end)`
+
+     Seen: does `UNIT_FACTION` come when the tag goes? (to do)
+7. **The pet journal.** wowlua's client has no pets: `C_PetJournal` is
+   fixed to "none" (`crates/wowlua-engine/src/collections.rs`: no
+   `GetPetInfoByIndex`, no `mock.setPets`), so SuuUI's Pets tab was tested
+   with a stand-in journal. WoW Forever has companion pets with fanfare
+   gifts. To record (a character with a few pets, one a gift if possible):
+   - `/run local n,o=C_PetJournal.GetNumPets() print(n,o,C_PetJournal.GetNumPetsNeedingFanfare())`
+   - `/run print(C_PetJournal.GetPetInfoByIndex(1))`
+   - `/run local _,s=C_PetJournal.GetPetInfoByIndex(1) print(C_PetJournal.GetPetModelSceneInfoBySpeciesID(s), select(12, C_PetJournal.GetPetInfoBySpeciesID(s)))`
+
+     Seen: (to do)
+8. **Pet favourites and the locked journal.** Recorded in game
+   (2026-11-07, 70755): `C_PetJournal.SetFavorite(petID, v)` takes 1 or 0
+   (also "1"); `true`, `false` or a method call raise
+   `Usage: SetFavorite(petID, bool)`, as does a nil petID. While the
+   account is logged in on two clients, `C_PetJournal.IsJournalUnlocked()`
+   is false and `SetFavorite` takes the call without an error and changes
+   nothing (`PetIsFavorite` stays false). Mount and toy favourites are not
+   locked then: `C_MountJournal.GetIsFavorite(i)` gave `false true` and
+   `C_ToyBox.SetIsFavorite` changed the toy. For wowlua's pet journal when it
+   comes (item 7): numbers only, and a lock a test can set. The steps (a pet
+   summoned):
+   - `/run local g=C_PetJournal.GetSummonedPetGUID() print(C_PetJournal.IsJournalUnlocked(), pcall(C_PetJournal.SetFavorite, g, 1))`
+   - `/run local g=C_PetJournal.GetSummonedPetGUID() print(pcall(C_PetJournal.SetFavorite, g, true))`
+   - `/run print(C_PetJournal.PetIsFavorite(C_PetJournal.GetSummonedPetGUID()))`
+
+     Seen (two clients): `false true`, then `false Usage: SetFavorite(petID, bool)`, then `false`.
+9. **A bag's family.** wowlua's `C_Container.GetContainerNumFreeSlots(bag)`
+   answers family 0 for every bag (`crates/wowlua-engine/src/character.rs`),
+   so SuuUI's sort with a profession bag (a leatherworking bag in the
+   reagent slot, found in game: the sort put other reagents in it and the
+   game refused) was tested with a faked family. Steps (a profession bag in
+   a bag slot or the reagent slot):
+   - `/run for b=1,5 do print(b, C_Container.GetContainerNumFreeSlots(b)) end`
+   - `/run for b=1,5 do local s=C_Container.ContainerIDToInventoryID(b) local id=GetInventoryItemID("player",s) print(b, id, id and C_Item.GetItemFamily(id)) end`
+
+     Seen: the family per bag, and which bags the reagent slot takes? (to do)
+10. **Secret group finder results.** Forever handed a search result's
+    `activityIDs` over as a secret (SuuUI's ForeverLFG on
+    `LFG_LIST_SEARCH_RESULT_UPDATED`: `bad argument #1 to 'ipairs' (table
+    expected, got secret)`, 2026-11-06); wowlua's results have no secrets.
+    Steps (after a search in the group finder):
+    - `/run local _,ids=C_LFGList.GetSearchResults() local i=C_LFGList.GetSearchResultInfo(ids[1]) print(issecretvalue(i.activityIDs), issecretvalue(i.numMembers), issecretvalue(i.comment), issecretvalue(i.leaderName))`
+
+      Seen: which fields are secret, and when (in combat, an update)? (to do)
+11. **Combat blocks wowlua let through.** SuuUI's Collections window holds
+    secure buttons, so it is protected. Opened in a fight through a secure
+    toggle, its OnShow moved a frame its secure buttons hang on
+    (`ClearAllPoints`, `SetPoint`): the game blocked both, wowlua's tests
+    did not. Escape closed it through `UISpecialFrames` (tainted by addon
+    entries): the game blocked its `Hide()`, wowlua's tests did not. Fixed in
+    SuuUI (moved only out of combat; Escape bound through a secure handler).
+    To check: whether wowlua restricts a frame that protected frames are
+    anchored to, and whether `CloseWindows` runs tainted when an addon put
+    its window in `UISpecialFrames`. Steps (out of combat, then in a fight):
+    - `/run W=CreateFrame("Frame","ProbeWin",UIParent) W:SetSize(100,100) W:SetPoint("CENTER") A=CreateFrame("Frame",nil,W) A:SetSize(10,10) A:SetPoint("TOP") B=CreateFrame("Button",nil,W,"SecureActionButtonTemplate") B:SetSize(10,10) B:SetPoint("TOP",A,"BOTTOM") tinsert(UISpecialFrames,"ProbeWin")`
+    - in a fight: `/run print(pcall(A.ClearAllPoints, A))`, then press Escape
+
+      Seen: blocked messages for `ClearAllPoints` and `ProbeWin:Hide()`? (to do)
+12. **An item put on an empty slot of its own bag.** In wowlua,
+    `C_Container.PickupContainerItem(0, 1)` then `PickupContainerItem(0, 3)`
+    (slot 3 empty) empties the cursor but leaves the item in slot 1, also
+    frames later; in the game it moves to slot 3. SuuUI's drag-and-drop test
+    (2026-11-07) checks the slots' calls instead. Steps (an item in backpack
+    slot 1, slot 3 empty):
+    - `/run C_Container.PickupContainerItem(0,1) C_Container.PickupContainerItem(0,3)`
+    - `/run print(C_Container.GetContainerItemID(0,1), C_Container.GetContainerItemID(0,3))`
+
+      Seen: nil and the item's ID (moved); wowlua: the item's ID and nil. (to confirm)
+13. **A hunter pet's happiness.** wowlua's pets follow classic's UI code,
+    unverified: `C_PetInfo.GetPetHappiness()` gives the mood (1 unhappy, 2
+    content, 3 happy), the damage in percent (75, 100, 125) and a loyalty
+    rate of 0, for any pet; `C_PetInfo.GetPetLoyalty()` a loyalty name.
+    SuuUI's pet frame shows the mood (2026-11-07) and keeps the last one if
+    it reads secret. To record: the values, a non-hunter's pet, and secrets
+    in a fight. Steps (a hunter, the pet out, out of combat):
+    - `/run print(C_PetInfo.GetPetHappiness())`
+    - `/run print(C_PetInfo.GetPetLoyalty())`
+    - in a fight: `/run local h,d,r=C_PetInfo.GetPetHappiness() print(issecretvalue(h), issecretvalue(d), issecretvalue(r))`
+    - as a warlock with a demon out: `/run print(C_PetInfo.GetPetHappiness())`
+
+      Seen: (to do)
+14. **Which spells' auras are never secret.** The game's aura container
+    applies spell-ID filters (`includeSpellIDs`, `excludeSpellIDs`) to a
+    debuff on a unit you can assist only when
+    `C_Secrets.GetSpellAuraSecrecy(spellId)` is `Enum.SecrecyLevel.NeverSecret`
+    (`Blizzard_AuraContainerUtil.lua`, `CanApplyIdentityCandidateFilters`:
+    "allows noisy debuffs (Exhaustion/Sated) to be filtered out on friendly
+    units"). wowlua answers ContextuallySecret for every spell, so it never
+    filters a friendly unit's debuffs, and a test can't make one never secret.
+    SuuUI's aura filters (2026-11-08) hide Forbearance, Weakened Soul,
+    Boosted Rest… on party and raid frames only if they are. Steps (anywhere):
+    - `/suu probe aurasecrecy` (SuuUI's dev build: prints each filter spell's level, saves `SuuUIProbe.auraSecrecy`)
+    - or `/run for _,id in ipairs({25771,6788,15007,11196,8326,26013,1229451}) do print(id, C_Secrets.GetSpellAuraSecrecy(id)) end` (compare with `Enum.SecrecyLevel`)
+
+      Seen (1.60.1, 2026-11-08): all 11 of SuuUI's list contextually secret
+      (Forbearance, Weakened Soul, Resurrection Sickness, Recently Bandaged
+      11196/1305047, Ghost, Deserter, Recently Dropped Flag ×3, Boosted
+      Rest), none never secret. Also seen: `C_Spell.GetVisibilityInfo(id,
+      RaidInCombat)` gives `false false false` for each (and for Corrosive
+      Poison 3396): no raid-frame rules; `GetDebuffDataByIndex("player", i,
+      "HARMFUL|RAID_IN_COMBAT")` returned nothing with Forbearance and
+      Corrosive Poison on (out of combat); `"HARMFUL|DISPELLABLE"` returned
+      Corrosive Poison. wowlua to match: never-secret only where the game
+      says, these visibility answers, and the RAID_IN_COMBAT and DISPELLABLE
+      filter words.
+15. **SuuUI's character window tab label over its marker.** In the game the
+    chosen side tab's label ("Stats", on Blizzard's `PaperDollSidebarTab1`)
+    draws over SuuUI's marker fill, made after the tabs at the same level
+    (6); wowlua draws the marker on top, as T587 (made later, on top;
+    probed on WoW Forever 2026-11-07 for plain frames) says. Something else
+    decides in the game: the strata, a parent's level, the label's draw
+    layer, or the buttons' level set after the marker was made. Steps (the
+    character window open on Stats; hover the tab, then the marker's edge):
+    - `/run local t=PaperDollSidebarTab1 local p=t:GetParent() print(t:GetFrameStrata(), t:GetFrameLevel(), p and p:GetName(), p and p:GetFrameLevel(), t:GetFontString() and t:GetFontString():GetDrawLayer())`
+    - hover the marker: `/run local f=GetMouseFoci()[1] local p=f and f:GetParent() print(f and f:GetName(), f and f:GetFrameStrata(), f and f:GetFrameLevel(), p and p:GetName(), p and p:GetFrameLevel())`
+
+      Seen: (to do)
