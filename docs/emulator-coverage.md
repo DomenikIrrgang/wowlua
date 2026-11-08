@@ -1726,7 +1726,7 @@ page changes only when a rule is added, removed or reworded.
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): The file a texture shows, by ID, as `GetTexture()` and `GetTextureFileID()` answer: one value.
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): `EditBox:GetTextInsets()`: what `SetTextInsets` set, else none (unverified: a fresh edit box's, not recorded).
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): `Minimap:GetZoomLevels()`: 6 (zooms 0 to 5).
-- [measures.rs](../crates/wowlua-engine/src/measures.rs): `AddMaskTexture(mask)`: added once (unverified: a second add).
+- [measures.rs](../crates/wowlua-engine/src/measures.rs): `AddMaskTexture(mask)`: added once (unverified: a second add); a fourth is an error (decision T596, as WoW Forever wo...
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): `GetHorizTile()`, `GetVertTile()`: what `SetHorizTile`/`SetVertTile` set, off at first (unverified: a fresh texture's...
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): Whether a texture snaps to the pixel grid: what `SetSnapToPixelGrid` set, else on (Blizzard's code only ever turns it...
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): `SetVerticalScroll(offset)` / `SetHorizontalScroll(offset)`: the offset kept; a change runs `OnVerticalScroll(offset)...
@@ -2495,6 +2495,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Top-level frames (decision T586)
 - Found with SuuUI on WoW Forever (2026-11-06)
 - The pet's spellbook (decision T599)
+- A texture's masks (decision T596)
 
 ## In-game regressions
 
