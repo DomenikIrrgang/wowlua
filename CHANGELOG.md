@@ -48,6 +48,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Clearing texture artwork with file ID `0` no longer draws missing-texture placeholders.
 - A frame's `OnUpdate` follows `SetOnUpdateMode`: `Enum.OnUpdateMode.Disabled` stops it, `RunWhenVisibleOnce` and `RunOnce` run it once, and `RunOnce` and `RunAlways` run it while the frame is hidden too. Before, every shown frame's `OnUpdate` ran each frame, whatever its mode.
 - An aura filter with a negated category, such as `HARMFUL|!CROWD_CONTROL`, no longer matches every aura, so rows split by a category and its negation show each aura once. `unit:applyAura` takes `crowdControl`, `raidInCombat`, `important`, `bigDefensive` and `externalDefensive` to put an aura in those filters, and `DISPELLABLE` finds auras with a dispel type.
+- A texture tiled with `SetHorizTile(true)` or `SetVertTile(true)` is drawn as in the game: set with `SetTexture(file, "REPEAT", "REPEAT")` its image repeats at its own size across the texture, and without `"REPEAT"` the image shows once and its edge pixels stretch over the rest. Before, the image was stretched once over the whole texture. This holds for a status bar's fill texture too.
 
 ## 0.13.8 (2026-11-01)
 

@@ -605,6 +605,22 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   shadows, each line's baseline its height times the font's ascent over
   its ascent and descent (as the client's page number sits between the
   action bar's arrows).
+- **Tiling** (decision T598): a texture of a file (not an atlas) tiled on
+  an axis (`SetHorizTile(true)`, `SetVertTile(true)`, XML `horizTile`,
+  `vertTile`) draws its image at its own size on that axis, its pixels
+  each the region's effective scale, from its left (top) texture
+  coordinate on, as the wrap mode `SetTexture(file, horizontal, vertical)`
+  set for that axis says: `"REPEAT"` the image again and again (the last
+  copy cut); `"CLAMP"` (the default) the image once, then its edge column
+  (row) stretched over the rest, as the client's sampler clamps the
+  coordinates past 1; `"MIRROR"` every other copy turned. The other axis
+  is drawn as without tiling. A status bar's fill texture tiles the same
+  way over the part its value fills. A turned texture, or one whose
+  texture coordinates are not a rectangle, is drawn stretched as without
+  tiling. Unverified: `"MIRROR"`; `"CLAMPTOBLACK"`,
+  `"CLAMPTOBLACKADDITIVE"` and `"CLAMPTOWHITE"`, taken as `"CLAMP"`; where
+  `SetTexCoord`'s other end and a reversed status bar's fill place the
+  copies.
 - **Models** (decision T318): each model item is drawn into a texture of
   its rectangle's size with a depth buffer, then into the UI pass in its
   place (premultiplied alpha): the actors posed on the CPU at the

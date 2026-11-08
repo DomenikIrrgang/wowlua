@@ -23,7 +23,7 @@ use std::collections::HashMap;
 
 pub use wowlua_casc::Rgba;
 pub use wowlua_casc::display::Display;
-use wowlua_engine::scene::{Blend, Image, Item, ModelSource, Rect, Scene};
+use wowlua_engine::scene::{Blend, Image, Item, ModelSource, Rect, Scene, Wrap};
 
 /// Where images and fonts come from: the addon's folder, the user's
 /// installation.
@@ -165,6 +165,109 @@ fn axis_pieces(
         ));
     }
     out
+}
+
+/// One axis of a plain image tiled (`SetHorizTile`, `SetVertTile`;
+/// decision T598): from the texture coordinate `from` on (`dir` +1 or -1,
+/// a flipped texture's -1), one whole image each `tile` pixels across
+/// `len`, as (destination start, length, source start, source end)
+/// pieces each within the image. Past the image's edge it repeats
+/// (`Repeat`), mirrors every other copy (`Mirror`) or holds its edge
+/// texels (`Clamp`: `texel` is half a texel, the edge texel's center that
+/// far in), one piece for all of that.
+fn tile_pieces(
+    start: f32,
+    len: f32,
+    from: f32,
+    dir: f32,
+    tile: f32,
+    wrap: Wrap,
+    texel: f32,
+) -> Vec<(f32, f32, f32, f32)> {
+    let to = from + dir * len / tile.max(f32::MIN_POSITIVE);
+    // Too small a tile, or too many copies, to draw piece by piece.
+    if tile <= 0.5 || (wrap != Wrap::Clamp && len / tile >= 512.0) {
+        return vec![(start, len, from, to)];
+    }
+    let mut out: Vec<(f32, f32, f32, f32)> = Vec::new();
+    let (mut at, mut u) = (0.0f32, from);
+    while at < len - 0.01 {
+        // The next whole coordinate the way it runs, past this one.
+        let next = if dir > 0.0 {
+            u.floor() + 1.0
+        } else {
+            u.ceil() - 1.0
+        };
+        let whole = (next - u).abs() * tile;
+        let (l, end) = if whole <= len - at {
+            (whole, next)
+        } else {
+            (len - at, u + dir * (len - at) / tile)
+        };
+        // Its copy's number: 0 the image itself.
+        let k = ((u + end) / 2.0).floor();
+        let (s0, s1) = match wrap {
+            Wrap::Repeat => (u - k, end - k),
+            Wrap::Mirror if k.rem_euclid(2.0) == 1.0 => (1.0 - (u - k), 1.0 - (end - k)),
+            Wrap::Mirror => (u - k, end - k),
+            Wrap::Clamp if k == 0.0 => (u, end),
+            Wrap::Clamp if k > 0.0 => (1.0 - texel, 1.0 - texel),
+            Wrap::Clamp => (texel, texel),
+        };
+        // The edge held on: one piece.
+        match out.last_mut() {
+            Some(p) if s0 == s1 && p.2 == p.3 && p.2 == s0 => p.1 += l,
+            _ => out.push((start + at, l, s0, s1)),
+        }
+        at += l;
+        u = end;
+        // Held at the edge to the end: no need to walk the copies.
+        if wrap == Wrap::Clamp && s0 == s1 && (k > 0.0) == (dir > 0.0) && at < len - 0.01 {
+            if let Some(p) = out.last_mut() {
+                p.1 += len - at;
+            }
+            break;
+        }
+    }
+    out
+}
+
+/// A plain image (a file, not an atlas) tiled on an axis, drawn at
+/// `unit` pixels per image pixel in `r`: its pieces, as `tile_pieces` cuts
+/// each axis, the other axis's coordinates as they are. The copies start
+/// at the quad's left (top) texture coordinate; the right (bottom) one
+/// only gives the direction. None to draw it as one quad: not tiled,
+/// turned, or with texture coordinates that are not a rectangle (decision
+/// T598).
+fn plain_tile_pieces(
+    q: &wowlua_engine::scene::Quad,
+    r: Rect,
+    unit: f32,
+    size: (u32, u32),
+) -> Option<Vec<(Rect, [f32; 4])>> {
+    let tc = q.texcoord;
+    let upright = tc[0] == tc[2] && tc[4] == tc[6] && tc[1] == tc[5] && tc[3] == tc[7];
+    let image = matches!(q.image, Image::File(_) | Image::FileId(_));
+    if !(q.tile.0 || q.tile.1) || q.rotation != 0.0 || !upright || !image {
+        return None;
+    }
+    let axis = |start: f32, len: f32, (a, b): (f32, f32), tiled: bool, wrap: Wrap, px: u32| {
+        if !tiled {
+            return vec![(start, len, a, b)];
+        }
+        let px = px.max(1) as f32;
+        let dir = if b < a { -1.0 } else { 1.0 };
+        tile_pieces(start, len, a, dir, px * unit, wrap, 0.5 / px)
+    };
+    let xs = axis(r.x, r.w, (tc[0], tc[4]), q.tile.0, q.wrap.0, size.0);
+    let ys = axis(r.y, r.h, (tc[1], tc[3]), q.tile.1, q.wrap.1, size.1);
+    let mut out = Vec::with_capacity(xs.len() * ys.len());
+    for &(y, h, v0, v1) in &ys {
+        for &(x, w, u0, u1) in &xs {
+            out.push((Rect { x, y, w, h }, [u0, u1, v0, v1]));
+        }
+    }
+    Some(out)
 }
 
 /// A quad's rectangle on whole pixels, as the client draws textures that
@@ -978,6 +1081,15 @@ impl Renderer {
                         Some(out)
                     });
                     let tex = self.texture(image, assets);
+                    // A plain image tiled: its copies.
+                    let pieces = pieces.or_else(|| {
+                        if own.is_some() || q.atlas.is_some() {
+                            return None;
+                        }
+                        let t = &self.textures[tex];
+                        let r = snapped(q, s(q.rect));
+                        plain_tile_pieces(q, r, q.unit * scale, (t.width, t.height))
+                    });
                     // The mask's image and its region (the build's atlas's
                     // where the assets know it).
                     let (mask, mask_rect, region) = match q.masks.first() {
@@ -1541,6 +1653,114 @@ pub fn decode_png(bytes: &[u8]) -> Result<Rgba, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A tiled axis: one copy per tile; past the image's edge `Repeat`
+    /// starts it again, `Mirror` turns every other copy, `Clamp` holds the
+    /// edge texel in one piece (decision T598).
+    #[test]
+    fn tiles_repeat_mirror_or_hold_the_edge() {
+        let cut = |wrap| tile_pieces(5.0, 25.0, 0.0, 1.0, 10.0, wrap, 0.05);
+        assert_eq!(
+            cut(Wrap::Repeat),
+            [
+                (5.0, 10.0, 0.0, 1.0),
+                (15.0, 10.0, 0.0, 1.0),
+                (25.0, 5.0, 0.0, 0.5)
+            ]
+        );
+        assert_eq!(
+            cut(Wrap::Mirror),
+            [
+                (5.0, 10.0, 0.0, 1.0),
+                (15.0, 10.0, 1.0, 0.0),
+                (25.0, 5.0, 0.0, 0.5)
+            ]
+        );
+        assert_eq!(
+            cut(Wrap::Clamp),
+            [(5.0, 10.0, 0.0, 1.0), (15.0, 15.0, 0.95, 0.95)]
+        );
+        // Shorter than a copy: part of the image, either way.
+        assert_eq!(
+            tile_pieces(0.0, 4.0, 0.0, 1.0, 10.0, Wrap::Clamp, 0.05),
+            [(0.0, 4.0, 0.0, 0.4)]
+        );
+        // From halfway in: the rest of the copy, then whole ones.
+        assert_eq!(
+            tile_pieces(0.0, 15.0, 0.5, 1.0, 10.0, Wrap::Repeat, 0.05),
+            [(0.0, 5.0, 0.5, 1.0), (5.0, 10.0, 0.0, 1.0)]
+        );
+        // Flipped: the coordinates run back, the edge held is the first
+        // texel.
+        assert_eq!(
+            tile_pieces(0.0, 25.0, 1.0, -1.0, 10.0, Wrap::Clamp, 0.05),
+            [(0.0, 10.0, 1.0, 0.0), (10.0, 15.0, 0.05, 0.05)]
+        );
+        // Thousands of copies held at the edge: still two pieces.
+        assert_eq!(
+            tile_pieces(0.0, 1e6, 0.0, 1.0, 10.0, Wrap::Clamp, 0.05).len(),
+            2
+        );
+    }
+
+    /// A plain image tiled across a quad: copies the image's pixel size
+    /// times the unit on the tiled axis, the other axis as it is; atlases,
+    /// turned or untiled quads are drawn whole.
+    #[test]
+    fn plain_tiled_quads_are_cut_into_copies() {
+        let mut q = wowlua_engine::scene::Quad {
+            widget: 0,
+            rect: Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 50.0,
+                h: 10.0,
+            },
+            image: Image::FileId(1),
+            texcoord: [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0],
+            atlas: None,
+            atlas_texcoord: [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0],
+            color: [1.0; 4],
+            blend: Blend::Blend,
+            desaturated: false,
+            rotation: 0.0,
+            tile: (true, false),
+            wrap: (Wrap::Repeat, Wrap::Clamp),
+            clip: None,
+            masks: Vec::new(),
+            unit: 1.0,
+            snap: true,
+            gradient: None,
+        };
+        let r = q.rect;
+        let rects = |p: Option<Vec<(Rect, [f32; 4])>>| {
+            p.expect("cut")
+                .into_iter()
+                .map(|(r, tc)| (r.x, r.w, tc))
+                .collect::<Vec<_>>()
+        };
+        // 16 pixels wide at 2 pixels a pixel: 32 per copy.
+        assert_eq!(
+            rects(plain_tile_pieces(&q, r, 2.0, (16, 8))),
+            [
+                (0.0, 32.0, [0.0, 1.0, 0.0, 1.0]),
+                (32.0, 18.0, [0.0, 0.5625, 0.0, 1.0])
+            ]
+        );
+        q.wrap.0 = Wrap::Clamp;
+        assert_eq!(
+            rects(plain_tile_pieces(&q, r, 2.0, (16, 8))),
+            [
+                (0.0, 32.0, [0.0, 1.0, 0.0, 1.0]),
+                (32.0, 18.0, [0.96875, 0.96875, 0.0, 1.0])
+            ]
+        );
+        q.rotation = 1.0;
+        assert!(plain_tile_pieces(&q, r, 2.0, (16, 8)).is_none());
+        q.rotation = 0.0;
+        q.tile = (false, false);
+        assert!(plain_tile_pieces(&q, r, 2.0, (16, 8)).is_none());
+    }
 
     /// Each level halves the one above (odd sizes round down, never below
     /// one) and averages its 2x2 texels.

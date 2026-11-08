@@ -987,6 +987,62 @@ fn texture_gradients() {
     );
 }
 
+/// A tiled texture's quad carries its tiling and `SetTexture`'s wrap
+/// modes, any case, `Clamp` by default (a status bar's fill too; decision
+/// T598).
+#[test]
+fn tiled_textures_carry_their_wrap_modes() {
+    use wowlua_engine::scene::{Image, Item, Wrap};
+    let mut vm = vm("camelot");
+    run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+f:SetSize(100, 20)
+f:SetPoint('CENTER')
+local t = f:CreateTexture(nil, 'ARTWORK')
+t:SetAllPoints()
+t:SetTexture('Interface\\\\Tiled\\\\Repeat', 'repeat', 'MIRROR')
+t:SetHorizTile(true)
+local c = f:CreateTexture(nil, 'ARTWORK')
+c:SetAllPoints()
+c:SetTexture('Interface\\\\Tiled\\\\Clamp', 'CLAMPTOBLACK')
+c:SetVertTile(true)
+local b = CreateFrame('StatusBar', nil, UIParent)
+b:SetSize(100, 20)
+b:SetPoint('TOP')
+b:SetMinMaxValues(0, 1)
+b:SetValue(0.5)
+b:SetStatusBarTexture('Interface\\\\Tiled\\\\Bar')
+b:GetStatusBarTexture():SetHorizTile(true)",
+    );
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let quad = |path: &str| {
+        scene
+            .items
+            .iter()
+            .find_map(|i| match i {
+                Item::Quad(q) if q.image == Image::File(path.into()) => Some(q.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{path} drawn"))
+    };
+    let r = quad("Interface\\Tiled\\Repeat");
+    assert_eq!(
+        (r.tile, r.wrap),
+        ((true, false), (Wrap::Repeat, Wrap::Mirror))
+    );
+    let c = quad("Interface\\Tiled\\Clamp");
+    assert_eq!(
+        (c.tile, c.wrap),
+        ((false, true), (Wrap::Clamp, Wrap::Clamp))
+    );
+    let b = quad("Interface\\Tiled\\Bar");
+    assert_eq!(
+        (b.tile, b.wrap),
+        ((true, false), (Wrap::Clamp, Wrap::Clamp))
+    );
+}
+
 /// An atlas inline in text (`|A:name:h:w|a`) is drawn where it stands.
 #[test]
 fn inline_atlases_are_drawn_in_text() {
