@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,187 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,193 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -60,7 +60,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 769 | 100 | 1,233 | 0 |
+| `(globals)` | 2,102 | 770 | 99 | 1,233 | 0 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -346,15 +346,15 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,179 | 1,671 | 436 | 5,068 | 4 |
+| **All** | 7,179 | 1,672 | 435 | 5,068 | 4 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
 | Blizzard's API documentation | 5,114 | 1,058 | 353 | 3,699 | 4 |
-| the client's other C functions (`/stdtest inventory`) | 2,065 | 613 | 83 | 1,369 | 0 |
-| the engine's own, in neither list | 15 | 14 | 0 | 1 | 0 |
+| the client's other C functions (`/stdtest inventory`) | 2,065 | 614 | 82 | 1,369 | 0 |
+| the engine's own, in neither list | 16 | 15 | 0 | 1 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
 functions in the client's inventory, its deprecation files' wrappers of the `C_`
@@ -363,6 +363,11 @@ functions); the engine's natives stand in for them until that code loads:
 `GetActionText`, `GetActionTexture`, `GetMoneyString`, `HasAction`,
 `IsAttackAction`, `IsPlayerSpell`, `IsUsableAction`, `SecondsToClock`,
 `SecondsToTime`, `SecondsToTimeAbbrev`, `SendChatMessage`.
+
+The engine's own functions are defined in camelot's environment though the
+client's inventory lacks them, so an addon's call of one works in `wowlua test`
+and fails in the game (behaviour the engine shares between flavors, or protected
+functions it adds): `HasPetSpells`.
 
 The modules that answer, by how many functions and methods:
 
@@ -375,7 +380,7 @@ The modules that answer, by how many functions and methods:
 | `leftovers2` | fill-in | 388 |
 | `collections` | fill-in | 377 |
 | `social` | fill-in | 373 |
-| `recorded` | recorded | 320 |
+| `recorded` | recorded | 319 |
 | `questinfo` | fill-in | 316 |
 | `systeminfo` | fill-in | 308 |
 | `iteminfo` | fill-in | 228 |
@@ -420,11 +425,11 @@ The modules that answer, by how many functions and methods:
 | `camera` | model | 22 |
 | `trainer` | model | 22 |
 | `models` | model | 20 |
+| `pets` | model | 20 |
 | `taxi` | model | 20 |
 | `party` | model | 19 |
 | `widgetdata` | recorded | 19 |
 | `input` | model | 18 |
-| `pets` | model | 18 |
 | `replies` | model | 18 |
 | `movement` | model | 16 |
 | `traits` | model | 16 |
@@ -844,7 +849,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,187 rules unverified: each rests on Blizzard's
+The engine's code marks 1,193 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1176,17 +1181,21 @@ page changes only when a rule is added, removed or reworded.
 
 - [coverage.rs](../crates/wowlua-engine/src/coverage.rs): A fill-in module's answer, from the documentation, Blizzard's UI code and the function's name (`fill_ins`; unverified).
 
-### cursor (9)
+### cursor (13)
 
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Unverified: picking up while holding something else, moving within one bag, money.
+- [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Whether holding it shows the click bindings' highlights: a spell, a macro (see the module), a pet's spell (Blizzard's...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Whether holding it shows the action bars' grid: a spell, a macro, an item but a trade good or a quest item (recorded:...
+- [cursor.rs](../crates/wowlua-engine/src/cursor.rs): `C_SpellBook.PickupSpellBookItem(slot, bank)`: the slot's spell; for an addon in combat, blocked (decision T253; Bliz...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): `PickupAction(slot)`: the action onto the cursor, the slot emptied.
+- [cursor.rs](../crates/wowlua-engine/src/cursor.rs): A pet's spell: a spell of subtype "pet" (unverified).
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Takes the item at `source` onto the cursor, or puts the held item back when it came from there; another slot: moves i...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Onto a part stack of the same item: stacked onto it, the target locked at once, then the cursor let go (recorded: Suu...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Onto another item, or a part stack onto a full stack of its own (seen in game, T256): the two swap places, the target...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): The bags as a packet tells their updates: the session's order first (`e.setBagOrder`; `bags` told bag 1, the reagent...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): The items whose counts a packet's moves changed, as the client told them (`bags`' sort and swap): the backpack's slot...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): The server stacked the items (recorded once, SuuUI's `/suu probe bagsort`: ten from bag 5 onto four in bag 1): for ea...
+- [cursor.rs](../crates/wowlua-engine/src/cursor.rs): As warcraft.wiki.gg's GetCursorInfo says and Blizzard's click binding frame reads it: the spell's ID, its slot in the...
 
 ### curves (16)
 
@@ -1852,12 +1861,14 @@ page changes only when a rule is added, removed or reworded.
 - [party.rs](../crates/wowlua-engine/src/party.rs): `C_PartyInfo.IsPartyFull()`: a party of five (recorded: not with two; unverified: full, a raid).
 - [party.rs](../crates/wowlua-engine/src/party.rs): `C_PartyInfo.ConvertToRaid()`: the leader's party a raid (`GROUP_ROSTER_UPDATE`; unverified: its other events and mes...
 
-### pets (6)
+### pets (8)
 
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): The player's pet.
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): Unverified: the events' order and their units, the default bar, the damage percentage by happiness (classic's 125, 10...
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): Its stats (`pet:setStats`); the default character's stand-ins until a test gives them (unverified).
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): The hunter's bar (unverified: classic's layout).
+- [pets.rs](../crates/wowlua-engine/src/pets.rs): `C_SpellBook.ToggleSpellBookItemAutoCast(slot, bank)`: the pet's spell there that may autocast switched, on its bar t...
+- [pets.rs](../crates/wowlua-engine/src/pets.rs): `GetPetIcon()`: the pet's icon, else its first spell's; nil without a pet (the full probe) or either (unverified).
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): `GetPetActionCooldown(slot)`: none, `0, 0, 0` (recorded without a pet, every slot; with one unverified).
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): `GetPetActionSlotUsable(slot)`: an action there, the pet alive; with no pet, any slot (the full probe: -1, 0, 1 and 2...
 
@@ -2002,7 +2013,7 @@ page changes only when a rule is added, removed or reworded.
 - [stats.rs](../crates/wowlua-engine/src/stats.rs): One the spellbook lacks: no name, no slots, unknown (the client knows every flyout; unverified).
 - [stats.rs](../crates/wowlua-engine/src/stats.rs): A quest's or faction's stat for one the profile does not hold, as the client answers any (the full probe, every numbe...
 - [stats.rs](../crates/wowlua-engine/src/stats.rs): `C_SpecializationInfo.GetSpecializationInfo(index, isInspect, isPet, …)` for another than the player's recorded specs...
-- [stats.rs](../crates/wowlua-engine/src/stats.rs): `C_SpellBook.IsSpellInSpellBook(spellID [, bank])`: in the player's book (unverified: overrides, the pet's bank).
+- [stats.rs](../crates/wowlua-engine/src/stats.rs): `C_SpellBook.IsSpellInSpellBook(spellID [, bank])`: in the player's book, or the pet's (`pets.rs`; unverified: overri...
 - [stats.rs](../crates/wowlua-engine/src/stats.rs): `C_SkillInfo.SetSelectedSkill(index)`: the skill line `GetSelectedSkill` answers from then (Blizzard's skills window...
 
 ### systeminfo (65)
@@ -2483,6 +2494,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - The mouse wheel over frames (decision T588)
 - Top-level frames (decision T586)
 - Found with SuuUI on WoW Forever (2026-11-06)
+- The pet's spellbook (decision T599)
 
 ## In-game regressions
 

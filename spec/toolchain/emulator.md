@@ -425,6 +425,34 @@ The WoW API the VM's code calls, per flavor.
   its race's racial spells for its faction and class, from the table,
   without learning them (`IsPlayerSpell`, `C_SpellBook.IsSpellKnown`);
   unverified: the recorded spellbook does not list them.
+- **The pet's spellbook.** The player's pet (`mock.setPet`) has a
+  spellbook, the spellbook's bank `Enum.SpellBookSpellBank.Pet` (1): the
+  spells `mock.setPet` gives (`spells`), else those on its bar (none on
+  the default hunter bar). `C_SpellBook.HasPetSpells` answers their count
+  and the pet's kind, `"PET"` for a hunter's, `"DEMON"` for another's
+  (nothing for a pet without spells; without a pet, the recorded answer).
+  The spellbook functions asked by slot and bank answer bank 1 from them,
+  each spell a pet action: `GetSpellBookItemInfo`'s `itemType` is
+  `PetAction` (3), its `spellID` and `actionID` the spell's ID, with its
+  `name`, `subName`, `iconID` and `isPassive`, `isOffSpec` false; so do
+  `GetSpellBookItemName`, `GetSpellBookItemTexture`,
+  `GetSpellBookItemType`, `GetSpellBookItemLink`, `IsSpellBookItemPassive`,
+  `GetSpellBookItemAutoCast` and `IsSpellInSpellBook(spellID, 1)`.
+  `ToggleSpellBookItemAutoCast(slot, 1)` and
+  `SetSpellBookItemAutoCastEnabled` switch a spell's autocast where it
+  may autocast, in the book and on the pet's bar together, as
+  `TogglePetAutocast` does from the bar, each with `PET_BAR_UPDATE`; an
+  addon may call them in combat. `PickupSpellBookItem(slot, 1)` puts the
+  pet's spell on the cursor (`GetCursorInfo`: `"petaction"`, its ID, its
+  slot; placed on an action bar, a spell of subtype `"pet"`).
+  `GetPetIcon` answers the pet's `icon`, else its first spell's, nil
+  without a pet; `PetHasSpellbook` whether there is a pet. A change of the
+  pet's spells is told by `SPELLS_CHANGED`, which Blizzard's spellbook
+  listens to (decision T599). Modelled on Blizzard's spellbook code and
+  the documentation, all unverified: the token for other pets, the action
+  ID (the client may add flags to it), whether the toggle is protected,
+  the cursor's values and the icon's kind (`tests/ingame/PROBES.md`, "The
+  pet's spellbook").
 - **Layout.** A region's rectangle comes from its points as the client
   lays it out: each edge from the points that set it (a `LEFT` and a
   `RIGHT` point give the width, a `TOP` and a `BOTTOM` the height),

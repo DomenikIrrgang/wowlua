@@ -16772,7 +16772,7 @@ declare function GetPetExperience(): (number, number)
 --- Returns the icon of the player's pet.
 ---
 --- *Description by wowlua: the API's documentation has none.*
-declare function GetPetIcon(): (...unknown)
+declare function GetPetIcon(): (number | string)?
 --- Returns the time left on the player's pet, in milliseconds.
 ---
 --- *Description by wowlua: the API's documentation has none.*
@@ -18694,7 +18694,7 @@ declare function PetHasActionBar(): boolean
 --- Returns whether the player's pet has a spell book.
 ---
 --- *Description by wowlua: the API's documentation has none.*
-declare function PetHasSpellbook(): (...unknown)
+declare function PetHasSpellbook(): boolean
 --- Orders the player's pet to move to a target. The `/petmoveto` slash command calls it.
 ---
 --- *Description by wowlua: the API's documentation has none.*

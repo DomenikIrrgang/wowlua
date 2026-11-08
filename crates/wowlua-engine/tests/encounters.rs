@@ -132,6 +132,89 @@ return none, UnitName('pet') or 'none', tostring(has), tostring(hunter),
     );
 }
 
+/// The pet's spellbook (decision T599): `spells`, read by slot in the
+/// pet's bank, its autocast shared with the bar, picked up as a pet action.
+#[test]
+fn the_pets_spellbook() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local seen = {}
+local f = CreateFrame('Frame')
+for _, e in ipairs({ 'PET_BAR_UPDATE', 'SPELLS_CHANGED' }) do f:RegisterEvent(e) end
+f:SetScript('OnEvent', function(_, e) seen[#seen + 1] = e end)
+local Pet = Enum.SpellBookSpellBank.Pet
+local without = select('#', C_SpellBook.HasPetSpells()) .. ' ' .. tostring(GetPetIcon())
+local wolf = mock.spawnUnit({ name = 'Fang', level = 19, reaction = 'friendly' })
+mock.setPet(wolf)
+local default = select('#', C_SpellBook.HasPetSpells()) .. ' ' .. tostring(GetPetIcon())
+    .. ' ' .. tostring(PetHasSpellbook())
+local summoned = table.concat(seen, ' ')
+seen = {}
+mock.setPet(wolf, {
+    actions = { [4] = { spell = 17253, name = 'Bite', icon = 132278, autocast = true } },
+    spells = {
+        { spell = 17253, name = 'Bite', subName = 'Rank 2', icon = 132278, autocast = true },
+        { spell = 2649, name = 'Growl', subName = 'Rank 1', icon = 132270, autocast = false },
+        { spell = 24604, name = 'Furious Howl', icon = 132203 },
+        { spell = 4187, name = 'Great Stamina', icon = 136112, passive = true },
+    },
+})
+local given = table.concat(seen, ' ')
+local n, token = C_SpellBook.HasPetSpells()
+local info = C_SpellBook.GetSpellBookItemInfo(2, Pet)
+local fields = table.concat({ info.name, info.subName, info.spellID, info.actionID, info.itemType,
+    info.iconID, tostring(info.isPassive), tostring(info.isOffSpec) }, ' ')
+local name, sub = C_SpellBook.GetSpellBookItemName(1, Pet)
+local kind, action, spell = C_SpellBook.GetSpellBookItemType(3, Pet)
+local others = table.concat({ name, sub, C_SpellBook.GetSpellBookItemTexture(2, Pet),
+    tostring(C_SpellBook.IsSpellBookItemPassive(4, Pet)), kind, action, spell,
+    C_SpellBook.GetSpellBookItemLink(1, Pet), tostring((C_SpellBook.GetSpellBookItemInfo(5, Pet))),
+    tostring(C_SpellBook.IsSpellInSpellBook(2649, Pet)), tostring(GetPetIcon()) }, ' ')
+local function auto(i) local a, e = C_SpellBook.GetSpellBookItemAutoCast(i, Pet) return tostring(a) .. '/' .. tostring(e) end
+local autos = auto(1) .. ' ' .. auto(2) .. ' ' .. auto(3)
+seen = {}
+C_SpellBook.ToggleSpellBookItemAutoCast(1, Pet)
+local toggled = auto(1) .. ' ' .. tostring(select(6, GetPetActionInfo(4)))
+TogglePetAutocast(4)
+local back = auto(1)
+C_SpellBook.ToggleSpellBookItemAutoCast(3, Pet)
+C_SpellBook.ToggleSpellBookItemAutoCast(2, Enum.SpellBookSpellBank.Player)
+C_SpellBook.SetSpellBookItemAutoCastEnabled(2, Pet, true)
+local toggles = table.concat(seen, ' ') .. ' ' .. auto(2) .. ' ' .. auto(3)
+C_SpellBook.PickupSpellBookItem(2, Pet)
+local cursor = table.concat({ GetCursorInfo() }, ' ')
+ClearCursor()
+mock.setPet(wolf, { hunter = false, icon = 136218 })
+local demon = select(2, C_SpellBook.HasPetSpells()) .. ' ' .. GetPetIcon()
+seen = {}
+mock.setPet(nil)
+return without, default, summoned, given, n .. ' ' .. token, fields, others, autos, toggled, back,
+    toggles, cursor, demon, table.concat(seen, ' '), select('#', C_SpellBook.HasPetSpells())",
+    );
+    assert_eq!(
+        r,
+        [
+            "0 nil",
+            "0 nil true",
+            "PET_BAR_UPDATE",
+            "PET_BAR_UPDATE SPELLS_CHANGED",
+            "4 PET",
+            "Growl Rank 1 2649 2649 3 132270 false false",
+            "Bite Rank 2 132270 true 3 24604 24604 \
+             |cff71d5ff|Hspell:17253:0|h[Bite]|h|r nil true 132278",
+            "true/true true/false false/false",
+            "true/false false",
+            "true/true",
+            "PET_BAR_UPDATE PET_BAR_UPDATE PET_BAR_UPDATE true/true false/false",
+            "petaction 2649 2",
+            "DEMON 136218",
+            "PET_BAR_UPDATE SPELLS_CHANGED",
+            "0",
+        ]
+    );
+}
+
 #[test]
 fn a_resurrection_offered_and_taken() {
     let mut vm = vm();

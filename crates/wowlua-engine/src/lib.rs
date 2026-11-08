@@ -1267,6 +1267,9 @@ const OVER_RECORDED: &[&str] = &[
     // The recorded first four slots' empty totem for every slot
     // `GetNumTotemSlots` counts (`spellinfo.rs`).
     "GetTotemInfo",
+    // The pet's icon (`pets.rs`, decision T599), the recorded nil without
+    // a pet.
+    "GetPetIcon",
 ];
 
 /// The C functions of a flavor's client, one per line: camelot's recorded

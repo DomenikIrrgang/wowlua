@@ -37,7 +37,7 @@ pub enum Ask {
     /// modification` (Blizzard's lookup key).
     Location,
     /// `f(slot, bank)`: by the player's spellbook slot (the pet's bank:
-    /// nothing recorded yet).
+    /// its spells, `pets.rs`).
     Slot,
     /// `f(flyoutID, slot)`: by `flyoutID * 100 + slot`.
     FlyoutSlot,
@@ -1209,6 +1209,18 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(stat) = name.and_then(|n| STATS.iter().find(|s| s.function == n)) else {
         return Ok(vec![]);
     };
+    // The pet's spellbook, with a pet (`pets.rs`, decision T599).
+    if stat.key == "hasPetSpells"
+        && let Some(values) = crate::pets::has_pet_spells(vm)
+    {
+        return Ok(values);
+    }
+    if stat.ask == Slot
+        && matches!(c.arg(2), Value::Num(b) if b == 1.0)
+        && let Some(values) = crate::pets::book_answer(vm, stat.key, num(c.arg(1)))
+    {
+        return Ok(values);
+    }
     // An inspected unit's or pet's groups: none (the full probe:
     // `GetNumSpecGroups(isInspect)` 0 with any argument, 1 without).
     if stat.function == "GetNumSpecGroups" && !c.arg(1).is_nil() {
@@ -1522,13 +1534,14 @@ fn find_spellbook_slot(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_SpellBook.IsSpellInSpellBook(spellID [, bank])`: in the player's
-/// book (unverified: overrides, the pet's bank).
+/// book, or the pet's (`pets.rs`; unverified: overrides, the pet's bank).
 pub(crate) fn is_spell_in_spellbook(vm: &mut Vm, c: NativeCall) -> Ret {
     let pet = matches!(c.arg(2), Value::Num(b) if b == 1.0);
-    let found = !pet
-        && num(c.arg(1))
-            .and_then(|s| spellbook_slot_of(vm, s))
-            .is_some();
+    let found = match num(c.arg(1)) {
+        Some(s) if pet => crate::pets::in_book(vm, s),
+        Some(s) => spellbook_slot_of(vm, s).is_some(),
+        None => false,
+    };
     Ok(vec![Value::Bool(found)])
 }
 

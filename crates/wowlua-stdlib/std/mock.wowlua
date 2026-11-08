@@ -983,15 +983,31 @@ export type PetAction = {
     active?: boolean,
 }
 
+--- A spell of the pet's spellbook (`mock.setPet`'s `spells`): its ID,
+--- name, rank (`subName`), icon, whether it is passive; `autocast` given
+--- (true or false, or `autocastAllowed`), it may autocast.
+export type PetSpell = {
+    spell: number,
+    name?: string,
+    subName?: string,
+    icon?: number | string,
+    passive?: boolean,
+    autocast?: boolean,
+    autocastAllowed?: boolean,
+}
+
 --- The player's pet (`nil`: dismissed): `UNIT_PET("player")`,
 --- `PET_BAR_UPDATE`, `UNIT_HAPPINESS("pet")`; Blizzard's pet frame and
 --- pet bar. A hunter's (`hunter`, by default) has its `happiness` (1 to
 --- 3, happy by default), `loyalty` and experience (`xp` of `xpMax`); its
 --- bar is a hunter's (attack, follow, stay, four spells, the three modes)
---- with `actions` in their slots. Called again for the same pet, it
+--- with `actions` in their slots. Its spellbook (the pet's bank of the
+--- `C_SpellBook` functions, `C_SpellBook.HasPetSpells`) holds `spells`, in
+--- their order, else the bar's spells; `icon` is what `GetPetIcon`
+--- answers (else its first spell's). Called again for the same pet, it
 --- changes what `opts` gives (`UNIT_HAPPINESS`, `UNIT_PET_EXPERIENCE`,
---- `PET_BAR_UPDATE`).
-export function setPet(pet: MockUnit?, opts: { hunter?: boolean, happiness?: number, loyalty?: string, xp?: number, xpMax?: number, actions?: { [number]: PetAction } }?)
+--- `PET_BAR_UPDATE`; its spells `SPELLS_CHANGED`).
+export function setPet(pet: MockUnit?, opts: { hunter?: boolean, happiness?: number, loyalty?: string, xp?: number, xpMax?: number, actions?: { [number]: PetAction }, spells?: PetSpell[], icon?: number | string }?)
     engine().setPet(pet, opts)
 end
 
