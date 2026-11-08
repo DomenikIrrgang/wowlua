@@ -2486,6 +2486,9 @@ local function addonsAndLibraries()
     mock.provideLibrary("LibThing-1.0", { answer = 42 })
     local lib: any = LibStub("LibThing-1.0")
     expect(lib.answer).toBe(42)
+    -- A real LibStub loaded later compares the minor: the stand-in has one.
+    local stub: any = LibStub
+    expect(stub.minor < 2).toBe(true)
 end
 "#,
         )],
