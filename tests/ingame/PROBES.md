@@ -1532,3 +1532,15 @@ engine to close, with the steps that would record the game's answer.
       Corrosive Poison. wowlua to match: never-secret only where the game
       says, these visibility answers, and the RAID_IN_COMBAT and DISPELLABLE
       filter words.
+15. **SuuUI's character window tab label over its marker.** In the game the
+    chosen side tab's label ("Stats", on Blizzard's `PaperDollSidebarTab1`)
+    draws over SuuUI's marker fill, made after the tabs at the same level
+    (6); wowlua draws the marker on top, as T587 (made later, on top;
+    probed on WoW Forever 2026-11-07 for plain frames) says. Something else
+    decides in the game: the strata, a parent's level, the label's draw
+    layer, or the buttons' level set after the marker was made. Steps (the
+    character window open on Stats; hover the tab, then the marker's edge):
+    - `/run local t=PaperDollSidebarTab1 local p=t:GetParent() print(t:GetFrameStrata(), t:GetFrameLevel(), p and p:GetName(), p and p:GetFrameLevel(), t:GetFontString() and t:GetFontString():GetDrawLayer())`
+    - hover the marker: `/run local f=GetMouseFoci()[1] local p=f and f:GetParent() print(f and f:GetName(), f and f:GetFrameStrata(), f and f:GetFrameLevel(), p and p:GetName(), p and p:GetFrameLevel())`
+
+      Seen: (to do)
