@@ -1513,7 +1513,9 @@ export function provideLibrary(major: string, impl: table, minor: number?)
     if stub == nil then
         local libs: { [string]: table } = {}
         local minors: { [string]: number } = {}
-        stub = setmetatable({ libs = libs, minors = minors }, {
+        -- `minor` 0: a real LibStub loaded later (`LibStub.minor <
+        -- LIBSTUB_MINOR`) upgrades the stand-in in place, keeping its libraries.
+        stub = setmetatable({ libs = libs, minors = minors, minor = 0 }, {
             __call = function(self: any, name: string, silent: boolean?): (table?, number?)
                 local lib = self.libs[name]
                 if lib == nil and not silent then
