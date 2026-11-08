@@ -1485,3 +1485,17 @@ engine to close, with the steps that would record the game's answer.
     - as a warlock with a demon out: `/run print(C_PetInfo.GetPetHappiness())`
 
       Seen: (to do)
+14. **Which spells' auras are never secret.** The game's aura container
+    applies spell-ID filters (`includeSpellIDs`, `excludeSpellIDs`) to a
+    debuff on a unit you can assist only when
+    `C_Secrets.GetSpellAuraSecrecy(spellId)` is `Enum.SecrecyLevel.NeverSecret`
+    (`Blizzard_AuraContainerUtil.lua`, `CanApplyIdentityCandidateFilters`:
+    "allows noisy debuffs (Exhaustion/Sated) to be filtered out on friendly
+    units"). wowlua answers ContextuallySecret for every spell, so it never
+    filters a friendly unit's debuffs, and a test can't make one never secret.
+    SuuUI's aura filters (2026-11-08) hide Forbearance, Weakened Soul,
+    Boosted Rest… on party and raid frames only if they are. Steps (anywhere):
+    - `/suu probe aurasecrecy` (SuuUI's dev build: prints each filter spell's level, saves `SuuUIProbe.auraSecrecy`)
+    - or `/run for _,id in ipairs({25771,6788,15007,11196,8326,26013,1229451}) do print(id, C_Secrets.GetSpellAuraSecrecy(id)) end` (compare with `Enum.SecrecyLevel`)
+
+      Seen: (to do)
