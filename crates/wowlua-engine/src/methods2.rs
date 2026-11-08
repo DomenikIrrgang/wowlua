@@ -1228,7 +1228,8 @@ fn set_draw_layer(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         Value::Nil => Value::Num(0.0),
         v => v,
     };
-    widgets::store(vm, id, "DrawLayer", &[c.arg(2), sublevel]);
+    let layer = crate::scene::layer_name(vm, c.arg(2));
+    widgets::store(vm, id, "DrawLayer", &[layer, sublevel]);
     Ok(vec![])
 }
 

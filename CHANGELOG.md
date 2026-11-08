@@ -41,6 +41,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua mcp` started in a folder without an addon no longer quits (which agents' clients show only as a closed connection); its tools say why there is nothing to run.
 - An asset under `libs/`, such as a library's textures, no longer fails the build with E4311 when no dependency writes the same file.
 - A texture with several masks (`AddMaskTexture`) shows wherever any of them shows it in screenshots, as in the game, not only where its first does. A texture takes three masks, as in the game: a fourth `AddMaskTexture` is an error, with the game's message.
+- Regions made or set on a draw layer named in lowercase (`CreateTexture(nil, "background")`) are drawn on that layer, not all on `ARTWORK`, and `GetDrawLayer` answers the name in capitals.
 - A top-level frame (`SetToplevel(true)`) is drawn above the rest of its strata when it is shown, its frame level unchanged, as in the game: SuuUI's bags open in front of its damage meter with their slots in front of their background.
 - A scroll frame's scroll child moves with its scroll (`SetVerticalScroll`, `SetHorizontalScroll`): its rows scroll on the screen, not only its scroll bar, as SuuUI's settings window's did.
 - The mouse wheel reaches a frame that takes only the wheel (`EnableMouseWheel`, an `OnMouseWheel` script) over a frame that takes the mouse: SuuUI's settings navigation scrolls again in wowlua Studio's game, instead of the camera zooming.
