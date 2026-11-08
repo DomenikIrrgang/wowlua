@@ -369,7 +369,7 @@ The modules that answer, by how many functions and methods:
 | Module | Kind | Functions and methods |
 |--------|------|----------------------:|
 | `extras` | fill-in | 1,488 |
-| `widgets` | model | 637 |
+| `widgets` | model | 638 |
 | `globalsinfo` | fill-in | 524 |
 | `content` | fill-in | 520 |
 | `leftovers2` | fill-in | 388 |
@@ -379,7 +379,7 @@ The modules that answer, by how many functions and methods:
 | `questinfo` | fill-in | 316 |
 | `systeminfo` | fill-in | 308 |
 | `iteminfo` | fill-in | 228 |
-| `methods3` | fill-in | 215 |
+| `methods3` | fill-in | 214 |
 | `spellinfo` | fill-in | 198 |
 | `vm` | model | 198 |
 | `unitinfo` | fill-in | 172 |
@@ -494,7 +494,7 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `FogOfWarFrame` | 12 | 6 | 0 | 6 | 0 |
 | `Font` | 24 | 14 | 0 | 10 | 0 |
 | `FontString` | 57 | 33 | 0 | 24 | 0 |
-| `Frame` | 126 | 87 | 12 | 27 | 0 |
+| `Frame` | 126 | 88 | 12 | 26 | 0 |
 | `FrameScriptObject` | 21 | 8 | 0 | 13 | 0 |
 | `HousingCatalogSearcher` | 46 | 46 | 0 | 0 | 0 |
 | `HousingFixturePointFrame` | 5 | 3 | 0 | 2 | 0 |
@@ -541,7 +541,7 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `UnitPositionFrame` | 12 | 4 | 0 | 8 | 0 |
 | `VectorGraphics` | 4 | 1 | 0 | 3 | 0 |
 | `VertexColor` | 4 | 2 | 0 | 2 | 0 |
-| **All** | 1,477 | 1,001 | 19 | 457 | 0 |
+| **All** | 1,477 | 1,002 | 19 | 456 | 0 |
 
 ## Verification against the client
 
@@ -556,7 +556,7 @@ locally and CI skips them.
 |------------|--------:|---:|------:|
 | Full probe (`/stdtest engine fullprobe`: every C function with many arguments) | 33,065 | 33,727 | 98.0% |
 | Answers battery (`/stdtest engine answers`: the calls Blizzard's UI makes) | 6,129 | 6,229 | 98.4% |
-| Method probe (`/stdtest engine methodprobe`: every widget method) | 8,399 | 13,049 | 64.4% |
+| Method probe (`/stdtest engine methodprobe`: every widget method) | 8,473 | 13,049 | 64.9% |
 | Maps (`/stdtest engine maps`: each map's data) | 3,028 | 3,028 | 100.0% |
 | Damage meter (its events in the recorded fights) | 557 | 561 | 99.3% |
 

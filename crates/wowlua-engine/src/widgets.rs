@@ -120,6 +120,9 @@ pub struct Widget {
     /// T586), 0 never: it and what is in it are drawn above the
     /// rest of its strata, the one raised last on top, its level kept.
     pub raised: u64,
+    /// When its `OnUpdate` runs (`SetOnUpdateMode`, `Enum.OnUpdateMode`
+    /// 0 to 4; decision T594): 1, while it is shown, at first.
+    pub on_update_mode: u8,
 }
 
 /// A line a chat window showed (decision T514).
@@ -687,6 +690,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         created: vm.caller_place(1),
         placed: 0,
         raised: 0,
+        on_update_mode: 1,
     };
     let mut w = w;
     // Secure code's widgets are forbidden; their names are the addons'
@@ -1114,6 +1118,7 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
         // Its arguments are any values (a unit menu passes the frame).
         "ExecuteAttribute",
         "SetFontObject",
+        "SetOnUpdateMode",
         "RegisterUnitEvent",
         "CreateFontString",
         "CreateTexture",
@@ -3939,6 +3944,31 @@ fn set_frame_level(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `Frame:GetOnUpdateMode()`: the frame's `Enum.OnUpdateMode`, 1
+/// (`RunWhenVisible`) at first.
+fn get_on_update_mode(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let mode = engine(vm).world.widgets[id.0].on_update_mode;
+    Ok(vec![Value::Num(f64::from(mode))])
+}
+
+/// `Frame:SetOnUpdateMode(mode)`: when the frame's `OnUpdate` runs, which
+/// the frames read (decision T594). As the client answered the method probe:
+/// a value that is no number is 0; none, or a mode past 0 to 4, the usage
+/// error, the mode kept.
+fn set_on_update_mode(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let usage = "Usage: self:SetOnUpdateMode(onUpdateMode)";
+    let v = c.arg(2);
+    if matches!(v, Value::Nil) {
+        return Err(vm.arg_error(2, usage));
+    }
+    let mode = vm.tonumber(vm.hidden(v)).map_or(0.0, f64::trunc);
+    if !(0.0..=4.0).contains(&mode) {
+        return Err(vm.arg_error(2, usage));
+    }
+    engine_mut(vm).world.widgets[id.0].on_update_mode = mode as u8;
+    Ok(vec![])
+}
+
 /// Sets a frame's level, its descendants with a level of their own moved
 /// with it (`SetFrameLevel`, `Raise`, `Lower`).
 pub(crate) fn set_level(vm: &mut Vm, id: WidgetId, level: f64) {
@@ -5301,6 +5331,8 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("CopyFontObject", copy_font_object),
         ("GetFrameLevel", get_frame_level),
         ("SetFrameLevel", set_frame_level),
+        ("GetOnUpdateMode", get_on_update_mode),
+        ("SetOnUpdateMode", set_on_update_mode),
         ("SetGradient", set_gradient),
         ("SetUsingParentLevel", set_using_parent_level),
         ("SetToDefaults", set_to_defaults),

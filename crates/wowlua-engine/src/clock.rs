@@ -421,7 +421,19 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
             };
             next = i + 1;
             let id = WidgetId(i);
-            if widgets::visible(engine(vm), id) && widgets::has_handler(vm, id, "OnUpdate") {
+            // Its `Enum.OnUpdateMode` (decision T594): 0 never, 1 while it
+            // is shown, 2 once while it is shown and 3 once, each back to 0
+            // before it runs (so the script may ask again), 4 hidden too.
+            let mode = engine(vm).world.widgets[i].on_update_mode;
+            let runs = match mode {
+                1 | 2 => widgets::visible(engine(vm), id),
+                3 | 4 => true,
+                _ => false,
+            };
+            if runs && widgets::has_handler(vm, id, "OnUpdate") {
+                if matches!(mode, 2 | 3) {
+                    engine_mut(vm).world.widgets[i].on_update_mode = 0;
+                }
                 widgets::run_script(vm, id, "OnUpdate", &[elapsed]);
                 if next < count {
                     vm.heap.intern(b"OnUpdate");
