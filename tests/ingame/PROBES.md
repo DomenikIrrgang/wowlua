@@ -1249,32 +1249,47 @@ looking at the steps, and take a screenshot after each step.
    steps and roofs lighter, a warm tint from the ground)? wowlua: the
    whole scene a little brighter, undersides warmer. Seen: (to do)
 
+## The frame-order steps in one run
+
+The next three sections (T587, T588, T586), with steps for a texture's
+masks (T596) and a draw layer's case (T597), run as one probe in StdTest; nothing needs typing. Ten seconds after login, once per client
+build, it records what the calls answer by itself (nothing shows). Then a
+panel at the top of the screen offers the look-and-click steps: squares
+appear in the middle, and each step has a button per answer, "None of the
+above" among them, with what wowlua draws in grey below. Later asks again
+at the next login; a finished run is not offered again on that build
+(`/stdtest engine layers` starts it at any time). Everything lands in
+`StdTestState.engineLayers`, written at logout or `/reload`. The steps
+below stay for running by hand.
+
 ## Frames of the same level (decision T587)
 
 On Classic Era now, and again on WoW Forever from its launch on 5 November
 2026 (the same steps on each). Two squares at the same strata and level,
 overlapping: which is drawn on top, and whether `SetFrameLevel`, `Show`
-or `SetParent` changes it. wowlua guesses the one placed later (made, or
+or `SetParent` changes it. wowlua guessed the one placed later (made, or
 its level changed, later) is on top: SuuUI's character window had its
 chosen tab's marker over the tab's label in wowlua, the label over it in
-the game. If the game differs, decision T587 changes with it.
+the game. WoW Forever (2026-11-07): the one made later, whatever level or
+showing changed since; wowlua now does the same, and the character
+window's tabs need another look.
 
 1. **Red, made first**: `/run A=CreateFrame("Frame",nil,UIParent) A:SetSize(200,200) A:SetPoint("CENTER") A:SetFrameLevel(50) local t=A:CreateTexture() t:SetAllPoints() t:SetColorTexture(1,0,0)`
 2. **Blue, made second**: `/run B=CreateFrame("Frame",nil,UIParent) B:SetSize(200,200) B:SetPoint("CENTER",60,60) B:SetFrameLevel(50) local t=B:CreateTexture() t:SetAllPoints() t:SetColorTexture(0,0,1)`
 
-   Seen: where they overlap, red or blue? wowlua: blue. Seen: (to do)
+   Seen: where they overlap, red or blue? wowlua: blue. WoW Forever (2026-11-07): blue.
 3. **Red's level set again, the same**: `/run A:SetFrameLevel(50)`
 
-   Seen: red or blue on top now? wowlua: blue. Seen: (to do)
+   Seen: red or blue on top now? wowlua: blue. WoW Forever (2026-11-07): blue.
 4. **Red's level changed and back**: `/run A:SetFrameLevel(49) A:SetFrameLevel(50)`
 
-   Seen: red or blue? wowlua: red. Seen: (to do)
+   Seen: red or blue? WoW Forever (2026-11-07): blue. wowlua now blue (it said red).
 5. **Blue hidden and shown**: `/run B:Hide() B:Show()`
 
-   Seen: red or blue? wowlua: red. Seen: (to do)
+   Seen: red or blue? WoW Forever (2026-11-07): blue. wowlua now blue (it said red).
 6. **Red hidden and shown**: `/run A:Hide() A:Show()`
 
-   Seen: red or blue? wowlua: red. Seen: (to do)
+   Seen: red or blue? WoW Forever (2026-11-07): blue. wowlua now blue (it said red).
 7. **Gone**: `/run A:Hide() B:Hide()`
 
 ## The mouse wheel over frames (decision T588)
@@ -1288,12 +1303,15 @@ mouse above it.
 2. **Wheel only, in it**: `/run S=CreateFrame("Frame",nil,W) S:SetAllPoints() S:SetScript("OnMouseWheel",function(_,d) print("S wheel",d) end)`
 3. Put the mouse over the dark square and turn the wheel one notch.
 
-   Seen: does the chat print "S wheel"? wowlua: yes. Seen: (to do)
+   Seen: does the chat print "S wheel"? wowlua: yes. WoW Forever
+   (2026-11-07): yes, the camera did not zoom.
 4. **A frame taking the mouse above it**: `/run B=CreateFrame("Frame",nil,UIParent) B:SetSize(100,100) B:SetPoint("CENTER") B:SetFrameStrata("HIGH") B:EnableMouse(true) local t=B:CreateTexture() t:SetAllPoints() t:SetColorTexture(1,0,0,0.5)`
 5. Put the mouse over the red square and turn the wheel one notch.
 
-   Seen: does the chat print "S wheel", or does the camera zoom? wowlua:
-   the camera zooms. Seen: (to do)
+   Seen: does the chat print "S wheel", or does the camera zoom? WoW
+   Forever (2026-11-07): "S wheel", the camera did not zoom: a frame
+   taking only the mouse does not keep the wheel from one below taking
+   it. wowlua now does the same (it zoomed the camera before).
 6. **Gone**: `/run W:Hide() B:Hide()`
 
 ## Top-level frames (decision T586)
@@ -1307,41 +1325,46 @@ line in the chat, one after another.
 1. `/run X=CreateFrame("Frame",nil,UIParent) X:SetSize(10,10) X:SetPoint("CENTER") X:SetFrameLevel(500)`
 2. `/run T=CreateFrame("Frame",nil,UIParent) T:SetSize(10,10) T:SetPoint("CENTER") T:SetToplevel(true) T:Hide() T:Show() print("shown", T:GetFrameLevel())`
 
-   TBC Anniversary: "shown 1". WoW Forever: (to do)
+   TBC Anniversary: "shown 1". WoW Forever (2026-11-07): "shown 1".
 3. `/run T:Raise() print("raised", T:GetFrameLevel())`
 
-   TBC Anniversary: "raised 1". WoW Forever: (to do)
+   TBC Anniversary: "raised 1". WoW Forever (2026-11-07): "raised 1".
+   wowlua now answers 1 (it raised the level above X's, to 501).
 4. `/run X:SetToplevel(true) T:Hide() T:Show() print("shown2", T:GetFrameLevel())`
 
-   TBC Anniversary: "shown2 1". WoW Forever: (to do)
+   TBC Anniversary: "shown2 1". WoW Forever (2026-11-07): "shown2 1".
 5. **A click**: `/run T:SetSize(200,200) T:EnableMouse(true) local t=T:CreateTexture() t:SetAllPoints() t:SetColorTexture(0,1,0)`, then click the green square, then `/run print("clicked", T:GetFrameLevel())`
 
-   TBC Anniversary: (to do). WoW Forever: (to do)
+   TBC Anniversary: (to do). WoW Forever (2026-11-07): "clicked 1" (1
+   before), as wowlua.
 6. `/run A=CreateFrame("Frame",nil,UIParent) A:SetSize(200,200) A:SetPoint("CENTER") A:SetFrameLevel(50) local t=A:CreateTexture() t:SetAllPoints() t:SetColorTexture(1,0,0)`
 7. `/run B=CreateFrame("Frame",nil,UIParent) B:SetSize(200,200) B:SetPoint("CENTER",60,60) B:SetFrameLevel(50) local u=B:CreateTexture() u:SetAllPoints() u:SetColorTexture(0,0,1)`
 8. `/run A:Raise() print("A", A:GetFrameLevel())`
 
    Seen: the level printed, and red or blue on top where they overlap.
-   TBC Anniversary: "A 50", blue on top. WoW Forever: (to do)
+   TBC Anniversary: "A 50", blue on top. WoW Forever (2026-11-07): the
+   same.
 9. **Gone**: `/run X:Hide() T:Hide() A:Hide() B:Hide()`
 10. **SuuUI's bags** (WoW Forever with SuuUI): open the bags, then `/run print(SuuUIBags:GetFrameLevel(), SuuUIBag2Slot1 and SuuUIBag2Slot1:GetFrameLevel(), SuuUIDamageMeter:GetFrameLevel())`
 
-    WoW Forever: (to do)
+    WoW Forever (2026-11-07): not run, without SuuUI.
 11. `/run R=CreateFrame("Frame",nil,UIParent) R:SetAllPoints() M=CreateFrame("Frame",nil,R) M:SetAllPoints()`
 12. `/run W=CreateFrame("Frame",nil,M) W:SetSize(200,200) W:SetPoint("CENTER") local t=W:CreateTexture() t:SetAllPoints() t:SetColorTexture(0,0,1)`
 13. `/run B=CreateFrame("Frame",nil,R) B:SetSize(200,200) B:SetPoint("CENTER",60,60) local t=B:CreateTexture() t:SetAllPoints() t:SetColorTexture(1,0,0) B:Hide() B:Show() print(W:GetFrameLevel(),B:GetFrameLevel())`
 
     Seen: red or blue on top. wowlua: "3 2", blue. TBC Anniversary:
-    (to do). WoW Forever: (to do)
+    (to do). WoW Forever (2026-11-07): "3 2", blue.
 14. `/run B:SetToplevel(true) B:Hide() B:Show()`
 
     Seen: red or blue on top. wowlua: red. TBC Anniversary (the same
     window made top-level before it showed): red, answering 2. WoW
-    Forever: (to do)
+    Forever (2026-11-07): red, "3 2".
 15. `/run B:EnableMouse(true) W:EnableMouse(true) W:SetToplevel(true) W:Hide() W:Show()`, then click the red square where they do not overlap
 
     Seen: red or blue on top after the show, then after the click.
-    wowlua: blue, then red. TBC Anniversary: (to do). WoW Forever: (to do)
+    TBC Anniversary: (to do). WoW Forever (2026-11-07): blue, then still
+    blue, "3 2": a top-level frame clicked is not raised. wowlua now does
+    the same (it raised it: red).
 16. `/run R:Hide()`
 
 ## Found with SuuUI on WoW Forever (2026-11-06)

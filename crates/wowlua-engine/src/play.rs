@@ -188,24 +188,15 @@ pub fn mouse_up(vm: &mut Vm, x: f64, y: f64, right: bool) {
 }
 
 /// The mouse wheel turned at a point (`delta` 1 a notch up): the topmost
-/// frame there taking the mouse or the wheel (decision T588), it or the
-/// nearest of its parents taking the wheel (`OnMouseWheel`), else the
-/// camera zooming in (out for a notch down).
+/// frame there taking the wheel, whatever takes the mouse above it
+/// (decision T588), else the camera zooming in (out for a notch down).
 pub fn wheel(vm: &mut Vm, x: f64, y: f64, delta: f64) {
-    let mut at = crate::scene::wheel_test(vm, x, y)
+    let at = crate::scene::wheel_test(vm, x, y)
         .filter(|f| engine(vm).world.widgets[f.0].name.as_deref() != Some("WorldFrame"));
-    while let Some(id) = at {
-        let props = engine(vm).world.widgets[id.0].props;
-        let takes = widgets::stored_args(vm, props, "MouseWheelEnabled")
-            .and_then(|v| v.first().copied())
-            .is_some_and(|v| v.truthy());
-        if takes {
-            crate::input::as_user(vm, |vm| {
-                widgets::run_script(vm, id, "OnMouseWheel", &[Value::Num(delta)]);
-            });
-            return;
-        }
-        at = engine(vm).world.widgets[id.0].parent;
+    match at {
+        Some(id) => crate::input::as_user(vm, |vm| {
+            widgets::run_script(vm, id, "OnMouseWheel", &[Value::Num(delta)]);
+        }),
+        None => crate::camera::wheel(vm, -delta),
     }
-    crate::camera::wheel(vm, -delta);
 }

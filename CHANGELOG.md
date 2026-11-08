@@ -29,15 +29,15 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- `frame:Raise()` no longer changes the frame's level, and clicking a top-level frame no longer brings it to the front, as in the game.
 - The camelot, vanilla, tbc and mists API declarations come from the games' current clients (WoW Forever 1.60.1.70755, Classic Era 1.15.9.70576, Anniversary 2.5.6.70577, Mists Classic 5.5.4.70631), with their global strings. A Classic flavor now declares only the UI globals its own game loads, not those of the other Classic games.
 
 ### Fixed
 
-- A top-level frame (`SetToplevel(true)`) is drawn above the rest of its strata when it is shown or clicked, its frame level unchanged, as in the game: SuuUI's bags open in front of its damage meter with their slots in front of their background.
-- A frame whose level moves with its parent's keeps its place among the frames of its level.
+- A top-level frame (`SetToplevel(true)`) is drawn above the rest of its strata when it is shown, its frame level unchanged, as in the game: SuuUI's bags open in front of its damage meter with their slots in front of their background.
 - A scroll frame's scroll child moves with its scroll (`SetVerticalScroll`, `SetHorizontalScroll`): its rows scroll on the screen, not only its scroll bar, as SuuUI's settings window's did.
 - The mouse wheel reaches a frame that takes only the wheel (`EnableMouseWheel`, an `OnMouseWheel` script) over a frame that takes the mouse: SuuUI's settings navigation scrolls again in wowlua Studio's game, instead of the camera zooming.
-- Of two frames at the same strata and level, the one whose level was set last is drawn and clicked on top, not the one made last: SuuUI's character window shows its chosen tab's label ("Stats") again.
+- The mouse wheel reaches the topmost frame under the mouse that takes the wheel even when a frame that takes only the mouse is above it, as in the game; before, the camera zoomed.
 - On camelot, the races' racial spells follow WoW Forever 70707 with the server's changes: the Orcs' Command (was Savage), the Dwarves' Artisan's Precision (was Earth Fury). Once the game has reached its login screen, the 3D world, talents, spells and atlases read from your installation follow the server's changes too.
 - With WoW Forever's latest update (1.60.1.70707) installed, `test.blizzard-ui` loads Blizzard's UI again, and spell descriptions read from your installation show their durations again.
 - Blizzard's global strings read from your installation have their line breaks, trailing spaces and backslashes: chat lines read "says: ", not `says:\32`.
@@ -46,6 +46,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `GetNumRegions()` counts a frame's current regions, including hidden regions, rather than returning a fresh frame's recorded count.
 - `DisableDrawLayer` and `EnableDrawLayer` hide and restore a frame's draw layers without changing its regions' shown state or its child frames' layers.
 - Clearing texture artwork with file ID `0` no longer draws missing-texture placeholders.
+- A frame's `OnUpdate` follows `SetOnUpdateMode`: `Enum.OnUpdateMode.Disabled` stops it, `RunWhenVisibleOnce` and `RunOnce` run it once, and `RunOnce` and `RunAlways` run it while the frame is hidden too. Before, every shown frame's `OnUpdate` ran each frame, whatever its mode.
+- An aura filter with a negated category, such as `HARMFUL|!CROWD_CONTROL`, no longer matches every aura, so rows split by a category and its negation show each aura once. `unit:applyAura` takes `crowdControl`, `raidInCombat`, `important`, `bigDefensive` and `externalDefensive` to put an aura in those filters, and `DISPELLABLE` finds auras with a dispel type.
 
 ## 0.13.8 (2026-11-01)
 

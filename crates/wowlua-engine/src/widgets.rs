@@ -112,14 +112,17 @@ pub struct Widget {
     /// The Lua line that made it: chunk name and line (an inspector's
     /// "created at", decision T484); none from the client's own loading.
     pub created: Option<(std::rc::Rc<[u8]>, u32)>,
-    /// When it took its place among the frames of its strata and level: it
-    /// was made, or its strata or level changed (decision T587). Of two
-    /// frames at the same strata and level the later is drawn on top.
+    /// When it was made (decision T587): of two frames at the same strata
+    /// and level the later is drawn on top, whatever level, strata or
+    /// showing changed since.
     pub placed: u64,
-    /// When it was last raised as a top-level frame (shown or clicked;
-    /// decision T586), 0 never: it and what is in it are drawn above the
+    /// When it was last raised as a top-level frame (shown; decision
+    /// T586), 0 never: it and what is in it are drawn above the
     /// rest of its strata, the one raised last on top, its level kept.
     pub raised: u64,
+    /// When its `OnUpdate` runs (`SetOnUpdateMode`, `Enum.OnUpdateMode`
+    /// 0 to 4; decision T594): 1, while it is shown, at first.
+    pub on_update_mode: u8,
 }
 
 /// A line a chat window showed (decision T514).
@@ -687,6 +690,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         created: vm.caller_place(1),
         placed: 0,
         raised: 0,
+        on_update_mode: 1,
     };
     let mut w = w;
     // Secure code's widgets are forbidden; their names are the addons'
@@ -1114,6 +1118,7 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
         // Its arguments are any values (a unit menu passes the frame).
         "ExecuteAttribute",
         "SetFontObject",
+        "SetOnUpdateMode",
         "RegisterUnitEvent",
         "CreateFontString",
         "CreateTexture",
@@ -3939,6 +3944,31 @@ fn set_frame_level(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `Frame:GetOnUpdateMode()`: the frame's `Enum.OnUpdateMode`, 1
+/// (`RunWhenVisible`) at first.
+fn get_on_update_mode(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let mode = engine(vm).world.widgets[id.0].on_update_mode;
+    Ok(vec![Value::Num(f64::from(mode))])
+}
+
+/// `Frame:SetOnUpdateMode(mode)`: when the frame's `OnUpdate` runs, which
+/// the frames read (decision T594). As the client answered the method probe:
+/// a value that is no number is 0; none, or a mode past 0 to 4, the usage
+/// error, the mode kept.
+fn set_on_update_mode(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let usage = "Usage: self:SetOnUpdateMode(onUpdateMode)";
+    let v = c.arg(2);
+    if matches!(v, Value::Nil) {
+        return Err(vm.arg_error(2, usage));
+    }
+    let mode = vm.tonumber(vm.hidden(v)).map_or(0.0, f64::trunc);
+    if !(0.0..=4.0).contains(&mode) {
+        return Err(vm.arg_error(2, usage));
+    }
+    engine_mut(vm).world.widgets[id.0].on_update_mode = mode as u8;
+    Ok(vec![])
+}
+
 /// Sets a frame's level, its descendants with a level of their own moved
 /// with it (`SetFrameLevel`, `Raise`, `Lower`).
 pub(crate) fn set_level(vm: &mut Vm, id: WidgetId, level: f64) {
@@ -3952,11 +3982,7 @@ pub(crate) fn set_level(vm: &mut Vm, id: WidgetId, level: f64) {
             if let Some(Value::Num(n)) =
                 stored_args(vm, props, "FrameLevel").and_then(|v| v.first().copied())
             {
-                // (moved with it, it keeps its place among the frames of its
-                // level: T587)
-                let placed = engine(vm).world.widgets[child.0].placed;
                 store(vm, child, "FrameLevel", &[Value::Num((n + delta).max(0.0))]);
-                engine_mut(vm).world.widgets[child.0].placed = placed;
             }
             stack.extend(engine(vm).world.widgets[child.0].children.iter().copied());
         }
@@ -5003,11 +5029,6 @@ pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
         });
         if !same {
             reorder(engine_mut(vm));
-            // (it takes its new place last among its strata and level:
-            // T587)
-            let world = &mut engine_mut(vm).world;
-            world.widgets[id.0].placed = world.next_placed;
-            world.next_placed += 1;
         }
     }
     mark(engine_mut(vm), id);
@@ -5310,6 +5331,8 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("CopyFontObject", copy_font_object),
         ("GetFrameLevel", get_frame_level),
         ("SetFrameLevel", set_frame_level),
+        ("GetOnUpdateMode", get_on_update_mode),
+        ("SetOnUpdateMode", set_on_update_mode),
         ("SetGradient", set_gradient),
         ("SetUsingParentLevel", set_using_parent_level),
         ("SetToDefaults", set_to_defaults),

@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,185 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,186 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -369,7 +369,7 @@ The modules that answer, by how many functions and methods:
 | Module | Kind | Functions and methods |
 |--------|------|----------------------:|
 | `extras` | fill-in | 1,488 |
-| `widgets` | model | 637 |
+| `widgets` | model | 638 |
 | `globalsinfo` | fill-in | 524 |
 | `content` | fill-in | 520 |
 | `leftovers2` | fill-in | 388 |
@@ -379,7 +379,7 @@ The modules that answer, by how many functions and methods:
 | `questinfo` | fill-in | 316 |
 | `systeminfo` | fill-in | 308 |
 | `iteminfo` | fill-in | 228 |
-| `methods3` | fill-in | 215 |
+| `methods3` | fill-in | 214 |
 | `spellinfo` | fill-in | 198 |
 | `vm` | model | 198 |
 | `unitinfo` | fill-in | 172 |
@@ -494,7 +494,7 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `FogOfWarFrame` | 12 | 6 | 0 | 6 | 0 |
 | `Font` | 24 | 14 | 0 | 10 | 0 |
 | `FontString` | 57 | 33 | 0 | 24 | 0 |
-| `Frame` | 126 | 87 | 12 | 27 | 0 |
+| `Frame` | 126 | 88 | 12 | 26 | 0 |
 | `FrameScriptObject` | 21 | 8 | 0 | 13 | 0 |
 | `HousingCatalogSearcher` | 46 | 46 | 0 | 0 | 0 |
 | `HousingFixturePointFrame` | 5 | 3 | 0 | 2 | 0 |
@@ -541,7 +541,7 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `UnitPositionFrame` | 12 | 4 | 0 | 8 | 0 |
 | `VectorGraphics` | 4 | 1 | 0 | 3 | 0 |
 | `VertexColor` | 4 | 2 | 0 | 2 | 0 |
-| **All** | 1,477 | 1,001 | 19 | 457 | 0 |
+| **All** | 1,477 | 1,002 | 19 | 456 | 0 |
 
 ## Verification against the client
 
@@ -556,7 +556,7 @@ locally and CI skips them.
 |------------|--------:|---:|------:|
 | Full probe (`/stdtest engine fullprobe`: every C function with many arguments) | 33,065 | 33,727 | 98.0% |
 | Answers battery (`/stdtest engine answers`: the calls Blizzard's UI makes) | 6,129 | 6,229 | 98.4% |
-| Method probe (`/stdtest engine methodprobe`: every widget method) | 8,399 | 13,049 | 64.4% |
+| Method probe (`/stdtest engine methodprobe`: every widget method) | 8,473 | 13,049 | 64.9% |
 | Maps (`/stdtest engine maps`: each map's data) | 3,028 | 3,028 | 100.0% |
 | Damage meter (its events in the recorded fights) | 557 | 561 | 99.3% |
 
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,185 rules unverified: each rests on Blizzard's
+The engine's code marks 1,186 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2265,9 +2265,10 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine/src/units.rs): `UnitIsHumanPlayer(unit)`: a player's character (unverified: as `UnitIsPlayer`).
 - [units.rs](../crates/wowlua-engine/src/units.rs): Not casting or channeling: no values.
 
-### widgetops (3)
+### widgetops (4)
 
-- [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): Unverified, none recorded: which frames `Raise` counts (the shown ones of the strata here) and the level cap (10000),...
+- [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): Unverified, none recorded: which frames `Lower` counts (the shown ones of the strata here), `Insert`'s `OnTextChanged...
+- [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): `Frame:Raise()`: nothing seen, its level and its place among the frames of its level kept (decision T586; TBC Anniver...
 - [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): A button's `Clear…Texture()`: the state's texture emptied (no file or atlas, hidden) but still the button's, `Get…Tex...
 - [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): Methods of what the engine draws or keeps nothing of: model cameras, lights and animation kits, the browser and the s...
 
@@ -2476,6 +2477,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Spells in the world (decision T582)
 - WoW Forever's water (decision T583)
 - The world's shading (decisions T584, T585)
+- The frame-order steps in one run
 - Frames of the same level (decision T587)
 - The mouse wheel over frames (decision T588)
 - Top-level frames (decision T586)
