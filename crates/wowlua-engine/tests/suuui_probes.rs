@@ -205,6 +205,39 @@ return got, C_Bank.BankBagTypeAndIDToInvSlot(0, 1), C_Bank.BankBagTypeAndIDToInv
 }
 
 #[test]
+fn aura_filters_by_kind_as_the_game_has_them() {
+    // WoW Forever 1.60.1 (2026-11-08): `HARMFUL|DISPELLABLE` kept a typed
+    // debuff (Corrosive Poison, Poison) and not Forbearance;
+    // `HARMFUL|RAID_IN_COMBAT` kept neither; `HARMFUL|CROWD_CONTROL` kept
+    // neither (no crowd control on the player).
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "mock.player:applyAura({ spellId = 25771, name = 'Forbearance', harmful = true })
+mock.player:applyAura({ spellId = 3396, name = 'Corrosive Poison', harmful = true, dispelName = 'Poison' })
+mock.player:applyAura({ spellId = 853, name = 'Hammer of Justice', harmful = true, dispelName = 'Magic', stuns = true })
+mock.player:applyAura({ spellId = 1090, name = 'Sleep', harmful = true, crowdControl = true })
+local function names(filter)
+    local out = {}
+    for _, a in ipairs(C_UnitAuras.GetUnitAuras('player', filter)) do out[#out + 1] = a.name end
+    return table.concat(out, ',')
+end
+return names('HARMFUL|DISPELLABLE'), names('HARMFUL|!DISPELLABLE'), names('HARMFUL|CROWD_CONTROL'),
+    names('HARMFUL|CROWD_CONTROL|!DISPELLABLE'), names('HARMFUL|RAID_IN_COMBAT')",
+    );
+    assert_eq!(
+        r,
+        [
+            "Corrosive Poison,Hammer of Justice",
+            "Forbearance,Sleep",
+            "Hammer of Justice,Sleep",
+            "Sleep",
+            ""
+        ]
+    );
+}
+
+#[test]
 fn aura_filters_negate_and_know_their_words() {
     let mut vm = vm();
     let r = run(
