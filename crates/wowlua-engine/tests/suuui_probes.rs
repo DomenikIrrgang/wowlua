@@ -215,7 +215,7 @@ fn aura_filters_by_kind_as_the_game_has_them() {
         &mut vm,
         "mock.player:applyAura({ spellId = 25771, name = 'Forbearance', harmful = true })
 mock.player:applyAura({ spellId = 3396, name = 'Corrosive Poison', harmful = true, dispelName = 'Poison' })
-mock.player:applyAura({ spellId = 853, name = 'Hammer of Justice', harmful = true, dispelName = 'Magic', crowdControl = true })
+mock.player:applyAura({ spellId = 853, name = 'Hammer of Justice', harmful = true, dispelName = 'Magic', stuns = true })
 mock.player:applyAura({ spellId = 1090, name = 'Sleep', harmful = true, crowdControl = true })
 local function names(filter)
     local out = {}

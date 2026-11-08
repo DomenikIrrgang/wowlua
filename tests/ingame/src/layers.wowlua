@@ -1,0 +1,533 @@
+-- /stdtest engine layers: PROBES.md's frame-order steps (decisions T586,
+-- T587, T588, T596, T597) in one guided run, into StdTestState.engineLayers.
+-- What a call answers is recorded at once; what only the eye or the mouse
+-- tells, a panel at the top of the screen asks, with a button per answer
+-- (and "None of the above"). Ten seconds after login, once per client
+-- build, it runs by itself without asking (only what the calls answer; the
+-- squares are made and hidden in the same frame, so nothing shows), then
+-- the panel offers the guided steps, until a guided run on this build
+-- finishes. `/stdtest engine layers` starts the guided steps at any time
+-- (`/stdtest engine layers <word>` answers from the chat). Read-only: the
+-- squares it draws go away at the end.
+import state from "/state"
+import stamp from "/state"
+import say from "/harness"
+import onLogin from "wowlua:lifecycle"
+import after from "wowlua:timer"
+
+type Option = { text: string, word: string }
+
+type Step = {
+    label: string,
+    --- Builds the scene; what it returns is recorded as the step's answer.
+    run?: () -> string?,
+    --- What the panel asks; the step then waits for the user's answer.
+    ask?: string,
+    --- The answers offered (by default, red or blue on top).
+    options?: Option[],
+    --- What wowlua draws, or another client answered, shown under the question.
+    expect?: string,
+    --- Read after the user answers, recorded with the answer.
+    after?: () -> string,
+}
+
+-- Every frame the steps make, hidden when a section starts and at the end.
+const made: Frame[] = {}
+local function frame(parent: Frame, w: number, h: number, x: number, y: number, r: number, g: number, b: number, a: number?): Frame
+    const f = CreateFrame("Frame", nil, parent)
+    f:SetSize(w, h)
+    f:SetPoint("CENTER", x, y)
+    const t = f:CreateTexture()
+    t:SetAllPoints()
+    t:SetColorTexture(r, g, b, a ?? 1)
+    made[#made + 1] = f
+    return f
+end
+local function clear()
+    for _, f in ipairs(made) do
+        f:Hide()
+    end
+end
+
+const ON_TOP = "Where the red and the blue square overlap, which is on top?"
+const NONE: Option = { text = "None of the above", word = "none" }
+const COLORS: Option[] = { { text = "Red on top", word = "red" }, { text = "Blue on top", word = "blue" }, NONE }
+const DONE: Option[] = { { text = "Done", word = "next" }, { text = "Could not do it", word = "none" } }
+
+local wheels = 0
+local zoom = 0
+local function wheelAfter(): string
+    const now = GetCameraZoom()
+    const out = `S wheel {wheels} times, camera zoom {string.format("%.2f", zoom)} -> {string.format("%.2f", now)}`
+    wheels = 0
+    return out
+end
+
+-- The frames the steps share.
+const F: { [string]: any } = {}
+
+const steps: Step[] = {
+    -- T597: a layer named in lowercase.
+    {
+        label = "T597 draw layers",
+        run = function(): string?
+            clear()
+            const f = frame(UIParent, 200, 40, 0, 0, 0, 0, 0, 0)
+            const a = f:CreateTexture(nil, "artwork" :: any, nil, -6)
+            a:SetAllPoints()
+            a:SetColorTexture(1, 0.73, 0.1)
+            const b = f:CreateTexture(nil, "background" :: any, nil, -5)
+            b:SetAllPoints()
+            b:SetColorTexture(0, 0, 0)
+            local al, as = a:GetDrawLayer()
+            local bl, bs = b:GetDrawLayer()
+            return `{tostring(al)} {tostring(as)}, {tostring(bl)} {tostring(bs)}`
+        end,
+        ask = "What colour is the bar in the middle of the screen?",
+        options = { { text = "Amber", word = "amber" }, { text = "Black", word = "black" }, NONE },
+        expect = "wowlua: amber",
+    },
+    -- T596: a texture's masks.
+    {
+        label = "T596 four masks",
+        run = function(): string?
+            clear()
+            const f = frame(UIParent, 256, 64, 0, 0, 0, 0, 0, 0)
+            const t = f:CreateTexture()
+            t:SetAllPoints()
+            t:SetColorTexture(1, 0, 0)
+            const m: any[] = {}
+            for i = 1, 4 do
+                m[i] = f:CreateMaskTexture()
+                m[i]:SetAllPoints()
+                m[i]:SetTexture("Interface\\CHATFRAME\\CHATFRAMEBACKGROUND")
+            end
+            for i = 1, 3 do
+                t:AddMaskTexture(m[i])
+            end
+            const before = t:GetNumMaskTextures()
+            local ok, err = pcall(t.AddMaskTexture, t, m[4])
+            const result = `{before}, {tostring(ok)} {tostring(err)}, {t:GetNumMaskTextures()}`
+            for i = 1, 4 do
+                pcall(t.RemoveMaskTexture, t, m[i])
+            end
+            m[1]:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask")
+            m[2]:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask")
+            m[2]:ClearAllPoints()
+            m[2]:SetPoint("LEFT", f, "CENTER")
+            m[2]:SetSize(256, 64)
+            t:AddMaskTexture(m[1])
+            t:AddMaskTexture(m[2])
+            return result
+        end,
+    },
+    {
+        label = "T596 two ellipses",
+        ask = "The red bar has two oval masks, the second shifted to the right. Where is it red?",
+        options = {
+            { text = "Only where they overlap", word = "intersection" },
+            { text = "In both ovals", word = "union" },
+            NONE,
+        },
+        expect = "wowlua: in both ovals",
+    },
+    -- T587: two squares at one level.
+    {
+        label = "T587 2 made",
+        run = function(): string?
+            clear()
+            F.A = frame(UIParent, 200, 200, 0, 0, 1, 0, 0)
+            F.A:SetFrameLevel(50)
+            F.B = frame(UIParent, 200, 200, 60, 60, 0, 0, 1)
+            F.B:SetFrameLevel(50)
+            return nil
+        end,
+        ask = `Red made first, blue second, at the same level. {ON_TOP}`,
+        expect = "wowlua: blue (the one made later)",
+    },
+    {
+        label = "T587 3 level again",
+        run = function(): string? F.A:SetFrameLevel(50) return nil end,
+        ask = `The red square's level set again, the same. {ON_TOP}`,
+        expect = "wowlua: blue",
+    },
+    {
+        label = "T587 4 level changed and back",
+        run = function(): string? F.A:SetFrameLevel(49) F.A:SetFrameLevel(50) return nil end,
+        ask = `The red square's level changed and back. {ON_TOP}`,
+        expect = "wowlua: blue",
+    },
+    {
+        label = "T587 5 blue shown again",
+        run = function(): string? F.B:Hide() F.B:Show() return nil end,
+        ask = `Blue hidden and shown. {ON_TOP}`,
+        expect = "wowlua: blue",
+    },
+    {
+        label = "T587 6 red shown again",
+        run = function(): string? F.A:Hide() F.A:Show() return nil end,
+        ask = `Red hidden and shown. {ON_TOP}`,
+        expect = "wowlua: blue",
+    },
+    -- T588: the wheel.
+    {
+        label = "T588 3 wheel only",
+        run = function(): string?
+            clear()
+            const w = frame(UIParent, 300, 300, 0, 0, 0, 0, 0, 0.5)
+            w:EnableMouse(true)
+            const s = CreateFrame("Frame", nil, w)
+            s:SetAllPoints()
+            s:SetScript("OnMouseWheel", function() wheels += 1 end)
+            wheels = 0
+            zoom = GetCameraZoom()
+            return nil
+        end,
+        ask = "Put the mouse over the dark square and turn the mouse wheel one notch.",
+        options = DONE,
+        expect = "The probe counts the wheel and reads the camera zoom itself.",
+        after = wheelAfter,
+    },
+    {
+        label = "T588 5 under a frame taking the mouse",
+        run = function(): string?
+            const b = frame(UIParent, 100, 100, 0, 0, 1, 0, 0, 0.5)
+            b:SetFrameStrata("HIGH")
+            b:EnableMouse(true)
+            zoom = GetCameraZoom()
+            return nil
+        end,
+        ask = "Put the mouse over the small red square and turn the mouse wheel one notch.",
+        options = DONE,
+        expect = "wowlua: the dark square takes it, the camera stays. The probe reads it itself.",
+        after = wheelAfter,
+    },
+    -- T586: top-level frames.
+    {
+        label = "T586 2-4 levels",
+        run = function(): string?
+            clear()
+            const x = frame(UIParent, 10, 10, 0, 0, 0, 0, 0, 0)
+            x:SetFrameLevel(500)
+            const t = frame(UIParent, 10, 10, 0, 0, 0, 1, 0)
+            F.T = t
+            t:SetToplevel(true)
+            t:Hide()
+            t:Show()
+            const shown = t:GetFrameLevel()
+            t:Raise()
+            const raised = t:GetFrameLevel()
+            x:SetToplevel(true)
+            t:Hide()
+            t:Show()
+            return `shown {shown}, raised {raised}, shown2 {t:GetFrameLevel()}`
+        end,
+    },
+    {
+        label = "T586 5 clicked",
+        run = function(): string?
+            F.T:SetSize(200, 200)
+            F.T:EnableMouse(true)
+            return `before {F.T:GetFrameLevel()}`
+        end,
+        ask = "Click the green square once.",
+        options = DONE,
+        expect = "The probe reads the square's level itself.",
+        after = function(): string return `after {F.T:GetFrameLevel()}` end,
+    },
+    {
+        label = "T586 8 raised",
+        run = function(): string?
+            clear()
+            F.A = frame(UIParent, 200, 200, 0, 0, 1, 0, 0)
+            F.A:SetFrameLevel(50)
+            F.B = frame(UIParent, 200, 200, 60, 60, 0, 0, 1)
+            F.B:SetFrameLevel(50)
+            F.A:Raise()
+            return `A {F.A:GetFrameLevel()}`
+        end,
+        ask = `Red raised with Raise(). {ON_TOP}`,
+        expect = "TBC Anniversary: blue",
+    },
+    {
+        label = "T586 10 SuuUI",
+        run = function(): string?
+            clear()
+            return nil
+        end,
+        ask = "With SuuUI: open your bags. Without SuuUI: just Done.",
+        options = { { text = "Done", word = "next" } },
+        expect = "The probe reads the bag frames' levels itself.",
+        after = function(): string
+            const g = _G :: any
+            if g.SuuUIBags == nil then
+                return "no SuuUI"
+            end
+            local function level(f: any): string return f and tostring(f:GetFrameLevel()) or "nil" end
+            return `bags {level(g.SuuUIBags)}, bag 2 slot 1 {level(g.SuuUIBag2Slot1)}, damage meter {level(g.SuuUIDamageMeter)}`
+        end,
+    },
+    {
+        label = "T586 13 window under a higher frame",
+        run = function(): string?
+            const r = CreateFrame("Frame", nil, UIParent)
+            r:SetAllPoints()
+            made[#made + 1] = r
+            const m = CreateFrame("Frame", nil, r)
+            m:SetAllPoints()
+            F.W = frame(m, 200, 200, 0, 0, 0, 0, 1)
+            F.B = frame(r, 200, 200, 60, 60, 1, 0, 0)
+            F.B:Hide()
+            F.B:Show()
+            return `{F.W:GetFrameLevel()} {F.B:GetFrameLevel()}`
+        end,
+        ask = `Blue sits one level deeper than red. {ON_TOP}`,
+        expect = "wowlua: blue",
+    },
+    {
+        label = "T586 14 red top-level",
+        run = function(): string?
+            F.B:SetToplevel(true)
+            F.B:Hide()
+            F.B:Show()
+            return `{F.W:GetFrameLevel()} {F.B:GetFrameLevel()}`
+        end,
+        ask = `Red made top-level and shown again. {ON_TOP}`,
+        expect = "wowlua: red. TBC Anniversary: red",
+    },
+    {
+        label = "T586 15 blue top-level shown",
+        run = function(): string?
+            F.B:EnableMouse(true)
+            F.W:EnableMouse(true)
+            F.W:SetToplevel(true)
+            F.W:Hide()
+            F.W:Show()
+            return `{F.W:GetFrameLevel()} {F.B:GetFrameLevel()}`
+        end,
+        ask = `Blue made top-level and shown again. {ON_TOP}`,
+        expect = "wowlua: blue",
+    },
+    {
+        label = "T586 15 red clicked",
+        ask = `First click the red square where it does not overlap the blue one. Then: {ON_TOP}`,
+        expect = "wowlua: blue",
+        after = function(): string return `{F.W:GetFrameLevel()} {F.B:GetFrameLevel()}` end,
+    },
+}
+
+local index = 0
+local waiting: Step? = nil
+
+local function out(): { [string]: string }
+    const st = state() :: any
+    st.engineLayers = st.engineLayers ?? {}
+    return st.engineLayers
+end
+
+local function client(): string
+    return `{(GetBuildInfo())} ({select(2, GetBuildInfo())})`
+end
+
+local function stampedHere(part: string): boolean
+    const done = ((state() :: any).engineStamps ?? {})[part]
+    return done ~= nil and done.client == client()
+end
+
+-- The panel: at the top of the screen, above everything, clear of the
+-- squares in the middle. Plain textures, no templates.
+local panel: Frame? = nil
+local title: FontString? = nil
+local body: FontString? = nil
+local note: FontString? = nil
+const buttons: Button[] = {}
+const labels: FontString[] = {}
+
+local function stop()
+    waiting = nil
+    clear()
+    if panel then
+        panel:Hide()
+    end
+end
+
+--- A text in the client font (no font objects: they need Blizzard UI).
+local function words(parent: Frame, size: number, r: number, g: number, b: number): FontString
+    const fs = parent:CreateFontString(nil, "OVERLAY")
+    fs:SetFont("Fonts\\FRIZQT__.TTF", size, "")
+    fs:SetTextColor(r, g, b)
+    return fs
+end
+
+local function button(parent: Frame, text: string): (Button, FontString)
+    const b = CreateFrame("Button", nil, parent)
+    b:SetSize(150, 26)
+    const bg = b:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.25, 0.25, 0.3, 1)
+    const hl = b:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetColorTexture(1, 1, 1, 0.15)
+    const label = words(b, 12, 1, 1, 1)
+    label:SetPoint("CENTER")
+    label:SetText(text)
+    return b, label
+end
+
+local function makePanel(): Frame
+    const p = CreateFrame("Frame", nil, UIParent)
+    p:SetSize(500, 130)
+    p:SetPoint("TOP", 0, -40)
+    p:SetFrameStrata("DIALOG")
+    p:EnableMouse(true)
+    const bg = p:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 0.85)
+    const t = words(p, 13, 1, 0.82, 0)
+    t:SetPoint("TOPLEFT", 12, -10)
+    const b = words(p, 12, 1, 1, 1)
+    b:SetPoint("TOPLEFT", 12, -30)
+    b:SetWidth(476)
+    b:SetJustifyH("LEFT")
+    const n = words(p, 11, 0.6, 0.6, 0.6)
+    n:SetPoint("TOPLEFT", 12, -72)
+    n:SetWidth(476)
+    n:SetJustifyH("LEFT")
+    const close = button(p, "Stop")
+    close:SetSize(60, 20)
+    close:SetPoint("TOPRIGHT", -6, -6)
+    close:SetScript("OnClick", stop)
+    title, body, note = t, b, n
+    return p
+end
+
+local function show(heading: string, text: string, hint: string?, options: Option[], pick: (word: string) -> ())
+    const p = panel ?? makePanel()
+    panel = p
+    ;(title :: FontString):SetText(heading)
+    ;(body :: FontString):SetText(text)
+    ;(note :: FontString):SetText(hint ?? "")
+    for i, option in ipairs(options) do
+        if buttons[i] == nil then
+            buttons[i], labels[i] = button(p, "")
+            buttons[i]:SetPoint("BOTTOMLEFT", 12 + (i - 1) * 160, 10)
+        end
+        labels[i]:SetText(option.text)
+        buttons[i]:SetScript("OnClick", function() pick(option.word) end)
+        buttons[i]:Show()
+    end
+    for i = #options + 1, #buttons do
+        buttons[i]:Hide()
+    end
+    p:Show()
+end
+
+local function advance()
+    while index < #steps do
+        index += 1
+        const step = steps[index]
+        -- What an unattended run recorded for the step is replaced.
+        out()[step.label] = step.run and step.run() or nil
+        if step.ask then
+            waiting = step
+            show(`StdTest frame order: step {index} of {#steps}`, step.ask :: string, step.expect, step.options ?? COLORS, layersProbe)
+            return
+        end
+    end
+    waiting = nil
+    clear()
+    stamp("layers-guided")
+    show("StdTest frame order: done", "Recorded. It is written when you log out or /reload.", nil, { { text = "Close", word = "close" } }, function() stop() end)
+end
+
+export function layersProbe(word: string?)
+    if word ~= nil and waiting == nil then
+        say("engine layers: no step is waiting; /stdtest engine layers starts again")
+        return
+    end
+    if word == nil then
+        index = 0
+        clear()
+        advance()
+        return
+    end
+    const step = waiting :: Step
+    const parts: string[] = {}
+    if out()[step.label] then
+        parts[#parts + 1] = out()[step.label] :: string
+    end
+    if word ~= "next" then
+        parts[#parts + 1] = `seen {word}`
+    end
+    if step.after then
+        parts[#parts + 1] = step.after()
+    end
+    out()[step.label] = table.concat(parts, "; ")
+    advance()
+end
+
+--- The steps without the questions: what the calls answer, and SuuUI's
+--- bag levels with its bags opened (closed again after a second).
+local function unattended(done: () -> ())
+    const out_ = out()
+    for _, step in ipairs(steps) do
+        if step.run then
+            local ok, result = pcall(step.run :: () -> string?)
+            if not ok then
+                out_[step.label] = `error: {tostring(result)}`
+            elseif result then
+                out_[step.label] = result
+            end
+        end
+    end
+    clear()
+    local function finish()
+        stamp("layers")
+        done()
+    end
+    if (_G :: any).SuuUIBags == nil then
+        out_["T586 10 SuuUI"] = "no SuuUI"
+        finish()
+        return
+    end
+    OpenAllBags()
+    after(1, function()
+        for _, step in ipairs(steps) do
+            if step.label == "T586 10 SuuUI" then
+                out_[step.label] = (step.after :: () -> string)()
+            end
+        end
+        CloseAllBags()
+        finish()
+    end)
+end
+
+local function offer()
+    if stampedHere("layers-guided") or waiting ~= nil then
+        return
+    end
+    show(
+        "StdTest frame order",
+        "18 short steps for wowlua: coloured squares appear in the middle of the screen, and you answer here what you see. About three minutes.",
+        "Later asks again at the next login.",
+        { { text = "Start", word = "start" }, { text = "Later", word = "later" } },
+        function(word: string)
+            if word == "start" then
+                layersProbe(nil)
+            else
+                stop()
+            end
+        end
+    )
+end
+
+@onLogin
+local function autoStart()
+    after(10, function()
+        if stampedHere("layers") then
+            offer()
+        else
+            unattended(offer)
+        end
+    end)
+end

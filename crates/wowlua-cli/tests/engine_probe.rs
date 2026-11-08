@@ -67,6 +67,7 @@ fn build() -> tempfile::TempDir {
         "maps.wowlua",
         "collections.wowlua",
         "leftovers.wowlua",
+        "layers.wowlua",
         "graphics.wowlua",
         "screen.wowlua",
         "wrap.wowlua",
@@ -2198,7 +2199,7 @@ fn write_misses(file: &str, probe: &str, matched: usize, total: usize, misses: &
 /// made under UIParent; the frame level left out, which the hidden parent
 /// changes) stand in for it. The client's run (the beta's last day,
 /// 13,049 calls) replaced them. Only ever raised.
-const METHODPROBE_MATCHED: usize = 8399;
+const METHODPROBE_MATCHED: usize = 8473;
 
 #[test]
 fn the_engine_answers_the_method_probe_as_the_client_did() {

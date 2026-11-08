@@ -92,6 +92,36 @@ entry:SetPoint('CENTER')",
     assert_eq!(out, ["nav -1"]);
 }
 
+/// A frame taking only the mouse, at a higher strata over one taking the
+/// wheel, does not keep the wheel from it: WoW Forever (2026-11-07), the
+/// camera did not zoom (decision T588).
+#[test]
+fn a_frame_taking_only_the_mouse_lets_the_wheel_through() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "Log = {}
+local w = CreateFrame('Frame', nil, UIParent)
+w:SetSize(300, 300)
+w:SetPoint('CENTER')
+w:EnableMouse(true)
+local s = CreateFrame('Frame', nil, w)
+s:SetAllPoints()
+s:SetScript('OnMouseWheel', function(_, d) Log[#Log + 1] = 'S ' .. d end)
+local b = CreateFrame('Frame', nil, UIParent)
+b:SetSize(100, 100)
+b:SetPoint('CENTER')
+b:SetFrameStrata('HIGH')
+b:EnableMouse(true)",
+    );
+    let zoom = run(&mut vm, "return GetCameraZoom()");
+    let (x, y) = middle(&vm);
+    play::wheel(&mut vm, x, y, 1.0);
+    let out = run(&mut vm, "return table.concat(Log, ', ')");
+    assert_eq!(out, ["S 1"]);
+    assert_eq!(run(&mut vm, "return GetCameraZoom()"), zoom);
+}
+
 #[test]
 fn a_frame_registered_for_dragging_follows_the_mouse() {
     let mut vm = vm();
