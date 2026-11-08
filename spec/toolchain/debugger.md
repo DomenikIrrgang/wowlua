@@ -600,7 +600,8 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   browser requires; native callers block on it.
 - **Drawing**: one batched pass of textured quads in scene order, with the
   client's blend modes, premultiplied alpha, linear filtering and texture
-  coordinates; masks as a second texture; text from a glyph atlas
+  coordinates; a texture's masks (up to three, decision T596) as more
+  textures, the highest of their alphas taken (their union); text from a glyph atlas
   rasterized from the font at the scene's pixel height, with outlines and
   shadows, each line's baseline its height times the font's ascent over
   its ascent and descent (as the client's page number sits between the

@@ -369,9 +369,15 @@ struct Vertex {
     pos: [f32; 2],
     uv: [f32; 2],
     color: [f32; 4],
-    mask_uv: [f32; 2],
+    /// Where each of its masks' textures is sampled (`MASKS`).
+    mask_uv: [[f32; 2]; MASKS],
     flags: u32,
 }
+
+/// The masks a texture takes (`AddMaskTexture`): the client's limit.
+pub(crate) const MASKS: usize = 3;
+/// No mask: white, sampled at its middle.
+const NO_MASK_UV: [[f32; 2]; MASKS] = [[0.5, 0.5]; MASKS];
 
 const DESATURATE: u32 = 1;
 const ALPHA_KEY: u32 = 2;
@@ -395,7 +401,7 @@ pub(crate) struct Tex {
 struct Batch {
     pipeline: usize,
     tex: usize,
-    mask: usize,
+    mask: [usize; MASKS],
     clip: Option<Rect>,
     start: u32,
     end: u32,
@@ -423,7 +429,7 @@ pub struct Renderer {
     sampler: wgpu::Sampler,
     textures: Vec<Tex>,
     by_key: HashMap<TexKey, usize>,
-    bind_groups: HashMap<(usize, usize), wgpu::BindGroup>,
+    bind_groups: HashMap<(usize, [usize; MASKS]), wgpu::BindGroup>,
     fonts: Vec<fontdue::Font>,
     font_ids: HashMap<String, usize>,
     atlas: glyphs::Atlas,
@@ -609,8 +615,10 @@ impl Renderer {
             entries: &[
                 tex_entry(0),
                 tex_entry(1),
+                tex_entry(2),
+                tex_entry(3),
                 wgpu::BindGroupLayoutEntry {
-                    binding: 2,
+                    binding: 4,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
@@ -633,7 +641,7 @@ impl Renderer {
                     buffers: &[Some(wgpu::VertexBufferLayout {
                         array_stride: std::mem::size_of::<Vertex>() as u64,
                         step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x4, 3 => Float32x2, 4 => Uint32],
+                        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x4, 3 => Float32x2, 4 => Float32x2, 5 => Float32x2, 6 => Uint32],
                     })],
                 },
                 primitive: wgpu::PrimitiveState::default(),
@@ -916,7 +924,7 @@ impl Renderer {
         id
     }
 
-    fn bind_group(&mut self, tex: usize, mask: usize) -> &wgpu::BindGroup {
+    fn bind_group(&mut self, tex: usize, mask: [usize; MASKS]) -> &wgpu::BindGroup {
         let (device, layout, sampler, textures) = (
             &self.device,
             &self.tex_layout,
@@ -934,10 +942,18 @@ impl Renderer {
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&textures[mask].view),
+                        resource: wgpu::BindingResource::TextureView(&textures[mask[0]].view),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&textures[mask[1]].view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(&textures[mask[2]].view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
                         resource: wgpu::BindingResource::Sampler(sampler),
                     },
                 ],
@@ -958,7 +974,7 @@ impl Renderer {
                     batches: &mut Vec<Batch>,
                     pipeline: usize,
                     tex: usize,
-                    mask: usize,
+                    mask: [usize; MASKS],
                     clip: Option<Rect>,
                     quad: [Vertex; 4]| {
             let start = verts.len() as u32;
@@ -1003,7 +1019,7 @@ impl Renderer {
                         pos,
                         uv,
                         color: c,
-                        mask_uv: [0.5, 0.5],
+                        mask_uv: NO_MASK_UV,
                         flags: 0,
                     };
                     let quad = [
@@ -1017,7 +1033,7 @@ impl Renderer {
                         &mut batches,
                         PIPELINE_PREMUL,
                         tex,
-                        self.white,
+                        [self.white; MASKS],
                         m.clip.map(s),
                         quad,
                     );
@@ -1090,19 +1106,25 @@ impl Renderer {
                         let r = snapped(q, s(q.rect));
                         plain_tile_pieces(q, r, q.unit * scale, (t.width, t.height))
                     });
-                    // The mask's image and its region (the build's atlas's
-                    // where the assets know it).
-                    let (mask, mask_rect, region) = match q.masks.first() {
-                        Some(m) => {
-                            let own = m.atlas.as_deref().and_then(|n| assets.atlas(n));
-                            let (image, region) = match &own {
-                                Some(a) => (&a.image, a.coords),
-                                None => (&m.image, m.region),
-                            };
-                            (self.texture(image, assets), Some(s(m.rect)), region)
-                        }
-                        None => (self.white, None, [0.0, 1.0, 0.0, 1.0]),
-                    };
+                    // Its masks' images, rectangles and regions (the build's
+                    // atlas's where the assets know it). The slots it does
+                    // not use repeat its first mask (white without one), so
+                    // they add nothing to the union.
+                    let mut mask = [self.white; MASKS];
+                    let mut mask_at: [Option<(Rect, [f32; 4])>; MASKS] = [None; MASKS];
+                    for (k, m) in q.masks.iter().take(MASKS).enumerate() {
+                        let own = m.atlas.as_deref().and_then(|n| assets.atlas(n));
+                        let (image, region) = match &own {
+                            Some(a) => (&a.image, a.coords),
+                            None => (&m.image, m.region),
+                        };
+                        mask[k] = self.texture(image, assets);
+                        mask_at[k] = Some((s(m.rect), region));
+                    }
+                    for k in q.masks.len().clamp(1, MASKS)..MASKS {
+                        mask[k] = mask[0];
+                        mask_at[k] = mask_at[0];
+                    }
                     let r = snapped(q, s(q.rect));
                     let (cx, cy) = (r.x + r.w / 2.0, r.y + r.h / 2.0);
                     let (sin, cos) = (-q.rotation).sin_cos();
@@ -1143,8 +1165,8 @@ impl Renderer {
                         pos,
                         uv,
                         color: shade(pos),
-                        mask_uv: match mask_rect {
-                            Some(m) if m.w > 0.0 && m.h > 0.0 => {
+                        mask_uv: mask_at.map(|at| match at {
+                            Some((m, region)) if m.w > 0.0 && m.h > 0.0 => {
                                 let (u, v) = ((pos[0] - m.x) / m.w, (pos[1] - m.y) / m.h);
                                 [
                                     region[0] + u * (region[1] - region[0]),
@@ -1152,7 +1174,7 @@ impl Renderer {
                                 ]
                             }
                             _ => [0.5, 0.5],
-                        },
+                        }),
                         flags,
                     };
                     let pipeline = match q.blend {
@@ -1263,7 +1285,7 @@ impl Renderer {
                                         pos,
                                         uv,
                                         color,
-                                        mask_uv: [0.5, 0.5],
+                                        mask_uv: NO_MASK_UV,
                                         flags: 0,
                                     };
                                     let quad = [
@@ -1277,7 +1299,7 @@ impl Renderer {
                                         &mut batches,
                                         PIPELINE_BLEND,
                                         self.atlas_tex,
-                                        self.white,
+                                        [self.white; MASKS],
                                         t.clip.map(s),
                                         quad,
                                     );
