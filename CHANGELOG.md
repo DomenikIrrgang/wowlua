@@ -46,6 +46,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `GetNumRegions()` counts a frame's current regions, including hidden regions, rather than returning a fresh frame's recorded count.
 - `DisableDrawLayer` and `EnableDrawLayer` hide and restore a frame's draw layers without changing its regions' shown state or its child frames' layers.
 - Clearing texture artwork with file ID `0` no longer draws missing-texture placeholders.
+- Test units' auras: the filter words `DISPELLABLE`, `CROWD_CONTROL` and `RAID_IN_COMBAT` now keep the auras the game keeps (a dispel type; crowd control, `crowdControl = true` in `applyAura`; no debuff for `RAID_IN_COMBAT`) instead of every aura.
 
 ## 0.13.8 (2026-11-01)
 
