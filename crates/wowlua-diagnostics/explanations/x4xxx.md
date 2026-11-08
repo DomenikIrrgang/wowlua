@@ -769,10 +769,11 @@ Related: E4311
 ## E4311
 
 A file would be written to a path that the build itself uses: an asset in one
-of the generated folders (`src/`, `wowlua/`, `libs/`), an asset named like a
+of the generated folders (`src/`, `wowlua/`), an asset named like a
 generated file (`Bindings.xml`, `LICENSES.txt`, a `.toc` in the AddOn root),
-an asset that is also a compiled file, or a file at the path of a bundle. One
-of them would overwrite the other.
+an asset that is also a compiled file or a file a dependency writes under
+`libs/`, or a file at the path of a bundle. One of them would overwrite the
+other.
 
 Move or rename the asset, or exclude it from `build.assets`. For a bundle,
 rename the file or set `bundle: false`. `LICENSES.txt` is where wowlua collects
