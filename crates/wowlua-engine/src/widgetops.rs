@@ -2,10 +2,10 @@
 //! until these, the engine took them for setters without a getter and did
 //! nothing (decision T289).
 //!
-//! - `Frame:Raise()` and `Frame:Lower()`: the frame's level above (below)
-//!   every other shown frame's in its strata, as `GetFrameLevel` answers.
-//!   A top-level frame shown or clicked is drawn above the rest of its
-//!   strata, its level kept (decision T586, `widgets::raise_toplevel`).
+//! - `Frame:Lower()`: the frame's level below every other shown frame's in
+//!   its strata, as `GetFrameLevel` answers. `Frame:Raise()` changes
+//!   nothing seen (decision T586); a top-level frame shown is drawn above
+//!   the rest of its strata, its level kept (`widgets::raise_toplevel`).
 //! - An edit box's selection: `HighlightText([start [, end]])` selects
 //!   (the whole text by default; `HighlightText(0, 0)` nothing),
 //!   `ClearHighlightText()` drops it; `Insert(text)` puts the text in place
@@ -24,8 +24,8 @@
 //!   `ResetTexCoord()`, `StopAnimating()` (every animation group of the
 //!   region stopped).
 //!
-//! Unverified, none recorded: which frames `Raise` counts (the shown ones
-//! of the strata here) and the level cap (10000), `Insert`'s
+//! Unverified, none recorded: which frames `Lower` counts (the shown ones
+//! of the strata here), `Insert`'s
 //! `OnTextChanged` (`false`, the frame's update after, as `SetText`'s),
 //! a selection given backwards, a box without `SetHistoryLines` keeping
 //! no line, the arrows' order (`OnArrowPressed` first), `ClearPointsOffset` zeroing the offsets
@@ -36,9 +36,6 @@ use wowlua_vm::{NativeCall, Value, Vm};
 
 use crate::widgets::{self, MethodFn, WidgetId};
 use crate::{engine, engine_mut};
-
-/// The level a frame can have at most.
-const MAX_LEVEL: f64 = 10000.0;
 
 /// The selection's stem (the engine's own: no setter has it).
 const HIGHLIGHT: &str = "\u{0}Highlight";
@@ -91,19 +88,11 @@ fn other_levels(vm: &mut Vm, id: WidgetId) -> Vec<f64> {
     out
 }
 
-/// `Frame:Raise()`: above every other shown frame of its strata, its
-/// descendants with levels of their own raised with it, as
-/// `SetFrameLevel` moves them: a top-level window raised as it opens
-/// keeps its panes above its background (the spellbook's
-/// `PlayerSpellsFrame`, raised to 501, its `SpellBookFrame` at 100 was
-/// drawn under it; the recorded tree has the pane above the window).
-fn raise(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    let own = widgets::frame_level(vm, id);
-    let top = other_levels(vm, id).into_iter().fold(f64::MIN, f64::max);
-    if top >= own {
-        let level = (top + 1.0).min(MAX_LEVEL);
-        widgets::set_level(vm, id, level);
-    }
+/// `Frame:Raise()`: nothing seen, its level and its place among the frames
+/// of its level kept (decision T586; TBC Anniversary and WoW Forever: a
+/// frame at 1 beside one at 500 stays at 1, a frame at 50 under another at
+/// 50 stays under it). Unverified: a top-level frame raised by it.
+fn raise(_vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 

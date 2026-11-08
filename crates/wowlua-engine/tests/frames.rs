@@ -2503,10 +2503,9 @@ return w('Fonts\\\\ARHei.ttf', 'ab') / px, w('Fonts\\\\FRIZQT__.TTF', 'éé') / 
     assert_ne!(recorded[1], with_fonts[1], "{recorded:?}");
 }
 
-/// `Raise()` moves a frame's descendants that have levels of their own
-/// with it, as `SetFrameLevel` does: a window raised as it opens keeps
-/// its panes over its background (the spellbook's `PlayerSpellsFrame`
-/// drew its pages under it).
+/// `Raise()` keeps a frame's level and its panes' (decision T586): a window
+/// raised as it opens keeps its panes over its background (the spellbook's
+/// `PlayerSpellsFrame` once drew its pages under it).
 #[test]
 fn raise_keeps_panes_above_their_window() {
     let mut vm = vm();
@@ -2523,8 +2522,7 @@ window:Raise()
 return window:GetFrameLevel(), pane:GetFrameLevel()",
     );
     let (window, pane): (f64, f64) = (r[0].parse().unwrap(), r[1].parse().unwrap());
-    assert!(window > 500.0, "{r:?}");
-    assert_eq!(pane - window, 99.0, "{r:?}");
+    assert_eq!((window, pane), (1.0, 100.0), "{r:?}");
 }
 
 /// A spell's tooltip with the client's tables (decision T391): its cost

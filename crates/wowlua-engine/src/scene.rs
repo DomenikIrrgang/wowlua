@@ -2742,9 +2742,10 @@ pub fn hit_test(vm: &mut Vm, x: f64, y: f64) -> Option<WidgetId> {
     topmost_at(vm, x, y, false)
 }
 
-/// The topmost visible frame at a point that takes the mouse or the wheel
-/// (`EnableMouseWheel`), as a turn of the wheel there finds it (decision
-/// T588: a scroll frame taking only the wheel, over its window).
+/// The topmost visible frame at a point that takes the wheel
+/// (`EnableMouseWheel`, or an `OnMouseWheel` script), as a turn of the
+/// wheel there finds it: frames above it taking only the mouse do not keep
+/// it from the wheel (decision T588).
 pub fn wheel_test(vm: &mut Vm, x: f64, y: f64) -> Option<WidgetId> {
     topmost_at(vm, x, y, true)
 }
@@ -2752,8 +2753,12 @@ pub fn wheel_test(vm: &mut Vm, x: f64, y: f64) -> Option<WidgetId> {
 fn topmost_at(vm: &mut Vm, x: f64, y: f64, wheel: bool) -> Option<WidgetId> {
     let order = frames_in_order(vm);
     order.into_iter().rev().find(|&f| {
-        let takes_wheel = || wheel && first(vm, f, "MouseWheelEnabled").is_some_and(|v| v.truthy());
-        if !mouse_enabled(vm, f) && !takes_wheel() {
+        let takes = if wheel {
+            first(vm, f, "MouseWheelEnabled").is_some_and(|v| v.truthy())
+        } else {
+            mouse_enabled(vm, f)
+        };
+        if !takes {
             return false;
         }
         let Some(r) = rect_of(vm, f) else {
