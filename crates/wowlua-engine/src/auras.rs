@@ -287,7 +287,8 @@ pub fn apply(vm: &mut Vm, me: UnitId, data: TableRef) -> f64 {
         stealable: flag(vm, "stealable"),
         boss: flag(vm, "boss"),
         raid: flag(vm, "raid"),
-        crowd_control: flag(vm, "crowdControl"),
+        // (a stun is crowd control)
+        crowd_control: flag(vm, "crowdControl") || flag(vm, "stuns"),
         raid_in_combat: flag(vm, "raidInCombat"),
         important: flag(vm, "important"),
         big_defensive: flag(vm, "bigDefensive"),
