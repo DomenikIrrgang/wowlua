@@ -274,7 +274,9 @@ const RUNTIME_PATH: &str = "wowlua/runtime.lua";
 const LOCALES_PATH: &str = "wowlua/locales/";
 
 /// Output entries that are reserved at the top level of the AddOn (§14.8).
-const RESERVED_DIRS: &[&str] = &["src", "wowlua", "libs"];
+/// `libs/` is not: an asset there collides only with a file a dependency
+/// writes (decision T591).
+const RESERVED_DIRS: &[&str] = &["src", "wowlua"];
 const RESERVED_FILES: &[&str] = &["Bindings.xml", "LICENSES.txt"];
 
 /// Builds the project. Returns `None` if any error was reported.

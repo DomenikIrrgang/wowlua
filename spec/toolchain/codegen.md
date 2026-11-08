@@ -231,7 +231,9 @@ The output tree has a fixed top level:
 | anything else | Assets, at their path relative to the package root (`media/x.tga` → `media/x.tga`) |
 
 These names are **reserved**. An asset whose output path collides with a
-reserved entry, or with another output file, is error E4311.
+reserved entry, or with another output file, is error E4311. `libs/` is
+reserved only for what the dependencies write: an asset there collides only
+with a file of theirs (decision T591).
 
 ### 14.8.1 Unbundled (default for `dev` and `test`)
 

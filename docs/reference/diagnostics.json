@@ -4343,7 +4343,7 @@
     },
     "E4311": {
       "area": "manifest",
-      "text": "A file would be written to a path that the build itself uses: an asset in one\nof the generated folders (`src/`, `wowlua/`, `libs/`), an asset named like a\ngenerated file (`Bindings.xml`, `LICENSES.txt`, a `.toc` in the AddOn root),\nan asset that is also a compiled file, or a file at the path of a bundle. One\nof them would overwrite the other.\n\nMove or rename the asset, or exclude it from `build.assets`. For a bundle,\nrename the file or set `bundle: false`. `LICENSES.txt` is where wowlua collects\nthe licenses of embedded libraries, so keep your own license under another\nname such as `LICENSE.txt`.",
+      "text": "A file would be written to a path that the build itself uses: an asset in one\nof the generated folders (`src/`, `wowlua/`), an asset named like a\ngenerated file (`Bindings.xml`, `LICENSES.txt`, a `.toc` in the AddOn root),\nan asset that is also a compiled file or a file a dependency writes under\n`libs/`, or a file at the path of a bundle. One of them would overwrite the\nother.\n\nMove or rename the asset, or exclude it from `build.assets`. For a bundle,\nrename the file or set `bundle: false`. `LICENSES.txt` is where wowlua collects\nthe licenses of embedded libraries, so keep your own license under another\nname such as `LICENSE.txt`.",
       "examples": [
         {
           "compiles": false,
