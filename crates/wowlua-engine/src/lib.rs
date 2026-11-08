@@ -322,6 +322,18 @@ pub fn set_screen(vm: &mut Vm, screen: Screen) {
     }
 }
 
+/// The screen a session asked for wins over the UI scale a world profile's
+/// CVars recorded (decision T603): applied again after the profile, UIParent
+/// following with `UI_SCALE_CHANGED` when its scale changed. A screen
+/// without a UI scale leaves the world's CVars to decide.
+pub fn keep_screen(vm: &mut Vm, screen: Screen) {
+    if let Some(ui) = screen.ui_scale {
+        framescript::cvar_set(vm, "useUiScale", "1".into());
+        framescript::cvar_set(vm, "uiScale", format!("{ui:.6}"));
+        change_screen(vm, screen);
+    }
+}
+
 /// The screen changed while the client runs, as the game's settings change
 /// it (decision T482: the window's size, `C_VideoOptions.SetGameWindowSize`;
 /// the UI scale, the `useUiScale` and `uiScale` CVars): UIParent follows,

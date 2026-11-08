@@ -363,8 +363,10 @@ world's default renown unchanged.
 
 `screen` is the screen the client draws on, as the manifest's `test.screen`
 gives it and over it; a file's `config({ screen })` is over both (decision
-T482). Its UI scale turns "Use UI Scale" on, as the client's CVars read; it
-is a value of the game's UI Scale slider, 0.65 to 1.15 in steps of 0.01
+T482). Its UI scale turns "Use UI Scale" on, as the client's CVars read, and
+wins over the `uiScale` the profile's own `cvars` (or the fresh character's)
+record (decision T603); without one, those CVars decide. It is
+a value of the game's UI Scale slider, 0.65 to 1.15 in steps of 0.01
 (decision T508).
 
 A unit's `level` is `UnitLevel`'s answer; -1 is a boss's "??" level, as the
