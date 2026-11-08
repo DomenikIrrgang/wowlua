@@ -791,6 +791,8 @@ fn load_vm(
     } else if let Some(text) = profile::default_for(&suite.flavor) {
         profile::apply_text(&mut vm, controls, text, "of the fresh character")?;
     }
+    // The screen's UI scale over the world's recorded CVars (decision T603).
+    wowlua_engine::keep_screen(&mut vm, screen);
 
     // The addon's key bindings, which the client reads at startup.
     let bindings = dir.join("Bindings.xml");
