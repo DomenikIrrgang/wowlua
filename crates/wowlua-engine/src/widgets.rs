@@ -309,6 +309,11 @@ pub struct World {
     /// The chat windows whose `AddMessage` a hook logs (Blizzard's, a Lua
     /// mixin's; T514).
     pub chat_hooked: std::collections::HashSet<usize>,
+    /// The function Blizzard's UI gave `C_Macro.SetMacroExecuteLineCallback`
+    /// (kept), which runs a macro's line as typed into chat (T601).
+    pub macro_line: Option<Value>,
+    /// `StopMacro` stopped the running macro: its other lines do not run.
+    pub macro_stopped: bool,
     /// Warnings for gaps that would make every test fail if they were errors
     /// (templates without Blizzard's UI code).
     pub warnings: Vec<String>,

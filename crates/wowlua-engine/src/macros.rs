@@ -9,6 +9,12 @@
 //! nothing is no enabled action (its cooldown's `isEnabled` false;
 //! recorded once, an empty macro; unverified for one that only talks).
 //!
+//! Running one (decision T601): `C_Macro.RunMacroText` (a secure button's
+//! `macrotext`) and `RunMacro` (its `macro`) run the lines through the
+//! callback Blizzard's UI gives `C_Macro.SetMacroExecuteLineCallback`, as
+//! the client does: each line as typed into chat, so `/click`, `/cast` and
+//! the client's other secure commands run as Blizzard's code has them.
+//!
 //! Unverified: the order a new or renamed macro takes (kept by name, as
 //! the client lists them), `GetMacroInfo`'s answer beyond name, icon and
 //! body.
@@ -278,6 +284,69 @@ pub fn control_set_macros(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `C_Macro.SetMacroExecuteLineCallback(cb)`: the function that runs a
+/// macro's line (Blizzard's MacroExecutionManager gives it at
+/// `PLAYER_ENTERING_WORLD`: its private chat edit box's `SendText`).
+fn set_execute_line_callback(vm: &mut Vm, c: NativeCall) -> Ret {
+    let cb = c.arg(1);
+    if matches!(cb, Value::Func(_)) {
+        widgets::keep(vm, cb);
+        engine_mut(vm).world.macro_line = Some(cb);
+    }
+    Ok(vec![])
+}
+
+/// Runs a macro's text line by line through the line callback, each as
+/// typed into chat (decision T601): the client's secure commands
+/// (`/click`, `/cast`, …), `SlashCmdList`'s, chat. Empty lines and `#`
+/// lines (`#showtooltip`) run nothing (unverified); `StopMacro`
+/// (`/stopmacro`) stops the rest. The running execution goes on into the
+/// callback (only secure code gets here: the runners are protected).
+/// Without Blizzard's UI there is no callback: nothing runs.
+pub fn run_text(vm: &mut Vm, body: &str) {
+    let Some(cb) = engine(vm).world.macro_line else {
+        return;
+    };
+    let outer = std::mem::replace(&mut engine_mut(vm).world.macro_stopped, false);
+    for line in body.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let s = vm.str(line);
+        vm.call_from_engine_in(cb, &[s], false);
+        if engine(vm).world.macro_stopped {
+            break;
+        }
+    }
+    engine_mut(vm).world.macro_stopped = outer;
+}
+
+/// `C_Macro.RunMacroText(text, button)`: the text run as a macro (a
+/// secure button's `macrotext`). The click's button is what `[button]`
+/// sees (`GetMouseButtonClicked`; unverified for a call outside a click).
+fn run_macro_text(vm: &mut Vm, c: NativeCall) -> Ret {
+    let body = text(vm, c.arg(1)).unwrap_or_default();
+    run_text(vm, &body);
+    Ok(vec![])
+}
+
+/// `RunMacro(index or name, button)`: the macro's body run (a secure
+/// button's `macro`); no such macro, nothing.
+fn run_macro(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(at) = find(vm, c.arg(1)) {
+        let body = get(vm, at).body;
+        run_text(vm, &body);
+    }
+    Ok(vec![])
+}
+
+/// `StopMacro()`: the running macro's other lines do not run.
+fn stop_macro(vm: &mut Vm, _c: NativeCall) -> Ret {
+    engine_mut(vm).world.macro_stopped = true;
+    Ok(vec![])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("GetNumMacros", get_num_macros),
@@ -287,5 +356,12 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("CreateMacro", create_macro),
         ("EditMacro", edit_macro),
         ("DeleteMacro", delete_macro),
+        (
+            "C_Macro.SetMacroExecuteLineCallback",
+            set_execute_line_callback,
+        ),
+        ("C_Macro.RunMacroText", run_macro_text),
+        ("RunMacro", run_macro),
+        ("StopMacro", stop_macro),
     ]
 }

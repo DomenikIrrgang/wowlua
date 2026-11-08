@@ -1544,6 +1544,17 @@ engine to close, with the steps that would record the game's answer.
     - hover the marker: `/run local f=GetMouseFoci()[1] local p=f and f:GetParent() print(f and f:GetName(), f and f:GetFrameStrata(), f and f:GetFrameLevel(), p and p:GetName(), p and p:GetFrameLevel())`
 
       Seen: (to do)
+16. **A macro's `/click` on the pet bar's button** (decision T601).
+    SuuUI's tests: a secure button with `type2 = "macro"` and `macrotext2
+    = "/click PetActionButton4 RightButton"`, right-clicked, did nothing in
+    wowlua (its macros ran no line). In the game, with Bite on pet bar
+    slot 4, out of combat, then in combat against a training dummy:
+    `/click PetActionButton4 RightButton`
+
+    wowlua (now): the slot's autocast switched, from chat and from a
+    secure button's macro, in combat too. Seen: WoW Forever 1.60.1
+    (2026-11-08): `/click PetActionButton4 RightButton` toggled the slot's
+    autocast, in and out of combat.
 
 ## The pet's spellbook (decision T599)
 

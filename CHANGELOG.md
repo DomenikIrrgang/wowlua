@@ -35,6 +35,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A secure button's macro runs its lines, as in the game: `type = "macro"` with `macrotext` (or `macro`, a saved macro) runs `/click PetActionButton4 RightButton`, `/cast` and the game's other slash commands, in combat too. Before, it did nothing. An addon calling `C_Macro.RunMacroText` itself gets ADDON_ACTION_FORBIDDEN.
 - `GetCurrentKeyBoardFocus()` may return nil, as it does while nothing has the keyboard's focus: `expect(GetCurrentKeyBoardFocus()).toBe(nil)` compiles.
 - A top-level frame (`SetToplevel(true)`) is drawn above the rest of its strata when it is shown, its frame level unchanged, as in the game: SuuUI's bags open in front of its damage meter with their slots in front of their background.
 - A scroll frame's scroll child moves with its scroll (`SetVerticalScroll`, `SetHorizontalScroll`): its rows scroll on the screen, not only its scroll bar, as SuuUI's settings window's did.

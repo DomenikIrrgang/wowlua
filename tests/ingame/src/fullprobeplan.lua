@@ -7,8 +7,8 @@
 --     461 undocumented and not named as a query
 --     311 a setter without a curated read-back and restore
 --     205 a Lua or WoW language function (the conformance suite probes these)
---     186 restricted (HasRestrictions)
---      89 protected
+--     185 restricted (HasRestrictions)
+--      90 protected
 --      16 acts: a request that joins, buys or answers
 --       2 acts: sets the group role
 --       1 acts: completes the quest and takes its reward
@@ -9642,7 +9642,7 @@ local skipped = {
     { [==[C_MacOptions.OpenMicrophoneRequestDialogue]==], [==[not named as a query (an action or a state change)]==] },
     { [==[C_MacOptions.OpenUniversalAccess]==], [==[not named as a query (an action or a state change)]==] },
     { [==[C_MacOptions.SetOSShortcutsDisabled]==], [==[a setter without a curated read-back and restore]==] },
-    { [==[C_Macro.RunMacroText]==], [==[restricted (HasRestrictions)]==] },
+    { [==[C_Macro.RunMacroText]==], [==[protected]==] },
     { [==[C_Mail.SetOpeningAll]==], [==[a setter without a curated read-back and restore]==] },
     { [==[C_MajorFactions.GetCurrentRenownLevel]==], [==[a retail system Forever lacks (its functions crashed the client)]==] },
     { [==[C_MajorFactions.GetMajorFactionData]==], [==[a retail system Forever lacks (its functions crashed the client)]==] },
@@ -11168,4 +11168,4 @@ local skipped = {
     { [==[xpcall]==], [==[a Lua or WoW language function (the conformance suite probes these)]==] },
 }
 
-ns.__wowlua.define("fullprobeplan", { calls = calls, risky = risky, suspect = suspect, setters = setters, skipped = skipped, version = "be517eacc83df97a" })
+ns.__wowlua.define("fullprobeplan", { calls = calls, risky = risky, suspect = suspect, setters = setters, skipped = skipped, version = "3f8370968cdcfc70" })
