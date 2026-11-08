@@ -1616,3 +1616,26 @@ out of combat, the spellbook closed, the cursor empty:
 
    wowlua: the icon `mock.setPet` gives (else the first spell's), `true`.
    Seen: a file ID or a path, and is it the family's icon? (to do)
+
+## A texture's masks (decision T596)
+
+On WoW Forever from its launch, each line in the chat. How many masks a
+texture takes and what a fourth does: wowlua takes three and raises
+an error on the fourth. Then whether two shaped masks intersect or
+join.
+
+1. `/run F=CreateFrame("Frame",nil,UIParent) F:SetSize(256,64) F:SetPoint("CENTER") T=F:CreateTexture() T:SetAllPoints() T:SetColorTexture(1,0,0) M={} for i=1,4 do M[i]=F:CreateMaskTexture() M[i]:SetAllPoints() M[i]:SetTexture("Interface\\CHATFRAME\\CHATFRAMEBACKGROUND") end`
+2. `/run for i=1,3 do T:AddMaskTexture(M[i]) end print(T:GetNumMaskTextures(), pcall(T.AddMaskTexture, T, M[4])) print(T:GetNumMaskTextures())`
+
+   Seen: the counts, and the error if any (else whether one shows in the
+   error frame or the log). WoW Forever (2026-11-07): "3 false
+   Texture:AddMaskTexture(): Texture already has the maximum number of
+   mask textures (3)", with a "Lua Taint" line naming the addon, then
+   "3". wowlua now words it so (it said "…at most 3 mask textures").
+3. `/run for i=1,3 do T:RemoveMaskTexture(M[i]) end M[1]:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask") M[2]:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask") M[2]:ClearAllPoints() M[2]:SetPoint("LEFT",F,"CENTER") M[2]:SetSize(256,64) T:AddMaskTexture(M[1]) T:AddMaskTexture(M[2])`
+
+   Seen: red only where the two ellipses overlap? WoW Forever
+   (2026-11-07): no, red in both ovals (their union). wowlua now draws
+   the union (it drew the overlap).
+4. `/run F:Hide()`
+
