@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,110 of the 5,114 documented camelot functions have
-  behaviour (99.9%): 1,058 modelled, 353 answered from recordings, 3,699 by a
+  behaviour (99.9%): 1,060 modelled, 353 answered from recordings, 3,697 by a
   documentation-based fill-in. Of all 7,179 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,192 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,194 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -216,7 +216,7 @@ ones together):
 | `C_LoreText` | 1 | 0 | 0 | 1 | 0 |
 | `C_LossOfControl` | 5 | 0 | 1 | 4 | 0 |
 | `C_MacOptions` | 10 | 0 | 0 | 10 | 0 |
-| `C_Macro` | 4 | 0 | 0 | 4 | 0 |
+| `C_Macro` | 4 | 2 | 0 | 2 | 0 |
 | `C_Mail` | 5 | 4 | 0 | 1 | 0 |
 | `C_MajorFactions` | 14 | 4 | 3 | 7 | 0 |
 | `C_Map` | 40 | 8 | 18 | 14 | 0 |
@@ -346,13 +346,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,179 | 1,672 | 435 | 5,068 | 4 |
+| **All** | 7,179 | 1,674 | 435 | 5,066 | 4 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,114 | 1,058 | 353 | 3,699 | 4 |
+| Blizzard's API documentation | 5,114 | 1,060 | 353 | 3,697 | 4 |
 | the client's other C functions (`/stdtest inventory`) | 2,065 | 614 | 82 | 1,369 | 0 |
 | the engine's own, in neither list | 16 | 15 | 0 | 1 | 0 |
 
@@ -373,7 +373,7 @@ The modules that answer, by how many functions and methods:
 
 | Module | Kind | Functions and methods |
 |--------|------|----------------------:|
-| `extras` | fill-in | 1,488 |
+| `extras` | fill-in | 1,486 |
 | `widgets` | model | 638 |
 | `globalsinfo` | fill-in | 524 |
 | `content` | fill-in | 520 |
@@ -409,8 +409,8 @@ The modules that answer, by how many functions and methods:
 | `collected` | model | 38 |
 | `framescript` | model | 36 |
 | `gamedata` | model | 36 |
-| `protection` | model | 35 |
 | `character` | model | 34 |
+| `protection` | model | 33 |
 | `misc` | model | 32 |
 | `lfg` | model | 31 |
 | `mail` | model | 30 |
@@ -442,6 +442,7 @@ The modules that answer, by how many functions and methods:
 | `targeting` | model | 12 |
 | `tooltip` | model | 12 |
 | `death` | model | 11 |
+| `macros` | model | 11 |
 | `channels` | model | 10 |
 | `buttons` | model | 9 |
 | `equipsets` | model | 9 |
@@ -453,7 +454,6 @@ The modules that answer, by how many functions and methods:
 | `auras` | model | 8 |
 | `chat` | model | 7 |
 | `damagemeter` | model | 7 |
-| `macros` | model | 7 |
 | `clientdata` | model | 6 |
 | `inspect` | model | 5 |
 | `achievements` | model | 3 |
@@ -849,7 +849,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,192 rules unverified: each rests on Blizzard's
+The engine's code marks 1,194 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1697,10 +1697,12 @@ page changes only when a rule is added, removed or reworded.
 
 - [loot.rs](../crates/wowlua-engine/src/loot.rs): Unverified: the packets' spacing (recorded: the slots 0.39 to 1.07 s after the window opened, `slotsAfter` replays a...
 
-### macros (2)
+### macros (4)
 
 - [macros.rs](../crates/wowlua-engine/src/macros.rs): Macros: the account's (indices 1 to 120) and the character's (121 to 138), each a name, an icon and a body.
 - [macros.rs](../crates/wowlua-engine/src/macros.rs): Unverified: the order a new or renamed macro takes (kept by name, as the client lists them), `GetMacroInfo`'s answer...
+- [macros.rs](../crates/wowlua-engine/src/macros.rs): Runs a macro's text line by line through the line callback, each as typed into chat (decision T601): the client's sec...
+- [macros.rs](../crates/wowlua-engine/src/macros.rs): `C_Macro.RunMacroText(text, button)`: the text run as a macro (a secure button's `macrotext`).
 
 ### mail (5)
 

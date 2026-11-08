@@ -44,6 +44,9 @@ use crate::{engine, engine_mut};
 /// `C_SpellBook.ToggleSpellBookItemAutoCast` forbidden out of combat (its
 /// pet spellbook, decision T600); `SetSpellBookItemAutoCastEnabled`, with
 /// the same flags in the documentation, is kept with it (unverified).
+/// `C_Macro.RunMacroText` (the documentation's `HasRestrictions`, as the
+/// global `RunMacroText` it replaced) runs a macro's secure commands since
+/// decision T601: kept with them (unverified).
 pub const PROTECTED: &[&str] = &[
     "AcceptBattlefieldPort",
     "AscendStop",
@@ -53,6 +56,7 @@ pub const PROTECTED: &[&str] = &[
     "C_GuildInfo.SetInfoText",
     "C_GuildInfo.SetMOTD",
     "C_GuildInfo.SetNote",
+    "C_Macro.RunMacroText",
     "C_SpellBook.SetSpellBookItemAutoCastEnabled",
     "C_SpellBook.ToggleSpellBookItemAutoCast",
     "CameraOrSelectOrMoveStart",

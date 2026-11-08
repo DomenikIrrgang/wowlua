@@ -36,6 +36,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A secure button's macro runs its lines, as in the game: `type = "macro"` with `macrotext` (or `macro`, a saved macro) runs `/click PetActionButton4 RightButton`, `/cast` and the game's other slash commands, in combat too. Before, it did nothing. An addon calling `C_Macro.RunMacroText` itself gets ADDON_ACTION_FORBIDDEN.
 - `GetCurrentKeyBoardFocus()` may return nil, as it does while nothing has the keyboard's focus: `expect(GetCurrentKeyBoardFocus()).toBe(nil)` compiles.
 - On case-sensitive file systems, Blizzard's barber shop functions (`ShowBarberShopFrame`, `HideBarberShopFrame`, `BarberShopFrame_LoadUI`) exist as in the game: wowlua now finds a Blizzard addon's TOC whatever the case of its name, as Windows does.
 - The LibStub that `mock.provideLibrary` sets up has a minor version, so a real LibStub loaded after it upgrades it instead of failing with "attempt to compare nil with number".

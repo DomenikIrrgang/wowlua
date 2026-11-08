@@ -136,7 +136,8 @@ The client's security model, in the VM:
     TargetLastTarget and StopAttack are not. So is the pet spellbook's
     `C_SpellBook.ToggleSpellBookItemAutoCast`, out of combat too (found
     in game, decision T600), and `SetSpellBookItemAutoCastEnabled` with
-    it (unverified).
+    it (unverified), and `C_Macro.RunMacroText` (decision T601,
+    unverified).
   - Protected methods (the documentation's `IsProtectedFunction`: `Show`,
     `Hide`, `SetPoint`, `SetSize`, `SetParent`, …) and `SetAttribute` of a
     protected frame, in combat lockdown: `ADDON_ACTION_BLOCKED`, after the
@@ -679,6 +680,22 @@ takes the flavor's `Interface` folder and its global strings:
   own `GetForbiddenObjectTable` (secure code only), and the delegate stays
   on the frame where a later private mixin has the same function.
   Unverified: errors in a delegate reach its caller.
+- **Macros** (decision T601): `C_Macro.RunMacroText(text, button)` (a
+  secure button's `macrotext`) and `RunMacro(index or name, button)` (its
+  `macro`, a saved macro's body) run the text line by line through the
+  function Blizzard's UI gives `C_Macro.SetMacroExecuteLineCallback` at
+  `PLAYER_ENTERING_WORLD` (its private chat edit box's `SendText`), as the
+  client does: each line as typed into chat, so the client's secure
+  commands run as Blizzard's code has them. `/click <name> [mouse button]
+  [down]` clicks the named button with that button (`LeftButton` without),
+  in combat too; a frame that is no button, or a name nothing has, gets
+  nothing (the access constraints and forbidden aspects the handler checks
+  are none on the engine's widgets). Empty lines and `#` lines
+  (`#showtooltip`) run nothing (unverified); `/stopmacro` (`StopMacro`)
+  stops the rest. `[button]` sees the click's button. Without Blizzard's UI
+  no callback is set and a macro runs nothing. `C_Macro.RunMacroText` is
+  protected, as the global `RunMacroText` is (the documentation's
+  `HasRestrictions`; unverified).
 - **Gaps.** Without game data or a recording, Blizzard's code gets empty
   values from functions that have no behaviour: secure code calling such a
   function gets its documented results' empty values (nil where nilable,

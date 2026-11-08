@@ -309,3 +309,104 @@ return missing, ChatFrame1EditBox:GetHistoryLines(), select(2, t:GetDrawLayer())
         ]
     );
 }
+
+/// A secure button's macro runs its lines as typed into chat, through the
+/// line callback Blizzard's UI gives (decision T601): `/click <name>
+/// <button>` clicks that button with that button, in combat too, as
+/// Blizzard's handler does (a frame that is no button and a name nothing
+/// has: nothing); `#` lines run nothing, `/stopmacro` stops the rest; a
+/// saved macro (`macro`) runs as its text does; `/click` typed in chat
+/// clicks too. (SuuUI's tests found the macro doing nothing.)
+#[test]
+fn a_macro_clicks_with_click() {
+    let Some(mut vm) = ui_vm() else { return };
+    let r = run(
+        &mut vm,
+        "local errs = {}
+seterrorhandler(function(e) errs[#errs + 1] = e end)
+local got = {}
+local target = CreateFrame('Button', 'MyClickTarget', UIParent)
+target:SetScript('OnClick', function(_, button, down) got[#got + 1] = button .. ' ' .. tostring(down) end)
+local plain = CreateFrame('Frame', 'MyPlainFrame', UIParent)
+plain:SetScript('OnMouseUp', function() got[#got + 1] = 'plain' end)
+local b = CreateFrame('Button', 'MyMacroButton', UIParent, 'SecureActionButtonTemplate')
+b:RegisterForClicks('AnyDown', 'AnyUp')
+b:SetAttribute('type1', 'macro')
+b:SetAttribute('macrotext1', '#showtooltip\\n/click MyClickTarget\\n/stopmacro\\n/click MyClickTarget Button4')
+b:SetAttribute('type2', 'macro')
+b:SetAttribute('macrotext2', '/click MyClickTarget RightButton')
+b:SetSize(20, 20); b:SetPoint('CENTER'); b:Show()
+mock.click(b, 'RightButton')
+mock.player:enterCombat()
+mock.click(b, 'RightButton')
+mock.click(b)
+mock.player:leaveCombat()
+local fought = table.concat(got, ',')
+got = {}
+b:SetAttribute('macrotext2', '/click MyPlainFrame RightButton\\n/click NoSuchFrame RightButton')
+mock.click(b, 'RightButton')
+mock.slash('/click MyClickTarget MiddleButton')
+mock.setMacros({ account = { { name = 'Clicker', icon = 1, body = '/click MyClickTarget Button5' } } })
+b:SetAttribute('macro2', 'Clicker')
+mock.click(b, 'RightButton')
+return fought, table.concat(got, ','), #mock.refusals(), tostring(errs[1])",
+    );
+    assert_eq!(
+        r,
+        [
+            "RightButton false,RightButton false,LeftButton false",
+            "MiddleButton false,Button5 false",
+            "0",
+            "nil"
+        ]
+    );
+}
+
+/// The game's pet bar button clicked by a macro's `/click PetActionButton4
+/// RightButton` switches that slot's autocast, out of combat and in
+/// (seen in game, WoW Forever 1.60.1; decisions T600, T601).
+#[test]
+fn a_macro_switches_the_pets_autocast() {
+    let Some(mut vm) = ui_vm() else { return };
+    let r = run(
+        &mut vm,
+        "mock.setPlayer({ name = 'Tamsin', level = 20, class = 'HUNTER', race = 'Dwarf' })
+local wolf = mock.spawnUnit({ name = 'Fang', level = 19, reaction = 'friendly', creatureFamily = 'Wolf',
+    creatureFamilyID = 1 })
+mock.defineSpell(17253, { name = 'Bite', icon = 132278 })
+mock.setPet(wolf, { actions = { [4] = { spell = 17253, name = 'Bite', icon = 132278, autocast = true } } })
+mock.nextFrame(10)
+local b = CreateFrame('Button', 'MyAutocastButton', UIParent, 'SecureActionButtonTemplate')
+b:RegisterForClicks('AnyDown', 'AnyUp')
+b:SetAttribute('type2', 'macro')
+b:SetAttribute('macrotext2', '/click PetActionButton4 RightButton')
+b:SetSize(20, 20); b:SetPoint('CENTER'); b:Show()
+local seen = {}
+local function note() seen[#seen + 1] = tostring(select(6, GetPetActionInfo(4))) end
+note()
+mock.click(b, 'RightButton')
+note()
+mock.player:enterCombat()
+mock.click(b, 'RightButton')
+note()
+return table.concat(seen, ','), #mock.refusals()",
+    );
+    assert_eq!(r, ["true,false,true", "0"]);
+}
+
+/// An addon's own call of `C_Macro.RunMacroText` is forbidden, as the
+/// global `RunMacroText` (decision T601).
+#[test]
+fn an_addon_may_not_run_a_macro_itself() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('ADDON_ACTION_FORBIDDEN')
+f:SetScript('OnEvent', function(_, _, addon, action) seen[#seen + 1] = addon .. ' ' .. action end)
+C_Macro.RunMacroText('/click MyClickTarget', 'LeftButton')
+return table.concat(seen, ','), #mock.refusals()",
+    );
+    assert_eq!(r, ["MyAddon RunMacroText()", "1"]);
+}

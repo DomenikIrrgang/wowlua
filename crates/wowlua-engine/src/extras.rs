@@ -2879,9 +2879,6 @@ const NOTHING: &[&str] = &[
     "C_MacOptions.OpenUniversalAccess",
     "C_MacOptions.SetOSShortcutsDisabled",
     "C_Macro.GetSelectedMacroIcon",
-    "C_Macro.RunMacroText",
-    // Runs no macro here: the callback is never called.
-    "C_Macro.SetMacroExecuteLineCallback",
     "C_ModifiedInstance.GetModifiedInstanceInfoFromMapID",
     "C_NamePlateManager.SetNamePlateSimplified",
     "C_NeighborhoodInitiative.AddTrackedInitiativeTask",
