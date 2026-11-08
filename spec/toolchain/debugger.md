@@ -223,7 +223,8 @@ a difference.
   T587), then a
   frame's regions (with those of its children on its level,
   `useParentLevel`, decision T341) by draw layer (`BACKGROUND`, `BORDER`, `ARTWORK`,
-  `OVERLAY`, `HIGHLIGHT` while the mouse is over its button; a region given
+  `OVERLAY`, `HIGHLIGHT` while the mouse is over its button; a layer named
+  in any case, `GetDrawLayer` answering it in capitals, decision T597; a region given
   none, a font string on `OVERLAY` and the others on `ARTWORK`, as the
   client's fresh regions answer, decision T338) and sublevel
   (-8 to 7), font strings after textures (decision T340), then masked textures after unmasked ones (the action
@@ -600,7 +601,8 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   browser requires; native callers block on it.
 - **Drawing**: one batched pass of textured quads in scene order, with the
   client's blend modes, premultiplied alpha, linear filtering and texture
-  coordinates; masks as a second texture; text from a glyph atlas
+  coordinates; a texture's masks (up to three, decision T596) as more
+  textures, the highest of their alphas taken (their union); text from a glyph atlas
   rasterized from the font at the scene's pixel height, with outlines and
   shadows, each line's baseline its height times the font's ascent over
   its ascent and descent (as the client's page number sits between the
@@ -804,6 +806,22 @@ clocked unless asked otherwise. A tool that runs code (`continue`, `step`,
 state (where it stopped) and what it printed meanwhile. Profiles count game
 frames as one node (`game frame`), each frame's cost in the report's
 timeline.
+
+`wowlua mcp` runs in the package of its folder. In a plain addon, a folder
+with a TOC and no `wowlua.json`, it adopts the addon in place and in memory
+(decision T592), as `wowlua init` would ([CLI §12.6](cli.md#126-adopting-an-existing-addon))
+but writing nothing there: the files stay where they are (`build.src` is the
+addon folder, the Lua and XML files no TOC loads are `build.exclude`d), the
+TOCs' interface numbers are the lockfile's pins, kept in memory with the
+rest of it, builds go to `$WOWLUA_HOME/adopted/<AddOn>-<key>/`, and
+`test.blizzard-ui` is on, with camelot the first flavor when the addon
+targets it (the flavor sessions start on). `.pkgmeta` externals become
+dependencies only when the checkout of one is missing; otherwise the addon
+loads the libraries it has, as its TOCs say, and `.pkgmeta` is not read.
+The commands it runs (`check`, `fmt`, `build`, `test`) adopt it the same
+way (`WOWLUA_ADOPT` in their environment). A folder without a package that
+loads still gets a server (decision T593): the errors go to stderr, and
+each tool that needs the package answers with them.
 
 ### 18.12.3 In process: wowlua studio
 

@@ -1675,6 +1675,32 @@ fn assets_a_build_leaves_out_are_e4307() {
         .stderr(predicate::str::contains("E4307").not());
 }
 
+/// An asset under `libs/` ships where no dependency writes the same file
+/// (decision T591; the libraries an adopted addon keeps in place).
+#[test]
+fn assets_under_libs_ship() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "glow", "version": "1.0.0" }, "build": { "assets": ["libs/**/*.tga"] } }"#,
+            ),
+            ("libs/LibGlow/Textures/glow.tga", "tga"),
+            ("src/main.lua", "print(1)\n"),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    assert!(
+        files_in(&dir.path().join("dist"))
+            .iter()
+            .any(|f| f.ends_with("/libs/LibGlow/Textures/glow.tga")),
+        "{:?}",
+        files_in(&dir.path().join("dist"))
+    );
+}
+
 #[test]
 fn parallel_builds_equal_sequential_builds() {
     let dir = tempfile::tempdir().unwrap();

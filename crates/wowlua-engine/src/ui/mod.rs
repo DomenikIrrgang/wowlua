@@ -211,13 +211,15 @@ fn startup_addons(interface: &Path, t: &Target) -> (Vec<Addon>, HashMap<String, 
         let Some(name) = dir.file_name().and_then(|n| n.to_str()).map(str::to_string) else {
             continue;
         };
-        // The client's suffixed TOC first (`Blizzard_WorldMap_Mainline.toc`).
+        // The client's suffixed TOC first (`Blizzard_WorldMap_Mainline.toc`),
+        // in any case, as on the client's file system
+        // (`Blizzard_BarbershopUI/Blizzard_BarberShopUI.toc`).
         let text = t
             .suffixes
             .iter()
             .map(|s| format!("{name}{s}.toc"))
             .chain(std::iter::once(format!("{name}.toc")))
-            .find_map(|f| wowlua_host::read_to_string(dir.join(f)).ok());
+            .find_map(|f| wowlua_host::read_to_string(resolve(&dir, &f)).ok());
         let Some(text) = text else {
             continue;
         };

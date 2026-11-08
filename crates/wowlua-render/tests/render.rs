@@ -296,3 +296,75 @@ t:SetHorizTile(true)
         assert_eq!(px(&img, x + 10.5 * u, y), second, "{wrap}");
     }
 }
+
+/// Masks of 16 pixels by file ID: 10 opaque, 11 its left half, 12 its top
+/// half.
+struct MaskAssets;
+
+impl wowlua_render::Assets for MaskAssets {
+    fn image(&mut self, image: &scene::Image) -> Option<wowlua_render::Rgba> {
+        let shape: fn(u32, u32) -> bool = match image {
+            scene::Image::FileId(10) => |_, _| true,
+            scene::Image::FileId(11) => |x, _| x < 8,
+            scene::Image::FileId(12) => |_, y| y < 8,
+            _ => return None,
+        };
+        let pixels = (0..16 * 16)
+            .flat_map(|i| [255, 255, 255, if shape(i % 16, i / 16) { 255 } else { 0 }])
+            .collect();
+        Some(wowlua_render::Rgba {
+            width: 16,
+            height: 16,
+            pixels,
+        })
+    }
+    fn font(&mut self, _: &str) -> Option<Vec<u8>> {
+        None
+    }
+}
+
+/// A texture's masks join (decision T596; WoW Forever: two ovals, red in
+/// both): the left and top halves leave all but the bottom right quarter,
+/// one mask alone cuts as before.
+#[test]
+fn a_texture_shows_where_any_of_its_masks_does() {
+    let mut r = match Renderer::new_blocking() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("skipped: {e}");
+            return;
+        }
+    };
+    let mut vm = vm("local f = CreateFrame('Frame', nil, UIParent)
+f:SetSize(200, 100)
+f:SetPoint('TOPLEFT', 10, -10)
+local t = f:CreateTexture(nil, 'ARTWORK')
+t:SetAllPoints()
+t:SetColorTexture(1, 0, 0)
+for _, id in ipairs({ 11, 12 }) do
+  local m = f:CreateMaskTexture()
+  m:SetAllPoints()
+  m:SetTexture(id)
+  t:AddMaskTexture(m)
+end
+local g = CreateFrame('Frame', nil, UIParent)
+g:SetSize(200, 100)
+g:SetPoint('TOPLEFT', 10, -210)
+local one = g:CreateTexture(nil, 'ARTWORK')
+one:SetAllPoints()
+one:SetColorTexture(1, 0, 0)
+local m = g:CreateMaskTexture()
+m:SetAllPoints()
+m:SetTexture(11)
+one:AddMaskTexture(m)
+");
+    let s = scene::build(&mut vm);
+    let img = r.render_blocking(&s, 1.0, None, &mut MaskAssets).unwrap();
+    let red = |x: f32, y: f32| px(&img, 10.0 + x, 10.0 + y)[0] > 250;
+    assert!(red(50.0, 25.0), "the top left quarter");
+    assert!(red(150.0, 25.0), "the top right: the top mask shows it");
+    assert!(red(50.0, 75.0), "the bottom left: the left mask shows it");
+    assert!(!red(150.0, 75.0), "the bottom right: neither");
+    assert!(red(50.0, 225.0), "one mask: its left half");
+    assert!(!red(150.0, 225.0), "one mask: not its right half");
+}
