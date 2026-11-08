@@ -5606,6 +5606,62 @@ end
     assert!(out.contains("3 passed, 0 failed"), "{out}");
 }
 
+/// A screen's UI scale wins over the one the world's CVars recorded
+/// (decision T603): the fresh camelot character's `uiScale` (0.66), a named
+/// profile's; a screen without one leaves the world's to decide.
+#[test]
+fn test_screen_ui_scale_over_the_worlds_cvars() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            (
+                "tests/profiles/scaled.json",
+                r#"{ "cvars": { "useUiScale": "1", "uiScale": "0.7" } }"#,
+            ),
+            (
+                "tests/fresh.test.wowlua",
+                r#"import test, expect, config from "wowlua:test"
+config({ screen = { width = 1920, height = 1080, uiScale = 0.8 } })
+
+@test("over the fresh character's")
+local function fresh()
+    expect(UIParent:GetScale()).toBe(0.80000001192092896)
+    expect(C_CVar.GetCVar("uiScale")).toBe("0.800000")
+    expect(C_CVar.GetCVar("useUiScale")).toBe("1")
+end
+"#,
+            ),
+            (
+                "tests/named.test.wowlua",
+                r#"import test, expect, config from "wowlua:test"
+config({ profile = "scaled", screen = { width = 1920, height = 1080, uiScale = 1.0 } })
+
+@test("over a named profile's")
+local function named()
+    expect(UIParent:GetScale()).toBe(1)
+    expect(C_CVar.GetCVar("uiScale")).toBe("1.000000")
+end
+"#,
+            ),
+            (
+                "tests/world.test.wowlua",
+                r#"import test, expect, config from "wowlua:test"
+config({ profile = "scaled", screen = { width = 1920, height = 1080 } })
+
+@test("none: the world's")
+local function world()
+    expect(UIParent:GetScale()).toBe(0.69999998807907104)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("3 passed, 0 failed"), "{out}");
+}
+
 /// A collection while a test waits (a timer's, between its steps) keeps
 /// the running test: only the runner held it, and the next step read a
 /// freed table ("stale handle").
