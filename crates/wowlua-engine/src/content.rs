@@ -919,7 +919,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetBattlefieldWinner", nil),
         ("GetNumBattlefieldScores", zero),
         ("GetNumBattlefieldVehicles", zero),
-        ("GetNumArenaOpponents", zero),
         ("GetBattlefieldPortExpiration", zero),
         ("GetBattlefieldInstanceExpiration", zero),
         ("GetBattlefieldInstanceRunTime", zero),

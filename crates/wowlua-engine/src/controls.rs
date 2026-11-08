@@ -508,6 +508,15 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("leaveInstance", crate::encounters::control_leave_instance),
         ("startEncounter", crate::encounters::control_start),
         ("endEncounter", crate::encounters::control_end),
+        ("prepareArena", crate::encounters::control_prepare_arena),
+        (
+            "setArenaOpponent",
+            crate::encounters::control_set_arena_opponent,
+        ),
+        (
+            "clearArenaOpponents",
+            crate::encounters::control_clear_arena_opponents,
+        ),
         ("setPet", crate::pets::control_set_pet),
         ("setRestriction", units::set_restriction_control),
         (
