@@ -793,6 +793,24 @@ fn recorded_corrections(d: &mut Decls) {
             *sigs = vec![sig];
         }
     }
+    // The pet's spellbook (the engine's model, decision T599): whether the
+    // pet has one (the full probe: false without a pet), and the pet's
+    // icon, a file ID or path, nil without a pet (the full probe;
+    // Blizzard's spellbook gives it to `AddIconTab` as its tab's icon).
+    // Blizzard's code shows neither's results (`(...unknown)` from its
+    // calls).
+    for (name, sig) in [
+        ("PetHasSpellbook", filter(&[], &["boolean"])),
+        ("GetPetIcon", filter(&[], &["(number | string)?"])),
+    ] {
+        if let Some(sigs) = d.functions.get_mut(name)
+            && sigs
+                .iter()
+                .all(|s| s.params.is_empty() && s.returns.is_empty())
+        {
+            *sigs = vec![sig];
+        }
+    }
     // `GetAchievementInfo`'s `icon` and `earnedBy`: nil for some
     // achievements (recorded: Archmage Arugal kills has no icon, Number of
     // hugs no one who earned it).
@@ -2751,5 +2769,23 @@ mod tests {
             text("HasInboxItem"),
             "(messageIndex: unknown, attachIndex: number?): boolean"
         );
+    }
+
+    /// The pet's spellbook functions the engine models (decision T599),
+    /// typed over what Blizzard's calls show (`(...unknown)`).
+    #[test]
+    fn the_pets_spellbook_functions_are_typed() {
+        let from_calls = || model::Sig {
+            ret_vararg: Some("unknown".into()),
+            ..model::Sig::default()
+        };
+        let mut d = Decls::default();
+        for name in ["PetHasSpellbook", "GetPetIcon"] {
+            d.functions.insert(name.into(), vec![from_calls()]);
+        }
+        recorded_corrections(&mut d);
+        let text = |n: &str| model::sig_text(&d.functions[n][0]);
+        assert_eq!(text("PetHasSpellbook"), "(): boolean");
+        assert_eq!(text("GetPetIcon"), "(): (number | string)?");
     }
 }

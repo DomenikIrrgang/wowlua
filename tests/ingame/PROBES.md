@@ -1544,3 +1544,53 @@ engine to close, with the steps that would record the game's answer.
     - hover the marker: `/run local f=GetMouseFoci()[1] local p=f and f:GetParent() print(f and f:GetName(), f and f:GetFrameStrata(), f and f:GetFrameLevel(), p and p:GetName(), p and p:GetFrameLevel())`
 
       Seen: (to do)
+
+## The pet's spellbook (decision T599)
+
+wowlua's pet spellbook is modelled on Blizzard's spellbook code
+(`SpellBookPetCategoryMixin`, `SpellBookItemMixin`) and the API
+documentation, none of it seen. With a hunter, the pet out, out of combat,
+the spellbook closed, the cursor empty:
+
+1. **How many spells, and the token.**
+   `/run print(C_SpellBook.HasPetSpells())`
+
+   wowlua: the pet's spells' count and `PET` (a warlock's demon: `DEMON`);
+   nothing with a pet without spells. Seen: (to do)
+2. **The first pet spell's info.**
+   `/run local i=C_SpellBook.GetSpellBookItemInfo(1, Enum.SpellBookSpellBank.Pet) for k,v in pairs(i or {}) do print(k, v) end`
+
+   wowlua: `itemType` 3 (`PetAction`), `spellID` and `actionID` the spell's
+   ID, `name`, `subName` (the rank, or empty), `iconID`, `isPassive`,
+   `isOffSpec` false, no `skillLineIndex`. Seen: is `actionID` the spell's ID,
+   or a pet action ID with flags? (to do)
+3. **The first pet spell's name and texture.**
+   `/run print(C_SpellBook.GetSpellBookItemName(1, 1), C_SpellBook.GetSpellBookItemTexture(1, 1), C_SpellBook.GetSpellBookItemType(1, 1))`
+
+   wowlua: name, rank, icon, then `3`, the spell's ID twice. Seen: (to do)
+4. **Autocast.** For each slot up to the count from step 1:
+   `/run for i=1,(C_SpellBook.HasPetSpells() or 0) do print(i, C_SpellBook.GetSpellBookItemName(i, 1), C_SpellBook.GetSpellBookItemAutoCast(i, 1)) end`
+
+   wowlua: `autoCastAllowed`, `autoCastEnabled` (false, false for a spell
+   that can't autocast). Seen: (to do)
+5. **Toggling autocast from /run.** Pick a slot that showed `true` as its
+   allowed value in step 4 (here slot 1):
+   `/run local f=CreateFrame("Frame") f:RegisterEvent("PET_BAR_UPDATE") f:SetScript("OnEvent", function(_, e) print(e) f:UnregisterAllEvents() end) C_SpellBook.ToggleSpellBookItemAutoCast(1, 1) print(C_SpellBook.GetSpellBookItemAutoCast(1, 1))`
+
+   wowlua: `PET_BAR_UPDATE`, autocast switched (the pet bar's button too).
+   Seen: (to do)
+6. **Toggling autocast in combat.** Attack a training dummy, then run the
+   line of step 5 again.
+
+   wowlua: allowed. Seen: switched, or "blocked" / `ADDON_ACTION_BLOCKED`?
+   (to do)
+7. **Picking up a pet spell.**
+   `/run C_SpellBook.PickupSpellBookItem(1, Enum.SpellBookSpellBank.Pet) print(GetCursorInfo())`
+   then `/run ClearCursor()`
+
+   wowlua: `petaction`, the spell's ID, 1. Seen: (to do)
+8. **The pet's icon.**
+   `/run print(GetPetIcon(), PetHasSpellbook())`
+
+   wowlua: the icon `mock.setPet` gives (else the first spell's), `true`.
+   Seen: a file ID or a path, and is it the family's icon? (to do)

@@ -54,17 +54,20 @@ pub enum Cursor {
     #[default]
     Empty,
     Spell(f64),
+    /// A spell of the pet's spellbook: its ID and slot (decision T599).
+    PetAction(f64, f64),
     Macro(f64),
     Item(Held, Option<Source>),
 }
 
 impl Cursor {
-    /// `Enum.UICursorType`: none 0, item 1, spell 3, macro 7.
+    /// `Enum.UICursorType`: none 0, item 1, spell 3, pet action 4, macro 7.
     fn kind(&self) -> f64 {
         match self {
             Cursor::Empty => 0.0,
             Cursor::Item(..) => 1.0,
             Cursor::Spell(_) => 3.0,
+            Cursor::PetAction(..) => 4.0,
             Cursor::Macro(_) => 7.0,
         }
     }
@@ -82,9 +85,13 @@ fn fire(vm: &mut Vm, event: &str, args: &[Value]) {
 }
 
 /// Whether holding it shows the click bindings' highlights: a spell, a
-/// macro (see the module).
+/// macro (see the module), a pet's spell (Blizzard's click binding frame
+/// takes a `"petaction"`; unverified).
 fn shows_highlights(cursor: &Cursor) -> bool {
-    matches!(cursor, Cursor::Spell(_) | Cursor::Macro(_))
+    matches!(
+        cursor,
+        Cursor::Spell(_) | Cursor::PetAction(..) | Cursor::Macro(_)
+    )
 }
 
 /// Whether holding it shows the action bars' grid: a spell, a macro, an
@@ -210,7 +217,8 @@ fn pickup_spell(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_SpellBook.PickupSpellBookItem(slot, bank)`: the slot's spell; for
 /// an addon in combat, blocked (decision T253; Blizzard's own code, the
-/// secure drag handlers among it, may).
+/// secure drag handlers among it, may). The pet's bank (1): its spell as a
+/// `"petaction"` (decision T599; unverified).
 fn pickup_spellbook_item(vm: &mut Vm, c: NativeCall) -> Ret {
     if crate::protection::refuses_in_combat(vm) {
         return Ok(vec![]);
@@ -218,6 +226,14 @@ fn pickup_spellbook_item(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(slot) = num(c.arg(1)) else {
         return Ok(vec![]);
     };
+    if matches!(c.arg(2), Value::Num(b) if b == 1.0) {
+        let slot = slot.trunc();
+        if let Some(id) = crate::pets::book_spell_id(vm, slot) {
+            put_down(vm);
+            pick_up(vm, Cursor::PetAction(id, slot));
+        }
+        return Ok(vec![]);
+    }
     let spell = spellbook_spell(vm, slot as i64);
     if let Some(id) = spell {
         put_down(vm);
@@ -308,6 +324,18 @@ fn place_action(vm: &mut Vm, c: NativeCall) -> Ret {
                 kind: "spell".into(),
                 id: Value::Num(id),
                 sub_type: vm.str("spell"),
+                texture,
+                usable: (true, false),
+                ..Action::default()
+            }
+        }
+        // A pet's spell: a spell of subtype "pet" (unverified).
+        Cursor::PetAction(id, slot) => {
+            let texture = crate::pets::book_texture(vm, slot);
+            Action {
+                kind: "spell".into(),
+                id: Value::Num(id),
+                sub_type: vm.str("pet"),
                 texture,
                 usable: (true, false),
                 ..Action::default()
@@ -1206,6 +1234,12 @@ fn get_cursor_info(vm: &mut Vm, _c: NativeCall) -> Ret {
             let slot = crate::stats::spellbook_slot_of(vm, id)
                 .map_or(Value::Nil, |s| Value::Num(s as f64));
             vec![vm.str("spell"), slot, vm.str("spell"), Value::Num(id)]
+        }
+        // As warcraft.wiki.gg's GetCursorInfo says and Blizzard's click
+        // binding frame reads it: the spell's ID, its slot in the pet's
+        // book (unverified).
+        Cursor::PetAction(id, slot) => {
+            vec![vm.str("petaction"), Value::Num(id), Value::Num(slot)]
         }
         Cursor::Macro(index) => vec![vm.str("macro"), Value::Num(index)],
         Cursor::Item(held, _) => {

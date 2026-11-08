@@ -1740,8 +1740,15 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         ("C_SpellBook.AbortSpellIntro", nothing),
         ("C_SpellBook.SetBarSlotFromIntro", nothing),
-        ("C_SpellBook.SetSpellBookItemAutoCastEnabled", nothing),
-        ("C_SpellBook.ToggleSpellBookItemAutoCast", nothing),
+        // The pet's spells' autocast (`pets.rs`, decision T599).
+        (
+            "C_SpellBook.SetSpellBookItemAutoCastEnabled",
+            crate::pets::set_book_autocast_enabled,
+        ),
+        (
+            "C_SpellBook.ToggleSpellBookItemAutoCast",
+            crate::pets::toggle_book_autocast,
+        ),
         ("GetFlyoutID", get_flyout_id),
         // C_ActionBar
         (
