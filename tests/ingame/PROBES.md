@@ -1498,4 +1498,14 @@ engine to close, with the steps that would record the game's answer.
     - `/suu probe aurasecrecy` (SuuUI's dev build: prints each filter spell's level, saves `SuuUIProbe.auraSecrecy`)
     - or `/run for _,id in ipairs({25771,6788,15007,11196,8326,26013,1229451}) do print(id, C_Secrets.GetSpellAuraSecrecy(id)) end` (compare with `Enum.SecrecyLevel`)
 
-      Seen: (to do)
+      Seen (1.60.1, 2026-11-08): all 11 of SuuUI's list contextually secret
+      (Forbearance, Weakened Soul, Resurrection Sickness, Recently Bandaged
+      11196/1305047, Ghost, Deserter, Recently Dropped Flag ×3, Boosted
+      Rest), none never secret. Also seen: `C_Spell.GetVisibilityInfo(id,
+      RaidInCombat)` gives `false false false` for each (and for Corrosive
+      Poison 3396): no raid-frame rules; `GetDebuffDataByIndex("player", i,
+      "HARMFUL|RAID_IN_COMBAT")` returned nothing with Forbearance and
+      Corrosive Poison on (out of combat); `"HARMFUL|DISPELLABLE"` returned
+      Corrosive Poison. wowlua to match: never-secret only where the game
+      says, these visibility answers, and the RAID_IN_COMBAT and DISPELLABLE
+      filter words.
