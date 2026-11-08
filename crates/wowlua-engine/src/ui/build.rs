@@ -888,6 +888,7 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
                         .unwrap_or(0.0);
                     if let Some(rid) = built.and_then(|r| widgets::widget_of(vm, r)) {
                         let l = vm.str(&level);
+                        let l = crate::scene::layer_name(vm, l);
                         widgets::store(vm, rid, "DrawLayer", &[l, Value::Num(sublevel)]);
                     }
                 }

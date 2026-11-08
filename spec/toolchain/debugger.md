@@ -223,7 +223,8 @@ a difference.
   T587), then a
   frame's regions (with those of its children on its level,
   `useParentLevel`, decision T341) by draw layer (`BACKGROUND`, `BORDER`, `ARTWORK`,
-  `OVERLAY`, `HIGHLIGHT` while the mouse is over its button; a region given
+  `OVERLAY`, `HIGHLIGHT` while the mouse is over its button; a layer named
+  in any case, `GetDrawLayer` answering it in capitals, decision T597; a region given
   none, a font string on `OVERLAY` and the others on `ARTWORK`, as the
   client's fresh regions answer, decision T338) and sublevel
   (-8 to 7), font strings after textures (decision T340), then masked textures after unmasked ones (the action

@@ -2495,6 +2495,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Found with SuuUI on WoW Forever (2026-11-06)
 - The pet's spellbook (decision T599)
 - A texture's masks (decision T596)
+- Draw layer case (decision T597)
 
 ## In-game regressions
 
