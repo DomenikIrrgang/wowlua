@@ -6,7 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
-- **The pet's spellbook**: `mock.setPet(pet, { spells = { … }, icon = … })` gives the pet its spells. `C_SpellBook.HasPetSpells` counts them, the spellbook functions read them in the pet's bank (`GetSpellBookItemInfo(i, Enum.SpellBookSpellBank.Pet)` and the others), `ToggleSpellBookItemAutoCast` switches their autocast (on the pet bar too), `PickupSpellBookItem(i, Enum.SpellBookSpellBank.Pet)` picks up the pet's spell instead of yours, and `GetPetIcon` answers the pet's icon. `PetHasSpellbook` and `GetPetIcon` are now typed.
+- **The pet's spellbook**: `mock.setPet(pet, { spells = { … }, icon = … })` gives the pet its spells. `C_SpellBook.HasPetSpells` counts them, the spellbook functions read them in the pet's bank (`GetSpellBookItemInfo(i, Enum.SpellBookSpellBank.Pet)` and the others), Blizzard's spellbook switches their autocast (on the pet bar too; an addon calling `ToggleSpellBookItemAutoCast` or `SetSpellBookItemAutoCastEnabled` gets ADDON_ACTION_FORBIDDEN, as in the game, so right-click the game's pet bar button instead: `/click PetActionButton4 RightButton` works in combat too), `PickupSpellBookItem(i, Enum.SpellBookSpellBank.Pet)` picks up the pet's spell instead of yours, and `GetPetIcon` answers the pet's icon. `PetHasSpellbook` and `GetPetIcon` are now typed.
 - World profiles accept `renown`, a map of faction IDs to numeric renown levels, applied before the addon loads.
 - **More for AI agents in `wowlua mcp`**: an agent can now check, format, build and test your package (`check`, `fmt`, `build`, and `test` with the failures' messages and lines, and coverage on request), see which frame is at a point (`pick`) and everything about one frame (`inspect`: anchors, scripts, events, the line that made it), list the world's units (`units`), log the game events (`events`), change the screen size (`set_screen`), save the running world as a world profile (`save_world`) and list the breakpoints with their hits (`breakpoints`). A stop at an error, a blocked action or taint now tells its details.
 - An agent can read wowlua's docs and the standard library's reference through `wowlua mcp` (`wowlua_docs`, `wowlua_reference`): the docs and modules of exactly the wowlua it runs, with no web access needed.
@@ -35,6 +35,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `GetCurrentKeyBoardFocus()` may return nil, as it does while nothing has the keyboard's focus: `expect(GetCurrentKeyBoardFocus()).toBe(nil)` compiles.
 - A top-level frame (`SetToplevel(true)`) is drawn above the rest of its strata when it is shown, its frame level unchanged, as in the game: SuuUI's bags open in front of its damage meter with their slots in front of their background.
 - A scroll frame's scroll child moves with its scroll (`SetVerticalScroll`, `SetHorizontalScroll`): its rows scroll on the screen, not only its scroll bar, as SuuUI's settings window's did.
 - The mouse wheel reaches a frame that takes only the wheel (`EnableMouseWheel`, an `OnMouseWheel` script) over a frame that takes the mouse: SuuUI's settings navigation scrolls again in wowlua Studio's game, instead of the camera zooming.

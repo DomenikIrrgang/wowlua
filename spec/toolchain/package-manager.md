@@ -427,7 +427,9 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    gives that the documentation lacks (`C_PetBattles.IsTrapAvailable()`'s
    reason), lists the wiki gives as their first values
    (`GetChatWindowMessages(index)` is `...string`), and getters a fresh
-   widget answers nil (`FontString:GetText()` is `string?`); a status
+   widget answers nil (`FontString:GetText()` is `string?`; so is
+   `GetCurrentKeyBoardFocus()` `EditBox?`, nil while nothing has the
+   keyboard's focus, as the full probe recorded); a status
    bar's `OnValueChanged` handler takes the value alone (its `userInput`
    is a slider's), and its scripts get the value and range as possibly
    secret, as its getters return them. A function

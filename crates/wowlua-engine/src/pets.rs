@@ -27,7 +27,9 @@
 //! [`book_answer`]) as pet actions (`Enum.SpellBookItemType.PetAction`,
 //! the action ID the spell's); `C_SpellBook.ToggleSpellBookItemAutoCast`
 //! and `TogglePetAutocast` switch a spell's autocast in the book and on
-//! the bar together (`PET_BAR_UPDATE`); `C_SpellBook.PickupSpellBookItem`
+//! the bar together (`PET_BAR_UPDATE`; the spellbook's two protected,
+//! decision T600: addons click the pet bar's button with the right
+//! button, `TogglePetAutocast`); `C_SpellBook.PickupSpellBookItem`
 //! puts it on the cursor as a `"petaction"` (`cursor.rs`). `GetPetIcon`:
 //! the `icon` given, else its first spell's. A change of its spells is
 //! told by `SPELLS_CHANGED`, as Blizzard's spellbook listens.
@@ -452,7 +454,8 @@ pub fn in_book(vm: &Vm, spell: f64) -> bool {
 
 /// `C_SpellBook.ToggleSpellBookItemAutoCast(slot, bank)`: the pet's spell
 /// there that may autocast switched, on its bar too (`PET_BAR_UPDATE`);
-/// the player's bank nothing. Callable in combat (unverified).
+/// the player's bank nothing. Protected (`protection::PROTECTED`, decision
+/// T600): only Blizzard's code gets here.
 pub fn toggle_book_autocast(vm: &mut Vm, c: NativeCall) -> Ret {
     set_book_autocast(vm, &c, None)
 }

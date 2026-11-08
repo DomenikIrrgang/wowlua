@@ -3,12 +3,12 @@
 -- 33397 times in all (419 setting calls of 105 settings, each set, read back and
 -- restored); 3194 functions skipped:
 --    1235 a retail system Forever lacks (its functions crashed the client)
---     685 not named as a query (an action or a state change)
+--     684 not named as a query (an action or a state change)
 --     461 undocumented and not named as a query
---     312 a setter without a curated read-back and restore
+--     311 a setter without a curated read-back and restore
 --     205 a Lua or WoW language function (the conformance suite probes these)
 --     186 restricted (HasRestrictions)
---      87 protected
+--      89 protected
 --      16 acts: a request that joins, buys or answers
 --       2 acts: sets the group role
 --       1 acts: completes the quest and takes its reward
@@ -10029,8 +10029,8 @@ local skipped = {
     { [==[C_SpellBook.ContainsAnyDisenchantSpell]==], [==[not named as a query (an action or a state change)]==] },
     { [==[C_SpellBook.PickupSpellBookItem]==], [==[not named as a query (an action or a state change)]==] },
     { [==[C_SpellBook.SetBarSlotFromIntro]==], [==[a setter without a curated read-back and restore]==] },
-    { [==[C_SpellBook.SetSpellBookItemAutoCastEnabled]==], [==[a setter without a curated read-back and restore]==] },
-    { [==[C_SpellBook.ToggleSpellBookItemAutoCast]==], [==[not named as a query (an action or a state change)]==] },
+    { [==[C_SpellBook.SetSpellBookItemAutoCastEnabled]==], [==[protected]==] },
+    { [==[C_SpellBook.ToggleSpellBookItemAutoCast]==], [==[protected]==] },
     { [==[C_SplashScreen.AcknowledgeSplash]==], [==[not named as a query (an action or a state change)]==] },
     { [==[C_SplashScreen.SendSplashScreenActionLaunchedTelem]==], [==[restricted (HasRestrictions)]==] },
     { [==[C_SplashScreen.SendSplashScreenCloseTelem]==], [==[restricted (HasRestrictions)]==] },
@@ -11168,4 +11168,4 @@ local skipped = {
     { [==[xpcall]==], [==[a Lua or WoW language function (the conformance suite probes these)]==] },
 }
 
-ns.__wowlua.define("fullprobeplan", { calls = calls, risky = risky, suspect = suspect, setters = setters, skipped = skipped, version = "84c1c23f57418140" })
+ns.__wowlua.define("fullprobeplan", { calls = calls, risky = risky, suspect = suspect, setters = setters, skipped = skipped, version = "be517eacc83df97a" })

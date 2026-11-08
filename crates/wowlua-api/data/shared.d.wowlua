@@ -14929,7 +14929,7 @@ declare function GetCurrentGuildBankTab(arg1: unknown?): (number?, ...unknown)
 --- Returns the EditBox object currently handling keyboard events.
 ---
 --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_GetCurrentKeyBoardFocus)
-declare function GetCurrentKeyBoardFocus(): EditBox
+declare function GetCurrentKeyBoardFocus(): EditBox?
 --- Returns the spell IDs of the features the player unlocks at the given level.
 ---
 --- *Description by wowlua: the API's documentation has none.*

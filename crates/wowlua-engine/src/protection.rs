@@ -40,7 +40,10 @@ use crate::{engine, engine_mut};
 /// SuuUI's probes saw AcceptBattlefieldPort and Logout (popups),
 /// GuildControlSetRank, `C_GuildInfo.SetMOTD` and `SetInfoText`
 /// (guildControl) and `C_GuildInfo.SetNote` (guildNotes, from a macro)
-/// forbidden; GuildControlSaveRank not.
+/// forbidden; GuildControlSaveRank not. SuuUI saw
+/// `C_SpellBook.ToggleSpellBookItemAutoCast` forbidden out of combat (its
+/// pet spellbook, decision T600); `SetSpellBookItemAutoCastEnabled`, with
+/// the same flags in the documentation, is kept with it (unverified).
 pub const PROTECTED: &[&str] = &[
     "AcceptBattlefieldPort",
     "AscendStop",
@@ -50,6 +53,8 @@ pub const PROTECTED: &[&str] = &[
     "C_GuildInfo.SetInfoText",
     "C_GuildInfo.SetMOTD",
     "C_GuildInfo.SetNote",
+    "C_SpellBook.SetSpellBookItemAutoCastEnabled",
+    "C_SpellBook.ToggleSpellBookItemAutoCast",
     "CameraOrSelectOrMoveStart",
     "CameraOrSelectOrMoveStop",
     "CancelShapeshiftForm",

@@ -133,7 +133,10 @@ The client's security model, in the VM:
     macros), the harmless ones checked in game: TargetUnit, ClearTarget,
     FocusUnit, AssistUnit, SpellStopCasting and SpellStopTargeting, the
     movement stops and PetFollow are protected; ClearFocus,
-    TargetLastTarget and StopAttack are not.
+    TargetLastTarget and StopAttack are not. So is the pet spellbook's
+    `C_SpellBook.ToggleSpellBookItemAutoCast`, out of combat too (found
+    in game, decision T600), and `SetSpellBookItemAutoCastEnabled` with
+    it (unverified).
   - Protected methods (the documentation's `IsProtectedFunction`: `Show`,
     `Hide`, `SetPoint`, `SetSize`, `SetParent`, …) and `SetAttribute` of a
     protected frame, in combat lockdown: `ADDON_ACTION_BLOCKED`, after the
@@ -441,8 +444,13 @@ The WoW API the VM's code calls, per flavor.
   `ToggleSpellBookItemAutoCast(slot, 1)` and
   `SetSpellBookItemAutoCastEnabled` switch a spell's autocast where it
   may autocast, in the book and on the pet's bar together, as
-  `TogglePetAutocast` does from the bar, each with `PET_BAR_UPDATE`; an
-  addon may call them in combat. `PickupSpellBookItem(slot, 1)` puts the
+  `TogglePetAutocast` does from the bar, each with `PET_BAR_UPDATE`. The
+  two spellbook functions are protected: only Blizzard's code may call
+  them (its spellbook's right-click), an addon's call is forbidden, in
+  combat or out (decision T600); addons switch autocast with a secure
+  right-click on the game's pet bar button (`/click PetActionButton4
+  RightButton`), which calls `TogglePetAutocast`, in combat too.
+  `PickupSpellBookItem(slot, 1)` puts the
   pet's spell on the cursor (`GetCursorInfo`: `"petaction"`, its ID, its
   slot; placed on an action bar, a spell of subtype `"pet"`).
   `GetPetIcon` answers the pet's `icon`, else its first spell's, nil
@@ -450,8 +458,8 @@ The WoW API the VM's code calls, per flavor.
   pet's spells is told by `SPELLS_CHANGED`, which Blizzard's spellbook
   listens to (decision T599). Modelled on Blizzard's spellbook code and
   the documentation, all unverified: the token for other pets, the action
-  ID (the client may add flags to it), whether the toggle is protected,
-  the cursor's values and the icon's kind (`tests/ingame/PROBES.md`, "The
+  ID (the client may add flags to it), whether the setter is protected
+  as the toggle is, the cursor's values and the icon's kind (`tests/ingame/PROBES.md`, "The
   pet's spellbook").
 - **Layout.** A region's rectangle comes from its points as the client
   lays it out: each edge from the points that set it (a `LEFT` and a

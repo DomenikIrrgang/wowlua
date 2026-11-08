@@ -811,6 +811,21 @@ fn recorded_corrections(d: &mut Decls) {
             *sigs = vec![sig];
         }
     }
+    // `GetCurrentKeyBoardFocus()`: nil while nothing has the keyboard's
+    // focus (the full probe recorded `nil`; the sources type it
+    // `EditBox`; decision T290).
+    for sig in d
+        .functions
+        .get_mut("GetCurrentKeyBoardFocus")
+        .into_iter()
+        .flatten()
+    {
+        if let Some(first) = sig.returns.first_mut()
+            && !first.ends_with('?')
+        {
+            *first = model::optional(first);
+        }
+    }
     // `GetAchievementInfo`'s `icon` and `earnedBy`: nil for some
     // achievements (recorded: Archmage Arugal kills has no icon, Number of
     // hugs no one who earned it).
@@ -2787,5 +2802,25 @@ mod tests {
         let text = |n: &str| model::sig_text(&d.functions[n][0]);
         assert_eq!(text("PetHasSpellbook"), "(): boolean");
         assert_eq!(text("GetPetIcon"), "(): (number | string)?");
+    }
+
+    /// The keyboard's focus is nil while nothing has it: the sources'
+    /// `EditBox` made optional, once.
+    #[test]
+    fn the_keyboard_focus_may_be_nil() {
+        let mut d = Decls::default();
+        d.functions.insert(
+            "GetCurrentKeyBoardFocus".into(),
+            vec![model::Sig {
+                returns: vec!["EditBox".into()],
+                ..model::Sig::default()
+            }],
+        );
+        recorded_corrections(&mut d);
+        recorded_corrections(&mut d);
+        assert_eq!(
+            model::sig_text(&d.functions["GetCurrentKeyBoardFocus"][0]),
+            "(): EditBox?"
+        );
     }
 }
