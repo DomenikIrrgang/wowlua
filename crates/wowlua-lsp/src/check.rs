@@ -515,6 +515,7 @@ fn check_and(
         bundled: false,
         // (a member's whole check: those of its workspace that depend on it)
         all_members: whole,
+        adopt: false,
     };
     let mut roots = Roots {
         dirs: vec![dir.clone()],

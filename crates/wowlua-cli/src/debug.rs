@@ -138,6 +138,9 @@ impl CliLauncher {
         if let Some(p) = &self.global.package {
             cmd.arg("--package").arg(p);
         }
+        if self.global.adopt {
+            cmd.env(crate::commands::ADOPT_ENV, "1");
+        }
         let out = cmd
             .args(args)
             .current_dir(&self.root)
@@ -151,15 +154,19 @@ impl CliLauncher {
 }
 
 /// Serves MCP on stdio until the client disconnects.
+/// A plain addon (a TOC, no `wowlua.json`) is adopted in memory; without
+/// an addon that loads it serves all the same, and the tools say why
+/// (decisions T592, T593).
 pub fn mcp(out: &Output, global: &GlobalArgs) -> bool {
-    let Some(root) = crate::commands::package_root(out, global) else {
-        eprintln!("error: wowlua mcp runs in an addon package that loads");
-        return false;
+    let global = GlobalArgs {
+        adopt: true,
+        ..global.clone()
     };
-    let launcher = Arc::new(CliLauncher {
-        global: global.clone(),
-        root,
+    let root = crate::commands::package_root(out, &global).unwrap_or_else(|| {
+        eprintln!("warning: wowlua mcp serves, but no addon package loads here; the tools say why");
+        crate::commands::cwd()
     });
+    let launcher = Arc::new(CliLauncher { global, root });
     let stdin = std::io::stdin();
     wowlua_debug::mcp::Server::new(launcher).serve(stdin.lock(), std::io::stdout());
     true

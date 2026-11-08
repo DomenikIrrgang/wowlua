@@ -9,12 +9,20 @@ game client.
 ## Connect your agent
 
 `wowlua mcp` is a Model Context Protocol server on stdio. It works on the
-package it is started in, so register it for your addon's folder, the one
-with `wowlua.json`. With Claude Code, run this in that folder:
+addon in the folder it is started in, so register it once for all your
+projects. With Claude Code:
 
 ```console
-$ claude mcp add wowlua -- wowlua mcp
+$ claude mcp add --scope user wowlua -- wowlua mcp
 ```
+
+Your addon needs no setup for it. An addon without `wowlua.json`, just its
+TOC and files, is adopted in memory the way [`wowlua init`](adopting.md)
+would adopt it, without writing anything in its folder: the agent works on
+your files where they are, with the libraries you have in `libs/`, over
+Blizzard's UI as in the game. Its builds go to wowlua's own folder
+(`~/.wowlua/adopted/`). In a folder without an addon the server still
+starts, and its tools tell the agent why there is nothing to run.
 
 Any other MCP client runs the same command. In a client configured with JSON,
 the server entry looks like this:
