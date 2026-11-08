@@ -241,3 +241,58 @@ m:SetDisplayInfo(7)
         .expect("drawn");
     assert_eq!(r.texture_count(), count);
 }
+
+/// An image eight pixels wide: red, its last column blue.
+struct Stripe;
+
+impl wowlua_render::Assets for Stripe {
+    fn image(&mut self, image: &scene::Image) -> Option<wowlua_render::Rgba> {
+        (*image == scene::Image::FileId(300)).then(|| wowlua_render::Rgba {
+            width: 8,
+            height: 1,
+            pixels: [[255, 0, 0, 255].repeat(7), vec![0, 0, 255, 255]].concat(),
+        })
+    }
+    fn font(&mut self, _: &str) -> Option<Vec<u8>> {
+        None
+    }
+}
+
+/// A texture tiled across: its image at its size once, then again with
+/// `"REPEAT"`, its edge column stretched without (decision T598).
+#[test]
+fn tiled_textures_repeat_or_stretch_their_edge() {
+    let mut r = match Renderer::new_blocking() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("skipped: {e}");
+            return;
+        }
+    };
+    for (wrap, second) in [("REPEAT", [255, 0, 0, 255]), ("CLAMP", [0, 0, 255, 255])] {
+        let mut vm = vm(&format!(
+            "local t = UIParent:CreateTexture(nil, 'ARTWORK')
+t:SetPoint('TOPLEFT', 20, -20)
+t:SetSize(200, 10)
+t:SetTexture(300, '{wrap}', '{wrap}')
+t:SetHorizTile(true)
+"
+        ));
+        let s = scene::build(&mut vm);
+        let q = s
+            .items
+            .iter()
+            .find_map(|i| match i {
+                scene::Item::Quad(q) if q.image == scene::Image::FileId(300) => Some(q.clone()),
+                _ => None,
+            })
+            .expect("the texture");
+        let img = r
+            .render_blocking(&s, 1.0, None, &mut Stripe)
+            .expect("drawn");
+        let (x, y, u) = (q.rect.x.round(), q.rect.y + q.rect.h / 2.0, q.unit);
+        // The first copy's third column, then the second copy's.
+        assert_eq!(px(&img, x + 2.5 * u, y), [255, 0, 0, 255], "{wrap}");
+        assert_eq!(px(&img, x + 10.5 * u, y), second, "{wrap}");
+    }
+}

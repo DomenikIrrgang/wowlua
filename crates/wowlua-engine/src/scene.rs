@@ -72,6 +72,20 @@ pub struct Mask {
     pub atlas: Option<String>,
 }
 
+/// How a texture's image continues past its edge on an axis, as
+/// `SetTexture(file, horizontal, vertical)` sets it (decision T598):
+/// `"CLAMP"` (the default) repeats the edge pixels, `"REPEAT"` the image,
+/// `"MIRROR"` the image mirrored every other time. `"CLAMPTOBLACK"`,
+/// `"CLAMPTOBLACKADDITIVE"` and `"CLAMPTOWHITE"` are taken as `Clamp`
+/// (unverified).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Wrap {
+    #[default]
+    Clamp,
+    Repeat,
+    Mirror,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Quad {
     pub widget: usize,
@@ -91,7 +105,12 @@ pub struct Quad {
     pub desaturated: bool,
     /// Radians, about the rectangle's center.
     pub rotation: f32,
+    /// `SetHorizTile`/`SetVertTile` (or the atlas's tiling): the image
+    /// drawn at its own size across the rectangle, repeated as `wrap`
+    /// says (decision T598).
     pub tile: (bool, bool),
+    /// The wrap modes `SetTexture` set (horizontal, vertical).
+    pub wrap: (Wrap, Wrap),
     pub clip: Option<Rect>,
     pub masks: Vec<Mask>,
     /// Screen pixels per UI unit of the region (its effective scale): a
@@ -1021,6 +1040,20 @@ fn bar_fill(vm: &Vm, id: WidgetId, rect: &mut Rect, tc: &mut [f32; 8]) {
     }
 }
 
+/// The wrap modes of a texture's file: `SetTexture`'s second and third
+/// arguments, any case; `Clamp` for others and for an atlas.
+fn wrap_of(vm: &Vm, id: WidgetId) -> (Wrap, Wrap) {
+    let Some(a) = args(vm, id, "Texture") else {
+        return (Wrap::Clamp, Wrap::Clamp);
+    };
+    let mode = |i: usize| match a.get(i).and_then(|v| text_of(vm, *v)) {
+        Some(m) if m.eq_ignore_ascii_case("REPEAT") => Wrap::Repeat,
+        Some(m) if m.eq_ignore_ascii_case("MIRROR") => Wrap::Mirror,
+        _ => Wrap::Clamp,
+    };
+    (mode(1), mode(2))
+}
+
 fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
     let (image, base, tile, plain) = image_of(vm, id)?;
     let mut rect = rect_of(vm, id)?;
@@ -1064,6 +1097,7 @@ fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
             tile.0 || first(vm, id, "HorizTile").is_some_and(|v| v.truthy()),
             tile.1 || first(vm, id, "VertTile").is_some_and(|v| v.truthy()),
         ),
+        wrap: wrap_of(vm, id),
         clip: clip_of(vm, id),
         masks: masks_of(vm, id),
         unit: unit_of(vm, id),
@@ -1175,6 +1209,7 @@ fn inline_quad(vm: &Vm, id: WidgetId, file: &str, atlas: bool, place: Rect) -> O
         desaturated: false,
         rotation: 0.0,
         tile: (false, false),
+        wrap: (Wrap::Clamp, Wrap::Clamp),
         clip: clip_of(vm, id),
         masks: Vec::new(),
         unit: unit_of(vm, id),
@@ -2153,6 +2188,7 @@ fn minimap_tiles(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
                 desaturated: false,
                 rotation,
                 tile: (false, false),
+                wrap: (Wrap::Clamp, Wrap::Clamp),
                 clip,
                 masks: mask.iter().cloned().collect(),
                 unit,
@@ -2230,6 +2266,7 @@ fn minimap_icon(
         desaturated: false,
         rotation,
         tile: (false, false),
+        wrap: (Wrap::Clamp, Wrap::Clamp),
         clip: look.clip,
         masks: Vec::new(),
         unit: look.unit,
@@ -2357,6 +2394,7 @@ fn minimap_arrow(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
         desaturated: false,
         rotation,
         tile: (false, false),
+        wrap: (Wrap::Clamp, Wrap::Clamp),
         clip: clip_of(vm, f),
         masks: Vec::new(),
         unit,
@@ -2412,6 +2450,7 @@ fn unit_position_player(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
             0.0
         },
         tile: (false, false),
+        wrap: (Wrap::Clamp, Wrap::Clamp),
         clip: clip_of(vm, f),
         masks: Vec::new(),
         unit,
