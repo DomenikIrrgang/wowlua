@@ -212,6 +212,9 @@ pub struct World {
     /// The status bars following a duration (`SetTimerDuration`): each
     /// frame moves their values.
     pub timer_bars: Vec<WidgetId>,
+    /// How many widgets show a text set from a secret now: none, and no
+    /// scroll frame's range is secret (decision T607).
+    pub secret_texts: usize,
     classes: HashMap<String, TableRef>,
     /// Templates and frame types tests (or stand-ins for Blizzard's UI
     /// code) define: name → (base class, function applied to the frame),
@@ -3938,6 +3941,14 @@ pub fn store_text(vm: &mut Vm, id: WidgetId, text: Option<Value>) {
         return;
     }
     mark(engine_mut(vm), id);
+    let was_secret = matches!(engine(vm).world.widgets[id.0].text, Some(Value::Secret(_)));
+    let is_secret = matches!(text, Some(Value::Secret(_)));
+    let world = &mut engine_mut(vm).world;
+    match (was_secret, is_secret) {
+        (false, true) => world.secret_texts += 1,
+        (true, false) => world.secret_texts -= 1,
+        _ => {}
+    }
     let props = engine(vm).world.widgets[id.0].props;
     let key = vm.str("\u{0}text");
     let _ = vm

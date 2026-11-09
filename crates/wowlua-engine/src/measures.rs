@@ -64,30 +64,56 @@ fn get_string_height(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(h)])
 }
 
-/// A scroll frame's child's size beyond its own (0 without a child).
-fn scroll_range(vm: &mut Vm, id: WidgetId, vertical: bool) -> f64 {
+/// A scroll frame's child's size beyond its own (0 without a child), a
+/// secret while a region in the child shows a text set from a secret
+/// (decision T607).
+fn scroll_range(vm: &mut Vm, id: WidgetId, vertical: bool) -> Value {
     let props = engine(vm).world.widgets[id.0].props;
     let child = widgets::stored_args(vm, props, "ScrollChild")
         .and_then(|v| v.first().copied())
         .and_then(|v| widgets::widget_of(vm, v));
     let Some(child) = child else {
-        return 0.0;
+        return Value::Num(0.0);
     };
     let (cw, ch) = widgets::laid_out_size(vm, child);
     let (w, h) = widgets::laid_out_size(vm, id);
-    if vertical {
+    let range = Value::Num(if vertical {
         (ch - h).max(0.0)
     } else {
         (cw - w).max(0.0)
+    });
+    if shows_secret_text(vm, child) {
+        vm.secret_wrap(range)
+    } else {
+        range
     }
 }
 
+/// Whether the widget or one in it (its children, theirs, …) shows a text
+/// set from a secret, shown or hidden (decision T607; the client's rule
+/// unverified). Without such a text anywhere it looks at nothing.
+fn shows_secret_text(vm: &Vm, id: WidgetId) -> bool {
+    let world = &engine(vm).world;
+    if world.secret_texts == 0 {
+        return false;
+    }
+    let mut stack = vec![id];
+    while let Some(w) = stack.pop() {
+        let widget = &world.widgets[w.0];
+        if matches!(widget.text, Some(Value::Secret(_))) {
+            return true;
+        }
+        stack.extend_from_slice(&widget.children);
+    }
+    false
+}
+
 fn get_vertical_scroll_range(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(scroll_range(vm, id, true))])
+    Ok(vec![scroll_range(vm, id, true)])
 }
 
 fn get_horizontal_scroll_range(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(scroll_range(vm, id, false))])
+    Ok(vec![scroll_range(vm, id, false)])
 }
 
 /// An atlas the client was seen to have: its name as the client spells

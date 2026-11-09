@@ -267,6 +267,19 @@ as secrets, and `HasSecretAspect(Enum.SecretAspect.BarValue)` is true,
 until a plain value (or range) is set again (unverified: the scripts'
 values, and what the client keeps).
 
+A scroll frame's ranges (`GetVerticalScrollRange`,
+`GetHorizontalScrollRange`) are secrets while a region in its scroll child
+(the child itself, its children, theirs, shown or not) shows a text set
+from a secret (`SetText`, `SetFormattedText`); its sizes, its child's and
+its scroll offsets stay plain, and once the text is plain again so are the
+ranges (decision T607). Found in game: Blizzard's character stats list in
+SuuUI's scroll frame made its vertical range secret in combat while the
+heights and the offset stayed plain, and an empty scroll frame in combat
+answered a plain range. Unverified: that the secret text is what does it
+(the stats' rows show the player's health and power), whether a secret
+alpha, a bar's secret value or a hidden region count too, and the
+horizontal range, which follows the vertical one here.
+
 A status bar given a duration (`SetTimerDuration(duration, interpolation,
 direction)`) follows it: its range becomes 0 to the duration's length in
 seconds, and its value the seconds passed

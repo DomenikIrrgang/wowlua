@@ -134,6 +134,81 @@ return tostring(hidden), tostring(shown), tostring(f:IsShown())",
     assert_eq!(r, ["false", "true", "false"]);
 }
 
+/// A scroll frame whose child holds a text set from a secret answers its
+/// ranges secret, its sizes and offset plain (decision T607; found in game:
+/// Blizzard's character stats list in SuuUI's scroll frame, in combat), and
+/// plain again once the text is plain.
+#[test]
+fn a_secret_text_in_the_scroll_child_makes_the_range_secret() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    run(
+        &mut vm,
+        "mock.player:enterCombat()
+local s = CreateFrame('ScrollFrame', 'MyAddonScroll', UIParent)
+s:SetSize(100, 100)
+s:SetPoint('CENTER')
+local child = CreateFrame('Frame', nil, s)
+child:SetSize(100, 300)
+s:SetScrollChild(child)
+local list = CreateFrame('Frame', 'MyAddonList', child)
+list:SetAllPoints()
+list.Health = list:CreateFontString(nil, 'ARTWORK')
+list.Health:SetFont('Fonts/FRIZQT__.TTF', 12, '')
+list.Health:SetPoint('TOPLEFT')",
+    );
+    // (Blizzard's row writes the health it was given, secret in combat)
+    secure(&mut vm, "MyAddonList.Health:SetText(secretwrap('1234'))");
+    let reads = "local s = MyAddonScroll
+local child = s:GetScrollChild()
+return tostring(issecretvalue(s:GetVerticalScrollRange())),
+  tostring(issecretvalue(s:GetHorizontalScrollRange())),
+  tostring(issecretvalue(s:GetHeight())), tostring(issecretvalue(child:GetHeight())),
+  tostring(issecretvalue(s:GetVerticalScroll())),
+  tostring(issecretvalue(MyAddonList:GetHeight())),
+  tostring(pcall(function() return math.max(0, s:GetVerticalScrollRange()) end))";
+    let r = run(&mut vm, reads);
+    assert_eq!(
+        r,
+        ["true", "true", "false", "false", "false", "false", "false"]
+    );
+    run(&mut vm, "MyAddonList.Health:SetText('1234')");
+    let r = run(
+        &mut vm,
+        "return tostring(issecretvalue(MyAddonScroll:GetVerticalScrollRange())),
+  MyAddonScroll:GetVerticalScrollRange(), MyAddonScroll:GetHorizontalScrollRange()",
+    );
+    assert_eq!(r, ["false", "200", "0"]);
+}
+
+/// In combat, a scroll frame whose child holds no secret text answers
+/// plain ranges (decision T607; seen in game: an empty one, 50 by 50 with
+/// a 50 by 200 child), while a secret text elsewhere does not count.
+#[test]
+fn an_empty_scroll_frame_in_combat_answers_a_plain_range() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    run(
+        &mut vm,
+        "mock.player:enterCombat()
+local other = UIParent:CreateFontString('MyAddonOther', 'ARTWORK')
+other:SetFont('Fonts/FRIZQT__.TTF', 12, '')",
+    );
+    secure(&mut vm, "MyAddonOther:SetText(secretwrap('1234'))");
+    let r = run(
+        &mut vm,
+        "local s = CreateFrame('ScrollFrame', nil, UIParent)
+s:SetSize(50, 50)
+s:SetPoint('CENTER')
+local c = CreateFrame('Frame', nil, s)
+c:SetSize(50, 200)
+s:SetScrollChild(c)
+return tostring(InCombatLockdown()), tostring(issecretvalue(s:GetVerticalScrollRange())),
+  s:GetVerticalScrollRange()",
+    );
+    assert_eq!(r, ["true", "false", "150"]);
+}
+
 /// A protected frame anchored to a region is refused, out of combat too;
 /// to a frame, or an unprotected frame to a region, it is not (T252).
 #[test]

@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,195 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,196 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -849,7 +849,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,195 rules unverified: each rests on Blizzard's
+The engine's code marks 1,196 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1722,9 +1722,10 @@ page changes only when a rule is added, removed or reworded.
 - [maps.rs](../crates/wowlua-engine/src/maps.rs): `C_Map.GetWorldPosFromMapPos(uiMapID, mapPosition)`: the instance and the world position (a vector, `x` the world's X...
 - [maps.rs](../crates/wowlua-engine/src/maps.rs): Azeroth: Kalimdor on its left half, the Eastern Kingdoms on its right (recorded: (0, 0) Kalimdor's, (1, 1) the Easter...
 
-### measures (9)
+### measures (10)
 
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): What regions measure and hold beyond their setters: a font string's lines and height (on the engine's text model: 6 u...
+- [measures.rs](../crates/wowlua-engine/src/measures.rs): Whether the widget or one in it (its children, theirs, …) shows a text set from a secret, shown or hidden (decision T...
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): A texture's atlas set (`SetAtlas(atlas, useAtlasSize)`, a button's `SetXAtlas`): with `useAtlasSize`, the texture tak...
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): The file a texture shows, by ID, as `GetTexture()` and `GetTextureFileID()` answer: one value.
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): `EditBox:GetTextInsets()`: what `SetTextInsets` set, else none (unverified: a fresh edit box's, not recorded).
@@ -2500,6 +2501,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - A texture's masks (decision T596)
 - Draw layer case (decision T597)
 - Unanchored font strings (decision T602)
+- A secret scroll range (decision T607)
 
 ## In-game regressions
 
