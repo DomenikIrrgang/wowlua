@@ -89,6 +89,11 @@ pub struct Widget {
     /// Has an intrinsic type's handlers (`intrinsic_key`).
     pub intrinsic_scripts: bool,
     pub points: Vec<Point>,
+    /// Its points are the XML's default for a font string it does not
+    /// anchor (its parent's, `SetAllPoints`): the first `SetPoint` replaces
+    /// them instead of adding to them (decision T602: Blizzard's quest
+    /// rewards anchor such a header by its `TOPLEFT` and measure it).
+    pub default_points: bool,
     pub width: f64,
     pub height: f64,
     pub scale: f64,
@@ -671,6 +676,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         shown: true,
         events: HashMap::new(),
         points: Vec::new(),
+        default_points: false,
         width: 0.0,
         height: 0.0,
         scale: 1.0,
@@ -2606,6 +2612,11 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     };
     refuse_region_anchor(vm, id, relative, "SetPoint")?;
     let w = &mut engine_mut(vm).world.widgets[id.0];
+    // The XML's fill of an unanchored font string gives way to the first
+    // point set (decision T602).
+    if std::mem::take(&mut w.default_points) {
+        w.points.clear();
+    }
     w.points.retain(|p| p.point != point);
     w.points.push(Point {
         point,
@@ -2628,6 +2639,7 @@ fn set_to_defaults(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     mark(engine_mut(vm), id);
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.points.clear();
+    w.default_points = false;
     w.width = 0.0;
     w.height = 0.0;
     layout_changed(vm);
@@ -2641,7 +2653,9 @@ fn clear_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
-    let points = &mut engine_mut(vm).world.widgets[id.0].points;
+    let w = &mut engine_mut(vm).world.widgets[id.0];
+    w.default_points = false;
+    let points = &mut w.points;
     let before = points.len();
     points.retain(|p| !p.point.eq_ignore_ascii_case(&name));
     if points.len() != before {
@@ -2652,7 +2666,9 @@ fn clear_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 
 fn clear_all_points(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     mark(engine_mut(vm), id);
-    engine_mut(vm).world.widgets[id.0].points.clear();
+    let w = &mut engine_mut(vm).world.widgets[id.0];
+    w.points.clear();
+    w.default_points = false;
     layout_changed(vm);
     Ok(vec![])
 }
@@ -2666,6 +2682,7 @@ fn set_all_points(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     refuse_region_anchor(vm, id, rel, "SetAllPoints")?;
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.points.clear();
+    w.default_points = false;
     for p in ["TOPLEFT", "BOTTOMRIGHT"] {
         w.points.push(Point {
             point: p.into(),
