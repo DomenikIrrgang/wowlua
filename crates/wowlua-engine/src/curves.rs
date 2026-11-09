@@ -1169,23 +1169,29 @@ pub fn update_text_bindings(vm: &mut Vm) {
     }
 }
 
-/// `UpdateAddOnMemoryUsage()`: measures the memory now, for
-/// `GetAddOnMemoryUsage`.
+/// `UpdateAddOnMemoryUsage()`: measures each addon's memory now, for
+/// `GetAddOnMemoryUsage` (decision T610): the live objects its code made.
 fn update_memory(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let kib = vm.heap.estimate_bytes() as f64 / 1024.0;
-    crate::globalsinfo::put(vm, "addOnMemory", Value::Num(kib));
+    let measured = vm
+        .memory_by_taint()
+        .into_iter()
+        .map(|(name, bytes)| (name.to_lowercase(), bytes as f64 / 1024.0))
+        .collect();
+    engine_mut(vm).world.addon_memory = Some(measured);
     Ok(vec![])
 }
 
-/// The memory in KiB as `UpdateAddOnMemoryUsage` last measured it, 0
-/// before (the full probe: 0 for any name, its own addon's too); the VM
-/// does not tell addons apart (unverified: the whole VM's).
-fn addon_memory(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![crate::globalsinfo::get_or(
-        vm,
-        "addOnMemory",
-        Value::Num(0.0),
-    )])
+/// The addon's memory in KiB (by name or index) as `UpdateAddOnMemoryUsage`
+/// last measured it: the live objects its code made (decision T610);
+/// 0 before the first measure (the full probe: 0 for any name, its own
+/// addon's too) and for an addon that made none.
+fn addon_memory(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = crate::bindings::addon_name(vm, c.arg(1)).map(|n| n.to_lowercase());
+    let kib = match (&engine(vm).world.addon_memory, name) {
+        (Some(measured), Some(name)) => measured.get(&name).copied().unwrap_or(0.0),
+        _ => 0.0,
+    };
+    Ok(vec![Value::Num(kib)])
 }
 
 pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {

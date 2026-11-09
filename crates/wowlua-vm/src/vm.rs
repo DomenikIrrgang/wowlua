@@ -245,6 +245,9 @@ pub struct Vm {
     pub(crate) debugger: Option<Box<dyn crate::debug::Debugger>>,
     pub(crate) dbg: Option<Box<crate::debug::DebugState>>,
     pub(crate) profiler: Option<Box<crate::profile::Profiler>>,
+    /// What a native function costs the client, estimated, for profiles
+    /// (the host's model; none: natives cost nothing; decision T611).
+    pub native_cost: Option<crate::profile::NativeCostFn>,
     /// Values kept alive outside the heap (host references).
     pub(crate) pinned: Vec<Value>,
     pub(crate) gc_threshold: usize,
@@ -364,6 +367,7 @@ impl Vm {
             debugger: None,
             dbg: None,
             profiler: None,
+            native_cost: None,
             output: Box::new(|bytes| {
                 use std::io::Write;
                 let _ = std::io::stdout().write_all(bytes);
@@ -436,6 +440,27 @@ impl Vm {
             env,
             taint,
         })))
+    }
+
+    /// New objects are charged to the code running now: the taint they
+    /// take (`luaR_taintalloc`), an addon's or secure (decision T610).
+    #[inline]
+    pub(crate) fn sync_owner(&mut self) {
+        self.heap.owner = self.cur.taint.alloc(false).0;
+    }
+
+    /// The approximate bytes live by addon, as `GetAddOnMemoryUsage`
+    /// counts them (decision T610): what each taint's code made (by the
+    /// taint's name), the secure code's left out.
+    pub fn memory_by_taint(&self) -> Vec<(String, u64)> {
+        let mut out: Vec<(String, u64)> = self
+            .heap
+            .bytes_by_owner()
+            .into_iter()
+            .filter_map(|(owner, bytes)| Some((self.taint_name(Taint(owner))?, bytes)))
+            .collect();
+        out.sort();
+        out
     }
 
     /// The taint of an addon (or any name).
@@ -513,6 +538,15 @@ impl Vm {
     /// [`load`](Self::load) on bytes, as Lua strings are: the error message
     /// keeps the chunk name's and the source's bytes.
     pub fn load_raw(&mut self, src: &[u8], chunkname: &[u8]) -> Result<Value, Vec<u8>> {
+        // The chunk's constants are the loading code's (decision T610).
+        let outer = self.heap.owner;
+        self.sync_owner();
+        let r = self.compile_chunk(src, chunkname);
+        self.heap.owner = outer;
+        r
+    }
+
+    fn compile_chunk(&mut self, src: &[u8], chunkname: &[u8]) -> Result<Value, Vec<u8>> {
         let mut message = chunkid_sized(chunkname, 80);
         // Lua 5.1 skips a first line starting with `#` in files only;
         // `loadstring` does not, so neither do we.
@@ -712,7 +746,10 @@ impl Vm {
         let saved_c = self.cstack.len();
         let saved_depth = self.c_depth;
         let saved_top = self.cur.top;
-        match self.call_at(func, args.len(), -1, false) {
+        let r = self.call_at(func, args.len(), -1, false);
+        // What the caller makes next is its own again.
+        self.sync_owner();
+        match r {
             Ok(()) => {
                 let results = self.cur.stack[func..self.cur.top].to_vec();
                 self.cur.top = saved_top;
@@ -937,11 +974,15 @@ impl Vm {
                 });
                 if self.call_hooks {
                     self.call_hook(f, true);
+                    if self.profiler.is_some() {
+                        self.native_cost_hook(f, &args);
+                    }
                 }
                 self.result_taints.clear();
                 self.cur.natives += 1;
                 let outer_used = std::mem::replace(&mut self.secret_used, false);
                 let outer_reveal = std::mem::replace(&mut self.secret_reveal, false);
+                self.sync_owner();
                 let r = native(
                     self,
                     NativeCall {
@@ -954,6 +995,7 @@ impl Vm {
                 );
                 self.cur.natives -= 1;
                 self.cstack.pop();
+                self.sync_owner();
                 if self.call_hooks {
                     self.return_hook(self.cur.frames.len() + self.cstack.len());
                 }
@@ -1272,6 +1314,7 @@ impl Vm {
                         self.set_index_slot(t, key, v, Some(a))?;
                     }
                     Op::NewTable { a, narr, nhash } => {
+                        self.sync_owner();
                         let t = self
                             .heap
                             .alloc_table(Table::new(narr as usize, nhash as usize));
@@ -1331,6 +1374,7 @@ impl Vm {
                         self.set_copy(base + a as usize, s);
                     }
                     Op::Concat { a, b, c } => {
+                        self.sync_owner();
                         let s = self.concat_range(base, b, c)?;
                         self.set_copy(base + a as usize, s);
                         self.gc_step()?;
@@ -1525,6 +1569,7 @@ impl Vm {
                         self.close_upvals(base + a as usize);
                     }
                     Op::Closure { a, proto: pi } => {
+                        self.sync_owner();
                         let p = proto.protos[pi as usize].clone();
                         let mut upvals = Vec::with_capacity(p.upvals.len());
                         for d in &p.upvals {

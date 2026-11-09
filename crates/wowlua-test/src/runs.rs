@@ -72,6 +72,7 @@ pub fn suite<'a>(
         camera,
         game_data,
         world,
+        before_test: None,
         after_test: None,
         after_file: None,
     }

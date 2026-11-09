@@ -14,6 +14,7 @@ pub mod coverage;
 #[cfg(feature = "native")]
 pub mod installed;
 mod natives;
+pub mod perf;
 pub mod profile;
 pub mod reports;
 pub mod runs;
@@ -84,6 +85,9 @@ pub struct Suite<'a> {
     /// the installation's ground, the world behind the UI in screenshots
     /// (`--world`); off by default.
     pub world: bool,
+    /// Called before each test runs (its `@beforeEach` hooks too), with
+    /// its VM and name.
+    pub before_test: Option<std::sync::Arc<AfterTest>>,
     /// Called after each test with its VM and name, before the next
     /// (`wowlua screenshot`).
     pub after_test: Option<std::sync::Arc<AfterTest>>,
@@ -441,6 +445,7 @@ pub fn run_file(suite: &Suite, file: &TestFile, filters: &[String]) -> FileResul
         suite.camera.clone(),
     );
     natives::reset();
+    perf::reset();
     match load(suite, file, None) {
         Ok(mut state) => {
             run_tests(suite, file, &mut state, filters, &mut result);
@@ -619,6 +624,32 @@ pub fn source_of_chunk(suite: &Suite, chunk: &str) -> Option<String> {
         return None;
     }
     Some(source_of(suite, rest))
+}
+
+/// Which addon a function's chunk belongs to, for a profile's sums by
+/// addon (decision T612): the addon's own files, but not its test side
+/// (test files, helpers, mocks, `wowlua:test` and `wowlua:mock`), and the
+/// `test.addons` named in `others`; none for Blizzard's code.
+pub fn addon_classifier(own: &str, others: &[String]) -> wowlua_vm::profile::Classify {
+    let own = own.to_string();
+    let others = others.to_vec();
+    Box::new(move |chunk: &[u8]| {
+        let chunk = String::from_utf8_lossy(chunk);
+        let chunk = chunk.strip_prefix('@').unwrap_or(&chunk).replace('\\', "/");
+        let at = chunk.find("Interface/AddOns/")?;
+        let (name, file) = chunk[at + "Interface/AddOns/".len()..].split_once('/')?;
+        if name.eq_ignore_ascii_case(&own) {
+            let test_side = file.starts_with("tests/")
+                || file.ends_with(".test.lua")
+                || file.ends_with("std/test.lua")
+                || file.ends_with("std/mock.lua");
+            return (!test_side).then(|| own.clone());
+        }
+        others
+            .iter()
+            .find(|o| o.eq_ignore_ascii_case(name))
+            .cloned()
+    })
 }
 
 /// Chunk name → source path.
@@ -1328,6 +1359,9 @@ fn run_tests(
         }
         let started = wowlua_host::Stopwatch::start();
         let before = suite.coverage.then(|| entry_counts(&state.vm));
+        if let Some(f) = &suite.before_test {
+            f(&mut state.vm, &p.name);
+        }
         let mut outcome = run_one(suite, file, state, p);
         let functions = before
             .map(|b| functions_ran(suite, &state.vm, &b))

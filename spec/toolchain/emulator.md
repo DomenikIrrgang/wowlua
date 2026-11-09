@@ -829,6 +829,17 @@ takes the flavor's `Interface` folder and its global strings:
     in a finalizer reaches the code that caused the collection.
   - `collectgarbage` reports memory, and `step` counts work, as Lua 5.1's
     incremental collector would.
+  - `collectgarbage("count")` is the whole Lua state's memory (Blizzard's UI
+    and every addon), and `GetAddOnMemoryUsage(addon)` (by name or index)
+    an addon's as `UpdateAddOnMemoryUsage()` last measured it, 0 before
+    (decision T610): the live objects its code made. Each object belongs to
+    the taint it took when made (`luaR_taintalloc`): an addon's while its
+    code runs, the game's functions it calls included, so the frames,
+    tables and strings `CreateFrame` makes for it are its; secure code's
+    objects are no addon's. A test's own code is the addon's (it runs with
+    the addon's taint), so a test counts toward it too. Sizes are the
+    collector's estimates (a table 64 bytes and its slots, a string 32 and
+    its length), the same on every run.
 - **Taint** (decision T193). Exact, as the client tracks it: every stack
   slot, table field, upvalue and object carries the taint (the addon) of the
   code that wrote it, and each thread its execution's taint (§17.4).

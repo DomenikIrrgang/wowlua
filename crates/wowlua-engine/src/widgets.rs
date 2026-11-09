@@ -176,6 +176,9 @@ pub struct World {
     pub ui_parent: Option<WidgetId>,
     /// Loose files' IDs given out (`GetFileIDFromPath`), by normalized path.
     pub file_ids: std::collections::HashMap<String, f64>,
+    /// Each addon's memory in KiB (by lower-case name) as
+    /// `UpdateAddOnMemoryUsage` last measured it (decision T610).
+    pub addon_memory: Option<std::collections::HashMap<String, f64>>,
     /// The NPC interactions open (`Enum.PlayerInteractionType`, as bits),
     /// from `PLAYER_INTERACTION_MANAGER_FRAME_SHOW`/`_HIDE`.
     pub interactions: Vec<u64>,

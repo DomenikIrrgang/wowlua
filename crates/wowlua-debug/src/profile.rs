@@ -1,9 +1,10 @@
 //! Profile reports (spec debugger §18.8, decision T308): the functions
 //! table, the game frames, and the call tree as speedscope JSON, which
-//! keeps the whole profile for wowlua's readers (decision T495).
+//! keeps the whole profile for wowlua's readers (decision T495), and the
+//! game frames' summary (decision T612).
 
 use serde_json::{Value as Json, json};
-use wowlua_vm::profile::{Cost, FRAME_TREES, Key, Profiler};
+use wowlua_vm::profile::{Cost, Key, Profiler};
 
 /// A key's name, source and line, as reports show it.
 fn place(
@@ -28,7 +29,87 @@ fn place(
 }
 
 fn cost(c: Cost) -> Json {
-    json!({ "instructions": c.instructions, "bytes": c.bytes, "nanos": c.nanos })
+    json!({
+        "instructions": c.instructions,
+        "bytes": c.bytes,
+        "nanos": c.nanos,
+        "native": c.native,
+    })
+}
+
+/// What the summary says of the natives' cost (decision T611).
+pub const NATIVE_NOTE: &str = "estimated: the game's functions weighted by wowlua's model \
+     (in instructions' worth), not measured in the client";
+
+/// The game frames' summary (decision T612): per frame its number, its
+/// instructions, estimated native cost, bytes allocated, collections and
+/// host time, the events fired, each addon's part, and its costliest
+/// functions (indexes into `functions`). Every frame profiled is in it
+/// (the newest 100 000), not only those whose trees are kept.
+pub fn frame_summary(p: &Profiler, map: &dyn Fn(&[u8]) -> Option<String>, name: &str) -> Json {
+    let mut functions: Vec<Json> = Vec::new();
+    let mut index: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
+    let frames: Vec<Json> = p
+        .frames
+        .iter()
+        .map(|f| {
+            let top: Vec<Json> = f
+                .top
+                .iter()
+                .map(|t| {
+                    let i = *index.entry(t.key).or_insert_with(|| {
+                        let (name, file, line) = place(p, t.key, map);
+                        functions.push(json!({ "name": name, "file": file, "line": line }));
+                        functions.len() - 1
+                    });
+                    json!({
+                        "function": i,
+                        "calls": t.calls,
+                        "instructions": t.self_cost.instructions,
+                        "native": t.self_cost.native,
+                        "bytes": t.self_cost.bytes,
+                    })
+                })
+                .collect();
+            let mut events = serde_json::Map::new();
+            for (key, count) in &f.events {
+                if let Key::Dispatch(_, event) = &p.keys[*key as usize] {
+                    events.insert(event.to_string(), json!(count));
+                }
+            }
+            let mut addons = serde_json::Map::new();
+            for (g, c) in p.groups.iter().zip(&f.groups) {
+                addons.insert(
+                    g.clone(),
+                    json!({
+                        "instructions": c.instructions,
+                        "native": c.native,
+                        "bytes": c.bytes,
+                    }),
+                );
+            }
+            json!({
+                "frame": f.number,
+                "instructions": f.cost.instructions,
+                "native": f.cost.native,
+                "bytes": f.cost.bytes,
+                "gc": f.gc,
+                "nanos": f.cost.nanos,
+                "events": events,
+                "addons": addons,
+                "top": top,
+            })
+        })
+        .collect();
+    json!({
+        "version": 1,
+        "exporter": "wowlua",
+        "name": name,
+        "native": NATIVE_NOTE,
+        "addons": p.groups,
+        "functions": functions,
+        "frames": frames,
+    })
 }
 
 /// The report: `functions` (by total instructions, the first 500),
@@ -139,7 +220,7 @@ impl Saved {
                 self_cost: n.self_cost,
             })
             .collect();
-        let from = p.frames.len().saturating_sub(FRAME_TREES);
+        let from = p.frames.len().saturating_sub(p.frame_trees);
         let frames = p.frames[from..]
             .iter()
             .map(|f| SavedFrame {
@@ -236,7 +317,7 @@ impl Saved {
                 })
             })
             .collect();
-        let c = |c: &Cost| json!([c.instructions, c.bytes, c.nanos]);
+        let c = |c: &Cost| json!([c.instructions, c.bytes, c.nanos, c.native]);
         let wowlua = json!({
             "version": 1,
             "kinds": self.keys.iter().map(|k| json!(k.kind)).collect::<Vec<_>>(),
@@ -291,6 +372,7 @@ impl Saved {
             instructions: v[0].as_u64().unwrap_or(0),
             bytes: v[1].as_u64().unwrap_or(0),
             nanos: v[2].as_u64().unwrap_or(0),
+            native: v[3].as_u64().unwrap_or(0),
         };
         let w = &file["wowlua"];
         if w["version"].as_u64() == Some(1) {
@@ -376,14 +458,16 @@ fn add(to: &mut Cost, c: Cost) {
     to.instructions += c.instructions;
     to.bytes += c.bytes;
     to.nanos += c.nanos;
+    to.native += c.native;
 }
 
 type Measure = (&'static str, &'static str, fn(&Cost) -> u64);
 
-const MEASURES: [Measure; 3] = [
+const MEASURES: [Measure; 4] = [
     ("instructions", "none", |c| c.instructions),
     ("bytes allocated", "bytes", |c| c.bytes),
     ("host time", "nanoseconds", |c| c.nanos),
+    ("native cost (estimated)", "none", |c| c.native),
 ];
 
 /// The profile as a speedscope file ([`Saved::to_speedscope`]).

@@ -118,8 +118,13 @@ pub struct TestArgs {
     #[arg(long)]
     pub watch: bool,
     /// Profile each test file and write its profile here (speedscope JSON)
+    /// and its game frames' summary (`.frames.json`)
     #[arg(long, value_name = "DIR")]
     pub profile_out: Option<PathBuf>,
+    /// Game frames whose call trees the profile keeps, the newest (default:
+    /// 600; the frame summary has every frame)
+    #[arg(long, value_name = "N", requires = "profile_out")]
+    pub profile_frames: Option<usize>,
     /// Answer from your WoW installation's own data (items, creatures,
     /// appearances, models) where a test defines nothing; off by default,
     /// so a test gives the same result on every machine

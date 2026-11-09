@@ -422,3 +422,144 @@ fn an_error_unwinds_the_profilers_stack() {
     );
     assert_eq!(after.calls, 3);
 }
+
+/// The host weighs its natives (decision T611): a call's estimated cost
+/// is the native's own, in the frame's and the profile's.
+#[test]
+fn natives_carry_their_estimated_cost() {
+    use wowlua_vm::debug::DispatchKind;
+    let mut vm = Vm::new();
+    vm.native_cost = Some(|_vm, name, args| match name {
+        "insert" => 100 + args.len() as u64,
+        _ => 1,
+    });
+    vm.start_profiling(clock());
+    let chunk = load(
+        &mut vm,
+        "function tick() local t = {} for i = 1, 3 do table.insert(t, i) end return #t end\n",
+    );
+    vm.call(chunk, &[]).expect("defines");
+    let tick = vm.get_global("tick");
+    let frame = vm.dispatch_enter(DispatchKind::Frame, || "frame".into());
+    vm.call(tick, &[]).expect("runs");
+    vm.dispatch_exit(frame);
+    let p = vm.stop_profiling().expect("profiling");
+    let flat = p.flat();
+    let insert = flat
+        .iter()
+        .find(|e| p.key_name(e.key) == "[C] insert")
+        .expect("insert");
+    assert_eq!(insert.calls, 3);
+    // Two arguments each.
+    assert_eq!(insert.self_cost.native, 3 * 102);
+    assert_eq!(insert.self_cost.instructions, 0);
+    let f = &p.frames[0];
+    assert_eq!(f.cost.native, 3 * 102);
+    assert_eq!(f.number, 1);
+    // The frame's costliest function is `insert`, by its estimate.
+    assert_eq!(p.key_name(f.top[0].key), "[C] insert");
+    assert_eq!(f.top[0].calls, 3);
+}
+
+/// Every frame keeps a summary (decision T612): events fired, collections,
+/// the costliest functions and each addon's part, also once its tree is
+/// gone.
+#[test]
+fn frames_keep_a_summary_past_their_trees() {
+    use wowlua_vm::debug::DispatchKind;
+    let mut vm = Vm::new();
+    vm.start_profiling(clock());
+    {
+        let p = vm.profiler_mut().expect("profiling");
+        p.frame_trees = 1;
+        p.top_n = 2;
+        p.classify_by(Box::new(|chunk: &[u8]| {
+            (chunk == b"@Interface/AddOns/Demo/a.lua").then(|| "Demo".to_string())
+        }));
+    }
+    let addon = vm
+        .load(
+            b"function work() local s = '' for i = 1, 20 do s = s .. i end return s end",
+            "@Interface/AddOns/Demo/a.lua",
+        )
+        .expect("compiles");
+    vm.call(addon, &[]).expect("defines");
+    let other = load(&mut vm, "function idle() return 1 end\n");
+    vm.call(other, &[]).expect("defines");
+    let (work, idle) = (vm.get_global("work"), vm.get_global("idle"));
+    for n in 0..3 {
+        let frame = vm.dispatch_enter(DispatchKind::Frame, || "frame".into());
+        let event = vm.dispatch_enter(DispatchKind::Event, || "UNIT_AURA".into());
+        vm.call(idle, &[]).expect("runs");
+        if n == 2 {
+            vm.call(work, &[]).expect("runs");
+            vm.collect().expect("collects");
+        }
+        vm.dispatch_exit(event);
+        vm.dispatch_exit(frame);
+    }
+    let p = vm.stop_profiling().expect("profiling");
+    assert_eq!(p.groups, ["Demo"]);
+    assert_eq!(p.frames.len(), 3);
+    // Only the newest frame keeps its tree.
+    assert!(p.frames[0].nodes.is_empty() && p.frames[1].nodes.is_empty());
+    assert!(!p.frames[2].nodes.is_empty());
+    for f in &p.frames {
+        assert_eq!(f.events.len(), 1);
+        assert_eq!(p.key_name(f.events[0].0), "event UNIT_AURA");
+        assert_eq!(f.events[0].1, 1);
+        assert!(f.top.len() <= 2);
+    }
+    assert_eq!((p.frames[0].gc, p.frames[2].gc), (0, 1));
+    // The addon's part: nothing until its function ran.
+    assert_eq!(p.frames[0].groups[0].instructions, 0);
+    let demo = p.frames[2].groups[0];
+    assert!(demo.instructions > 20 && demo.bytes > 0, "{demo:?}");
+    assert!(demo.instructions < p.frames[2].cost.instructions);
+    assert_eq!(
+        p.key_name(p.frames[2].top[0].key),
+        "function (Interface/AddOns/Demo/a.lua:1)"
+    );
+}
+
+/// Each object belongs to the code that made it: the taint new objects
+/// take, an addon's, so the memory an addon holds can be told (decision
+/// T610); secure code's objects belong to no addon.
+#[test]
+fn objects_belong_to_the_addon_that_made_them() {
+    let mut vm = Vm::wow();
+    let secure = vm
+        .load(
+            b"SecureData = {} for i = 1, 500 do SecureData[i] = { i } end",
+            "=secure",
+        )
+        .expect("compiles");
+    vm.call(secure, &[]).expect("runs");
+    let addon = vm
+        .load_as(
+            b"AddonData = {} for i = 1, 1000 do AddonData[i] = { tostring(i) } end",
+            "@Interface/AddOns/Demo/a.lua",
+            "Demo",
+        )
+        .expect("compiles");
+    vm.call(addon, &[]).expect("runs");
+    vm.collect().expect("collects");
+    let demo = vm
+        .memory_by_taint()
+        .iter()
+        .find(|(n, _)| n == "Demo")
+        .map(|m| m.1)
+        .expect("Demo's memory");
+    // A thousand tables and strings: more than 64 KiB, less than the state.
+    assert!(demo > 64 * 1000, "{demo}");
+    assert!((demo as usize) < vm.heap.estimate_bytes());
+    // Dropping them gives the memory back.
+    vm.set_global("AddonData", Value::Nil);
+    vm.collect().expect("collects");
+    let after = vm
+        .memory_by_taint()
+        .iter()
+        .find(|(n, _)| n == "Demo")
+        .map_or(0, |m| m.1);
+    assert!(after < demo / 10, "{after} of {demo}");
+}

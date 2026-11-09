@@ -35,6 +35,7 @@ pub mod collections;
 pub mod conditionals;
 pub mod content;
 pub mod controls;
+pub mod cost;
 pub mod coverage;
 pub mod cursor;
 pub mod curves;
@@ -480,6 +481,8 @@ pub fn cvars(flavor: &str) -> Vec<CVar> {
 /// not already define), and the `Enum` and `Constants` tables.
 pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     let api = api::api(flavor).ok_or_else(|| format!("no API documentation for `{flavor}`"))?;
+    // Profiles weigh the game's functions (decision T611).
+    vm.native_cost = Some(cost::native_cost);
     for (i, f) in api.functions.iter().enumerate() {
         let index = Value::Num(i as f64);
         match f.namespace {

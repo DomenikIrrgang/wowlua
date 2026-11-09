@@ -177,13 +177,43 @@ The VM counts, per function and per dispatch (decision T307):
   machine and every run, so CI compares them);
 - bytes allocated, self and total (the garbage a function makes);
 - host time, self and total, in nanoseconds (the emulator's speed, not the
-  client's; shown as a second measure).
+  client's; shown as a second measure);
+- the game's functions' **estimated cost** (below), self and total.
+
+**The game's functions' cost** (decision T611). The emulator's natives run
+no Lua, so by instructions alone `CreateFrame`, `SetPoint` and `SetText`
+would look free, while in the client they are most of what building a UI
+costs. A profile therefore weighs every native call with the engine's cost
+model, in Lua instructions' worth, as the native's own cost: any call 5, and
+the known heavy ones more, a template a frame or region inherits 1000 more
+(`CreateFrame`'s `template`, a region's `inherits`). The weights
+(`wowlua_engine::cost`) are estimates no measure in the client has confirmed
+(unverified; a calibration in the game is to come) and are labelled so
+wherever they show: they rank work, they do not time it.
+
+| Natives | Weight |
+|---------|--------|
+| `CreateFrame` | 2000 |
+| `CreateFontString` | 400 |
+| `CreateTexture`, `CreateMaskTexture`, `CreateLine` | 300 |
+| `SetFont` | 300 |
+| `CreateAnimationGroup`, `GetUnitAuras` | 200 |
+| `SetFontObject` | 150 |
+| `CreateAnimation`, `SetFormattedText`, `SetTexture`, `SetAtlas`, `SetStatusBarTexture` | 100 |
+| `SetText`, `SetParent` | 80 |
+| `SetAllPoints`, `SetScale`, `GetAuraDataByIndex`, `UnitAura`, `UnitBuff`, `UnitDebuff` | 60 |
+| `SetPoint`, `GetAuraDataByAuraInstanceID`, `GetAuraDataBySlot` | 50 |
+| `SetSize`, `Show`, `Hide`, `SetShown`, `GetStringWidth`, `GetStringHeight`, `GetAuraSlots`, `RegisterUnitEvent` | 40 |
+| `ClearAllPoints`, `ClearPoint`, `SetWidth`, `SetHeight`, `SetColorTexture`, `HookScript`, `RegisterEvent`, `UnregisterEvent` | 30 |
+| `GetWidth`, `GetHeight`, `GetSize`, `GetRect`, `GetLeft`, `GetRight`, `GetTop`, `GetBottom`, `GetCenter`, `SetTexCoord`, `SetScript` | 20 |
+| any other native (Lua's library too) | 5 |
 
 Functions are keyed by their definition (source, line defined; natives by
 name), dispatches by kind and name (`event PLAYER_LOGIN`, `MyFrame:OnEvent`,
 `OnUpdate MyFrame`, `timer`), and game frames by number. The call tree keeps
 every path (callers and callees) up to depth 256, and each of the newest 600
-game frames keeps its own: the nodes that ran in it, with their calls and
+game frames (a profile may keep more or fewer) keeps its own: the nodes that
+ran in it, with their calls and
 costs in that frame (decision T495). A profile is started and
 stopped in a session (or covers a whole test file with
 `wowlua test --profile-out <dir>`), and is given as a table (functions sorted by a
@@ -191,9 +221,33 @@ measure), a call tree, a per-frame timeline, or a file:
 [speedscope](https://www.speedscope.app) JSON with one profile per measure,
 which Studio and speedscope open (decision T308). The file keeps the whole
 profile under `wowlua` for wowlua's readers, which speedscope leaves alone:
-the dispatches' kinds, the tree with each node's calls and own cost, and the
-kept frames with their trees; read back, it is the profile again, and
+the dispatches' kinds, the tree with each node's calls and own cost (its
+measures in the order instructions, bytes, nanoseconds, native estimate), and
+the kept frames with their trees; read back, it is the profile again, and
 another tool's speedscope file reads as the tree of its samples (decision T495).
+
+**The frames' summary** (decision T612). Every game frame, its tree kept or
+not (the newest 100 000), keeps a summary: its number, instructions,
+estimated native cost, bytes allocated, garbage collections and host time,
+the events fired in it (by name, how often), its five costliest functions
+(by their own instructions and native estimate there) and each addon's part.
+A function belongs to the first addon on its path from the root: the addon's
+own code and everything it calls (Blizzard's functions, natives) are the
+addon's, and code of no addon (Blizzard's, the test side: test files,
+helpers, mocks, `wowlua:test`, `wowlua:mock`) is no addon's until it calls
+an addon's. `wowlua test --profile-out <dir>` writes it next to each
+speedscope file as `<file>.<flavor>.frames.json`: a small JSON file
+(`version` 1) with the addons, the functions the frames name (`name`,
+`file`, `line`), the frames (`frame`, `instructions`, `native`, `bytes`,
+`gc`, `nanos`, `events`, `addons` with each addon's `instructions`, `native`
+and `bytes`, `top` with each function's index, `calls`, `instructions`,
+`native` and `bytes`), each test's frames (`tests`: `name`, `first`,
+`last`, its `@beforeEach` and `@afterEach` hooks' frames included), and the
+memory at the file's end after a full collection (`memory`: `total` and
+each addon's, in KiB, as `collectgarbage("count")` and
+`GetAddOnMemoryUsage` count them). `--profile-frames <n>` sets how many of
+the newest frames keep their trees in the speedscope file (600 by default,
+`0` for none: a small file with the whole tree and no frame's).
 
 ## 18.9 Scene
 

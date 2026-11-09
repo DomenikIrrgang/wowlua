@@ -65,6 +65,9 @@ impl Vm {
     /// that caused the collection, and the rest wait for the next one.
     pub fn collect(&mut self) -> Result<(), LuaError> {
         self.gc_cycles += 1;
+        if let Some(p) = self.profiler.as_mut() {
+            p.gc_cycles += 1;
+        }
         self.gc_cycle_work = None;
         let mut m = Marker {
             gray: Vec::new(),

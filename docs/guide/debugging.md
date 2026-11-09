@@ -268,7 +268,31 @@ $ wowlua test --profile-out prof    # one speedscope file per test file and flav
 
 `prof/` then holds files such as
 `tests_tracker.test.wowlua.camelot.speedscope.json`; open one on
-speedscope.app. An agent profiles with the `profile_start` and
+speedscope.app.
+
+The game's own functions run no Lua in the emulator, so a profile also
+gives each of them an **estimated cost** in instructions' worth:
+`CreateFrame` 2000, `SetPoint` 50, `SetText` 80, any other call 5 (the
+whole list is in [Debugger
+§18.8](../../spec/toolchain/debugger.md#188-profiler)). The estimate shows
+as its own measure, "native cost (estimated)", so building frames no longer
+looks free; it ranks work, it does not time the game.
+
+Next to each speedscope file is a small summary of every game frame,
+`….frames.json`: per frame its instructions, the native estimate, the
+memory allocated, garbage collections, the events fired, the costliest
+functions and your addon's part, plus the frames each test ran and the
+memory your addon holds at the end. A minute of frames fits in it. The
+speedscope file keeps the call trees of the newest 600 frames, which makes
+it large; keep fewer, or none:
+
+```console
+$ wowlua test --profile-out prof --profile-frames 0
+```
+
+In tests, `UpdateAddOnMemoryUsage()` and `GetAddOnMemoryUsage("MyAddon")`
+measure your addon's memory alone, as in the game: what its code made that
+is still alive. `collectgarbage("count")` is the whole client's. An agent profiles with the `profile_start` and
 `profile_stop` tools of [`wowlua mcp`](agents.md), and an editor with the
 debug adapter's `wowlua/profile` request
 ([Debugger §18.8](../../spec/toolchain/debugger.md#188-profiler)).

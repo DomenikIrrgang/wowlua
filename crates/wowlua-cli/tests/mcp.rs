@@ -181,7 +181,8 @@ fn an_agent_drives_and_debugs_an_addon() {
     assert!(report.contains("script CounterButton:OnClick"), "{report}");
     assert!(report.contains("function src/counter.lua:12"), "{report}");
     let ss: Value = serde_json::from_slice(&fs::read(&speedscope).unwrap()).unwrap();
-    assert_eq!(ss["profiles"].as_array().unwrap().len(), 3);
+    // Instructions, bytes, host time and the native estimate.
+    assert_eq!(ss["profiles"].as_array().unwrap().len(), 4);
 
     // The events told, the units, the screen and the world.
     m.ok("events", json!({ "log": true }));
