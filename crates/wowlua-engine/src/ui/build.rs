@@ -1184,7 +1184,12 @@ fn build_as(
 /// font strings, lines, and whether the client places them at creation or
 /// later. A font string so too (Blizzard's `ScrollingFontTemplate` anchors
 /// none: the character window's side panes showed no description; in game
-/// it shows), but a button's `ButtonText`, which the button centers.
+/// it shows), but a button's `ButtonText`, which the button centers. A
+/// font string's fill gives way to the first point set, which does not
+/// add to it (decision T602: Blizzard's map quest rewards anchor their
+/// unanchored "You will receive:" by its `TOPLEFT` alone and add its
+/// height to the frame's; the parent's bottom kept, it measured 4 and
+/// later stretched to the frame's bottom, the rewards below the frame).
 fn fill_parent_if_unplaced(vm: &mut Vm, cx: &Context, el: &Element, region: Value, id: WidgetId) {
     let w = &engine(vm).world.widgets[id.0];
     if !matches!(w.class.as_str(), "Texture" | "MaskTexture" | "FontString")
@@ -1199,6 +1204,8 @@ fn fill_parent_if_unplaced(vm: &mut Vm, cx: &Context, el: &Element, region: Valu
         return;
     }
     call_method(vm, cx, el.line, region, "SetAllPoints", &[]);
+    let w = &mut engine_mut(vm).world.widgets[id.0];
+    w.default_points = w.class == "FontString";
 }
 
 /// Compiles UI code: as the loading addon's ([`Registry::code_of`]), or

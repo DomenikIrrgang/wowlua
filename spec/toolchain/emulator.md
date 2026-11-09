@@ -658,6 +658,9 @@ takes the flavor's `Interface` folder and its global strings:
   which the slider anchors by its `LEFT` to its own `LEFT` (`TOP` to `TOP`
   on a vertical slider), offset along its length by its value, so
   `GetNumPoints` gives 1 and `GetPoint` that anchor, decision T326; a
+  font string with none fills its parent too, but a `ButtonText`, until
+  its first `SetPoint`, which replaces the fill instead of adding to it:
+  by one point it is its text's size, decision T602; a
   texture's `rotation` is in degrees, turning it about its center), layers,
   child frames and scripts (`function`, `method` or a body;
   `inherit="prepend"` / `"append"`; a texture's `<Color>` is its plain
