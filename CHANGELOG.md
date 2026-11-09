@@ -2,7 +2,7 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
-## Unreleased
+## 0.13.9 (2026-11-09)
 
 ### New
 
@@ -28,7 +28,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - **Moving props in the 3D world**: with `--world`, the props near you that move in the game (banners, lanterns, mills, birds, fountains, flowing textures) play their animations, each in its own rhythm, and the props and units show their particles: flames, smoke, sparkles.
 - **Water in the 3D world**: with `--world`, lakes, rivers, the sea and lava are drawn with their animated surfaces, the ground and units under the water showing through.
 - **Daylight in the 3D world**: with `--world`, the sky with its clouds and stars, sunlight, ambient light and fog come from your installation's light tables for the place and the realm's time of day, each game version its own. A session starts at 12:00; `mock.setTimeOfDay(hour, minute)` and a world profile's `"time": "21:30"` set the time, which `GetGameTime` now answers instead of always 12:00.
-- The Classic flavors' engine knows the game's colors (`C_UIColor.GetColors`, `NORMAL_FONT_COLOR` and the others Blizzard's code makes from them) and the enums and `LE_*` constants their clients define, so much more of Blizzard's UI loads on vanilla, tbc and mists.
+- The Classic flavors' engine knows the game's colors (`C_UIColor.GetColors`, `NORMAL_FONT_COLOR` and the others Blizzard's code makes from them) and the enums and `LE_*` constants their clients define, so much more of Blizzard's UI loads on vanilla, tbc and mists. There, `GetMaxPlayerLevel` and `GetMaxLevelForPlayerExpansion` answer the flavor's max level (60, 70 and 90).
 
 ### Changed
 
@@ -62,6 +62,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `GetNumRegions()` counts a frame's current regions, including hidden regions, rather than returning a fresh frame's recorded count.
 - `DisableDrawLayer` and `EnableDrawLayer` hide and restore a frame's draw layers without changing its regions' shown state or its child frames' layers.
 - Clearing texture artwork with file ID `0` no longer draws missing-texture placeholders.
+- `ClearNormalTexture` and a button's other `Clear…Texture` methods empty and hide the texture but leave it the button's, so `GetNormalTexture` still answers it afterwards: Blizzard's professions UI on WoW Forever loads again without an error.
 - A frame's `OnUpdate` follows `SetOnUpdateMode`: `Enum.OnUpdateMode.Disabled` stops it, `RunWhenVisibleOnce` and `RunOnce` run it once, and `RunOnce` and `RunAlways` run it while the frame is hidden too. Before, every shown frame's `OnUpdate` ran each frame, whatever its mode.
 - An aura filter with a negated category, such as `HARMFUL|!CROWD_CONTROL`, no longer matches every aura, so rows split by a category and its negation show each aura once. `unit:applyAura` takes `crowdControl`, `raidInCombat`, `important`, `bigDefensive` and `externalDefensive` to put an aura in those filters, and `DISPELLABLE` finds auras with a dispel type.
 - A texture tiled with `SetHorizTile(true)` or `SetVertTile(true)` is drawn as in the game: set with `SetTexture(file, "REPEAT", "REPEAT")` its image repeats at its own size across the texture, and without `"REPEAT"` the image shows once and its edge pixels stretch over the rest. Before, the image was stretched once over the whole texture. This holds for a status bar's fill texture too.
