@@ -1730,3 +1730,47 @@ points until its first `SetPoint`, which replaces them.
    receive:", and the rewards frame's height. wowlua: "1", the two
    heights equal (about 10), the frame about 51.
 4. Close the map (M).
+
+## A secret scroll range (decision T607)
+
+Found with SuuUI's character window on WoW Forever 1.60.1 (70862),
+2026-11-09. SuuUI puts Blizzard's character stats list
+(`CharacterStatsPaneScrollBox.ScrollBox`) in its own scroll frame's
+scroll child, the child given a fixed height.
+
+- Seen out of combat: `issecretvalue` false for the scroll frame's
+  `GetVerticalScrollRange()`, its `GetHeight()`, the scroll child's
+  `GetHeight()`, its `GetVerticalScroll()` and the list's `GetHeight()`.
+- Seen in combat: `GetVerticalScrollRange()` secret, the other four
+  plain; SuuUI's `math.max(0, scroll:GetVerticalScrollRange())` raised
+  "attempt to perform numeric conversion on a secret number value
+  (execution tainted by 'SuuUI')".
+- Seen in combat: a new scroll frame (50 by 50, a 50 by 200 child, nothing
+  else in it) answered a plain range.
+
+wowlua answered a plain number always; it now answers the ranges secret
+while a region in the scroll child shows a text set from a secret. That
+the text is the cause is inferred (the stats' rows show the player's
+health and power), not seen. To check it, each line in the chat:
+
+1. `/run S=CreateFrame("ScrollFrame",nil,UIParent) S:SetSize(50,50) S:SetPoint("CENTER") C=CreateFrame("Frame",nil,S) C:SetSize(50,200) S:SetScrollChild(C) T=C:CreateFontString(nil,"ARTWORK","GameFontNormal") T:SetPoint("TOPLEFT")`
+2. Enter combat (attack a training dummy), and stay in it for the next
+   three lines.
+3. `/run T:SetText(UnitHealth("player")) print(issecretvalue(UnitHealth("player")), issecretvalue(S:GetVerticalScrollRange()), issecretvalue(S:GetHorizontalScrollRange()))`
+
+   Seen: whether the health is secret, then whether each range is.
+   wowlua: the last two as the first ("true true true" when the health is
+   secret).
+4. `/run T:SetText("1") print(issecretvalue(S:GetVerticalScrollRange()))`
+
+   Seen: whether a plain text makes the range plain again. wowlua:
+   "false".
+5. `/run T:SetText("") T:Hide() T:SetText(UnitHealth("player")) print(issecretvalue(S:GetVerticalScrollRange()))`
+
+   Seen: whether a hidden font string's secret text counts. wowlua:
+   "true".
+6. `/run T:SetText("") B=CreateFrame("StatusBar",nil,C) B:SetMinMaxValues(0,UnitHealthMax("player")) B:SetValue(UnitHealth("player")) print(issecretvalue(B:GetValue()), issecretvalue(S:GetVerticalScrollRange()))`
+
+   Seen: whether a bar's secret value counts. wowlua: "true false" (only
+   texts count).
+7. Leave combat, then `/run S:Hide()`
