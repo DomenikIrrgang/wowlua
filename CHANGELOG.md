@@ -32,7 +32,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### Changed
 
 - `frame:Raise()` no longer changes the frame's level, and clicking a top-level frame no longer brings it to the front, as in the game.
-- The camelot, vanilla, tbc and mists API declarations come from the games' current clients (WoW Forever 1.60.1.70755, Classic Era 1.15.9.70576, Anniversary 2.5.6.70577, Mists Classic 5.5.4.70631), with their global strings. A Classic flavor now declares only the UI globals its own game loads, not those of the other Classic games.
+- The camelot, vanilla, tbc and mists API declarations come from the games' current clients (WoW Forever 1.60.1.70862, Classic Era 1.15.9.70576, Anniversary 2.5.6.70577, Mists Classic 5.5.4.70631), with their global strings. A Classic flavor now declares only the UI globals its own game loads, not those of the other Classic games.
+- WoW Forever 1.60.1.70862: `C_BattleNet.GetDefaultTitleWhisperTarget` is declared, and `BNGetDisplayName`'s result may be nil, so check it before using it as a string.
 
 ### Fixed
 

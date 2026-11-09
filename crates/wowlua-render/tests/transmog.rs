@@ -5,9 +5,10 @@
 //! skipped where there is none.
 
 /// What the build changed since the recording (1.60.1.70425): on 70707
-/// two sources show another appearance, on 70755 135 more (their items'
-/// new appearances, nothing else of them changed) (until the sources are
-/// recorded again: tests/ingame/PROBES.md, "The Camelot update").
+/// two sources show another appearance, on 70755 135 more and on 70862
+/// four more (their items' new appearances, nothing else of them
+/// changed) (until the sources are recorded again: tests/ingame/PROBES.md,
+/// "The Camelot update").
 const CHANGED: &[&str] = &[
     "source 299176:",
     "source 304856:",
@@ -146,6 +147,11 @@ const CHANGED: &[&str] = &[
     "source 308774:",
     "source 308775:",
     "source 308776:",
+    // 70862
+    "source 308072:",
+    "source 308171:",
+    "source 308323:",
+    "source 308567:",
 ];
 
 #[test]

@@ -1,4 +1,4 @@
-# Global strings of the installed camelot client (1.60.1.70755, its
+# Global strings of the installed camelot client (1.60.1.70862, its
 # GlobalStrings.lua) that Ketho's BlizzardInterfaceResources dump the
 # declarations name lacks (decision T590): set after that dump, where the
 # global is still nil. Delete a line once the dump has it.
@@ -25,6 +25,7 @@ SET_PRESET_OPTION_BUTTON_CLASSIC_LABEL = "Set to Classic";
 SET_PRESET_OPTION_BUTTON_ENHANCED_LABEL = "Set to Enhanced";
 SHARD_TRANSFER_COMBAT = "You can't refresh the world while in combat.";
 SOCIAL_TAB_UNAVAILABLE = "The %s feature is unavailable due to your account's privacy settings. Some social features are restricted.";
+SPELL_FAILED_CUSTOM_ERROR_2717 = "Requires an ancient masterwork";
 STAT_CATEGORY_COMBAT = "Combat";
 STAT_PET_HIT_TOOLTIP = "Increases |cFFFFFFFFMelee|r and |cFFFFFFFFSpell|r hit chance\n\nIncreased by 100% of |cFFFFFFFFMaster's Hit Chance|r\n\n|cffBCBCBCTo never miss|r |cFFFF5A5ARaid Bosses|r|cffBCBCBC:\n  8.00%% Melee\n17.00%% Spells\n\nTo never miss|r |cFF52E31EEqual-Level Targets|r|cffBCBCBC:\n  5.00%% Melee\n  4.00%% Spells|r";
 STAT_WARLOCK_PET_MANA_REGEN_TOOLTIP = "The amount of |cFFFFFFFFMana|r regenerated every 5 sec\n\nIncreased by %d%% of |cFFFFFFFFMaster's Intellect|r\n\n|cFFBCBCBCImps benefit more from their Master's Intellect than other demons|r";

@@ -484,10 +484,11 @@ fn spells_read_as_the_client_shows_them() {
     assert!(same >= 190, "{same}");
 }
 
-/// What 70755 changed since the recordings: Rake's and Pounce's damage
+/// What 70755 changed since the recordings: Rake's and Pounce's damage;
+/// 70862 Thorns' (rank 2 at level 21: 6 where the recording has 8)
 /// (until the trainers are recorded again: tests/ingame/PROBES.md, "The
 /// Camelot update").
-const NEWER_DESCRIPTIONS: &[u32] = &[1822, 1823, 1824, 9005, 9823, 9827, 9904];
+const NEWER_DESCRIPTIONS: &[u32] = &[1822, 1823, 1824, 9005, 9823, 9827, 9904, 782];
 
 /// camelot's spells' power costs as the client's `GetSpellPowerCost`
 /// answers them in the trainers' recordings: each cost's power type and
