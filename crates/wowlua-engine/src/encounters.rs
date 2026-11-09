@@ -15,8 +15,7 @@
 //! success's `BOSS_KILL`, `ENCOUNTER_END` with each boss's status, the
 //! tokens cleared and `INSTANCE_ENCOUNTER_ENGAGE_UNIT` again.
 //!
-//!
-//! Arenas (decision T602): `mock.prepareArena(specs)`: the opponents'
+//! Arenas (decision T606): `mock.prepareArena(specs)`: the opponents'
 //! specializations (`GetNumArenaOpponentSpecs`, `GetArenaOpponentSpec`),
 //! `ARENA_PREP_OPPONENT_SPECIALIZATIONS`; `mock.setArenaOpponent(slot,
 //! unit?)`: the unit on `arenaN`, `ARENA_OPPONENT_UPDATE("arenaN",
