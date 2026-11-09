@@ -721,10 +721,23 @@ fn get_desaturation(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(if on { 1.0 } else { 0.0 })])
 }
 
-/// `GetTextureFilePath()`: the file path set, else nil.
+/// `GetTextureFilePath()`: the file path set, nil for an addon's file that
+/// is not there; an atlas's file ID (WoW Forever 70862, 2026-11-09: a
+/// missing file of an addon nil, `128-RedButton-Exit`'s 8063723; decision
+/// T356); else nil. Unverified: a path to no file outside the addons.
 fn get_texture_file_path(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    let v = first(vm, id, "Texture").filter(|v| matches!(v, Value::Str(_)));
-    Ok(vec![v.unwrap_or(Value::Nil)])
+    Ok(vec![match first(vm, id, "Texture") {
+        Some(v @ Value::Str(s)) => {
+            let path = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+            if crate::misc::missing_addon_file(vm, &path) {
+                Value::Nil
+            } else {
+                v
+            }
+        }
+        None => crate::measures::texture_file(vm, id),
+        _ => Value::Nil,
+    }])
 }
 
 // ------------------------------------------------------------- cooldowns
@@ -1165,12 +1178,17 @@ fn get_model_scale(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 }
 
 /// `GetModelFileID()`: the file ID set (`SetModelByFileID`, or `SetModel`
-/// given one), else 0.
+/// given one), else 0; nil after `ClearModel` (recorded 2026-11-09).
 fn get_model_file_id(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     for stem in ["ModelByFileID", "Model"] {
         if let Some(Value::Num(n)) = first(vm, id, stem) {
             return Ok(vec![Value::Num(n)]);
         }
+    }
+    let p = props(vm, id);
+    let cleared = vm.str(crate::models::CLEARED);
+    if vm.heap.table(p).get(cleared).truthy() {
+        return Ok(vec![Value::Nil]);
     }
     Ok(vec![Value::Num(0.0)])
 }

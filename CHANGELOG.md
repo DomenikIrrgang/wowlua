@@ -2,6 +2,28 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- Walking away from an open mailbox closes it, as in the game: past 5 yards (`unit:setDistance`, or the player moving away) the mail ends with `SECURE_TRANSFER_CANCEL` and `PLAYER_INTERACTION_MANAGER_FRAME_HIDE`, and `C_PlayerInteractionManager.IsInteractingWithNpcOfType(17)` turns false. There is no `MAIL_CLOSED`, as in the game.
+- A frame anchored to a panel whose `OnSizeChanged` resizes the panel is lost as in the game also when nothing asks for its place before the frame ends, and when the panel was built hidden and shown later; before, wowlua placed it.
+- `IsRectValid()` answers true once a frame has been laid out (its size or place asked for, or the next frame), not always false.
+- `GetPoint(i)` lists a frame's points in the game's order (`TOPLEFT` first), not the order they were set in.
+- `EditBox:Insert` tells `OnTextChanged` with `userInput` true, as the game does, and `HighlightText(start, end)` with the end before the start selects to the text's end.
+- A button's `ClearNormalTexture` (and the other states') leaves the texture shown, and `ClearModel` makes `GetModelFileID` answer nil, as in the game.
+- A frame given `OnMouseUp`, `OnMouseDown`, `OnEnter` or `OnLeave`, or `EnableMouse(true)`, also answers true to `IsMouseClickEnabled` and `IsMouseMotionEnabled`.
+- A button's `SetNormalFontObject`, `SetHighlightFontObject` and `SetDisabledFontObject` refuse an unknown font name with the game's message.
+- `GetBindingText("SHIFT", 1)` gives `s` and `GetBindingText("META")` gives `CMD` on a Mac: a modifier key alone is named as the game names it.
+- `C_AddOns.GetAddOnInfo` answers a load-on-demand addon as not loadable with `"DEMAND_LOADED"`, also after it is loaded.
+- The PvP ranks 11 to 13 need the reputation the game says (16600, 19100, 21750), and ranks 2 to 6 have their "Rank N Rewards".
+- `C_MountJournal.GetMountInfoByID(6)` answers the Brown Horse, not collected.
+- A heal prediction calculator's incoming heals overflow 1.05 by default, as in the game, so `GetMaximumIncomingHeals` matches the game's.
+- `C_AuraContainerUtil.ProcessAuraTooltipBackdropOptions` keeps a `backdropInfo` you give as you gave it.
+- `GetTextureFilePath()` answers an atlas's file ID, and nil for an addon's texture that isn't there.
+- `C_UIColor.GetColors()` gives `COMPACT_UNIT_FRAME_FRIENDLY_HEALTH_COLOR` an alpha of 1 on camelot, as the game does.
+- A texture path ending in `.jpg` finds the game's `.blp` file, as `.tga` and `.png` already did.
+
 ## 0.13.9 (2026-11-09)
 
 ### New

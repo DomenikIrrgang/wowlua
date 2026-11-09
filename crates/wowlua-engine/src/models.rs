@@ -18,6 +18,8 @@ const VALUE: &str = "\u{0}modelvalue";
 const TRIED: &str = "\u{0}tryon";
 const UNDRESSED: &str = "\u{0}undressed";
 const UNDRESSED_SLOTS: &str = "\u{0}undressedslots";
+/// Whether `ClearModel` emptied it (and nothing was set since).
+pub(crate) const CLEARED: &str = "\u{0}modelcleared";
 
 fn set_prop(vm: &mut Vm, id: WidgetId, key: &str, v: Value) {
     crate::widgets::mark(crate::engine_mut(vm), id);
@@ -44,6 +46,7 @@ fn set_source(vm: &mut Vm, id: WidgetId, c: &NativeCall, stem: &str, kind: &str,
     set_prop(vm, id, TRIED, Value::Nil);
     set_prop(vm, id, UNDRESSED, Value::Nil);
     set_prop(vm, id, UNDRESSED_SLOTS, Value::Nil);
+    set_prop(vm, id, CLEARED, Value::Nil);
 }
 
 /// A file asset: an ID, or a path (a number in a string is an ID).
@@ -84,12 +87,14 @@ fn set_model(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `ClearModel()`: shows nothing.
+/// `ClearModel()`: shows nothing; `GetModelFileID` then answers nil
+/// (recorded 2026-11-09, decision T289).
 fn clear_model(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     for key in [KIND, VALUE, TRIED, UNDRESSED] {
         set_prop(vm, id, key, Value::Nil);
     }
-    // and what its setters kept for the getters (`GetModelFileID` 0)
+    set_prop(vm, id, CLEARED, Value::Bool(true));
+    // and what its setters kept for the getters
     for stem in [
         "Model",
         "ModelByFileID",

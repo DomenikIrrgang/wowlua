@@ -180,6 +180,14 @@ KEY_MOUSEWHEELUP = 'Mouse Wheel Up'",
         "return GetBindingText('SHIFT-1', 1), GetBindingText('CTRL-ALT-2', true), GetBindingText('META-E', 'KEY_', 1), GetBindingText('SHIFT-MOUSEWHEELUP', 1), GetBindingText('SHIFT-1')",
     );
     assert_eq!(r, ["s-1", "c-a-2", "m-E", "s-Mouse Wheel Up", "SHIFT-1"]);
+    // A modifier alone is named as one (WoW Forever on a Mac, 2026-11-09:
+    // `SHIFT s SHIFT`, `META m CMD`).
+    let r = run(
+        &mut vm,
+        "return GetBindingText('SHIFT', 1), GetBindingText('SHIFT'), GetBindingText('CTRL', 1), GetBindingText('ALT', 1),
+    GetBindingText('META', 1), GetBindingText('META'), GetBindingText('E', 1)",
+    );
+    assert_eq!(r, ["s", "SHIFT", "c", "a", "m", "CMD", "E"]);
 }
 
 /// `Settings.OpenToCategory`'s client call asks the settings panel to open

@@ -605,8 +605,14 @@ const MOUNT_IDS: [u32; 139] = [
 ];
 
 /// The journal's first mount's data as the full probe (1.60.1) recorded
-/// it: `GetMountInfoByID(3126)` and `GetMountInfoExtraByID(3126)`.
+/// it: `GetMountInfoByID(3126)` and `GetMountInfoExtraByID(3126)`; mount
+/// 6's info as the batched probes recorded it (2026-11-09, 70862: a
+/// mount the character lacks answers its info, not collected).
 const PROBED_MOUNTS: &[(&str, &str)] = &[
+    (
+        "C_MountJournal.GetMountInfoByID(6)",
+        "13: string Brown Horse, number 458, number 132261, boolean false, boolean false, number 0, boolean false, boolean true, number 1, boolean false, boolean false, number 6, boolean false",
+    ),
     (
         "C_MountJournal.GetMountInfoByID(3126)",
         "13: string Black Druid Moose Mount, number 1309377, number 7949967, boolean false, boolean false, number 0, boolean false, boolean false, nil nil, boolean true, boolean false, number 3126, boolean false",

@@ -179,6 +179,10 @@ pub struct World {
     /// The NPC interactions open (`Enum.PlayerInteractionType`, as bits),
     /// from `PLAYER_INTERACTION_MANAGER_FRAME_SHOW`/`_HIDE`.
     pub interactions: Vec<u64>,
+    /// The next `PLAYER_INTERACTION_MANAGER_FRAME_HIDE` leaves its
+    /// interaction open (a mailbox walked away from tells its hide twice,
+    /// the interaction on during the first: decision T609).
+    pub hide_keeps_interaction: bool,
     /// The widgets given an `OnUpdate` (set, hooked or from XML) or an
     /// intrinsic type's handlers, ever: the ones a frame looks at, each
     /// checked as its turn comes (most of the UI's widgets never update);
@@ -248,6 +252,10 @@ pub struct World {
     /// the last text, also when it did not change, the last box set first
     /// (`/stdtest engine`; unverified: by setting or making order).
     pub text_set: Vec<WidgetId>,
+    /// Those of `text_set` whose last change was an `Insert`: their
+    /// `OnTextChanged` tells user input (`true`; recorded 2026-11-09, also
+    /// for a `SetText` then an `Insert` in one frame: one call, `true`).
+    pub text_inserted: Vec<WidgetId>,
     /// A color select's color: red, green, blue, alpha.
     pub colors: HashMap<usize, [f64; 4]>,
     /// A color select's hue, saturation and value as `SetColorHSV` gave
@@ -1294,6 +1302,11 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
     if let Some(stem) = setter {
         let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
         store(vm, id, &stem, &args);
+        // The mouse turned on or off: its clicks and its motion too.
+        if short == "EnableMouse" {
+            store(vm, id, "MouseClickEnabled", &args);
+            store(vm, id, "MouseMotionEnabled", &args);
+        }
         // A setter's documented results (`success`): it worked.
         return Ok(returns
             .iter()
@@ -1577,15 +1590,18 @@ fn seed_laid_out(vm: &mut Vm, id: WidgetId) {
 /// input on; taking it away does not turn it off. A key script the
 /// keyboard (`/stdtest engine answers` "Keyboard script enables":
 /// `KeybindListener` listens by its scripts alone); `OnEnter`, `OnLeave`,
-/// `OnMouseDown` and `OnMouseUp` the mouse, `OnMouseWheel` the wheel
-/// (decision T365; unverified on WoW Forever: the side tabs of the
-/// character frame and the group finder are frames clicked by their
-/// `OnMouseUp` alone).
+/// `OnMouseDown` and `OnMouseUp` the mouse, its clicks and its motion
+/// alike, `OnMouseWheel` the wheel (decision T365; WoW Forever 70862,
+/// 2026-11-09: the character frame's side tab `CharacterFrameModeTab2`, a
+/// frame clicked by its `OnMouseUp`, answers `IsMouseEnabled`,
+/// `IsMouseClickEnabled` and `IsMouseMotionEnabled` true).
 pub fn input_script_set(vm: &mut Vm, id: WidgetId, script: &str) {
     match script {
         "OnKeyDown" | "OnKeyUp" => store(vm, id, "KeyboardEnabled", &[Value::Bool(true)]),
         "OnEnter" | "OnLeave" | "OnMouseDown" | "OnMouseUp" => {
-            store(vm, id, "MouseEnabled", &[Value::Bool(true)])
+            for stem in ["MouseEnabled", "MouseClickEnabled", "MouseMotionEnabled"] {
+                store(vm, id, stem, &[Value::Bool(true)]);
+            }
         }
         "OnMouseWheel" => store(vm, id, "MouseWheelEnabled", &[Value::Bool(true)]),
         _ => {}
@@ -1815,11 +1831,16 @@ pub fn fire_now(vm: &mut Vm, event: &str, args: &[Value]) {
         event.starts_with("PLAYER_INTERACTION_MANAGER_FRAME_"),
         args.first().copied(),
     ) {
-        let open = &mut engine_mut(vm).world.interactions;
+        let world = &mut engine_mut(vm).world;
+        let open = &mut world.interactions;
         if event.ends_with("_SHOW") && !open.contains(&n.to_bits()) {
             open.push(n.to_bits());
         } else if event.ends_with("_HIDE") {
-            open.retain(|&o| o != n.to_bits());
+            if world.hide_keeps_interaction {
+                world.hide_keeps_interaction = false;
+            } else {
+                open.retain(|&o| o != n.to_bits());
+            }
         }
     }
     if event == "ADDON_LOADED"
@@ -2816,7 +2837,12 @@ fn get_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 fn reported_points(vm: &Vm, id: WidgetId) -> Vec<Point> {
     let w = &engine(vm).world.widgets[id.0];
     if !w.points.is_empty() {
-        return w.points.clone();
+        // In `Enum.FramePoint`'s order, as the client keeps one anchor per
+        // point type (recorded 2026-11-09: `RIGHT`, `LEFT`, then `TOPLEFT`
+        // set, `GetPoint(1)` is `TOPLEFT`; decision T337).
+        let mut points = w.points.clone();
+        points.sort_by_key(|p| point_rank(&p.point));
+        return points;
     }
     let Some((slider, at, vertical)) = crate::bars::thumb_place(vm, id) else {
         return vec![];
@@ -2838,6 +2864,19 @@ fn reported_points(vm: &Vm, id: WidgetId) -> Vec<Point> {
         x,
         y,
     }]
+}
+
+/// `IsRectValid()`: an anchored region laid out since it was last anchored
+/// (asked for, or its frames', or by the layout pass) and not left without
+/// a place; UIParent and WorldFrame always (decision T605; WoW Forever
+/// 70862, 2026-11-09: a frame and its parent made in one call, both
+/// `SetAllPoints`, answer true once the frame's width was asked for;
+/// unverified: before it was asked).
+fn is_rect_valid(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let w = &engine(vm).world.widgets[id.0];
+    let screen = matches!(w.name.as_deref(), Some("UIParent" | "WorldFrame"));
+    let valid = screen || (!w.points.is_empty() && w.rect_seen.get() && w.unplaced == Unplaced::No);
+    Ok(vec![Value::Bool(valid)])
 }
 
 fn get_num_points(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
@@ -2956,7 +2995,18 @@ pub fn run_size_changes(vm: &mut Vm) {
         };
         let mut done = rustc_hash::FxHashSet::default();
         let mut known = KnownBounds::default();
-        for id in watching.into_iter().chain(released) {
+        // The frames anchored since the last pass first, each laying out
+        // what it hangs on for itself: a size script that resizes the
+        // frame they hang on then leaves them without a place, as when
+        // asked for (WoW Forever 70862, 2026-11-09: SuuUI's case G with
+        // nothing asking before the frame's end, and built hidden, shown a
+        // frame later, lost the item as the asked case did).
+        let fresh_first: Vec<WidgetId> = fresh
+            .iter()
+            .copied()
+            .filter(|id| id.0 < engine(vm).world.widgets.len())
+            .collect();
+        for id in fresh_first.into_iter().chain(watching).chain(released) {
             notify_chain(vm, id, None, &mut done, &mut known, 0);
         }
         // (a size script of this pass left frames for it: laid out again
@@ -3149,14 +3199,21 @@ pub(crate) fn layout_changed(vm: &mut Vm) {
 
 /// The `OnTextChanged(false)` this frame's `SetText` owes, in the frames'
 /// update after `OnUpdate`: a hidden edit box's waits until it shows, then
-/// comes in that frame, once (`/stdtest engine textchange`, recorded).
+/// comes in that frame, once (`/stdtest engine textchange`, recorded); an
+/// `Insert`'s tells user input (`true`, recorded 2026-11-09).
 pub fn run_text_changes(vm: &mut Vm) {
     let set = std::mem::take(&mut engine_mut(vm).world.text_set);
     let (now, later): (Vec<WidgetId>, Vec<WidgetId>) =
         set.into_iter().partition(|id| visible(engine(vm), *id));
     engine_mut(vm).world.text_set = later;
     for id in now.into_iter().rev() {
-        run_script(vm, id, "OnTextChanged", &[Value::Bool(false)]);
+        let inserted = {
+            let list = &mut engine_mut(vm).world.text_inserted;
+            let was = list.contains(&id);
+            list.retain(|i| *i != id);
+            was
+        };
+        run_script(vm, id, "OnTextChanged", &[Value::Bool(inserted)]);
     }
 }
 
@@ -3895,6 +3952,7 @@ fn set_text_value(vm: &mut Vm, id: WidgetId, text: Value) -> Ret {
         if !engine(vm).world.text_set.contains(&id) {
             engine_mut(vm).world.text_set.push(id);
         }
+        engine_mut(vm).world.text_inserted.retain(|i| *i != id);
     }
     Ok(vec![])
 }
@@ -5523,6 +5581,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("SetAllPoints", set_all_points),
         ("GetNumPoints", get_num_points),
         ("GetPoint", get_point),
+        ("IsRectValid", is_rect_valid),
         ("SetSize", set_size),
         ("SetWidth", set_width),
         ("SetHeight", set_height),

@@ -1324,6 +1324,22 @@ fn names_itself(api: &Api, f: &Function) -> bool {
 }
 
 fn fail(vm: &mut Vm, api: &Api, f: &Function, n: usize, why: Option<Refusal>) -> LuaError {
+    // A button's font object setters refuse what is no font in their own
+    // words, no position (the method probe; again 2026-11-09:
+    // `SetHighlightFontObject("NoSuchFont")`).
+    if matches!(why, None | Some(Refusal::Type))
+        && f.name.starts_with("Button:")
+        && matches!(
+            f.short,
+            "SetNormalFontObject" | "SetHighlightFontObject" | "SetDisabledFontObject"
+        )
+    {
+        return crate::widgets::c_error(
+            vm,
+            &format!("{}(): Usage: (\"fontname\" or fontObject)", f.name),
+            false,
+        );
+    }
     let usage = usage(f);
     let msg = match &why {
         None | Some(Refusal::Type) => usage,

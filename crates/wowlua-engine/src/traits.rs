@@ -1694,19 +1694,19 @@ fn get_current_renown_level(vm: &mut Vm, c: NativeCall) -> Ret {
 /// WoW Forever's PvP ranks: major faction 2800 (Blizzard's
 /// `PVP_RANK_POINTS_FACTION_ID`), probed 2026-10-24: 14 ranks, the
 /// reputation to reach ranks 1 to 4 750, 1650, 2700 and 3900, rank 14
-/// 24750 (the PvP tab's "up to a maximum of 24750 for Rank 14"). Ranks 1
-/// to 4 are 75·n·(n + 9); ranks 5 to 13 are taken so (unverified: it gives
-/// 24150 for rank 14).
+/// 24750 (the PvP tab's "up to a maximum of 24750 for Rank 14"); ranks 5
+/// to 13 probed 2026-11-09 (decision T345).
 const PVP_RANKS: i64 = 2800;
 const PVP_MAX_RANK: i64 = 14;
+/// The reputation to reach each PvP rank, 0 to 14.
+const PVP_RANK_TOTALS: [f64; 15] = [
+    0.0, 750.0, 1650.0, 2700.0, 3900.0, 5250.0, 6750.0, 8400.0, 10200.0, 12150.0, 14250.0, 16600.0,
+    19100.0, 21750.0, 24750.0,
+];
 
 /// The reputation to reach PvP rank `level` (0 at rank 0).
 fn pvp_rank_total(level: i64) -> f64 {
-    let n = level.clamp(0, PVP_MAX_RANK);
-    if n == PVP_MAX_RANK {
-        return 24750.0;
-    }
-    75.0 * (n * (n + 9)) as f64
+    PVP_RANK_TOTALS[level.clamp(0, PVP_MAX_RANK) as usize]
 }
 
 fn renown_level(vm: &mut Vm, faction: i64) -> f64 {
@@ -1755,15 +1755,35 @@ fn get_total_reputation_for_renown_level(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(pvp_rank_total(level))])
 }
 
-/// `C_MajorFactions.GetRenownRewardsForLevel(faction, level)`: rank 1's
-/// faction tabard for the PvP ranks (probed), none for their other ranks
-/// (unverified); else the recorded answers.
+/// `C_MajorFactions.GetRenownRewardsForLevel(faction, level)`: for the
+/// PvP ranks one reward each, rank 1's the faction tabard (probed), the
+/// others' named "Rank N Rewards" (probed 2026-11-09 for ranks 2 to 6;
+/// their other fields and ranks 7 to 14 unverified); else the recorded
+/// answers.
 fn get_renown_rewards_for_level(vm: &mut Vm, c: NativeCall) -> Ret {
     if int(vm, &c, 1) != Some(PVP_RANKS) {
         return crate::recorded::recorded(vm, c);
     }
     let list = vm.new_table();
-    if int(vm, &c, 2) == Some(1) {
+    let rank = int(vm, &c, 2).unwrap_or(0);
+    if (2..=PVP_MAX_RANK).contains(&rank) {
+        let r = vm.new_table();
+        let (key, v) = (vm.str("name"), vm.str(&format!("Rank {rank} Rewards")));
+        let _ = vm.heap.table_mut(r).set(key, v);
+        for (k, v) in [
+            ("isAccountUnlock", Value::Bool(false)),
+            ("uiOrder", Value::Num(0.0)),
+            ("renownRewardID", Value::Num(0.0)),
+        ] {
+            let key = vm.str(k);
+            let _ = vm.heap.table_mut(r).set(key, v);
+        }
+        let _ = vm
+            .heap
+            .table_mut(list)
+            .set(Value::Num(1.0), Value::Table(r));
+    }
+    if rank == 1 {
         let r = vm.new_table();
         let strings = [
             ("description", "Faction Tabard"),

@@ -362,9 +362,12 @@ local m = CreateFrame('PlayerModel', nil, UIParent)
 m:SetModel(130737)
 m:ClearModel()
 return tostring(b:GetNormalTexture() == tex and tex:GetTexture()), tostring(tex:IsShown()), tostring(fs:GetText()),
-    tostring(holder.Kid), tostring(kid:GetParentKey()), t:GetTexCoord(), m:GetModelFileID()",
+    tostring(holder.Kid), tostring(kid:GetParentKey()), t:GetTexCoord(), tostring(m:GetModelFileID())",
     );
-    assert_eq!(r, ["nil", "false", "nil", "nil", "nil", "0", "0"]);
+    // (the cleared texture still shown, the cleared model's file nil: WoW
+    // Forever 70862, 2026-11-09)
+    assert_eq!(r[..6], ["nil", "true", "nil", "nil", "nil", "0"]);
+    assert_eq!(r.last().map(String::as_str), Some("nil"));
     // (a fresh button's cleared texture: none, as the client answered)
     let r = run(
         &mut vm,

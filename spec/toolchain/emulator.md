@@ -481,8 +481,8 @@ The WoW API the VM's code calls, per flavor.
   otherwise its set size placed by the axis's first point. Of two points
   that set one edge, the one earlier in `Enum.FramePoint`'s order
   (`TOPLEFT`, `TOP`, `TOPRIGHT`, `LEFT`, `CENTER`, `RIGHT`, `BOTTOMLEFT`,
-  `BOTTOM`, `BOTTOMRIGHT`) places it, whatever order they were set in
-  (decision T337). Points that
+  `BOTTOM`, `BOTTOMRIGHT`) places it, whatever order they were set in,
+  and `GetPoint(i)` answers them in that order (decision T337). Points that
   put the right edge left of the left one, or the top below the bottom,
   give no size: 0, at the `LEFT` and `BOTTOM` points (decision T266; seen
   in game). `GetSize`,
@@ -492,6 +492,9 @@ The WoW API the VM's code calls, per flavor.
   `GetTop`, `GetRect`, `GetSize` and the other getters of an anchored
   region) and in the layout pass before the next frame's `OnUpdate`
   (the client's at the end of the frame), after the frames it hangs on;
+  the pass takes the frames anchored since the last pass first, each
+  laying out what it hangs on for itself, as a query would, hidden or
+  shown;
   an anchored frame with an `OnSizeChanged` script or hook gets it there
   and then, with its laid-out size, when that size differs from the one
   it was last told, its first rectangle too: an item anchored and asked
@@ -504,11 +507,14 @@ The WoW API the VM's code calls, per flavor.
   until it is anchored again (`SetPoint`, `SetAllPoints`); when that was
   the resizing frame's first rectangle, only until the next layout pass.
   A resize the handler leaves for later (a timer) loses nothing, nor does
-  a fit run before the frame is asked for. Handlers nest ten deep at
-  most; deeper, a size waits (decision T605; SuuUI's `anchors` probes on
-  WoW Forever 70862, recorded in `tests/ingame/PROBES.md`; unverified: the
-  order the pass takes the frames in, that a frame laid out for itself,
-  its own `GetSize` in a script, leaves nothing unplaced, the bound).
+  a fit run before the frame is asked for, nor a frame laid out for
+  itself (its own `GetSize` in a script, or asked before the frame
+  anchored to it). Handlers nest ten deep at most; deeper, a size waits.
+  `IsRectValid()` answers whether an anchored region was laid out since
+  it was last anchored and has a place (UIParent's always) (decision
+  T605; SuuUI's `anchors` probes and `/stdtest engine owed` on WoW
+  Forever 70862, recorded in `tests/ingame/PROBES.md`; unverified: the
+  bound).
 - **Screen and text.** The client draws on a screen (decision T237, a
   test setting; a world profile's `screen` and the game's settings while
   it runs, decision T482: the window's size, "Use UI Scale" and its slider,
@@ -552,7 +558,9 @@ The WoW API the VM's code calls, per flavor.
   give a file ID set, a path's file as `GetFileIDFromPath` gives it (a game
   file's own ID where the installation is at hand, an addon's file its
   loose file's, nil for a file there is not), an atlas's file, else nil;
-  `GetTextureFilePath()` the path set. A loose file's ID set
+  `GetTextureFilePath()` the path set (nil for an addon's file that is not
+  there), an atlas's file ID. A path named `.tga`, `.png` or `.jpg` that
+  the storage lacks is its `.blp` (decision T350). A loose file's ID set
   (`b:SetTexture(a:GetTexture())`) shows that file. `SetTexture` fails
   (false) for `""` and file ID 0. Without the installation a game file's ID is not known, and
   a path to one answers a stand-in: a negative number, the same for the
@@ -563,18 +571,23 @@ The WoW API the VM's code calls, per flavor.
   strata (`GetFrameLevel`), and a top-level frame (`SetToplevel(true)`)
   shown or clicked is drawn, with what is in it, above the rest of its
   strata, its level kept (decision T586); an edit box keeps a selection
-  (`HighlightText`, `ClearHighlightText`) that `Insert(text)` and the
+  (`HighlightText`, `ClearHighlightText`; an end before the start selects
+  to the text's end) that `Insert(text)` and the
   user's typing (`mock.type`) replace, else they go in at the cursor, and
   `SetText` puts the cursor at the end, as does the user's click or typing
   into a box without the focus (before its `OnEditFocusGained`);
+  `Insert`'s `OnTextChanged` comes in the frame's update after, as
+  `SetText`'s, but telling user input (`true`);
   `AdjustPointsOffset(x, y)` moves every anchor, `ClearPointsOffset()`
   zeroes them; the clears (a button's `ClearNormalTexture`
   and the other states', `FontString:ClearText`, `ClearParentKey`,
   `ResetTexCoord`, `StopAnimating`, `ClearAttributes`, `ClearScripts`,
-  `RemoveAnimations`) undo their setters, but a button's cleared state
-  texture stays its own, emptied and hidden (`GetNormalTexture` answers
+  `RemoveAnimations`, `ClearModel`, after which `GetModelFileID` is nil)
+  undo their setters, but a button's cleared state
+  texture stays its own, emptied and shown (`GetNormalTexture` answers
   it: Forever 70707's item buttons mask it after their `OnLoad`, in which
-  the professions' recraft slot clears it; unverified, decision T576); `LockHighlight` is
+  the professions' recraft slot clears it; decision T576, recorded on
+  70862 with the rest of T289's steps, 2026-11-09); `LockHighlight` is
   `SetHighlightLocked(true)`. The methods of what the engine draws or keeps
   nothing of (model cameras and lights, the browser, the shop's checkout,
   housing's pins, the minimap's blips, movies, vector graphics) change
