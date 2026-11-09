@@ -13273,7 +13273,7 @@ declare function BNGetBlockedInfo(index: unknown?, ...: unknown): (...unknown)
 --- Returns the display name of the Battle.net account with the given ID, as used to send it a whisper.
 ---
 --- *Description by wowlua: the API's documentation has none.*
-declare function BNGetDisplayName(arg1: unknown): (string, ...unknown)
+declare function BNGetDisplayName(arg1: unknown): (string?, ...unknown)
 --- Returns info for the specified friend of a Battle.net friend.
 ---
 --- **Parameters**

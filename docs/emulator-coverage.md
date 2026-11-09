@@ -18,9 +18,9 @@ that client answered. The other flavors have their API documentation, the same
 engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
-- **API functions:** 5,110 of the 5,114 documented camelot functions have
+- **API functions:** 5,110 of the 5,115 documented camelot functions have
   behaviour (99.9%): 1,060 modelled, 353 answered from recordings, 3,697 by a
-  documentation-based fill-in. Of all 7,179 C functions the client has,
+  documentation-based fill-in. Of all 7,180 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
   (100.0%).
@@ -32,7 +32,7 @@ their clients answer differently is unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| camelot | 5,114 | 5,110 (99.9%) | 353 | 1,477 | 1,477 (100.0%) | all |
+| camelot | 5,115 | 5,110 (99.9%) | 353 | 1,477 | 1,477 (100.0%) | all |
 | standard | 4,871 | 4,523 (92.9%) | 0 | 1,438 | 1,431 (99.5%) | none |
 | vanilla | 3,221 | 2,909 (90.3%) | 0 | 1,360 | 1,349 (99.2%) | none |
 | tbc | 3,221 | 2,909 (90.3%) | 0 | 1,360 | 1,349 (99.2%) | none |
@@ -88,7 +88,7 @@ ones together):
 | `C_Bank` | 26 | 15 | 2 | 9 | 0 |
 | `C_BarberShop` | 29 | 0 | 0 | 29 | 0 |
 | `C_BarberShopInternal` | 1 | 0 | 0 | 1 | 0 |
-| `C_BattleNet` | 35 | 0 | 2 | 33 | 0 |
+| `C_BattleNet` | 36 | 0 | 2 | 33 | 1 |
 | `C_BehavioralMessaging` | 1 | 0 | 0 | 1 | 0 |
 | `C_BlackMarket` | 8 | 0 | 0 | 8 | 0 |
 | `C_BlizzCon2026` | 4 | 0 | 0 | 4 | 0 |
@@ -346,13 +346,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,179 | 1,674 | 435 | 5,066 | 4 |
+| **All** | 7,180 | 1,674 | 435 | 5,066 | 5 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,114 | 1,060 | 353 | 3,697 | 4 |
+| Blizzard's API documentation | 5,115 | 1,060 | 353 | 3,697 | 5 |
 | the client's other C functions (`/stdtest inventory`) | 2,065 | 614 | 82 | 1,369 | 0 |
 | the engine's own, in neither list | 16 | 15 | 0 | 1 | 0 |
 
