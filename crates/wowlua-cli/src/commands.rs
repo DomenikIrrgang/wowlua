@@ -3236,3 +3236,334 @@ fn bench_table(out: &Output, files: &[wowlua_test::bench::BenchFile], profile: &
         }
     }
 }
+
+/// `wowlua perf run` and `wowlua perf baseline` (spec Tooling §16.1.8,
+/// decision T613): the perf scenarios played and measured, compared with
+/// the baseline or written as it.
+pub fn perf(out: &Output, global: &GlobalArgs, args: &crate::PerfArgs, baseline: bool) -> bool {
+    use termcolor::Color;
+    let mut session = Session::new();
+    let Some(projects) = load_projects(global, &mut session, &load_options(out, global)) else {
+        out.flush(&mut session);
+        return false;
+    };
+    let wanted: Vec<String> = args
+        .flavor
+        .iter()
+        .filter_map(|f| wowlua_flavors::table().resolve(f).map(|f| f.id.clone()))
+        .collect();
+    // Scenario files at once, as `wowlua test` runs its files.
+    let jobs = global.jobs();
+    let threads = if jobs.explicit {
+        jobs.threads.get()
+    } else {
+        std::thread::available_parallelism().map_or(1, |n| n.get())
+    };
+    let mut ok = true;
+    let mut results = wowlua_test::perf::Results::default();
+    let mut baseline_path: Option<PathBuf> = args.baseline.as_ref().map(|b| cwd().join(b));
+    let mut results_path: Option<PathBuf> = None;
+    let mut ran = 0usize;
+    for project in projects {
+        if !matches!(project.kind(), PackageKind::Addon | PackageKind::Library) {
+            continue;
+        }
+        baseline_path.get_or_insert_with(|| project.root().join(wowlua_test::perf::BASELINE));
+        results_path
+            .get_or_insert_with(|| project.manifest.out_dir().join("perf").join("results.json"));
+        let flavors: Vec<String> = if wanted.is_empty() {
+            project.manifest.flavors.iter().take(1).cloned().collect()
+        } else {
+            project
+                .manifest
+                .flavors
+                .iter()
+                .filter(|f| wanted.contains(f))
+                .cloned()
+                .collect()
+        };
+        let shared_mode = project.manifest.manifest.build.flavor_mode
+            == wowlua_manifest::model::FlavorMode::Shared;
+        for flavor in flavors {
+            let built: Vec<String> = if shared_mode {
+                project.manifest.flavors.clone()
+            } else {
+                vec![flavor.clone()]
+            };
+            let dir = if shared_mode {
+                "shared".to_string()
+            } else {
+                flavor.clone()
+            };
+            let Some((build, left_out)) =
+                test_build(out, global, &mut session, &project, built, &dir)
+            else {
+                ok = false;
+                continue;
+            };
+            let blizzard_ui = if project.manifest.manifest.test.blizzard_ui {
+                match wowlua_test::ui_source(&flavor, &|what| out.status("Fetching", what)) {
+                    Ok(ui) => Some(ui),
+                    Err(e) => {
+                        out.colored(&[
+                            (Some(Color::Red), true, "error"),
+                            (None, false, &format!(": test.blizzard-ui: {e}\n")),
+                        ]);
+                        ok = false;
+                        continue;
+                    }
+                }
+            } else {
+                None
+            };
+            let own = build.addon_name.clone();
+            let others = other_addon_names(&project);
+            // Every frame's summary, no frame's tree.
+            let start_profile: &(dyn Fn(&mut wowlua_vm::Vm) + Sync) = &|vm: &mut wowlua_vm::Vm| {
+                let start = Instant::now();
+                vm.start_profiling(Box::new(move || start.elapsed().as_nanos() as u64));
+                if let Some(p) = vm.profiler_mut() {
+                    p.classify_by(wowlua_test::addon_classifier(&own, &others));
+                    p.frame_trees = 0;
+                }
+            };
+            let mut suite = make_suite(
+                &project,
+                &build,
+                &flavor,
+                blizzard_ui,
+                SuiteSwitches {
+                    update_snapshots: false,
+                    coverage: false,
+                    game_data: false,
+                    world: false,
+                },
+                Some(start_profile),
+            );
+            suite.perf = true;
+            wowlua_test::perf::track_phases(&mut suite);
+            let measured: std::sync::Arc<std::sync::Mutex<Vec<wowlua_test::perf::Scenario>>> =
+                Default::default();
+            {
+                let measured = measured.clone();
+                let mapper = wowlua_test::chunk_mapper(&suite);
+                let own = own.clone();
+                let flavor = flavor.clone();
+                suite.after_file = Some(std::sync::Arc::new(
+                    move |vm: &mut wowlua_vm::Vm, rel: &str| {
+                        let Some(p) = vm.stop_profiling() else { return };
+                        let map = |chunk: &[u8]| mapper(&String::from_utf8_lossy(chunk));
+                        let phases = wowlua_test::perf::take_phases(&p, &own, &map);
+                        if let Ok(mut m) = measured.lock() {
+                            m.push(wowlua_test::perf::Scenario {
+                                file: wowlua_driver::examples::source_of(rel),
+                                flavor: flavor.clone(),
+                                phases,
+                            });
+                        }
+                    },
+                ));
+            }
+            out.status("Running", format!("perf scenarios ({flavor})"));
+            let mut files = wowlua_test::run(&suite, &args.filter, threads);
+            // The scenarios among the files that do not compile.
+            let left_out: Vec<String> = left_out
+                .into_iter()
+                .filter(|rel| {
+                    std::fs::read(project.root().join(rel))
+                        .is_ok_and(|text| wowlua_test::perf::is_scenario(&text))
+                })
+                .collect();
+            files.extend(not_compiling(out, &left_out, &args.filter, &flavor));
+            for result in &files {
+                ran += 1;
+                if result.failed() {
+                    ok = false;
+                    print_result(out, result);
+                }
+            }
+            let mut measured = measured.lock().map(|m| m.clone()).unwrap_or_default();
+            measured.sort_by(|a, b| a.file.cmp(&b.file));
+            results.scenarios.extend(measured);
+        }
+    }
+    if ran == 0 {
+        out.status(
+            "Note",
+            "no perf scenarios (a test file with `config({ perf = true })`)",
+        );
+    }
+    let Some(baseline_path) = baseline_path else {
+        return ok;
+    };
+    if let Some(path) = &results_path {
+        write_json(out, path, &results.to_json());
+    }
+    if baseline {
+        if !ok {
+            out.colored(&[
+                (Some(Color::Red), true, "error"),
+                (
+                    None,
+                    false,
+                    ": a scenario failed; the baseline is left as it was\n",
+                ),
+            ]);
+            return false;
+        }
+        // A run of some scenarios replaces only theirs.
+        let mut kept = read_results(&baseline_path).unwrap_or_default();
+        kept.merge(&results);
+        return write_json(out, &baseline_path, &kept.to_json());
+    }
+    let base = read_results(&baseline_path);
+    if base.is_none() {
+        out.status(
+            "Note",
+            format!(
+                "no baseline at {} (`wowlua perf baseline` writes it)",
+                baseline_path.display()
+            ),
+        );
+    }
+    let threshold = args.threshold.unwrap_or(wowlua_test::perf::THRESHOLD);
+    let worse = perf_table(out, &results, base.as_ref(), threshold);
+    if args.json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&results.to_json()).expect("JSON")
+        );
+    }
+    ok && worse == 0
+}
+
+/// A results file, if there is one that reads.
+fn read_results(path: &Path) -> Option<wowlua_test::perf::Results> {
+    let text = std::fs::read(path).ok()?;
+    let json: serde_json::Value = serde_json::from_slice(&text).ok()?;
+    wowlua_test::perf::Results::from_json(&json)
+}
+
+/// Writes JSON, pretty and with a final newline (a file kept in git).
+fn write_json(out: &Output, path: &Path, json: &serde_json::Value) -> bool {
+    use termcolor::Color;
+    let text = format!("{}\n", serde_json::to_string_pretty(json).expect("JSON"));
+    let written = path
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(path, text));
+    match written {
+        Ok(()) => {
+            out.status("Wrote", path.display().to_string());
+            true
+        }
+        Err(e) => {
+            out.colored(&[
+                (Some(Color::Red), true, "error"),
+                (None, false, &format!(": writing {}: {e}\n", path.display())),
+            ]);
+            false
+        }
+    }
+}
+
+/// Prints each scenario's phases with their measures against the
+/// baseline's; the number of measures worse past `threshold` percent.
+fn perf_table(
+    out: &Output,
+    results: &wowlua_test::perf::Results,
+    base: Option<&wowlua_test::perf::Results>,
+    threshold: f64,
+) -> usize {
+    use termcolor::Color;
+    use wowlua_test::perf::Verdict;
+    let mut worse = 0;
+    let shown = |v: f64| {
+        if v.fract() == 0.0 {
+            format!("{v:.0}")
+        } else {
+            format!("{v:.1}")
+        }
+    };
+    for s in &results.scenarios {
+        out.colored(&[(None, true, &format!("\n{} ({})\n", s.file, s.flavor))]);
+        for phase in &s.phases {
+            out.colored(&[(
+                None,
+                true,
+                &format!("  {} ({} frames)\n", phase.name, phase.frames),
+            )]);
+            let old = base.and_then(|b| b.phase(&s.file, &s.flavor, &phase.name));
+            // The addon's measures first, by kind, each mean, p95, max.
+            let mut metrics: Vec<(&String, &f64)> = phase.metrics.iter().collect();
+            let rank = |m: &str| {
+                let kind = [
+                    "instructions.",
+                    "native.",
+                    "bytes.",
+                    "all.",
+                    "gc",
+                    "memory.",
+                ]
+                .iter()
+                .position(|p| m.starts_with(p))
+                .unwrap_or(6);
+                let stat = ["mean", "p95", "max"]
+                    .iter()
+                    .position(|s| m.ends_with(s))
+                    .unwrap_or(0);
+                (kind, stat)
+            };
+            metrics.sort_by(|a, b| (rank(a.0), a.0).cmp(&(rank(b.0), b.0)));
+            for (metric, value) in metrics {
+                let mut line = format!("    {metric:<24} {:>12}", shown(*value));
+                let mut color = None;
+                if let Some(before) = old.and_then(|o| o.metrics.get(metric)) {
+                    let (change, verdict) = wowlua_test::perf::verdict(*before, *value, threshold);
+                    let change = if change.is_finite() {
+                        format!("{change:+.1}%")
+                    } else {
+                        "new".to_string()
+                    };
+                    line.push_str(&format!("  {:>12}  {change:>8}", shown(*before)));
+                    match verdict {
+                        Verdict::Worse => {
+                            worse += 1;
+                            color = Some(Color::Red);
+                            line.push_str("  worse");
+                        }
+                        Verdict::Better => {
+                            color = Some(Color::Green);
+                            line.push_str("  better");
+                        }
+                        Verdict::Same => {}
+                    }
+                }
+                line.push('\n');
+                out.colored(&[(color, false, &line)]);
+            }
+            if let Some(w) = &phase.worst {
+                let top: Vec<String> = w.top.iter().map(|(n, c)| format!("{n} {c}")).collect();
+                out.colored(&[(
+                    None,
+                    false,
+                    &format!("    worst frame {}: {}\n", w.frame, top.join(", ")),
+                )]);
+            }
+        }
+    }
+    if worse > 0 {
+        out.colored(&[
+            (Some(Color::Red), true, "\nerror"),
+            (
+                None,
+                false,
+                &format!(
+                    ": {worse} measure{} worse than the baseline by more than {threshold}%\n",
+                    if worse == 1 { "" } else { "s" }
+                ),
+            ),
+        ]);
+    }
+    worse
+}

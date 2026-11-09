@@ -38,8 +38,7 @@ fn cost(c: Cost) -> Json {
 }
 
 /// What the summary says of the natives' cost (decision T611).
-pub const NATIVE_NOTE: &str = "estimated: the game's functions weighted by wowlua's model \
-     (in instructions' worth), not measured in the client";
+pub use wowlua_vm::profile::NATIVE_NOTE;
 
 /// The game frames' summary (decision T612): per frame its number, its
 /// instructions, estimated native cost, bytes allocated, collections and

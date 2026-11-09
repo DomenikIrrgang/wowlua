@@ -6199,3 +6199,141 @@ end
             .any(|p| p["name"] == "native cost (estimated)")
     );
 }
+
+/// Runs `wowlua perf <args>`: success and stdout + stderr.
+fn perf(dir: &Path, args: &[&str]) -> (bool, String) {
+    let out = wowlua(dir).arg("perf").args(args).output().unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    (out.status.success(), text)
+}
+
+const PERF_UI: &str = r#"export function build(n: number)
+    for _ = 1, n do
+        local f = CreateFrame("Frame", nil, UIParent)
+        f:SetSize(10, 10)
+        f:SetPoint("CENTER")
+    end
+end
+"#;
+
+/// A test file with `config({ perf = true })` is a perf scenario: `wowlua
+/// test` leaves it out, `wowlua perf run` measures each of its tests, the
+/// same on every run, against the baseline `wowlua perf baseline` writes;
+/// a measure worse than the baseline fails the run (decision T613).
+#[test]
+fn perf_scenarios_are_measured_against_a_baseline() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            ("src/ui.wowlua", PERF_UI),
+            (
+                "tests/unit.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+
+@test("plain")
+local function plain()
+    expect(1).toBe(1)
+end
+"#,
+            ),
+            (
+                "tests/perf/build.test.wowlua",
+                r#"import test, beforeAll, config from "wowlua:test"
+import * as mock from "wowlua:mock"
+import build from "/ui"
+
+config({ perf = true })
+
+local driver = CreateFrame("Frame")
+local work = 0
+
+@beforeAll
+local function warmUp()
+    driver:SetScript("OnUpdate", function()
+        build(work)
+    end)
+    mock.advanceFrames(5, 1000 / 60)
+end
+
+@test("idle")
+local function idle()
+    mock.advanceFrames(30, 1000 / 60)
+end
+
+@test("busy")
+local function busy()
+    work = 3
+    mock.advanceFrames(20, 1000 / 60)
+    work = 0
+end
+"#,
+            ),
+        ],
+    );
+    // `wowlua test` leaves the scenario out.
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(
+        out.contains("1 passed, 0 failed, 0 skipped (1 file)"),
+        "{out}"
+    );
+    assert!(!out.contains("perf/build"), "{out}");
+
+    // No baseline yet: measured and noted.
+    let (ok, out) = perf(dir.path(), &["run"]);
+    assert!(ok, "{out}");
+    assert!(out.contains("no baseline"), "{out}");
+    assert!(
+        out.contains("tests/perf/build.test.wowlua (standard)"),
+        "{out}"
+    );
+    assert!(out.contains("busy (20 frames)"), "{out}");
+    let results: serde_json::Value =
+        serde_json::from_slice(&fs::read(dir.path().join("dist/perf/results.json")).unwrap())
+            .unwrap();
+    let phases = results["scenarios"][0]["phases"].as_array().unwrap();
+    assert_eq!(phases.len(), 2);
+    let (idle, busy) = (&phases[0]["metrics"], &phases[1]["metrics"]);
+    assert_eq!(phases[0]["name"], "idle");
+    assert_eq!(phases[0]["frames"], 30);
+    // Three frames made each busy frame: CreateFrame's estimate at least.
+    assert!(busy["native.mean"].as_u64().unwrap() >= 3 * 2000, "{busy}");
+    assert!(
+        busy["instructions.mean"].as_u64().unwrap() > idle["instructions.mean"].as_u64().unwrap()
+    );
+    assert!(busy["memory.Demo"].as_f64().unwrap() > idle["memory.Demo"].as_f64().unwrap());
+    assert!(phases[1]["worst"]["top"][0][0].as_str().is_some(), "{busy}");
+
+    // The baseline, twice: the same numbers every run.
+    let (ok, out) = perf(dir.path(), &["baseline"]);
+    assert!(ok, "{out}");
+    let baseline = dir.path().join("tests/perf-baseline.json");
+    let first = fs::read_to_string(&baseline).unwrap();
+    let (ok, out) = perf(dir.path(), &["baseline"]);
+    assert!(ok, "{out}");
+    assert_eq!(fs::read_to_string(&baseline).unwrap(), first);
+    let (ok, out) = perf(dir.path(), &["run"]);
+    assert!(ok, "{out}");
+    assert!(!out.contains("worse") && !out.contains("better"), "{out}");
+
+    // More work per frame is worse, and fails the run.
+    fs::write(
+        dir.path().join("src/ui.wowlua"),
+        PERF_UI.replace("for _ = 1, n do", "for _ = 1, n * 2 do"),
+    )
+    .unwrap();
+    let (ok, out) = perf(dir.path(), &["run"]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("worse"), "{out}");
+    assert!(
+        out.contains("worse than the baseline by more than 2%"),
+        "{out}"
+    );
+    // A filter runs only what it names.
+    let (_, out) = perf(dir.path(), &["run", "idle"]);
+    assert!(!out.contains("busy ("), "{out}");
+}

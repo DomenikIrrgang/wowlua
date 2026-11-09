@@ -52,6 +52,9 @@ $ wowlua test -u                           # take the new snapshots and screensh
 $ wowlua test --coverage --reporter html   # which lines and branches the tests ran
 $ wowlua bench                             # time the @bench functions, optimized and not
 $ wowlua bench auras --json                # only those whose path or name contains "auras", as JSON
+$ wowlua perf baseline                    # play the perf scenarios and write tests/perf-baseline.json
+$ wowlua perf run                         # play them again and compare with the baseline
+$ wowlua perf run combat --threshold 5    # only "combat"; a change under 5% counts as the same
 $ wowlua fmt                               # format the package's sources
 $ wowlua fmt --check                       # only report what would change
 $ wowlua lint                              # only the lints: unused, shadowing, unreachable

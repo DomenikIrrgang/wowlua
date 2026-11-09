@@ -291,13 +291,16 @@ export const afterAll: TestDecorator = hook("afterAll")
 --- runs on, `"mac"` (the default) or `"windows"`; `screen`: the screen it
 --- draws on, its pixels, DPI scale and the UI scale with "Use UI Scale"
 --- on (the recorded Mac's 1920 x 1080 by default; all three read before
---- anything loads, as literals).
+--- anything loads, as literals); `perf = true`: the file is a perf
+--- scenario, each test a phase `wowlua perf` measures, left out of
+--- `wowlua test` (decision T613; read before anything loads, as a literal).
 export function config(opts: {
     lifecycle?: "auto" | "manual",
     timeout?: number,
     profile?: string,
     platform?: "mac" | "windows",
     screen?: { width: number, height: number, dpiScale?: number, uiScale?: number },
+    perf?: boolean,
 })
     if opts.lifecycle then
         settings.lifecycle = opts.lifecycle

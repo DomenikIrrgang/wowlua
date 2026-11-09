@@ -85,6 +85,9 @@ pub struct Suite<'a> {
     /// the installation's ground, the world behind the UI in screenshots
     /// (`--world`); off by default.
     pub world: bool,
+    /// Run the perf scenarios (`config({ perf = true })`, `wowlua perf`)
+    /// instead of the other test files (decision T613).
+    pub perf: bool,
     /// Called before each test runs (its `@beforeEach` hooks too), with
     /// its VM and name.
     pub before_test: Option<std::sync::Arc<AfterTest>>,
@@ -170,6 +173,7 @@ pub fn run_with(
         .tests
         .iter()
         .filter(|t| t.role == TestRole::Test)
+        .filter(|t| is_scenario(suite, t) == suite.perf)
         .filter(|t| selectable(suite, t, filters))
         .collect();
     let next = std::sync::atomic::AtomicUsize::new(0);
@@ -200,6 +204,13 @@ pub fn run_with(
         .map(|(_, r)| r)
         .filter(|r| r.error.is_some() || !r.tests.is_empty() || filters.is_empty())
         .collect()
+}
+
+/// Whether a test file is a perf scenario, left to `wowlua perf`
+/// (decision T613).
+fn is_scenario(suite: &Suite, file: &TestFile) -> bool {
+    wowlua_host::read_to_string(suite.root.join(&file.rel))
+        .is_ok_and(|text| text.contains("perf") && perf::is_scenario(text.as_bytes()))
 }
 
 /// Whether `filters` may select a test of `file`: one is in its path, or

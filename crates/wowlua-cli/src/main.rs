@@ -138,6 +138,35 @@ pub struct TestArgs {
 }
 
 #[derive(Args, Debug, Clone)]
+pub struct PerfArgs {
+    /// Only scenario files and phases whose path or name contains one of
+    /// these (`path::name`: that phase exactly)
+    pub filter: Vec<String>,
+    /// Restrict to these flavors (default: the first one)
+    #[arg(long, value_delimiter = ',')]
+    pub flavor: Vec<String>,
+    /// The baseline file (default: tests/perf-baseline.json)
+    #[arg(long, value_name = "FILE")]
+    pub baseline: Option<PathBuf>,
+    /// A change past this many percent is better or worse; worse fails
+    /// the run (default: 2)
+    #[arg(long, value_name = "PCT")]
+    pub threshold: Option<f64>,
+    /// Print the results as JSON
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Subcommand, Debug)]
+enum PerfCommand {
+    /// Play the perf scenarios (test files with `config({ perf = true })`),
+    /// measure each phase and compare with the baseline
+    Run(PerfArgs),
+    /// Play the perf scenarios and write their measures as the baseline
+    Baseline(PerfArgs),
+}
+
+#[derive(Args, Debug, Clone)]
 pub struct BenchArgs {
     /// Only test files and benchmarks whose path or name contains one of
     /// these (`path::name`: that benchmark exactly)
@@ -429,6 +458,12 @@ enum Command {
     Test(TestArgs),
     /// Run the `@bench` functions, optimized and unoptimized, and compare
     Bench(BenchArgs),
+    /// Perf scenarios: measure what the addon costs while the game is
+    /// played, against a baseline
+    Perf {
+        #[command(subcommand)]
+        command: PerfCommand,
+    },
     /// Serve the Model Context Protocol for AI agents: drive and debug the addon
     Mcp,
     /// Run a test file and write a screenshot of the UI as it ends
@@ -920,6 +955,12 @@ fn run() -> ExitCode {
         } => commands::check(&out, &cli.global, &profile.name("dev"), flavor, watch),
         Command::Test(args) => commands::test(&out, &cli.global, &args),
         Command::Bench(args) => commands::bench(&out, &cli.global, &args),
+        Command::Perf {
+            command: PerfCommand::Run(args),
+        } => commands::perf(&out, &cli.global, &args, false),
+        Command::Perf {
+            command: PerfCommand::Baseline(args),
+        } => commands::perf(&out, &cli.global, &args, true),
         Command::Debug { port } => debug::debug(&out, &cli.global, port),
         // exit code 1 when the client exits without `shutdown`
         Command::Lsp { worker: true } => match wowlua_lsp::run_worker() {
