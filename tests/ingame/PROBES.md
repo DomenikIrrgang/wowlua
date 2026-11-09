@@ -1375,18 +1375,64 @@ Where SuuUI's tests passed in wowlua and the game did otherwise (found in
 game, from SuuUI's error log and screenshots, 70755). Each is a gap in the
 engine to close, with the steps that would record the game's answer.
 
-1. **A frame anchored before its parent had a place is never placed.**
-   SuuUI's bags: the window's Bags/Bank switch, its toggles and their
-   labels, anchored (through a row frame) while the window had no position
-   yet, were shown (`IsShown`, `IsVisible` true) but `GetLeft` and `GetTop`
-   gave nil, and nothing was drawn, on the first open after a reload. On
-   the second open (the row anchored again) they had a place. wowlua: the
-   row placed and drawn at once. Steps:
-   - `/run P=CreateFrame("Frame",nil,UIParent) P:SetSize(200,30) R=CreateFrame("Frame",nil,P) R:SetSize(1,30) C=CreateFrame("Frame",nil,R) C:SetSize(40,20) C:SetPoint("LEFT",R,"LEFT",50,0) local t=C:CreateTexture() t:SetAllPoints() t:SetColorTexture(1,0,0)`
-   - `/run R:SetPoint("TOPLEFT",P,"TOPLEFT") P:SetPoint("CENTER") print("C", C:GetLeft(), C:GetTop())`
+1. **A frame laid out while a size script resizes what its anchor hangs
+   on is never placed** (answered 2026-11-09, WoW Forever 1.60.1.70862;
+   decision T605, wowlua follows it). First seen in SuuUI's bags (the
+   window's Bags/Bank switch and toggles, anchored through a row frame,
+   shown but `GetLeft` nil and not drawn on the first open after a
+   reload) and in keybind mode's Done button. Taken first for "a frame
+   anchored before its parent had a place is never placed": the probes
+   disproved that. `/suu probe anchors` (plain frames) and `anchors2`
+   (buttons): a box anchored to a row or parent before they had points, a
+   parent with a width but no height whose height comes the same frame or
+   a frame later, a sized parent whose point comes a frame later, a button
+   on a placed parent, a body anchored `TOPLEFT` and `TOPRIGHT` 1x1 whose
+   height is set right after a button anchors to it: all placed (some only
+   once the parent had its point or height). `panelanchors` and
+   `panelanchors2` (SuuUI's titled panel and layout stack, as keybind
+   mode): the button stayed unplaced with the body's `OnSizeChanged`
+   fitting the panel's height; with a fixed body or panel height it was
+   placed, built hidden and shown a frame later too.
 
-     Seen: numbers, or nil and no red box? wowlua: numbers. Seen: (to do)
-   - `/run R:ClearAllPoints() R:SetPoint("TOPLEFT",P,"TOPLEFT") print("C again", C:GetLeft())`, then `/run P:Hide()`
+   `anchors3` and `anchors4`, the replica (all in one slash command, all
+   shown): `P` a panel on UIParent; `body` a child of `P` at
+   `TOPLEFT` (12, -40), `SetSize(1, 1)`, `P:SetWidth(320)`, `TOPRIGHT`
+   (-12, -40); `fit()` sets `P`'s height to 40 + the body's height + 12;
+   `body:SetScript("OnSizeChanged", fit)`; `P:SetHeight(53)`; `item` a
+   Button child of `body`, `SetSize(55, 30)`, an `OnSizeChanged` hook
+   logging; `P:SetPoint("TOPLEFT", x, y)`, `P:Show()`. `place()`:
+   `item:ClearAllPoints()`, `item:SetPoint("TOPLEFT", body, "TOPLEFT")`,
+   `body:SetHeight(30)`, run in a driver's `OnUpdate` a frame later; then
+   the item's `GetLeft`/`GetTop` at once ("now"), `C_Timer.After(0)`
+   ("next") and `After(1)` ("1s"). Seen:
+   - G (as above): nil, nil, nil; the item's `OnSizeChanged` never ran.
+   - H (a Frame for the item): nil, nil, nil.
+   - I (no body script): the item's `OnSizeChanged` 55x30 ran inside the
+     `OnUpdate`, between `place()` and the "now" line; placed, stays.
+   - J (`place()` in the build itself): now nil; the item's
+     `OnSizeChanged` 55x30 later; placed the next frame and after 1 s.
+   - K (G, the item's `GetLeft` asked before it was anchored): as G.
+   - L (G without the item's hook): as G.
+   - M (no body script; `fit()` called in `place()` after the height):
+     as I.
+   - N (an empty body script): as I.
+   - O (G with `body:SetHeight(30)` before the item is anchored): as G.
+   - P (the body script defers `fit` with `C_Timer.After(0)`): as I.
+
+   The rule: a rectangle is laid out when asked for and in the layout
+   pass at the frame's end, `OnSizeChanged` running then. When a frame's
+   `OnSizeChanged`, run while a frame anchored to it is laid out, resizes
+   the frame it hangs on, the frame being laid out, if it had no place
+   since it was anchored, is left without one until it is anchored again
+   (SuuUI's fix anchors it anew later), or only until the next pass when
+   that was the resizing frame's first rectangle (J). wowlua's
+   `crates/wowlua-engine/tests/frames.rs` replays G to P. Left open: the
+   order the end-of-frame pass takes frames in (a resize nobody asked for
+   before the pass), whether a frame laid out for itself (the body's own
+   `GetSize` in a script while the item waits) loses the item too (wowlua:
+   no, only the frame whose layout was asked for), whether a hidden frame
+   is laid out (`panelanchors2` built hidden placed the button), the
+   nesting bound.
 2. **Text measures taller in the game.** SuuUI's own fonts (Figtree
    caption 11, label 12, body 13) wrap and stand taller in the game than
    wowlua measures them: two lines of a toy's description ran into the

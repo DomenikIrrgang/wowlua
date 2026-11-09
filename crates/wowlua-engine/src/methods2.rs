@@ -517,6 +517,7 @@ fn get_bounds_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// scale again (`GetUnscaledFrameRect`): without the scale, the default
 /// UI's action bars grew by 1 / UIParent's scale.
 fn get_scaled_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    widgets::resolve(vm, id);
     let ui = engine(vm).screen.ui_parent_scale();
     Ok(match screen_rect(vm, id) {
         Some(r) => vec![
