@@ -671,6 +671,18 @@ const QUERIES: { [string]: (ask: (name: string, ...any) -> any, ...any) -> () } 
 
 local recorder: any = nil
 
+--- `mailwalk`: walking away from an open mailbox (SuuUI, 2026-11-09: the
+--- game ends the interaction at some distance). Besides every event, the
+--- player's position and whether the mailbox interaction is on: at the
+--- start, at each of these events, and every quarter second the player
+--- moved half a yard or more.
+const WALK_EVENTS: { [string]: boolean } = {
+    MAIL_SHOW = true, MAIL_CLOSED = true, PLAYER_INTERACTION_MANAGER_FRAME_SHOW = true,
+    PLAYER_INTERACTION_MANAGER_FRAME_HIDE = true, SECURE_TRANSFER_CANCEL = true,
+    PLAYER_STARTED_MOVING = true, PLAYER_STOPPED_MOVING = true,
+}
+local walker: any = nil
+
 --- Starts recording scenario `name`; `stop` ends it.
 export function scenarioProbe(name: string)
     const st = state() :: any
@@ -678,6 +690,10 @@ export function scenarioProbe(name: string)
         if recorder then
             recorder:UnregisterAllEvents()
             recorder:SetScript("OnEvent", nil)
+        end
+        if walker then
+            walker:Cancel()
+            walker = nil
         end
         const current = st.engineScenarioRunning
         if current and st.engineScenarios and st.engineScenarios[current] then
@@ -746,6 +762,12 @@ export function scenarioProbe(name: string)
         end
         return packed[2]
     end
+    --- `mailwalk`'s position and mailbox interaction.
+    local function whereAmI()
+        ask("UnitPosition", "player")
+        const mailType = G.Enum and G.Enum.PlayerInteractionType and G.Enum.PlayerInteractionType.MailInfo
+        ask("C_PlayerInteractionManager.IsInteractingWithNpcOfType", mailType)
+    end
     recorder = recorder ?? CreateFrame("Frame")
     recorder:SetScript("OnEvent", function(_, event: string, ...: any)
         -- Players' chat is theirs: left out (the game's own messages stay).
@@ -786,7 +808,29 @@ export function scenarioProbe(name: string)
         if queries then
             queries(ask, ...)
         end
+        if name == "mailwalk" and WALK_EVENTS[event] then
+            whereAmI()
+        end
     end)
     recorder:RegisterAllEvents()
+    if walker then
+        walker:Cancel()
+        walker = nil
+    end
+    if name == "mailwalk" then
+        whereAmI()
+        note(`MailFrame shown: {tostring(G.MailFrame and G.MailFrame:IsShown())}`)
+        local lastX, lastY = UnitPosition("player")
+        walker = C_Timer.NewTicker(0.25, function()
+            local x, y = UnitPosition("player")
+            if x == nil or lastX == nil or issecretvalue(x) or issecretvalue(lastX) then
+                return
+            end
+            if math.abs(x - lastX) + math.abs(y - lastY) >= 0.5 then
+                lastX, lastY = x, y
+                whereAmI()
+            end
+        end)
+    end
     say(`engine scenario "{name}": recording; play it, then /stdtest engine scenario stop`)
 end

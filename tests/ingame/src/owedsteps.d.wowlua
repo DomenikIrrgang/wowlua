@@ -1,0 +1,8 @@
+declare module "/owedsteps"
+    --- The steps, in order: the key their output is recorded under (nil:
+    --- record nothing), their code (given print and dump), and the seconds
+    --- to wait before them (at least the next frame).
+    const steps: { [number]: { key: string?, run: (print: (...any) -> (), dump: (...any) -> ()) -> (), wait: number? } }
+    --- Hides what the steps made (their scripts and events cleared).
+    function release()
+end

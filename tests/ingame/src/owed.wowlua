@@ -1,0 +1,144 @@
+-- /stdtest engine owed: the owed in-game probes of tests/ingame/PROBES.md
+-- that are pure code ("Batched (2026-11-09)" there lists them), in one run
+-- (owedsteps.lua holds the steps, as PROBES.md's /run lines). Into
+-- StdTestState.engineOwed: `results[key]`, each step's printed lines (as
+-- `print` shows them, a secret as "secret", an error as "error: <text>");
+-- `order`, every line in the order printed with the frame it came in;
+-- `times[key]`, when each step ran (seconds from the start). One step per
+-- frame, as lines typed one after another; what the steps made is hidden
+-- after. About 25 seconds, out of combat.
+import state from "/state"
+import stamp from "/state"
+import say from "/harness"
+import * as plan from "/owedsteps"
+
+--- A value as `print` shows it; a secret as "secret".
+local function text(v: any): string
+    if issecretvalue(v) then
+        return "secret"
+    end
+    return tostring(v)
+end
+
+--- A value as `/dump` shows it, a table flattened (keys sorted, 4 deep).
+local function flat(v: any, depth: number): string
+    if issecretvalue(v) then
+        return "secret"
+    end
+    if type(v) == "string" then
+        return string.format("%q", v)
+    end
+    if type(v) ~= "table" then
+        return tostring(v)
+    end
+    if depth >= 4 then
+        return "{...}"
+    end
+    const parts: string[] = {}
+    for k, inner in pairs(v :: table) do
+        parts[#parts + 1] = `{text(k)}={flat(inner, depth + 1)}`
+    end
+    table.sort(parts)
+    return `\{{table.concat(parts, ", ")}\}`
+end
+
+local running = false
+
+export function owedProbe()
+    if running then
+        say("engine owed: already running; wait for its last line")
+        return
+    end
+    if InCombatLockdown() then
+        say("engine owed: leave combat first (it opens the settings panel)")
+        return
+    end
+    running = true
+    const st = state() :: any
+    const results: { [string]: string } = {}
+    const order: string[] = {}
+    const times: { [string]: string } = {}
+    st.engineOwed = {
+        client = `{(GetBuildInfo())} ({select(2, GetBuildInfo())})`,
+        at = date("%Y-%m-%d %H:%M:%S"),
+        results = results,
+        order = order,
+        times = times,
+    }
+    stamp("owed")
+    const start = GetTime()
+    local frame = 0
+    --- A step's print: its lines under its key, in order.
+    local function printer(key: string): (...any) -> ()
+        return function(...: any)
+            const parts: string[] = {}
+            for i = 1, select("#", ...) do
+                parts[#parts + 1] = text((select(i, ...)))
+            end
+            const line = table.concat(parts, " ")
+            const before = results[key]
+            results[key] = (before == nil or before == "") and line or `{before}\n{line}`
+            if #order < 5000 then
+                order[#order + 1] = `{frame} {key}: {line}`
+            end
+        end
+    end
+    local function dumper(key: string): (...any) -> ()
+        const p = printer(key)
+        return function(...: any)
+            const n = select("#", ...)
+            if n == 0 then
+                p("empty result")
+            end
+            for i = 1, n do
+                p(`[{i}]={flat((select(i, ...)), 0)}`)
+            end
+        end
+    end
+    const steps = plan.steps
+    local index = 1
+    local due = 0.0
+    local waiting = false
+    const driver = CreateFrame("Frame")
+    driver:SetScript("OnUpdate", function()
+        frame += 1
+        const now = GetTime()
+        if index > #steps then
+            driver:SetScript("OnUpdate", nil)
+            pcall(plan.release)
+            running = false
+            local count = 0
+            local errors = 0
+            for _, r in pairs(results) do
+                count += 1
+                if r:find("error: ", 1, true) then
+                    errors += 1
+                end
+            end
+            say(`engine owed: {count} answers recorded ({errors} with an error); type /reload so the file is written`)
+            return
+        end
+        const s = steps[index]
+        if not waiting then
+            waiting = true
+            due = now + (s.wait ?? 0)
+        end
+        if now < due then
+            return
+        end
+        waiting = false
+        index += 1
+        const key = s.key
+        const label = key ?? `(step {index - 1})`
+        times[label] = string.format("%.3f", now - start)
+        -- A step that prints nothing is recorded as run.
+        if key ~= nil and results[key] == nil then
+            results[key] = ""
+        end
+        local ok, err = pcall(s.run, printer(label), dumper(label))
+        if not ok then
+            printer(label)(`error: {issecretvalue(err) and "<secret>" or tostring(err)}`)
+        end
+    end)
+    say(`engine owed: {#steps} steps, about 25 seconds; a few things show in the middle of the screen and go`)
+end

@@ -11,6 +11,111 @@ sent, the character does not move, and no output stores a player's name.
 After a run that StdTest records, `/reload` writes the results to the saved
 variables; `cargo xtask ingest` then takes them into the fixtures.
 
+## Batched (2026-11-09)
+
+`/stdtest engine owed` runs the owed steps below that are pure code, by
+itself, in one go (`src/owedsteps.lua` holds them, each the item's `/run`
+line with the same calls and IDs). Every step's printed values land in
+`StdTestState.engineOwed.results` under a key naming the section and step
+(`M12.3.2`: "Owed from the M12 screenshots", item 3, step 2), as `print`
+shows them (a secret as `secret`, an error as `error: <text>`, a `/dump`'s
+tables flattened); `order` has every line in the order printed, `times`
+when each step ran. One step per frame, as lines typed one after another;
+a step's "about N seconds later" waits that long. What the steps make is
+hidden after. These items are covered: do not run them by hand again.
+
+- **Owed from the M12 screenshots**: 1 (both steps, and step 1 again after
+  step 2; step 2 loads `AtlasLootClassic_Crafting` if it is installed, a
+  load-on-demand addon, else the client answers for a missing one), 2, 3,
+  4, 7, 8 (steps 1 and 2: the widths and heights), 11, 14, 16 (steps 1 and
+  2: the size, and again a frame later), 17, 18 step 2 (a title that is not
+  a holiday's as its length only; again 2 s after `C_Calendar.OpenCalendar()`),
+  19 steps 7 and 9, 20d steps 1 and 2 (and step 3's line without the
+  character frame open), 20e step 3 (and `select("#", BNGetInfo())`, the
+  count only).
+- **Owed from M13**: 1 (the widths, and again a frame later), 2 (with the
+  character's class and level: it means something on a paladin with spell
+  power), 3 (the dumps).
+- **Owed from M14**: 1 (the three lines in the order printed; the
+  settings panel then closed with `HideUIPanel(SettingsPanel)`).
+- **Owed from the contributions in 0.13.5**: 1, 2, 4, 6 (timed: 3 s, 0.5 s,
+  2 s and 3 s apart; a white bar shows in the middle for about 8 s).
+- **Still to run**: the `GetBindingText(key, 1)` bullet (each key with `1`,
+  `true` and no second argument; the keys and modifiers alone too).
+- **Decision T605's open questions** (new; keys `T605.<case>`; SuuUI's
+  `anchors3` case G as in "Found with SuuUI" item 1, each case alone, a
+  second apart; the item's left and top, top from UIParent's: `112,-140`
+  placed, `nil` not):
+  - `G`, `I`, `M`: the recorded cases again. wowlua: G `place | now nil |
+    next nil | 1s nil`; I and M `place | size 55x30 | now 112,-140 | next
+    112,-140 | 1s 112,-140`.
+  - `Gq`, the pass order: G with nothing asking for a rectangle before the
+    frame's end (no "now"). wowlua: `place | next nil | 1s nil`.
+  - `Gh`, a panel built hidden: G built with the panel hidden, placed (and
+    asked "now") hidden, shown a frame later and asked at once ("shown").
+    wowlua: `place | now nil | show | shown nil | next nil | 1s nil`.
+  - `Gh2`: as `Gh` without "now" and "shown". wowlua: `place | size 55x30
+    | show | next 112,-140 | 1s 112,-140`.
+  - `T`: the body's `OnSizeChanged` asks for its own size and resizes
+    nothing. wowlua: `body asks 1 | place | body asks 30 | size 55x30 | now
+    112,-140 | next 112,-140 | 1s 112,-140`.
+  - `W`, a frame laid out for itself: G with `body:GetSize()` asked right
+    after the body's height is set, before the item is asked for. wowlua:
+    `place | body 30 | size 55x30 | now 112,-140 | next 112,-140 | 1s
+    112,-140`.
+- **Other sections**: Widget state (T289) 1 to 7 and 11 to 14; Targeting
+  and history (T291) 3; Leftovers (T295) 4 (a system line "probe line"
+  shows); Model frames' cameras 3; Textures the screenshots draw 1 and 4;
+  Unanchored textures 1 (its Lua half); The Camelot update 5 and 6 (its
+  print); Unanchored font strings (T602) 1; Names over units 1; How far
+  the world is drawn 1; Found with SuuUI 2 (SuuUI's font, if installed), 7
+  and 9.
+
+wowlua answers M12.19.9 `100 false false` now (the item says `100 true
+true`, written before decision T605).
+
+The steps:
+
+1. On the desktop, in `tests/ingame`: `wowlua install --client _forever_`
+   (done 2026-11-09; again only after StdTest changes).
+2. In game, out of combat, the settings closed, standing anywhere: `/reload`
+3. `/stdtest engine owed`
+4. Do not type or click until the chat line `engine owed: N answers
+   recorded (M with an error); type /reload so the file is written` (about
+   25 seconds). A white bar, a short text, a tooltip and the Settings
+   window show in the middle of the screen for a moment and go, and a
+   system line "probe line" comes in the chat.
+5. `/reload`
+6. On the desktop: keep a copy of
+   `WTF/Account/<account>/SavedVariables/StdTest.lua`; its
+   `StdTestState.engineOwed` holds the answers (not ingested: read it).
+
+**A mailbox walked away from** (new, 2026-11-09; SuuUI found that the game
+ends a mailbox interaction when you walk away; wowlua keeps it open at any
+distance). The scenario recorder records every event with its time
+(`MAIL_CLOSED`, `PLAYER_INTERACTION_MANAGER_FRAME_HIDE` with its type,
+`SECURE_TRANSFER_CANCEL`, …); for `mailwalk` it also records the player's
+position and whether the mailbox interaction is on, at the start, at those
+events and every quarter second the player moved half a yard. Nothing is
+read from the mail.
+
+1. Stand at a mailbox, out of combat, and right-click it so the mail window
+   opens.
+2. `/stdtest engine scenario mailwalk`
+3. Walk straight away from the mailbox (W), not closing the mail window,
+   until it closes by itself, then two more seconds. If it is still open
+   60 yards away, stop there.
+4. `/stdtest engine scenario stop`
+5. `/reload`
+
+Still by hand (screenshots, other players, combat, walking, a window
+opened by hand): Owed from the M12 screenshots 5, 6, 8 step 3, 9, 10, 12,
+13, 15 (a blocked action: `/reload` after), 16 step 3, 18 step 1, 19
+steps 1 to 6 and 8, 20a, 20b, 20c, 20d step 3 (the character frame open),
+20e steps 1 and 2 (at login), 20; Owed from M13 1's screenshots; Owed from
+the contributions in 0.13.5 3, 5, 7; and the other sections' steps not
+named above.
+
 ## Still to run (2026-10-21, postponed)
 
 The beta's last day left these open, most needed first. Each gives data the
@@ -85,7 +190,8 @@ engine cannot get otherwise.
     8. `/run C_VideoOptions.SetGameWindowSize(1000, 700)`, then step 7 again (a size the monitor does not list).
     9. Untick "Use UI Scale", set the Window Size back, Apply.
 
-- **`GetBindingText(key, 1)` with modifiers** (the action bars' hotkeys):
+- **`GetBindingText(key, 1)` with modifiers** (batched 2026-11-09 in
+  `/stdtest engine owed`; the action bars' hotkeys):
   `SHIFT-1`, `CTRL-ALT-2`, `META-E`, `SHIFT-MOUSEWHEELUP`, `SHIFT-NUMPAD1`.
   Why: the engine shortens the modifiers with the client's
   `*_KEY_TEXT_ABBR` strings and joins them with `-` (`s-1`), and keeps the
@@ -505,6 +611,10 @@ player's arrow 32 by 32 UI units; neither is recorded on camelot.
 
 ## Owed from the M12 screenshots (next beta, about 2026-11-07)
 
+Batched (2026-11-09, `/stdtest engine owed`, see the top): 1, 2, 3, 4,
+7, 8 steps 1-2, 11, 14, 16 steps 1-2, 17, 18 step 2, 19 steps 7 and 9, 20d
+steps 1-2, 20e step 3.
+
 The camelot beta closed on 2026-10-24; these close what the screenshot work
 left as proposals. Each item stands alone: after a `/reload` (or an error)
 start the item again from its first step. In the chat box `|` is escaped,
@@ -660,6 +770,9 @@ alone unless an item names an addon.
 
 ## Owed from M13 (next beta, about 2026-11-07)
 
+Batched (2026-11-09, `/stdtest engine owed`, see the top): 1 (the
+widths), 2, 3.
+
 What the M13 work (the client's tables in tests) guessed. Each item stands
 alone: after a `/reload` (or an error) start it again from its first step.
 Take a screenshot after each step that names one.
@@ -685,6 +798,8 @@ Take a screenshot after each step that names one.
 
 ## Owed from M14 (next beta, about 2026-11-07)
 
+Batched (2026-11-09, `/stdtest engine owed`, see the top): 1.
+
 1. **When `SETTINGS_PANEL_OPEN` comes** (decision T400; wowlua fires it
    inside `C_SettingsUtil.OpenSettingsPanel`, at once). With the settings
    closed:
@@ -695,6 +810,8 @@ Take a screenshot after each step that names one.
    event before "after", and is the panel shown at "after"?
 
 ## Owed from the contributions in 0.13.5 (next beta, about 2026-11-07)
+
+Batched (2026-11-09, `/stdtest engine owed`, see the top): 1, 2, 4, 6.
 
 What pull requests #81 to #91 guessed. Their decisions (T485 to T490)
 stay proposals, open for review, until these answer. Each item stands
