@@ -82,6 +82,9 @@ impl SecretRef {
 struct Entry<T> {
     value: T,
     marked: bool,
+    /// Whose it is: the taint of the code that made it (an addon's, 0
+    /// for secure code), for each addon's memory (decision T610).
+    owner: u32,
 }
 
 /// Slots of one object kind.
@@ -104,11 +107,12 @@ impl<T> Default for Arena<T> {
 }
 
 impl<T> Arena<T> {
-    fn alloc(&mut self, value: T) -> (u32, u32) {
+    fn alloc(&mut self, value: T, owner: u32) -> (u32, u32) {
         self.live += 1;
         let entry = Some(Entry {
             value,
             marked: false,
+            owner,
         });
         if let Some(idx) = self.free.pop() {
             self.slots[idx as usize] = entry;
@@ -201,6 +205,13 @@ impl<T> Arena<T> {
             .filter_map(|s| s.as_mut().map(|e| &mut e.value))
     }
 
+    /// Adds each live object's `size` to its owner's sum.
+    fn sum_by_owner(&self, sums: &mut FxHashMap<u32, u64>, size: impl Fn(&T) -> u64) {
+        for e in self.slots.iter().flatten() {
+            *sums.entry(e.owner).or_default() += size(&e.value);
+        }
+    }
+
     /// Every live object, with its index and generation.
     pub(crate) fn iter(&self) -> impl Iterator<Item = (u32, u32, &T)> {
         self.slots.iter().enumerate().filter_map(|(i, s)| {
@@ -243,6 +254,9 @@ pub struct Heap {
     allocated_before: u64,
     /// The last userdata's creation serial.
     ud_serial: u64,
+    /// Who new objects belong to: the taint new objects take where they
+    /// are made (the VM keeps it current; decision T610).
+    pub(crate) owner: u32,
 }
 
 impl Heap {
@@ -264,7 +278,7 @@ impl Heap {
         }
         self.debt += bytes.len() + 32;
         let rc: Rc<[u8]> = Rc::from(bytes);
-        let (idx, generation) = self.strings.alloc(LuaStr { bytes: rc.clone() });
+        let (idx, generation) = self.strings.alloc(LuaStr { bytes: rc.clone() }, self.owner);
         let s = StrRef {
             idx,
             generation,
@@ -291,7 +305,7 @@ impl Heap {
 
     pub fn alloc_table(&mut self, t: Table) -> TableRef {
         self.debt += 64 + t.capacity_bytes();
-        let (idx, generation) = self.tables.alloc(t);
+        let (idx, generation) = self.tables.alloc(t, self.owner);
         TableRef { idx, generation }
     }
 
@@ -305,7 +319,7 @@ impl Heap {
 
     pub fn alloc_func(&mut self, f: Function) -> FuncRef {
         self.debt += 64;
-        let (idx, generation) = self.funcs.alloc(f);
+        let (idx, generation) = self.funcs.alloc(f, self.owner);
         FuncRef { idx, generation }
     }
 
@@ -319,7 +333,7 @@ impl Heap {
 
     pub fn alloc_upval(&mut self, u: Upval) -> UpvalRef {
         self.debt += 32;
-        let (idx, generation) = self.upvals.alloc(u);
+        let (idx, generation) = self.upvals.alloc(u, self.owner);
         UpvalRef { idx, generation }
     }
 
@@ -333,7 +347,7 @@ impl Heap {
 
     pub fn alloc_thread(&mut self, t: Thread) -> ThreadRef {
         self.debt += 256;
-        let (idx, generation) = self.threads.alloc(t);
+        let (idx, generation) = self.threads.alloc(t, self.owner);
         ThreadRef { idx, generation }
     }
 
@@ -349,7 +363,7 @@ impl Heap {
         self.debt += 64;
         self.ud_serial += 1;
         u.serial = self.ud_serial;
-        let (idx, generation) = self.userdata.alloc(u);
+        let (idx, generation) = self.userdata.alloc(u, self.owner);
         UdRef { idx, generation }
     }
 
@@ -358,7 +372,7 @@ impl Heap {
             return SecretRef::NIL;
         }
         self.debt += 32;
-        let (idx, generation) = self.secrets.alloc(v);
+        let (idx, generation) = self.secrets.alloc(v, self.owner);
         SecretRef { idx, generation }
     }
 
@@ -416,6 +430,25 @@ impl Heap {
             + self.threads.live() * 256
             + self.userdata.live() * 64
             + self.secrets.live() * 32
+    }
+
+    /// The approximate bytes of everything live ([`estimate_bytes`]),
+    /// by owner: the taint of the code that made each object (0: secure
+    /// code's), as the client counts each addon's memory (decision T610).
+    ///
+    /// [`estimate_bytes`]: Self::estimate_bytes
+    pub fn bytes_by_owner(&self) -> FxHashMap<u32, u64> {
+        let mut sums = FxHashMap::default();
+        self.strings
+            .sum_by_owner(&mut sums, |s| s.bytes.len() as u64 + 32);
+        self.tables
+            .sum_by_owner(&mut sums, |t| 64 + t.capacity_bytes() as u64);
+        self.funcs.sum_by_owner(&mut sums, |_| 64);
+        self.upvals.sum_by_owner(&mut sums, |_| 32);
+        self.threads.sum_by_owner(&mut sums, |_| 256);
+        self.userdata.sum_by_owner(&mut sums, |_| 64);
+        self.secrets.sum_by_owner(&mut sums, |_| 32);
+        sums
     }
 
     /// The value's object identity, for `tostring` and table keys.

@@ -611,6 +611,12 @@ fn addon_index(vm: &mut Vm, v: Value) -> Option<usize> {
     }
 }
 
+/// The name of the addon an `uiAddon` argument names (its name or index).
+pub(crate) fn addon_name(vm: &mut Vm, v: Value) -> Option<String> {
+    let i = addon_index(vm, v)?;
+    Some(engine(vm).world.bindings.addons[i].name.clone())
+}
+
 /// `GetAddOnMetadata(name, field)`: the TOC's field, any case.
 fn get_addon_metadata(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(i) = addon_index(vm, c.arg(1)) else {

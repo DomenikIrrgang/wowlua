@@ -71,7 +71,8 @@ $ wowlua trace --clipboard                                  # map an error copie
 $ wowlua trace error.txt                                    # or from a file, or from standard input
 $ wowlua screenshot tests/window.test.wowlua -o window.png  # the UI as a test file leaves it
 $ wowlua screenshot tests/zone.test.wowlua --world -o zone.png  # with the 3D world behind it
-$ wowlua test --profile-out prof                            # a speedscope profile per test file
+$ wowlua test --profile-out prof                            # a speedscope profile and a frames' summary per test file
+$ wowlua test --profile-out prof --profile-frames 0         # the same, without each frame's call tree (small files)
 $ wowlua prof report                                        # an HTML page of the recordings you exported in the game
 $ wowlua prof report --account MYACCOUNT --client _retail_  # when several accounts or clients have some
 $ wowlua prof report --recording "pull 1" --no-open         # only this recording; write the page, don't open it

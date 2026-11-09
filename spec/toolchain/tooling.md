@@ -502,9 +502,14 @@ Mocking (decision T187):
 ### 16.1.5 Running
 
 ```
-wowlua test [filter…] [--flavor <f>] [-u] [--watch] [--coverage] [--reporter <r>,…] [--output <dir>] [--game-data]
+wowlua test [filter…] [--flavor <f>] [-u] [--watch] [--coverage] [--reporter <r>,…] [--output <dir>] [--game-data] [--profile-out <dir> [--profile-frames <n>]]
 ```
 
+- `--profile-out <dir>` profiles each test file and flavor, writing its
+  speedscope file and its frames' summary there ([Debugger
+  §18.8](debugger.md#188-profiler), decisions T495, T612);
+  `--profile-frames <n>` keeps the trees of the newest `n` frames in the
+  speedscope file (600 by default).
 - Each test file runs once **per manifest flavor** by default. `--flavor`
   restricts the run, and `@flavors` restricts individual tests.
 - Each file and flavor runs in a fresh VM. Files run in parallel, one a

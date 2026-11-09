@@ -527,7 +527,8 @@ fn a_profile_report_has_functions_and_a_speedscope_file() {
         .expect("sq");
     assert_eq!(sq["calls"], 100);
     let ss = &r["speedscope"];
-    assert_eq!(ss["profiles"].as_array().unwrap().len(), 3);
+    // Instructions, bytes, host time and the native estimate.
+    assert_eq!(ss["profiles"].as_array().unwrap().len(), 4);
     assert_eq!(ss["profiles"][0]["unit"], "none");
 }
 

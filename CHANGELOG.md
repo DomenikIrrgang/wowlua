@@ -4,6 +4,13 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### New
+
+- `GetAddOnMemoryUsage("MyAddon")` measures your addon's own memory after `UpdateAddOnMemoryUsage()`, as in the game: what its code made that is still alive, the frames and tables the game's functions made for it included. Before, it answered the whole emulated client's. `collectgarbage("count")` stays the whole client's.
+- Profiles show what the game's own functions cost: `CreateFrame`, `SetPoint`, `SetText`, textures, aura queries and every other call get an estimated cost in instructions' worth, shown as "native cost (estimated)", so building frames no longer looks free. The weights are estimates, not measured in the game.
+- `wowlua test --profile-out` also writes a small summary of every game frame (`….frames.json`): instructions, the native estimate, memory allocated, garbage collections, events fired, the costliest functions, your addon's part, the frames each test ran and your addon's memory at the end. It covers every frame, so a minute of play fits.
+- `wowlua test --profile-frames <n>` sets how many of the newest frames keep their call trees in the speedscope file (600 by default); `0` keeps the file small.
+
 ### Fixed
 
 - Walking away from an open mailbox closes it, as in the game: past 5 yards (`unit:setDistance`, or the player moving away) the mail ends with `SECURE_TRANSFER_CANCEL` and `PLAYER_INTERACTION_MANAGER_FRAME_HIDE`, and `C_PlayerInteractionManager.IsInteractingWithNpcOfType(17)` turns false. There is no `MAIL_CLOSED`, as in the game.

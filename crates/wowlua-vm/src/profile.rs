@@ -1,8 +1,11 @@
 //! The profiler (spec debugger §18.8, decision T307): a call tree of
 //! functions and the engine's dispatches, each node with its calls and
-//! the instructions, bytes and host time spent in it (self). Totals are
+//! the instructions, bytes and host time spent in it (self), and the
+//! estimated cost of the game's functions (decision T611). Totals are
 //! sums over the tree, so a coroutine's time is not counted while it
-//! waits.
+//! waits. Each game frame keeps a summary (decision T612): its cost, its
+//! collections, the events fired, its costliest functions and each
+//! addon's part.
 
 use std::rc::Rc;
 
@@ -11,6 +14,15 @@ use rustc_hash::FxHashMap;
 use crate::debug::DispatchKind;
 use crate::heap::ThreadRef;
 use crate::proto::Proto;
+use crate::value::Value;
+
+/// A native function's estimated cost for the client, in instructions'
+/// worth (decision T611), from its name and its arguments.
+pub type NativeCostFn = fn(&crate::vm::Vm, &str, &[Value]) -> u64;
+
+/// Tells the addon a function's code belongs to, by its chunk name
+/// (`@Interface/AddOns/MyAddon/core.lua`); none for code of no addon.
+pub type Classify = Box<dyn Fn(&[u8]) -> Option<String>>;
 
 /// What a node is: a function or a dispatch.
 #[derive(Clone, Debug)]
@@ -40,13 +52,17 @@ pub struct Cost {
     pub instructions: u64,
     pub bytes: u64,
     pub nanos: u64,
+    /// The game's functions' estimated cost, in instructions' worth
+    /// (decision T611): a model, not a measure.
+    pub native: u64,
 }
 
 impl Cost {
-    fn add(&mut self, o: Cost) {
+    pub fn add(&mut self, o: Cost) {
         self.instructions += o.instructions;
         self.bytes += o.bytes;
         self.nanos += o.nanos;
+        self.native += o.native;
     }
 }
 
@@ -57,6 +73,7 @@ impl std::ops::Sub for Cost {
             instructions: self.instructions.saturating_sub(o.instructions),
             bytes: self.bytes.saturating_sub(o.bytes),
             nanos: self.nanos.saturating_sub(o.nanos),
+            native: self.native.saturating_sub(o.native),
         }
     }
 }
@@ -77,10 +94,31 @@ pub struct Node {
 #[derive(Clone, Debug)]
 pub struct FrameSample {
     pub name: Rc<str>,
+    /// Its number: the first frame profiled is 1.
+    pub number: u64,
     pub cost: Cost,
     /// The nodes that ran in the frame, by index (a parent before its
-    /// children); empty for a frame older than the newest [`FRAME_TREES`].
+    /// children); empty for a frame older than the newest
+    /// [`Profiler::frame_trees`].
     pub nodes: Vec<FrameNode>,
+    /// Garbage collections run in the frame.
+    pub gc: u64,
+    /// The events fired in it: each event's key and how often, by key.
+    pub events: Vec<(u32, u64)>,
+    /// Its costliest functions ([`Profiler::top_n`] of them, by their own
+    /// instructions and estimated native cost in the frame).
+    pub top: Vec<FrameTop>,
+    /// Each addon's part ([`Profiler::groups`], in that order): the cost
+    /// of its code and of what that code called.
+    pub groups: Vec<Cost>,
+}
+
+/// A function's part in one game frame: its calls and its own cost there.
+#[derive(Clone, Copy, Debug)]
+pub struct FrameTop {
+    pub key: u32,
+    pub calls: u64,
+    pub self_cost: Cost,
 }
 
 /// A node's part in one game frame: its calls and its own cost there.
@@ -90,6 +128,9 @@ pub struct FrameNode {
     pub calls: u64,
     pub self_cost: Cost,
 }
+
+/// A frame's events, costliest functions and addons' parts.
+type FrameSummary = (Vec<(u32, u64)>, Vec<FrameTop>, Vec<Cost>);
 
 #[derive(Clone, Copy)]
 struct Entry {
@@ -107,8 +148,12 @@ pub const MAX_DEPTH: usize = 256;
 /// Most game frames kept (the newest).
 const MAX_FRAMES: usize = 100_000;
 
-/// Game frames whose call trees are kept (the newest; decision T495).
+/// Game frames whose call trees are kept by default (the newest;
+/// decisions T495, T612).
 pub const FRAME_TREES: usize = 600;
+
+/// Functions each frame's summary names by default (decision T612).
+pub const TOP_FUNCTIONS: usize = 5;
 
 /// The profiler's state, and the profile it collects.
 pub struct Profiler {
@@ -123,6 +168,26 @@ pub struct Profiler {
     frame_count: u64,
     /// While a game frame runs: each node's calls and cost in it.
     frame_nodes: Option<FxHashMap<u32, (u64, Cost)>>,
+    /// The natives' estimated cost so far (decision T611).
+    pub native_total: u64,
+    /// Garbage collections so far, and when the running frame began.
+    pub gc_cycles: u64,
+    frame_gc: u64,
+    /// Game frames whose call trees are kept, the newest ([`FRAME_TREES`]
+    /// by default; every frame keeps its summary).
+    pub frame_trees: usize,
+    /// Functions each frame's summary names ([`TOP_FUNCTIONS`]).
+    pub top_n: usize,
+    /// The addons frames are summed by ([`classify_by`]): a node is the
+    /// first addon's on its path from the root, its code and what that
+    /// calls.
+    ///
+    /// [`classify_by`]: Self::classify_by
+    pub groups: Vec<String>,
+    classify: Option<Classify>,
+    /// By key and by node: 1 + its index in `groups`, 0 for none.
+    key_group: Vec<u16>,
+    node_group: Vec<u16>,
 }
 
 impl Profiler {
@@ -145,7 +210,27 @@ impl Profiler {
             frames: Vec::new(),
             frame_count: 0,
             frame_nodes: None,
+            native_total: 0,
+            gc_cycles: 0,
+            frame_gc: 0,
+            frame_trees: FRAME_TREES,
+            top_n: TOP_FUNCTIONS,
+            groups: Vec::new(),
+            classify: None,
+            key_group: vec![0],
+            node_group: vec![0],
         }
+    }
+
+    /// Sums each frame by addon from now on: `classify` names the addon of
+    /// a function's chunk (decision T612).
+    pub fn classify_by(&mut self, classify: Classify) {
+        self.classify = Some(classify);
+    }
+
+    /// Game frames profiled so far.
+    pub fn frame_count(&self) -> u64 {
+        self.frame_count
     }
 
     fn now(&self, instructions: u64, bytes: u64) -> Cost {
@@ -153,6 +238,7 @@ impl Profiler {
             instructions,
             bytes,
             nanos: (self.clock)(),
+            native: self.native_total,
         }
     }
 
@@ -178,7 +264,22 @@ impl Profiler {
             return k;
         }
         let k = self.keys.len() as u32;
-        self.keys.push(key());
+        let key = key();
+        let group = match (&key, &self.classify) {
+            (Key::Lua(p), Some(classify)) => match classify(&p.source) {
+                Some(name) => match self.groups.iter().position(|g| *g == name) {
+                    Some(i) => i as u16 + 1,
+                    None => {
+                        self.groups.push(name);
+                        self.groups.len() as u16
+                    }
+                },
+                None => 0,
+            },
+            _ => 0,
+        };
+        self.keys.push(key);
+        self.key_group.push(group);
         self.key_ids.insert(id, k);
         k
     }
@@ -198,6 +299,12 @@ impl Profiler {
             self_cost: Cost::default(),
         });
         self.nodes[parent as usize].children.push(n);
+        // The first addon on the path owns it.
+        let group = match self.node_group[parent as usize] {
+            0 => self.key_group[key as usize],
+            g => g,
+        };
+        self.node_group.push(group);
         n
     }
 
@@ -291,6 +398,7 @@ impl Profiler {
         });
         if kind == DispatchKind::Frame {
             self.frame_nodes = Some(FxHashMap::default());
+            self.frame_gc = self.gc_cycles;
         }
         self.push(k, depth, thread, resumers, true, now);
     }
@@ -360,19 +468,74 @@ impl Profiler {
                         })
                         .collect();
                     nodes.sort_unstable_by_key(|n| n.node);
+                    let (events, top, groups) = self.summarize(&nodes);
+                    if self.frame_trees == 0 {
+                        nodes = Vec::new();
+                    }
                     self.frames.push(FrameSample {
                         name: format!("frame {}", self.frame_count).into(),
+                        number: self.frame_count,
                         cost: now - e.start,
                         nodes,
+                        gc: self.gc_cycles - self.frame_gc,
+                        events,
+                        top,
+                        groups,
                     });
-                    // Older frames keep their cost, not their tree.
-                    if let Some(old) = self.frames.len().checked_sub(FRAME_TREES + 1) {
+                    // Older frames keep their cost and summary, not their
+                    // tree.
+                    if let Some(old) = self.frames.len().checked_sub(self.frame_trees + 1) {
                         self.frames[old].nodes = Vec::new();
                     }
                 }
                 break;
             }
         }
+    }
+
+    /// A frame's summary from its nodes: the events fired, the costliest
+    /// functions, each addon's part.
+    fn summarize(&self, nodes: &[FrameNode]) -> FrameSummary {
+        let mut events: Vec<(u32, u64)> = Vec::new();
+        let mut by_key: FxHashMap<u32, (u64, Cost)> = FxHashMap::default();
+        let mut groups = vec![Cost::default(); self.groups.len()];
+        for n in nodes {
+            let key = self.nodes[n.node as usize].key;
+            match &self.keys[key as usize] {
+                Key::Dispatch(DispatchKind::Event, _) => {
+                    match events.iter_mut().find(|e| e.0 == key) {
+                        Some(e) => e.1 += n.calls,
+                        None => events.push((key, n.calls)),
+                    }
+                }
+                Key::Lua(_) | Key::Native(_) => {
+                    let e = by_key.entry(key).or_default();
+                    e.0 += n.calls;
+                    e.1.add(n.self_cost);
+                }
+                _ => {}
+            }
+            if let Some(g) = self.node_group[n.node as usize].checked_sub(1) {
+                groups[g as usize].add(n.self_cost);
+            }
+        }
+        events.sort_unstable_by_key(|e| e.0);
+        let mut top: Vec<FrameTop> = by_key
+            .into_iter()
+            .map(|(key, (calls, self_cost))| FrameTop {
+                key,
+                calls,
+                self_cost,
+            })
+            .collect();
+        top.sort_unstable_by_key(|t| {
+            (
+                std::cmp::Reverse(t.self_cost.instructions + t.self_cost.native),
+                t.key,
+            )
+        });
+        top.truncate(self.top_n);
+        (events, top, groups)
     }
 
     /// A finished coroutine's stack goes.
@@ -492,6 +655,7 @@ impl crate::vm::Vm {
             instructions: self.instructions,
             bytes: self.heap.allocated(),
             nanos: (p.clock)(),
+            native: 0,
         };
         self.profiler = Some(Box::new(p));
         self.hook_base |= crate::debug::HOOK_COUNT;
@@ -510,6 +674,12 @@ impl crate::vm::Vm {
 
     pub fn profiler(&self) -> Option<&Profiler> {
         self.profiler.as_deref()
+    }
+
+    /// The profiler, to set what it keeps ([`Profiler::frame_trees`],
+    /// [`Profiler::classify_by`]).
+    pub fn profiler_mut(&mut self) -> Option<&mut Profiler> {
+        self.profiler.as_deref_mut()
     }
 
     /// Instructions run while hooks were on (the profiler's measure).

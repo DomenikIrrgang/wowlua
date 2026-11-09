@@ -6063,3 +6063,139 @@ end
     assert!(!ok);
     assert!(stderr.contains("E4006"), "{stderr}");
 }
+
+/// `GetAddOnMemoryUsage` answers what the addon's code made that is still
+/// live, as `UpdateAddOnMemoryUsage` last measured it (decision T610);
+/// `collectgarbage("count")` stays the whole state's.
+#[test]
+fn an_addons_memory_is_what_its_code_made() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            (
+                "src/data.lua",
+                "DemoCache = {}\nfor i = 1, 2000 do DemoCache[i] = { tostring(i) } end\n",
+            ),
+            (
+                "tests/memory.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+
+@test("memory")
+local function memory()
+    expect(GetAddOnMemoryUsage("Demo")).toBe(0)
+    UpdateAddOnMemoryUsage()
+    local own = GetAddOnMemoryUsage("Demo")
+    expect(own > 150).toBe(true)
+    expect(GetAddOnMemoryUsage(C_AddOns.GetNumAddOns())).toBe(own)
+    expect(((collectgarbage("count") :: unknown) :: number) > own * 2).toBe(true)
+    -- What it drops is given back at the next measure.
+    _G.DemoCache = nil
+    collectgarbage("collect")
+    UpdateAddOnMemoryUsage()
+    expect(GetAddOnMemoryUsage("Demo") < own / 2).toBe(true)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("1 passed, 0 failed"), "{out}");
+}
+
+/// `--profile-out` writes each test file's frames' summary next to its
+/// profile: every frame's cost with the game's functions' estimated cost,
+/// the addon's part, the costliest functions, and each test's frames
+/// (decisions T611, T612); `--profile-frames 0` keeps no frame's tree.
+#[test]
+fn profile_out_writes_a_summary_of_every_frame() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            (
+                "src/ui.wowlua",
+                r#"export function build()
+    local f = CreateFrame("Frame", nil, UIParent)
+    f:SetSize(10, 10)
+    f:SetPoint("CENTER")
+    local t = f:CreateTexture(nil, "ARTWORK")
+    t:SetColorTexture(1, 0, 0)
+    return f
+end
+"#,
+            ),
+            (
+                "tests/ui.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import build from "/ui"
+
+local driver = CreateFrame("Frame")
+
+@test("builds in frames")
+local function builds()
+    local n = 0
+    driver:SetScript("OnUpdate", function()
+        n += 1
+        build()
+    end)
+    mock.advanceFrames(4, 1000 / 60)
+    driver:SetScript("OnUpdate", nil)
+    expect(n).toBe(4)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(
+        dir.path(),
+        &["--profile-out", "prof", "--profile-frames", "0"],
+    );
+    assert!(ok, "{out}");
+    let read = |name: &str| -> serde_json::Value {
+        serde_json::from_slice(&fs::read(dir.path().join("prof").join(name)).unwrap()).unwrap()
+    };
+    let summary = read("tests_ui.test.wowlua.standard.frames.json");
+    assert_eq!(summary["addons"], serde_json::json!(["Demo"]));
+    assert!(summary["native"].as_str().unwrap().contains("estimated"));
+    let tests = summary["tests"].as_array().unwrap();
+    assert_eq!(tests[0]["name"], "builds in frames");
+    let (first, last) = (
+        tests[0]["first"].as_u64().unwrap(),
+        tests[0]["last"].as_u64().unwrap(),
+    );
+    assert_eq!(last + 1 - first, 4, "{tests:?}");
+    let functions = summary["functions"].as_array().unwrap();
+    let frames = summary["frames"].as_array().unwrap();
+    for n in first..=last {
+        let f = frames.iter().find(|f| f["frame"] == n).expect("the frame");
+        // CreateFrame alone is estimated at 2000 instructions' worth.
+        let demo = &f["addons"]["Demo"];
+        assert!(demo["native"].as_u64().unwrap() >= 2000, "{f}");
+        assert!(demo["instructions"].as_u64().unwrap() > 0, "{f}");
+        assert!(f["native"].as_u64().unwrap() >= demo["native"].as_u64().unwrap());
+        let top: Vec<&str> = f["top"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| {
+                functions[t["function"].as_u64().unwrap() as usize]["name"]
+                    .as_str()
+                    .unwrap()
+            })
+            .collect();
+        assert_eq!(top[0], "[C] CreateFrame", "{top:?}");
+    }
+    assert!(summary["memory"]["addons"]["Demo"].as_f64().unwrap() > 0.0);
+    // No frame's tree in the profile; the native measure is one of its
+    // profiles.
+    let profile = read("tests_ui.test.wowlua.standard.speedscope.json");
+    assert_eq!(profile["wowlua"]["frames"], serde_json::json!([]));
+    assert!(
+        profile["profiles"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["name"] == "native cost (estimated)")
+    );
+}

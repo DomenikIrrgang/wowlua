@@ -431,6 +431,7 @@ pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> b
                 output: None,
                 watch: false,
                 profile_out: None,
+                profile_frames: None,
                 game_data: false,
                 world: false,
             };
@@ -1141,9 +1142,20 @@ fn test_once(
             } else {
                 None
             };
+            // Each frame summed by addon: the addon's own code, and the
+            // `test.addons` (decision T612).
+            let own = build.addon_name.clone();
+            let others = other_addon_names(&project);
+            let frame_trees = args.profile_frames;
             let start_profile: &(dyn Fn(&mut wowlua_vm::Vm) + Sync) = &|vm: &mut wowlua_vm::Vm| {
                 let start = Instant::now();
                 vm.start_profiling(Box::new(move || start.elapsed().as_nanos() as u64));
+                if let Some(p) = vm.profiler_mut() {
+                    p.classify_by(wowlua_test::addon_classifier(&own, &others));
+                    if let Some(n) = frame_trees {
+                        p.frame_trees = n;
+                    }
+                }
             };
             let mut suite = make_suite(
                 &project,
@@ -1174,21 +1186,29 @@ fn test_once(
                 let dir = cwd().join(dir);
                 let mapper = wowlua_test::chunk_mapper(&suite);
                 let flavor = flavor.clone();
+                wowlua_test::perf::track_tests(&mut suite);
                 suite.after_file = Some(std::sync::Arc::new(
                     move |vm: &mut wowlua_vm::Vm, rel: &str| {
+                        let tests = wowlua_test::perf::take_tests();
+                        let memory = wowlua_test::perf::memory(vm);
                         let Some(p) = vm.stop_profiling() else { return };
                         let map = |chunk: &[u8]| mapper(&String::from_utf8_lossy(chunk));
-                        let json = wowlua_debug::profile::speedscope(
-                            &p,
-                            &map,
-                            &format!("{rel} ({flavor})"),
-                        );
-                        let name =
-                            format!("{}.{flavor}.speedscope.json", rel.replace(['/', '\\'], "_"));
+                        let title = format!("{rel} ({flavor})");
+                        let json = wowlua_debug::profile::speedscope(&p, &map, &title);
+                        let base = format!("{}.{flavor}", rel.replace(['/', '\\'], "_"));
                         let _ = std::fs::create_dir_all(&dir);
                         let _ = std::fs::write(
-                            dir.join(name),
+                            dir.join(format!("{base}.speedscope.json")),
                             serde_json::to_vec(&json).unwrap_or_default(),
+                        );
+                        // The frames' summary, with each test's frames and
+                        // the memory each addon holds at the end.
+                        let mut summary = wowlua_debug::profile::frame_summary(&p, &map, &title);
+                        summary["tests"] = wowlua_test::perf::tests_json(&tests);
+                        summary["memory"] = memory.to_json();
+                        let _ = std::fs::write(
+                            dir.join(format!("{base}.frames.json")),
+                            serde_json::to_vec(&summary).unwrap_or_default(),
                         );
                     },
                 ));
@@ -1368,6 +1388,23 @@ use wowlua_test::runs::Switches as SuiteSwitches;
 
 /// The test runner's suite for a test build of `project`, with the
 /// renderer's camera.
+/// The names of the package's `test.addons` (their folders'), the
+/// addons a profile sums frames by besides the package's own.
+fn other_addon_names(project: &Project) -> Vec<String> {
+    project
+        .manifest
+        .manifest
+        .test
+        .addons
+        .iter()
+        .filter_map(|a| {
+            Path::new(a)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+        })
+        .collect()
+}
+
 fn make_suite<'a>(
     project: &Project,
     build: &'a BuildOutput,

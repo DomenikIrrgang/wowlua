@@ -503,6 +503,22 @@ impl Vm {
         }
     }
 
+    /// A native was entered while profiling: its estimated cost goes to it
+    /// (decision T611).
+    #[inline(never)]
+    pub(crate) fn native_cost_hook(&mut self, f: FuncRef, args: &[Value]) {
+        let Some(cost) = self.native_cost else {
+            return;
+        };
+        let Function::Native(n) = self.heap.func(f) else {
+            return;
+        };
+        let w = cost(self, n.name, args);
+        if let Some(p) = self.profiler.as_mut() {
+            p.native_total += w;
+        }
+    }
+
     /// Calls at depth `depth` and above returned (or unwound).
     #[inline(never)]
     pub(crate) fn return_hook(&mut self, depth: usize) {
