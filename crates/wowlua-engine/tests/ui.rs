@@ -339,6 +339,54 @@ return h.Plain:GetNumPoints(), h.Sized:GetNumPoints(), h.Sized:GetWidth(), thumb
     );
 }
 
+/// An unanchored XML font string fills its parent until a point is set,
+/// and the first point replaces the fill instead of adding to it: by its
+/// `TOPLEFT` alone it is its text's height, as Blizzard's map quest
+/// rewards measure their "You will receive:" (decision T602). A texture
+/// keeps the fill's other point, and so does a font string the code
+/// itself gave `SetAllPoints`.
+#[test]
+fn an_unanchored_font_strings_fill_gives_way_to_its_first_point() {
+    let interface = tree(
+        "unanchored-text",
+        &[
+            ("AddOns/Blizzard_Box/Blizzard_Box.toc", "Box.xml\n"),
+            (
+                "AddOns/Blizzard_Box/Box.xml",
+                r#"<Ui>
+  <Font name="BoxFont" font="Fonts\FRIZQT__.TTF" height="12" virtual="true"/>
+  <Frame name="TextHolder" parent="UIParent">
+    <Size x="200" y="100"/>
+    <Anchors><Anchor point="TOPLEFT" x="10" y="-10"/></Anchors>
+    <Layers><Layer level="ARTWORK">
+      <FontString parentKey="Header" inherits="BoxFont"/>
+      <FontString parentKey="Again" inherits="BoxFont"/>
+      <Texture parentKey="Plain"/>
+    </Layer></Layers>
+  </Frame>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let r = run(
+        &mut vm,
+        "local h = TextHolder
+local before = h.Header:GetNumPoints()
+h.Header:SetText('You will receive:')
+h.Header:SetPoint('TOPLEFT', h, 'TOPLEFT', 0, -6)
+h.Again:SetAllPoints()
+h.Again:SetPoint('TOPLEFT', h, 'TOPLEFT', 0, -6)
+h.Plain:SetPoint('TOPLEFT', h, 'TOPLEFT', 0, -6)
+return before, h.Header:GetNumPoints(), h.Header:GetHeight() == h.Header:GetStringHeight(),
+    h:GetTop() - h.Header:GetTop(), h.Again:GetNumPoints(), h.Again:GetHeight(),
+    h.Plain:GetNumPoints(), h.Plain:GetHeight()",
+    );
+    assert_eq!(r, ["2", "1", "true", "6", "2", "94", "2", "94"]);
+}
+
 /// An intrinsic type declared with `allowUntaintedCreation` (Blizzard's
 /// `AuraContainer`), made by an addon while the addon loads: its `method`
 /// scripts are Blizzard's, not the loading addon's code, so its `OnLoad`

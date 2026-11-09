@@ -1662,3 +1662,23 @@ layer named in lowercase is answered in capitals, and draws on that layer.
    "ARTWORK -6", "BACKGROUND -5", amber. Seen on WoW Forever 1.60.1
    (70862), 2026-11-07: "ARTWORK -6", "BACKGROUND -5", amber, as wowlua.
 2. `/run F:Hide()`
+
+## Unanchored font strings (decision T602)
+
+On WoW Forever from its launch, each line in the chat. Whether a font
+string the XML does not anchor has points of its own, and what its first
+`SetPoint` leaves. wowlua: such a font string fills its parent with two
+points until its first `SetPoint`, which replaces them.
+
+1. `/run local r=MapQuestInfoRewardsFrame print(r.QuestSessionBonusReward:GetNumPoints(), r.PlayerTitleText:GetNumPoints())`
+
+   Seen: two counts (these two are anchored only for a quest-session
+   bonus or a title reward). wowlua: "2 2".
+2. Open the world map (M), and in its quest log click a quest whose
+   rewards are XP and money, so its details show.
+3. `/run local r=MapQuestInfoRewardsFrame local t=r.ItemReceiveText print(t:GetNumPoints(), t:GetHeight(), t:GetStringHeight(), r:GetHeight())`
+
+   Seen: the points, the height and the text's height of "You will
+   receive:", and the rewards frame's height. wowlua: "1", the two
+   heights equal (about 10), the frame about 51.
+4. Close the map (M).

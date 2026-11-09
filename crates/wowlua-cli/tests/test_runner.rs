@@ -628,7 +628,10 @@ end
 /// one group per dispel type (SuuUI's debuff-type badges), and a Magic
 /// debuff shows the Magic group's button alone. The buttons hide with
 /// `SetShown(secretwrap(false))`, which showed them while a secret false
-/// counted as true.
+/// counted as true. SuuUI's own shape too: a container per type, every
+/// type's or only the removable ones (`HARMFUL|RAID_PLAYER_DISPELLABLE`),
+/// the badge a frame its `initializeFrame` hangs on the button: no badge
+/// shows without a debuff, Magic's alone with one.
 #[test]
 fn aura_buttons_show_only_their_auras() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
@@ -677,6 +680,153 @@ local function onlyTheirs()
     mock.player:removeAura(id)
     mock.nextFrame(2)
     expect(shown(made)).toEqual({ Magic = 0, Curse = 0, Poison = 0, Disease = 0 })
+end
+
+-- One engine container per type, its button carrying a badge over `holder`.
+local function badges(holder: Frame, filter: string): { [string]: Frame }
+    const badge: { [string]: Frame } = {}
+    for _, kind in ipairs(TYPES) do
+        const c = CreateFrame("AuraContainer", nil, holder, "CustomAuraContainerTemplate") :: any
+        c:SetSize(1, 1)
+        c:AddAuraGroup(kind, filter, {
+            maxFrameCount = 1,
+            candidateFilters = { includeDispelTypes = { [kind] = true } },
+            initializeFrame = function(button: any)
+                const deco = CreateFrame("Frame", nil, button)
+                deco:SetAllPoints(holder)
+                badge[kind] = deco
+            end,
+        })
+        c:SetUnit("none")
+        c:SetPoint("TOPLEFT", holder, "TOPLEFT")
+        c:SetUnit("player")
+    end
+    return badge
+end
+
+local function visible(badge: { [string]: Frame }): { [string]: boolean }
+    const out: { [string]: boolean } = {}
+    for _, kind in ipairs(TYPES) do
+        out[kind] = badge[kind]:IsVisible()
+    end
+    return out
+end
+
+@test("debuff-type badges only with such a debuff")
+local function typeBadges()
+    const holder = CreateFrame("Frame", nil, UIParent)
+    holder:SetSize(200, 40)
+    holder:SetPoint("CENTER")
+    const every = badges(holder, "HARMFUL")
+    const removable = badges(holder, "HARMFUL|RAID_PLAYER_DISPELLABLE")
+    mock.nextFrame(2)
+    const none = { Magic = false, Curse = false, Poison = false, Disease = false }
+    expect(visible(every)).toEqual(none)
+    expect(visible(removable)).toEqual(none)
+    const id = mock.player:applyAura({ spellId = 116, name = "Frostbolt", duration = 9, harmful = true, dispelName = "Magic" })
+    mock.nextFrame(2)
+    expect(visible(every)).toEqual({ Magic = true, Curse = false, Poison = false, Disease = false })
+    mock.player:removeAura(id)
+    mock.nextFrame(2)
+    expect(visible(every)).toEqual(none)
+end
+"#,
+        )],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("2 passed, 0 failed"), "{text}");
+}
+
+/// The world map's quest details on camelot (Blizzard's
+/// `QuestMapFrame_ShowQuestDetails`) size their rewards box to hold every
+/// reward, above the Abandon, Share and Track buttons (decision T602): the
+/// unanchored "You will receive:" anchored by its `TOPLEFT` is its text's
+/// height. It kept the frame's bottom too, measured 4 and later stretched
+/// to the frame's bottom, so the rewards frame came out 45 tall for XP and
+/// money, the rewards below it and under the buttons (SuuUI, 2026-11-08).
+#[test]
+fn map_quest_details_hold_their_rewards() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let dir = project(
+        r#""camelot": {}"#,
+        &[(
+            "tests/rewards.test.wowlua",
+            r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local function take(id: number, data: table)
+    const giver = mock.spawnUnit({ name = "Giver " .. id, reaction = "friendly" })
+    data.giver = giver
+    mock.defineQuest(id, data)
+    giver:setDistance(3)
+    mock.player:interact(giver)
+    mock.advanceTime(1)
+    AcceptQuest()
+    mock.advanceTime(1)
+end
+
+-- The quest's details on the map: every shown reward inside the rewards
+-- frame and its box, the box above the buttons under it.
+local function fits(id: number, rewards: number)
+    QuestMapFrame_ShowQuestDetails(id)
+    mock.nextFrame(2)
+    const details = QuestMapFrame.DetailsFrame :: any
+    const box = details.RewardsFrameContainer
+    const frame = MapQuestInfoRewardsFrame :: any
+    expect(frame:IsVisible()).toBe(true)
+    local shown: any[] = {}
+    for _, key in ipairs({ "XPFrame", "MoneyFrame" }) do
+        if frame[key]:IsShown() then
+            shown[#shown + 1] = frame[key]
+        end
+    end
+    for _, button in ipairs(frame.RewardButtons) do
+        if button:IsShown() then
+            shown[#shown + 1] = button
+        end
+    end
+    expect(#shown).toBe(rewards)
+    for _, reward in ipairs(shown) do
+        expect(reward:GetBottom() >= frame:GetBottom() - 0.5).toBe(true)
+        expect(reward:GetBottom() >= box:GetBottom()).toBe(true)
+        expect(reward:GetTop() <= box:GetTop()).toBe(true)
+    end
+    for _, key in ipairs({ "AbandonButton", "ShareButton", "TrackButton" }) do
+        expect(box:GetBottom() >= details[key]:GetTop()).toBe(true)
+    end
+end
+
+@test("the rewards box holds every reward")
+local function holds()
+    mock.defineItem(80, { name = "Soft Fur-lined Shoes", quality = 1, icon = 132543 })
+    take(959, { title = "Trouble at the Docks", xp = 170, money = 2500 })
+    take(962, { title = "Wolves", xp = 250, money = 1200, rewards = { { id = 80, count = 1 } } })
+    ToggleWorldMap()
+    mock.nextFrame(2)
+    fits(959, 2)
+    fits(962, 3)
+    fits(959, 2)
 end
 "#,
         )],

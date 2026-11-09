@@ -2498,6 +2498,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - The pet's spellbook (decision T599)
 - A texture's masks (decision T596)
 - Draw layer case (decision T597)
+- Unanchored font strings (decision T602)
 
 ## In-game regressions
 
