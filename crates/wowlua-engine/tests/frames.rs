@@ -2571,3 +2571,217 @@ return table.concat(out, ' ; '), t:GetWidth(), tostring(WrapTipTextLeft2:GetHeig
     assert!((width - 320.0).abs() < 1.0, "{r:?}");
     assert_eq!(r[2], "true", "{r:?}");
 }
+
+/// SuuUI's `anchors3` and `anchors4` probes (WoW Forever 1.60.1.70862,
+/// 2026-11-09), built as in game: a panel whose body hangs on its top by
+/// two points, 1 high, and an item (a button) sized 55 by 30, all shown.
+/// `place()` anchors the item to the body and sets the body's height; the
+/// item's place is asked for at once ("now"), a frame later and a second
+/// later; the item's `OnSizeChanged` hook logs its size where it runs.
+const ANCHORS_PROBE: &str = "Log, Pending, Items, Names = {}, {}, {}, {}
+local function rect(f)
+    local l, t = f:GetLeft(), f:GetTop()
+    return l and string.format('%g,%g', l, t - UIParent:GetTop()) or 'nil'
+end
+-- (the place asked for first: a size script it runs logs before it)
+local function note(log, label, f)
+    local r = rect(f)
+    log[#log + 1] = label .. ' ' .. r
+end
+function Case(name, o)
+    local log = {}
+    Log[name] = log
+    Names[#Names + 1] = name
+    local P = CreateFrame('Frame', nil, UIParent)
+    local body = CreateFrame('Frame', nil, P)
+    body:SetPoint('TOPLEFT', 12, -40)
+    body:SetSize(1, 1)
+    P:SetWidth(320)
+    body:SetPoint('TOPRIGHT', -12, -40)
+    local function fit() local _, h = body:GetSize(); P:SetHeight(40 + h + 12) end
+    if o.script == 'fit' then body:SetScript('OnSizeChanged', fit)
+    elseif o.script == 'empty' then body:SetScript('OnSizeChanged', function() end)
+    elseif o.script == 'later' then body:SetScript('OnSizeChanged', function() C_Timer.After(0, fit) end) end
+    P:SetHeight(40 + 1 + 12)
+    local item = CreateFrame(o.frame and 'Frame' or 'Button', nil, body)
+    item:SetSize(55, 30)
+    if o.ask then note(log, 'before', item) end
+    if not o.nohook then
+        item:HookScript('OnSizeChanged', function(_, w, h) log[#log + 1] = string.format('size %gx%g', w, h) end)
+    end
+    P:SetPoint('TOPLEFT', 100, -100)
+    P:Show()
+    local function place()
+        if o.heightFirst then body:SetHeight(30) end
+        item:ClearAllPoints()
+        item:SetPoint('TOPLEFT', body, 'TOPLEFT', 0, 0)
+        if not o.heightFirst then body:SetHeight(30) end
+        if o.fitNow then fit() end
+    end
+    local function watch()
+        note(log, 'now', item)
+        C_Timer.After(0, function() note(log, 'next', item) end)
+        C_Timer.After(1, function() note(log, '1s', item) end)
+    end
+    Items[name] = { item = item, body = body, rect = rect, log = log }
+    if o.atOnce then place(); watch(); return end
+    Pending[#Pending + 1] = function() log[#log + 1] = 'place'; place(); watch() end
+end
+local driver = CreateFrame('Frame')
+driver:SetScript('OnUpdate', function(self)
+    self:SetScript('OnUpdate', nil)
+    for _, f in ipairs(Pending) do f() end
+end)
+";
+
+/// The cases built (in one go, as the probe), run for a second and more;
+/// each case's log, its lines joined by ` | `.
+fn anchors_probe(vm: &mut Vm, cases: &str) -> Vec<String> {
+    run(vm, ANCHORS_PROBE);
+    run(vm, cases);
+    wowlua_engine::clock::advance_frames(vm, 75, 1000.0 / 60.0);
+    run(
+        vm,
+        "local out = {}
+for _, name in ipairs(Names) do
+    out[#out + 1] = name .. ': ' .. table.concat(Log[name], ' | ')
+end
+return unpack(out)",
+    )
+}
+
+/// A frame anchored to a frame whose `OnSizeChanged` resizes the frame it
+/// hangs on, run while the frame's own place was worked out before it had
+/// one, is never placed; anything else places it, its `OnSizeChanged`
+/// running when its place is asked for (decision T605; SuuUI's `anchors3`
+/// and `anchors4` probes, cases G to P, as recorded).
+#[test]
+fn a_size_script_resizing_its_anchor_loses_the_frame_being_placed() {
+    let mut vm = vm();
+    let r = anchors_probe(
+        &mut vm,
+        "Case('G', { script = 'fit' })
+Case('H', { script = 'fit', frame = true })
+Case('I', {})
+Case('J', { script = 'fit', atOnce = true })
+Case('K', { script = 'fit', ask = true })
+Case('L', { script = 'fit', nohook = true })
+Case('M', { fitNow = true })
+Case('N', { script = 'empty' })
+Case('O', { script = 'fit', heightFirst = true })
+Case('P', { script = 'later' })",
+    );
+    let placed = "112,-140";
+    let lost = "now nil | next nil | 1s nil";
+    let kept = format!("size 55x30 | now {placed} | next {placed} | 1s {placed}");
+    assert_eq!(
+        r,
+        [
+            format!("G: place | {lost}"),
+            format!("H: place | {lost}"),
+            format!("I: place | {kept}"),
+            format!("J: now nil | size 55x30 | next {placed} | 1s {placed}"),
+            format!("K: before nil | place | {lost}"),
+            format!("L: place | {lost}"),
+            format!("M: place | {kept}"),
+            format!("N: place | {kept}"),
+            format!("O: place | {lost}"),
+            format!("P: place | {kept}"),
+        ]
+    );
+}
+
+/// A frame the layout left without a place gets one when it is anchored
+/// again (SuuUI's fix: the item anchored anew later), its `OnSizeChanged`
+/// with it (decision T605).
+#[test]
+fn a_lost_frame_anchored_again_is_placed() {
+    let mut vm = vm();
+    anchors_probe(&mut vm, "Case('G', { script = 'fit' })");
+    let r = run(
+        &mut vm,
+        "local c = Items.G
+local before = c.rect(c.item)
+c.item:ClearAllPoints()
+c.item:SetPoint('TOPLEFT', c.body, 'TOPLEFT', 0, 0)
+return before, c.rect(c.item), table.concat(c.log, ' | ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "nil",
+            "112,-140",
+            "place | now nil | next nil | 1s nil | size 55x30"
+        ]
+    );
+}
+
+/// Anchored before what it hangs on has a place, a frame is placed once
+/// that has one (SuuUI's `anchors` and `anchors2` probes, WoW Forever
+/// 70862: a box on a parent with a width but no point, the parent's
+/// point and height set later).
+#[test]
+fn a_frame_anchored_before_its_parent_has_a_place_is_placed_later() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "Parent = CreateFrame('Frame', nil, UIParent)
+Parent:SetWidth(200)
+Box = CreateFrame('Button', nil, Parent)
+Box:SetSize(20, 20)
+Box:SetPoint('TOPLEFT', Parent, 'TOPLEFT', 5, -5)
+local before = tostring(Box:GetLeft())
+Parent:SetPoint('TOPLEFT', 100, -100)
+return before, Box:GetLeft()",
+    );
+    assert_eq!(r, ["nil", "105"]);
+    wowlua_engine::clock::advance_frames(&mut vm, 1, 1000.0 / 60.0);
+    let r = run(
+        &mut vm,
+        "Parent:SetHeight(50)
+return Box:GetLeft(), Box:GetTop() - UIParent:GetTop()",
+    );
+    assert_eq!(r, ["105", "-105"]);
+}
+
+/// The layout pass before a frame: an anchored frame resized between
+/// frames or in `OnUpdate` is told before the next `OnUpdate`, a frame
+/// given a size script once placed is not told the size it has, and one
+/// told nothing changes is told nothing (decision T605; `/stdtest engine`).
+#[test]
+fn the_layout_pass_tells_sizes_before_the_next_update() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "Seen = {}
+local f = CreateFrame('Frame', nil, UIParent)
+f:SetPoint('CENTER')
+f:SetSize(10, 20)
+f:SetScript('OnSizeChanged', function(_, w, h) Seen[#Seen + 1] = string.format('size %gx%g', w, h) end)
+Placed = CreateFrame('Frame', nil, UIParent)
+Placed:SetPoint('CENTER')
+Placed:SetSize(5, 5)
+local n = 0
+local driver = CreateFrame('Frame')
+driver:SetScript('OnUpdate', function(self)
+    n = n + 1
+    Seen[#Seen + 1] = 'update' .. n
+    if n == 1 then
+        Placed:SetScript('OnSizeChanged', function(_, w) Seen[#Seen + 1] = 'placed ' .. w end)
+    elseif n == 2 then
+        f:SetSize(30, 40)
+        f:SetSize(10, 20)
+    elseif n == 3 then
+        f:SetSize(30, 40)
+    elseif n == 5 then
+        self:SetScript('OnUpdate', nil)
+    end
+end)",
+    );
+    wowlua_engine::clock::advance_frames(&mut vm, 6, 1000.0 / 60.0);
+    let r = run(&mut vm, "return table.concat(Seen, ' ')");
+    assert_eq!(
+        r,
+        ["size 10x20 update1 update2 update3 size 30x40 update4 update5"]
+    );
+}

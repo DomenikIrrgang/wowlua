@@ -475,7 +475,27 @@ The WoW API the VM's code calls, per flavor.
   in game). `GetSize`,
   `GetWidth` and `GetHeight` give the laid-out size of an anchored region
   (unverified beyond fresh widgets; `/stdtest engine` records
-  `layoutSizes`).
+  `layoutSizes`). A rectangle is laid out when it is asked for (`GetLeft`,
+  `GetTop`, `GetRect`, `GetSize` and the other getters of an anchored
+  region) and in the layout pass before the next frame's `OnUpdate`
+  (the client's at the end of the frame), after the frames it hangs on;
+  an anchored frame with an `OnSizeChanged` script or hook gets it there
+  and then, with its laid-out size, when that size differs from the one
+  it was last told, its first rectangle too: an item anchored and asked
+  for in an `OnUpdate` runs its `OnSizeChanged` inside that `OnUpdate`,
+  before the getter answers; a frame without points gets none. When a
+  frame's `OnSizeChanged`, run while a frame anchored to it was being
+  laid out, resizes the frame it hangs on, and the frame being laid out
+  had no place since it was last anchored, that frame gets none: `GetLeft`
+  and `GetRect` answer nothing and its own `OnSizeChanged` never runs,
+  until it is anchored again (`SetPoint`, `SetAllPoints`); when that was
+  the resizing frame's first rectangle, only until the next layout pass.
+  A resize the handler leaves for later (a timer) loses nothing, nor does
+  a fit run before the frame is asked for. Handlers nest ten deep at
+  most; deeper, a size waits (decision T605; SuuUI's `anchors` probes on
+  WoW Forever 70862, recorded in `tests/ingame/PROBES.md`; unverified: the
+  order the pass takes the frames in, that a frame laid out for itself,
+  its own `GetSize` in a script, leaves nothing unplaced, the bound).
 - **Screen and text.** The client draws on a screen (decision T237, a
   test setting; a world profile's `screen` and the game's settings while
   it runs, decision T482: the window's size, "Use UI Scale" and its slider,

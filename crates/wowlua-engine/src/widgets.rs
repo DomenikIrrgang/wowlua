@@ -17,8 +17,9 @@
 //! line where it adds one; `Is…` getters are false until set (a button
 //! takes the mouse); alpha keeps eight bits. A template only Blizzard's UI
 //! code defines warns while that code is not loaded; any other unknown
-//! name fails (decided 2026-10-16). Unverified: `OnSizeChanged` runs with
-//! the next frame.
+//! name fails (decided 2026-10-16). A rectangle is laid out when asked
+//! for and in the layout pass before the next frame, `OnSizeChanged`
+//! running then (decision T605).
 
 use std::collections::HashMap;
 
@@ -128,6 +129,27 @@ pub struct Widget {
     /// When its `OnUpdate` runs (`SetOnUpdateMode`, `Enum.OnUpdateMode`
     /// 0 to 4; decision T594): 1, while it is shown, at first.
     pub on_update_mode: u8,
+    /// Its rectangle was laid out since it was last anchored (`SetPoint`,
+    /// `SetAllPoints`): a frame anchored since is not placed yet
+    /// (decision T605).
+    pub rect_seen: std::cell::Cell<bool>,
+    /// Left without a rectangle by a layout a size script changed
+    /// (decision T605).
+    pub unplaced: Unplaced,
+}
+
+/// Why a frame has no rectangle although its anchors give it one
+/// (decision T605): a frame's `OnSizeChanged`, run while it was laid out,
+/// resized the frame it is anchored to before the frames anchored to it
+/// had their places.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Unplaced {
+    #[default]
+    No,
+    /// Until the next layout pass (the frame's first layout).
+    UntilPass,
+    /// Until it is anchored again (a frame laid out before).
+    UntilAnchored,
 }
 
 /// A line a chat window showed (decision T514).
@@ -198,18 +220,22 @@ pub struct World {
     pub frame_types: HashMap<String, (String, Value)>,
     /// The last event registration's number.
     pub next_registration: u64,
-    /// Widgets whose size changed since the last frame (`OnSizeChanged`
-    /// runs with the next frame, not at `SetSize`).
-    pub resized: Vec<WidgetId>,
-    /// The same widgets, by index: whether one is already among them.
-    pub resizing: std::collections::HashSet<usize>,
     /// A widget's points, size, scale or parent changed since the last
-    /// frame: the frame looks for sizes that followed (`OnSizeChanged` of
-    /// a frame sized by its anchors).
+    /// layout pass: a rectangle asked for, and the next pass, look for
+    /// sizes that changed (`OnSizeChanged`, decision T605).
     pub layout_changed: bool,
     /// The laid-out size each anchored widget with an `OnSizeChanged`
-    /// handler last had, by index.
+    /// handler was last told of, by index.
     pub laid_out: HashMap<usize, (f64, f64)>,
+    /// The widgets anchored since the last layout pass: the pass places
+    /// them (decision T605).
+    pub anchored_since: Vec<WidgetId>,
+    /// The widgets left without a rectangle until the next layout pass
+    /// ([`Unplaced::UntilPass`]).
+    pub unplaced_until_pass: Vec<WidgetId>,
+    /// How deep `OnSizeChanged` handlers run inside layouts (one that
+    /// asks for a rectangle lays out again).
+    pub resolving: u32,
     /// The widgets a keyboard setting (`KeyboardEnabled`) was ever stored
     /// for, in order, each once: the only ones that can take keys
     /// (`input::keyboard_frames`).
@@ -702,6 +728,8 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         placed: 0,
         raised: 0,
         on_update_mode: 1,
+        rect_seen: std::cell::Cell::new(true),
+        unplaced: Unplaced::No,
     };
     let mut w = w;
     // Secure code's widgets are forbidden; their names are the addons'
@@ -1517,8 +1545,28 @@ fn set_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 pub fn script_stored(vm: &mut Vm, id: WidgetId, script: &str) {
     match script {
         "OnUpdate" => engine_mut(vm).world.updates(id.0),
-        "OnSizeChanged" => insert_sorted(&mut engine_mut(vm).world.size_watching, id.0),
+        "OnSizeChanged" => {
+            insert_sorted(&mut engine_mut(vm).world.size_watching, id.0);
+            seed_laid_out(vm, id);
+        }
         _ => {}
+    }
+}
+
+/// A frame given an `OnSizeChanged` once placed: the size it has is no
+/// change (decision T605); one not placed yet is told its first.
+fn seed_laid_out(vm: &mut Vm, id: WidgetId) {
+    let e = engine(vm);
+    let w = &e.world.widgets[id.0];
+    if w.points.is_empty() || !w.rect_seen.get() || e.world.laid_out.contains_key(&id.0) {
+        return;
+    }
+    if let Some(b) = bounds(vm, id, 0) {
+        let s = layout_scale(engine(vm), id);
+        engine_mut(vm)
+            .world
+            .laid_out
+            .insert(id.0, (b.2 / s, b.3 / s));
     }
 }
 
@@ -2626,6 +2674,7 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         y,
     });
     note_anchors(vm, id);
+    reanchored(engine_mut(vm), id);
     layout_changed(vm);
     Ok(vec![])
 }
@@ -2640,6 +2689,7 @@ fn set_to_defaults(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.points.clear();
     w.default_points = false;
+    w.unplaced = Unplaced::No;
     w.width = 0.0;
     w.height = 0.0;
     layout_changed(vm);
@@ -2669,6 +2719,7 @@ fn clear_all_points(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.points.clear();
     w.default_points = false;
+    w.unplaced = Unplaced::No;
     layout_changed(vm);
     Ok(vec![])
 }
@@ -2693,6 +2744,7 @@ fn set_all_points(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         });
     }
     note_anchors(vm, id);
+    reanchored(engine_mut(vm), id);
     layout_changed(vm);
     Ok(vec![])
 }
@@ -2741,6 +2793,7 @@ fn not_for_lines(vm: &mut Vm, id: WidgetId, method: &str) -> Result<(), LuaError
 
 /// `GetRect()`: left, bottom, width and height, nothing while unanchored.
 fn get_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    resolve(vm, id);
     let s = layout_scale(engine(vm), id);
     Ok(match bounds(vm, id, 0) {
         Some(b) if !reported_points(vm, id).is_empty() => vec![
@@ -2866,87 +2919,222 @@ fn resize(vm: &mut Vm, id: WidgetId, w: Option<f64>, h: Option<f64>) {
     widget.width = w.unwrap_or(old.0);
     widget.height = h.unwrap_or(old.1);
     let new = (widget.width, widget.height);
-    // `OnSizeChanged` waits: an anchored frame's runs before the next
-    // `OnUpdate` (also when resized in `OnUpdate`), a frame without points
-    // never gets one (`/stdtest engine`).
-    let world = &mut engine_mut(vm).world;
+    // `OnSizeChanged` waits until the rectangle is laid out: asked for, or
+    // the layout pass before the next `OnUpdate` (also when resized in
+    // `OnUpdate`); a frame without points never gets one (`/stdtest
+    // engine`; decision T605).
     if new != old {
-        world.layout_changed = true;
-    }
-    if new != old && world.resizing.insert(id.0) {
-        world.resized.push(id);
+        engine_mut(vm).world.layout_changed = true;
     }
 }
 
-/// `OnSizeChanged` for the widgets resized since the last frame: those
-/// `SetSize` resized, then those whose size follows their anchors and
-/// changed with them (a `SetAllPoints` child of a resized frame, a
-/// template's part anchored at both ends), with their laid-out size, as
+/// The layout pass before a frame (the client's at the end of the one
+/// before; decision T605): the anchored widgets with an `OnSizeChanged`
+/// handler are laid out, each after what it is anchored to, and told of a
+/// size that changed (their first one too) with their laid-out size, as
 /// the client runs it whenever the rectangle's size changes (SuuUI's
-/// tests; unverified: their order).
+/// tests, `/stdtest engine`, SuuUI's `anchors` probes). The frames left
+/// without a place until this pass are laid out again, those a size
+/// script of this pass left so too; then the frames anchored since the
+/// last pass are placed.
 pub fn run_size_changes(vm: &mut Vm) {
-    let world = &mut engine_mut(vm).world;
-    world.resizing.clear();
-    let resized = std::mem::take(&mut world.resized);
-    let mut told = std::collections::HashSet::new();
-    for id in resized {
-        let w = &engine(vm).world.widgets[id.0];
-        if w.points.is_empty() {
-            continue;
+    let released = release_holds(vm);
+    let changed = std::mem::take(&mut engine_mut(vm).world.layout_changed);
+    let fresh = std::mem::take(&mut engine_mut(vm).world.anchored_since);
+    if changed || !released.is_empty() {
+        let watching: Vec<WidgetId> = {
+            let e = engine(vm);
+            e.world
+                .size_watching
+                .iter()
+                .filter(|&&i| e.world.widgets.get(i).is_some_and(|w| !w.points.is_empty()))
+                .map(|&i| WidgetId(i))
+                .collect()
+        };
+        let mut done = rustc_hash::FxHashSet::default();
+        let mut known = KnownBounds::default();
+        for id in watching.into_iter().chain(released) {
+            notify_chain(vm, id, None, &mut done, &mut known, 0);
         }
-        let size = [Value::Num(w.width), Value::Num(w.height)];
-        // An object whose untrusted layout scripts are forbidden runs only
-        // its secure ones (the documentation's `UntrustedLayoutScriptExecution`;
-        // unverified by a probe).
-        let trusted_only = w.forbidden_aspects & crate::protection::UNTRUSTED_LAYOUT_SCRIPTS != 0;
-        told.insert(id.0);
-        run_script_of(vm, id, "OnSizeChanged", &size, trusted_only);
+        // (a size script of this pass left frames for it: laid out again
+        // in it, once)
+        let again = release_holds(vm);
+        let mut done = rustc_hash::FxHashSet::default();
+        for id in again {
+            notify_chain(vm, id, None, &mut done, &mut known, 0);
+        }
     }
-    if !std::mem::take(&mut engine_mut(vm).world.layout_changed) {
+    let mut known = KnownBounds::default();
+    for id in fresh {
+        if id.0 < engine(vm).world.widgets.len() {
+            bounds_in(vm, id, 0, &mut known);
+        }
+    }
+}
+
+/// The frames left without a place until the layout pass get theirs back.
+fn release_holds(vm: &mut Vm) -> Vec<WidgetId> {
+    let held = std::mem::take(&mut engine_mut(vm).world.unplaced_until_pass);
+    let mut out = Vec::new();
+    for id in held {
+        let w = &mut engine_mut(vm).world.widgets[id.0];
+        if w.unplaced == Unplaced::UntilPass {
+            w.unplaced = Unplaced::No;
+            mark(engine_mut(vm), id);
+            out.push(id);
+        }
+    }
+    out
+}
+
+/// A rectangle asked for (`GetLeft`, `GetRect`, `GetSize`, …): laid out
+/// now, after what it is anchored to, each running the `OnSizeChanged` it
+/// owes before the answer (SuuUI's `anchors3` probe: an item's runs inside
+/// the `OnUpdate` that asks for its place; decision T605).
+pub(crate) fn resolve(vm: &mut Vm, id: WidgetId) {
+    let world = &engine(vm).world;
+    if !world.layout_changed || world.size_watching.is_empty() {
         return;
     }
-    // The anchored widgets that listen, each one's size now.
-    let key = vm.heap.intern(b"OnSizeChanged");
-    let watching: Vec<WidgetId> = {
-        let e = engine(vm);
-        e.world
-            .size_watching
-            .iter()
-            .filter_map(|&i| Some((i, e.world.widgets.get(i)?)))
-            .filter(|(_, w)| !w.points.is_empty())
-            .filter(|(_, w)| {
-                !vm.heap.table(w.scripts).get_str(key).is_nil()
-                    || !vm.heap.table(w.hooks).get_str(key).is_nil()
-            })
-            .map(|(i, _)| WidgetId(i))
-            .collect()
-    };
+    let mut done = rustc_hash::FxHashSet::default();
     let mut known = KnownBounds::default();
-    let mut changed = Vec::new();
-    for id in watching {
-        let Some(b) = bounds_in(vm, id, 0, &mut known) else {
-            continue;
+    notify_chain(vm, id, None, &mut done, &mut known, 0);
+}
+
+/// How deep `OnSizeChanged` handlers run inside layouts: deeper, a size
+/// waits for a later layout (a handler that resizes what it hangs on
+/// would run without end; unverified: the client's bound).
+const MAX_NESTED_LAYOUTS: u32 = 10;
+
+/// [`notify`] for a widget after the widgets it is anchored to, each once;
+/// `asker` the widget anchored to it whose layout asked for it.
+fn notify_chain(
+    vm: &mut Vm,
+    id: WidgetId,
+    asker: Option<WidgetId>,
+    done: &mut rustc_hash::FxHashSet<usize>,
+    known: &mut KnownBounds,
+    depth: usize,
+) {
+    if depth > 64 || id.0 >= engine(vm).world.widgets.len() || !done.insert(id.0) {
+        return;
+    }
+    for t in anchor_targets(vm, id) {
+        notify_chain(vm, t, Some(id), done, known, depth + 1);
+    }
+    notify(vm, id, asker, known);
+}
+
+/// The widgets a widget's rectangle comes from: those its points name (its
+/// parent for a point without one); without points, the slider, status
+/// bar or scroll frame that places it.
+fn anchor_targets(vm: &Vm, id: WidgetId) -> Vec<WidgetId> {
+    let w = &engine(vm).world.widgets[id.0];
+    let mut out: Vec<WidgetId> = Vec::new();
+    if w.points.is_empty() {
+        if let Some((slider, _, _)) = crate::bars::thumb_place(vm, id) {
+            out.push(slider);
+        } else if let Some((bar, ..)) = crate::bars::fill_place(vm, id) {
+            out.push(bar);
+        } else if let Some(p) = w.scroll_parent {
+            out.push(p);
+        }
+        return out;
+    }
+    for p in &w.points {
+        let t = match p.relative {
+            Some(v) => widget_of(vm, v),
+            None => w.parent,
         };
-        let s = layout_scale(engine(vm), id);
-        let now = (b.2 / s, b.3 / s);
-        let w = &engine(vm).world.widgets[id.0];
-        let set = (w.width, w.height);
-        let before = engine_mut(vm)
-            .world
-            .laid_out
-            .insert(id.0, now)
-            .unwrap_or(set);
-        let moved = (now.0 - before.0).abs() > 1e-6 || (now.1 - before.1).abs() > 1e-6;
-        if moved && !told.contains(&id.0) {
-            changed.push((id, now));
+        if let Some(t) = t.filter(|t| *t != id && !out.contains(t)) {
+            out.push(t);
         }
     }
-    for (id, (width, height)) in changed {
-        let trusted_only = engine(vm).world.widgets[id.0].forbidden_aspects
-            & crate::protection::UNTRUSTED_LAYOUT_SCRIPTS
-            != 0;
-        let size = [Value::Num(width), Value::Num(height)];
-        run_script_of(vm, id, "OnSizeChanged", &size, trusted_only);
+    out
+}
+
+/// Whether a widget has an `OnSizeChanged` script or hook.
+fn listens_for_size(vm: &mut Vm, id: WidgetId) -> bool {
+    if engine(vm).world.size_watching.binary_search(&id.0).is_err() {
+        return false;
+    }
+    let key = vm.heap.intern(b"OnSizeChanged");
+    let w = &engine(vm).world.widgets[id.0];
+    !vm.heap.table(w.scripts).get_str(key).is_nil() || !vm.heap.table(w.hooks).get_str(key).is_nil()
+}
+
+/// An anchored widget with an `OnSizeChanged` handler laid out: told of
+/// its size when it changed since it was last told (its first rectangle
+/// too). When the handler resized a frame the widget is anchored to while
+/// it was laid out for `asker`, a frame anchored to it not placed yet,
+/// `asker` gets no place: until the next layout pass if this was the
+/// widget's first rectangle, else until it is anchored again (SuuUI's
+/// `anchors3` and `anchors4` probes, WoW Forever 70862; decision T605). A
+/// widget laid out for itself (its own `GetSize` in a script) loses
+/// nothing (unverified).
+fn notify(vm: &mut Vm, id: WidgetId, asker: Option<WidgetId>, known: &mut KnownBounds) {
+    if engine(vm).world.widgets[id.0].points.is_empty() || !listens_for_size(vm, id) {
+        return;
+    }
+    let Some(b) = bounds_in(vm, id, 0, known) else {
+        return;
+    };
+    let s = layout_scale(engine(vm), id);
+    let now = (b.2 / s, b.3 / s);
+    let before = engine(vm).world.laid_out.get(&id.0).copied();
+    if before.is_some_and(|b| (now.0 - b.0).abs() <= 1e-6 && (now.1 - b.1).abs() <= 1e-6) {
+        return;
+    }
+    if engine(vm).world.resolving >= MAX_NESTED_LAYOUTS {
+        return;
+    }
+    engine_mut(vm).world.laid_out.insert(id.0, now);
+    let targets = anchor_targets(vm, id);
+    let sizes = |vm: &Vm| -> Vec<(f64, f64)> {
+        let e = engine(vm);
+        targets
+            .iter()
+            .map(|t| (e.world.widgets[t.0].width, e.world.widgets[t.0].height))
+            .collect()
+    };
+    let sizes_before = sizes(vm);
+    // An object whose untrusted layout scripts are forbidden runs only
+    // its secure ones (the documentation's `UntrustedLayoutScriptExecution`;
+    // unverified by a probe).
+    let trusted_only = engine(vm).world.widgets[id.0].forbidden_aspects
+        & crate::protection::UNTRUSTED_LAYOUT_SCRIPTS
+        != 0;
+    engine_mut(vm).world.resolving += 1;
+    let size = [Value::Num(now.0), Value::Num(now.1)];
+    run_script_of(vm, id, "OnSizeChanged", &size, trusted_only);
+    engine_mut(vm).world.resolving -= 1;
+    known.clear();
+    if let Some(c) = asker
+        && sizes(vm) != sizes_before
+    {
+        let w = &engine(vm).world.widgets[c.0];
+        if w.points.is_empty() || w.rect_seen.get() || w.unplaced != Unplaced::No {
+            return;
+        }
+        let e = engine_mut(vm);
+        if before.is_some() {
+            e.world.widgets[c.0].unplaced = Unplaced::UntilAnchored;
+        } else {
+            e.world.widgets[c.0].unplaced = Unplaced::UntilPass;
+            e.world.unplaced_until_pass.push(c);
+        }
+        mark(e, c);
+    }
+}
+
+/// A widget anchored (`SetPoint`, `SetAllPoints`): not placed until laid
+/// out, a place it was left without given back (decision T605).
+fn reanchored(e: &mut Engine, id: WidgetId) {
+    let w = &mut e.world.widgets[id.0];
+    w.unplaced = Unplaced::No;
+    w.rect_seen.set(false);
+    if e.world.anchored_since.last() != Some(&id) {
+        e.world.anchored_since.push(id);
     }
 }
 
@@ -3089,16 +3277,25 @@ fn text_extent(vm: &Vm, id: WidgetId, width: Option<f64>) -> (f64, f64) {
     (widest, h)
 }
 
+/// [`laid_out_size`] asked for: an anchored widget laid out now
+/// ([`resolve`]).
+fn asked_size(vm: &mut Vm, id: WidgetId) -> (f64, f64) {
+    if !engine(vm).world.widgets[id.0].points.is_empty() {
+        resolve(vm, id);
+    }
+    laid_out_size(vm, id)
+}
+
 fn get_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(laid_out_size(vm, id).0)])
+    Ok(vec![Value::Num(asked_size(vm, id).0)])
 }
 
 fn get_height(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(laid_out_size(vm, id).1)])
+    Ok(vec![Value::Num(asked_size(vm, id).1)])
 }
 
 fn get_size(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    let (w, h) = laid_out_size(vm, id);
+    let (w, h) = asked_size(vm, id);
     Ok(vec![Value::Num(w), Value::Num(h)])
 }
 
@@ -3308,7 +3505,21 @@ fn bounds_in(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
     b
 }
 
+/// [`laid_out_rect`], none for a widget a layout left without a place
+/// (decision T605); a rectangle found places it.
 fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Option<Rect> {
+    let w = &engine(vm).world.widgets[id.0];
+    if w.unplaced != Unplaced::No {
+        return None;
+    }
+    let b = laid_out_rect(vm, id, depth, known);
+    if b.is_some() {
+        w.rect_seen.set(true);
+    }
+    b
+}
+
+fn laid_out_rect(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Option<Rect> {
     let e = engine(vm);
     let w = &e.world.widgets[id.0];
     // UIParent and WorldFrame cover the screen.
@@ -3461,6 +3672,7 @@ fn point_rank(point: &str) -> usize {
 }
 
 fn edge(vm: &mut Vm, id: WidgetId, f: fn((f64, f64, f64, f64)) -> f64) -> Ret {
+    resolve(vm, id);
     let s = layout_scale(engine(vm), id);
     Ok(vec![
         bounds(vm, id, 0).map_or(Value::Nil, |b| Value::Num(f(b) / s)),
@@ -3484,6 +3696,7 @@ fn get_top(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 }
 
 fn get_center(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    resolve(vm, id);
     let s = layout_scale(engine(vm), id);
     Ok(match bounds(vm, id, 0) {
         Some(b) => vec![
