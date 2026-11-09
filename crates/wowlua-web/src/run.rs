@@ -406,6 +406,7 @@ fn suite<'a>(
             std::sync::Arc::new(crate::installation::GameData(casc))
                 as std::sync::Arc<dyn wowlua_test::screenshots::Camera>
         }),
+        perf: false,
         before_test: None,
         after_test: None,
         after_file: None,

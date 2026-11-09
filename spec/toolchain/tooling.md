@@ -134,7 +134,7 @@ the file, naming the addon. Coverage counts only the addon's own files.
 | `@beforeEach`, `@afterEach`, `@beforeAll`, `@afterAll` | Hooks, per file |
 | `@skip(reason?)`, `@only` | Test selection |
 | `@flavors("standard", …)` | Run only for these flavors |
-| `config({ lifecycle: "auto" \| "manual", timeout?, profile?, platform?, screen? })` | Per-file runner settings (`profile`: the world profile; `platform`: `"mac"` or `"windows"`, the machine the client runs on, decision T236; `screen`: `{ width, height, dpiScale?, uiScale? }`, the screen it draws on, decision T237; all read before anything loads) |
+| `config({ lifecycle: "auto" \| "manual", timeout?, profile?, platform?, screen?, perf? })` | Per-file runner settings (`profile`: the world profile; `platform`: `"mac"` or `"windows"`, the machine the client runs on, decision T236; `screen`: `{ width, height, dpiScale?, uiScale? }`, the screen it draws on, decision T237; `perf = true`: the file is a perf scenario, §16.1.8, decision T613; all read before anything loads) |
 | `describe(name, fn)` | Grouping for runtime-generated tests (`test(name)(fn)` inside `fn`) |
 | `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`, `toMatchSnapshot`, `toBeSecret`; for widgets `toBeShown`, `toBeVisible`, `toHaveText`, `toHaveSize`, `toBeAnchoredTo`, `toMatchScreenshot` ([Debugger §18.12.5](debugger.md#18125-in-tests)). Negation with `expect(v).never.toBe(x)`. Type-checked (below). Expected values may hold wildcards (decision T261): `anything` matches any value but `nil`, `ofType(kind)` any value whose `type()` is `kind`, in `toEqual` (at any depth) and `toHaveBeenCalledWith`; messages name them. |
 | `@cases(list)` | Runs a test once per case, the case's values as its arguments (below) |
@@ -643,6 +643,83 @@ end
   `unoptimized` and `optimized` with `nanos` and `spread`, and `speedup`).
 - A benchmark that raises an error is reported with it and fails the run
   (exit code 1), as does a file that does not load or compile.
+
+### 16.1.8 Performance scenarios (`wowlua perf`)
+
+```
+wowlua perf run [filter…] [--flavor <f>] [--baseline <file>] [--threshold <pct>] [--json]
+wowlua perf baseline [filter…] [--flavor <f>] [--baseline <file>]
+```
+
+`wowlua perf` measures what the addon costs while the game is played:
+scenarios played in the emulated client, measured frame by frame, and
+compared with a baseline kept with the sources, so a change shows what it
+made cheaper or dearer (decision T613).
+
+```wowlua
+-- tests/perf/idle.test.wowlua
+import test, beforeAll, config from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+config({ perf = true, profile = "raid" })
+
+@beforeAll
+local function warmUp()
+    mock.advanceFrames(60)          -- the login's warm-ups: set up, not measured
+end
+
+@test("idle")
+local function idle()
+    mock.advanceFrames(600)         -- ten seconds with nothing happening
+end
+```
+
+- **Scenarios.** A test file with `config({ perf = true })` is a perf
+  scenario (read from its syntax before anything loads): `wowlua test`
+  leaves it out without loading it, and `wowlua perf` runs only such
+  files. It compiles, loads and runs as any test file does (§16.1.2: a
+  fresh client per file, its tests in order, hooks, waits, `wowlua:mock`);
+  each of its tests is a **phase**, measured on its own, and `@beforeAll`
+  sets up without being measured. A failing test fails the run, as in
+  `wowlua test`.
+- **What runs.** One flavor (the first, or each `--flavor`), files in
+  parallel (`--jobs`). `filter` selects files and phases as for `wowlua
+  test`. A phase plays the game with `mock.advanceFrames`,
+  `mock.waitSeconds` and the like; what runs in its game frames is
+  measured, so a phase drives its work inside the frames (an `OnUpdate`
+  script, timers, the events the mocks fire as time passes).
+- **Measures** (per phase, from the profiler, [Debugger
+  §18.8](debugger.md#188-profiler)). Over the phase's game frames (those
+  its test ran, its `@beforeEach` and `@afterEach` hooks included), the
+  addon's part of each frame (its own code and what that calls, decision
+  T612): `instructions`, `native` (the game's functions' estimated cost,
+  decision T611) and `bytes` (allocated: the garbage it makes), each as
+  `mean`, `p95` and `max` per frame; `all.instructions.mean`, the whole
+  client's instructions per frame; `gc`, the garbage collections in those
+  frames; and after the phase, following a full collection, each addon's
+  memory in KiB (`memory.<Addon>`, as `GetAddOnMemoryUsage` counts it,
+  decision T610). Every measure is a count, the same on every machine and
+  every run; host times are left out. A phase without frames has its
+  memory only. The frame where the addon cost the most (instructions and
+  native estimate) is named with its three costliest functions, a place to
+  start looking.
+- **Results.** `run` prints each scenario's phases with their measures,
+  and the baseline's value and the change in percent where the baseline
+  has that measure; a change past `--threshold` percent (2 by default) is
+  `better` or `worse` (every measure is better lower). It writes the
+  results to `<build.out>/perf/results.json`, and `--json` prints them:
+  `version` 1, `native` (what the estimate is), and `scenarios`, each with
+  its `file`, `flavor` and `phases` (`name`, `frames`, `metrics` by name,
+  `worst` with its `frame` and `top` functions).
+- **Baseline.** `baseline` runs the same and writes its results as the
+  baseline, `tests/perf-baseline.json` unless `--baseline` names another
+  file, to be committed with the change that made the numbers. A run of
+  some scenarios replaces only theirs. A measure or phase the baseline
+  lacks is shown without a comparison. A baseline made with another
+  wowlua version may differ by the emulator's changes alone.
+- **Exit code** 1 when a test fails, a scenario does not load or compile,
+  or a measure is worse than the baseline past the threshold; `baseline`
+  writes nothing when a test fails.
 
 ## 16.2 Language server (`wowlua lsp`)
 

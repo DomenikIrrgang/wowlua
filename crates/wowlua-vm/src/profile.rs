@@ -152,6 +152,11 @@ const MAX_FRAMES: usize = 100_000;
 /// decisions T495, T612).
 pub const FRAME_TREES: usize = 600;
 
+/// What a report says of the natives' cost wherever it shows (decision
+/// T611).
+pub const NATIVE_NOTE: &str = "estimated: the game's functions weighted by wowlua's model \
+     (in instructions' worth), not measured in the client";
+
 /// Functions each frame's summary names by default (decision T612).
 pub const TOP_FUNCTIONS: usize = 5;
 

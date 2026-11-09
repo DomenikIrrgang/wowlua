@@ -669,6 +669,62 @@ the optimized build is says what an optimization buys, not what a frame in
 WoW costs. For that, record in the game with the dev window (see
 [Debugging](debugging.md)).
 
+## Perf scenarios
+
+A benchmark times one function. A perf scenario plays a stretch of the game
+and measures what your addon costs in it, frame by frame: a test file with
+`config({ perf = true })`. `wowlua test` leaves it out; `wowlua perf run`
+plays it, each test a phase measured on its own, and `@beforeAll` sets up
+without being measured.
+
+```wowlua title=tests/perf/combat.test.wowlua
+import test, beforeAll, config from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+config({ perf = true, profile = "raid" })
+
+@beforeAll
+local function warmUp()
+    mock.advanceFrames(60)                -- after login, before measuring
+end
+
+@test("idle")
+local function idle()
+    mock.advanceFrames(600)               -- ten seconds, nothing happening
+end
+
+@test("combat")
+local function combat()
+    mock.player:enterCombat()
+    mock.advanceFrames(300)
+end
+```
+
+```console
+$ wowlua perf baseline     # measure and write tests/perf-baseline.json; commit it
+$ wowlua perf run          # measure again and compare with the baseline
+$ wowlua perf run combat   # only what matches "combat"
+
+tests/perf/combat.test.wowlua (camelot)
+  combat (300 frames)
+    instructions.mean            1840          1790     +2.8%  worse
+    instructions.p95             2210          2210     +0.0%
+    ...
+```
+
+Each phase shows your addon's part of every frame (its code and the game's
+functions it calls): Lua instructions, the game's functions' estimated cost
+(`native`) and the memory it allocated (`bytes`, the garbage it leaves),
+each as the mean, the 95th percentile and the worst frame; the whole
+client's instructions per frame; the garbage collections; and each addon's
+memory after the phase (`memory.MyAddon`). The frame where your addon cost
+the most is named with its costliest functions. These are counts, the same
+on every machine and every run, so a change past 2% (`--threshold`) is a
+real change: `better`, or `worse`, which fails the run. Write the baseline
+again, with `wowlua perf baseline`, when a change made things faster or was
+worth what it costs. The numbers rank your addon's work; they are not the
+milliseconds a frame takes in WoW.
+
 ## In CI
 
 Tests need no game, so they run wherever wowlua does. The `github` reporter
