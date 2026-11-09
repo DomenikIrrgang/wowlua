@@ -2454,6 +2454,7 @@ calls on 53 widget kinds).
 The probes to run in the client next, what each answers and how to run it, are
 in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 
+- Batched (2026-11-09)
 - Still to run (2026-10-21, postponed)
 - The answers battery's new calls
 - The collections (decision T235)
