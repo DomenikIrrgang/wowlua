@@ -22,7 +22,10 @@
 //! unlocks the items, resets the money, `MAIL_SEND_SUCCESS`, `MAIL_SUCCESS`,
 //! "Mail sent.", the items gone and the postage paid in its next packets.
 //! `CloseMail`: `SECURE_TRANSFER_CANCEL` and the interaction's hides; the
-//! server's `UPDATE_PENDING_MAIL` a round trip later.
+//! server's `UPDATE_PENDING_MAIL` a round trip later. Walking away
+//! (`/stdtest engine scenario mailwalk`) ends the interaction past its
+//! range: `SECURE_TRANSFER_CANCEL` and the mailbox's hide, each twice, no
+//! `MAIL_CLOSED` ([`moved_away`]).
 //!
 //! Recorded too (`/stdtest engine scenario mail2`, the inbox's first fetch
 //! of a session): the inbox empty (`GetInboxNumItems` 0) till the server's
@@ -78,6 +81,9 @@ pub struct Mail {
     /// and emptied).
     pub letters: Vec<TableRef>,
     pub open: Option<UnitId>,
+    /// The player walking away is ending the interaction (its events
+    /// running: `CloseMail` then does nothing).
+    pub leaving: bool,
     /// The invoices' players' names known.
     pub names: bool,
     /// The send frame showing (`SetSendMailShowing`).
@@ -991,21 +997,69 @@ fn sent_items(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `CloseMail()`: `SECURE_TRANSFER_CANCEL`, the interaction's hides; the
-/// server's `UPDATE_PENDING_MAIL` a round trip later.
-fn close_mail(vm: &mut Vm, _c: NativeCall) -> Ret {
-    if mail_mut(vm).open.take().is_none() {
-        return Ok(vec![]);
-    }
+/// The attachments given back and the send frame's state dropped, as the
+/// mailbox closes.
+fn release_attachments(vm: &mut Vm) {
     let attached: Vec<(i64, usize)> = mail(vm).attached.iter().flatten().copied().collect();
     for (bag, slot) in attached {
         cursor::lock(vm, &Source::Bag(bag, slot), false);
     }
+    let m = mail_mut(vm);
+    m.attached = vec![None; ATTACHMENTS];
+    m.sending = false;
+}
+
+/// The player walked away from the open mailbox `unit` (`unit:setDistance`,
+/// or the player moving): past the interaction's range the game ends it
+/// (`/stdtest engine scenario mailwalk`, WoW Forever 70862, 2026-11-09):
+/// `SECURE_TRANSFER_CANCEL` twice, then
+/// `PLAYER_INTERACTION_MANAGER_FRAME_HIDE(17)` twice, the interaction
+/// still on during the first; no `MAIL_CLOSED`, no hide of type 0.
+/// Blizzard's mail frame closes on the hide (its `CloseMail` then finds
+/// the mailbox closed). The range is the NPCs' (`INTERACT_RANGE`, 5 yards;
+/// unverified for a mailbox: the recording closed it between 2.5 and 3.8
+/// yards from where the player stood, the mailbox's own place unknown).
+/// Decision T609.
+pub fn moved_away(vm: &mut Vm, unit: UnitId, distance: Option<f64>) {
+    if mail(vm).open != Some(unit) || mail(vm).leaving {
+        return;
+    }
+    if !distance.is_some_and(|d| d > crate::quests::INTERACT_RANGE) {
+        return;
+    }
+    mail_mut(vm).leaving = true;
+    release_attachments(vm);
+    fire(vm, "SECURE_TRANSFER_CANCEL", &[]);
+    fire(vm, "SECURE_TRANSFER_CANCEL", &[]);
+    engine_mut(vm).world.hide_keeps_interaction = true;
+    fire(
+        vm,
+        "PLAYER_INTERACTION_MANAGER_FRAME_HIDE",
+        &[Value::Num(MAILBOX)],
+    );
     {
         let m = mail_mut(vm);
-        m.attached = vec![None; ATTACHMENTS];
-        m.sending = false;
+        m.open = None;
+        m.leaving = false;
     }
+    if engine(vm).units.npc == Some(unit) {
+        engine_mut(vm).units.npc = None;
+    }
+    fire(
+        vm,
+        "PLAYER_INTERACTION_MANAGER_FRAME_HIDE",
+        &[Value::Num(MAILBOX)],
+    );
+}
+
+/// `CloseMail()`: `SECURE_TRANSFER_CANCEL`, the interaction's hides; the
+/// server's `UPDATE_PENDING_MAIL` a round trip later. Nothing while the
+/// player's walking away ends the interaction ([`moved_away`]).
+fn close_mail(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if mail(vm).leaving || mail_mut(vm).open.take().is_none() {
+        return Ok(vec![]);
+    }
+    release_attachments(vm);
     engine_mut(vm).units.npc = None;
     fire(vm, "SECURE_TRANSFER_CANCEL", &[]);
     fire(

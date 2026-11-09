@@ -298,7 +298,7 @@ fn get_atlas(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// file the loose file's ID, nil for a file there is not (recorded:
 /// `"NoSuchFile"`, `""`); an atlas's, its file's (unverified); nothing set,
 /// a color, or another value nil (recorded: `nil`, `{}`).
-fn texture_file(vm: &mut Vm, id: WidgetId) -> Value {
+pub(crate) fn texture_file(vm: &mut Vm, id: WidgetId) -> Value {
     let props = engine(vm).world.widgets[id.0].props;
     let set = widgets::stored_args(vm, props, "Texture").and_then(|v| v.first().copied());
     let answer = match set.map(|v| vm.hidden(v)) {

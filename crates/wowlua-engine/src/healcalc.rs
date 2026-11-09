@@ -12,9 +12,11 @@
 //! it. A unit's health is secret (`UnitHealth`: documented
 //! `SecretReturns`; its absorbs recorded secret 0s), so a filled
 //! calculator's amounts and `clamped` are secrets and `HasSecretValues` is
-//! true. Unverified: the modes' defaults (the enumerations' first, 0; the
-//! overflow 1), the order of the reductions
-//! and clamps, that a calculator nothing filled reads plain 0s.
+//! true. Recorded (2026-11-09): the modes' defaults (the enumerations'
+//! first, 0), the overflow's (1.05: the maximum incoming heals are the
+//! maximum health times 1.05 less the health), the amounts of a calculator
+//! given its values. Unverified: the order of the reductions and clamps
+//! beyond those, that a calculator nothing filled reads plain 0s.
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
@@ -320,7 +322,8 @@ fn incoming_heal_clamp_mode(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     mode(vm, id, "IncomingHealClampMode")
 }
 
-/// The incoming heals' overflow: what was set, else 1 (unverified).
+/// The incoming heals' overflow: what was set, else 1.05 as the client's
+/// float keeps it, `1.0499999523163` (recorded 2026-11-09, decision T486).
 fn incoming_heal_overflow(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(overflow(vm, id))])
 }
@@ -331,7 +334,7 @@ fn overflow(vm: &mut Vm, id: WidgetId) -> f64 {
         .and_then(|v| v.first().copied())
     {
         Some(Value::Num(n)) => n,
-        _ => 1.0,
+        _ => f64::from(1.05f32),
     }
 }
 

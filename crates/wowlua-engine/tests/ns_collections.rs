@@ -40,12 +40,13 @@ return #C_MountJournal.GetMountIDs(), source.itemID, source.visualID,
     C_TransmogCollection.GetSourceItemID(21598), statID, GetNumTitles(), GetCurrentTitle(),
     HasCompletedAnyAchievement(), PlayerHasToy(1), pcall(C_ToyBox.GetToyInfo)",
     );
-    // The three mounts whose info was recorded (the answers battery's two,
-    // the full probe's first of the journal) are listed.
+    // The four mounts whose info was recorded (the answers battery's two,
+    // the full probe's first of the journal, the batched probes' 6) are
+    // listed.
     assert_eq!(
         &r[..9],
         [
-            "3", "44803", "11257", "44803", "60", "111", "-1", "true", "false"
+            "4", "44803", "11257", "44803", "60", "111", "-1", "true", "false"
         ]
     );
     assert_eq!(r[9], "false");

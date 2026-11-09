@@ -713,6 +713,15 @@ fn ui_colors(vm: &mut Vm, c: NativeCall) -> Ret {
 fn color_entries(flavor: &str) -> Option<Vec<Rec>> {
     let mut out = Vec::new();
     for (name, argb) in colors_of(flavor)? {
+        // The friendly health color's alpha: 0 in the installed client's
+        // table (70658 on), 1 as the client answers it (recorded on 70425
+        // and again on 70862, 2026-11-09: a hotfix over the table; the
+        // table's other colors of alpha 0 answer 0). Decision T554.
+        let argb = if name == "COMPACT_UNIT_FRAME_FRIENDLY_HEALTH_COLOR" {
+            argb | 0xFF00_0000
+        } else {
+            argb
+        };
         // (the client's: the byte times 1/255, in floats)
         let byte = |shift: u32| {
             Rec::Num(f64::from(
@@ -1102,19 +1111,16 @@ mod tests {
             .filter(|c| !matches!(c, Rec::Table(f) if added.contains(&f[0].1)))
             .collect();
         assert_eq!(ours.len(), theirs.len());
-        // Its alpha: 0 in 70658's and 70707's table, 1 as recorded on 70425
-        // (the build's change or a hotfix: tests/ingame/PROBES.md, "The
-        // Camelot update").
-        let changed = Rec::Str("COMPACT_UNIT_FRAME_FRIENDLY_HEALTH_COLOR".into());
-        let mut differ = Vec::new();
-        for (mine, (i, recorded)) in ours.iter().zip(&theirs) {
-            if plain(mine) != plain(recorded) {
-                differ.push(*i);
-                let Rec::Table(fields) = mine else { panic!() };
-                assert_eq!(fields[0].1, changed, "color {i}");
-            }
-        }
-        assert_eq!(differ.len(), 1, "{differ:?}");
+        // (the friendly health color's alpha 1 over the table's 0, as
+        // recorded on 70425 and on 70862: tests/ingame/PROBES.md, "The
+        // Camelot update")
+        let differ: Vec<u32> = ours
+            .iter()
+            .zip(&theirs)
+            .filter(|(mine, (_, recorded))| plain(mine) != plain(recorded))
+            .map(|(_, (i, _))| *i)
+            .collect();
+        assert!(differ.is_empty(), "{differ:?}");
         assert!(color_entries("vanilla").is_some_and(|c| c.len() > 150));
     }
 

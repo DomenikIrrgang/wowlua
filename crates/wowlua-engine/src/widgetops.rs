@@ -19,17 +19,17 @@
 //! - `AdjustPointsOffset(x, y)`: every anchor moved by (x, y);
 //!   `ClearPointsOffset()`: every anchor's offset 0.
 //! - The clears: a button's
-//!   `ClearNormalTexture()` and the other states' (the texture emptied and
-//!   hidden, still the button's: decision T576), `FontString:ClearText()`, `ClearParentKey()`,
+//!   `ClearNormalTexture()` and the other states' (the texture emptied,
+//!   still shown and the button's: decision T576), `FontString:ClearText()`, `ClearParentKey()`,
 //!   `ResetTexCoord()`, `StopAnimating()` (every animation group of the
-//!   region stopped).
+//!   region stopped), `ClearModel()` (`GetModelFileID` nil after).
 //!
-//! Unverified, none recorded: which frames `Lower` counts (the shown ones
-//! of the strata here), `Insert`'s
-//! `OnTextChanged` (`false`, the frame's update after, as `SetText`'s),
-//! a selection given backwards, a box without `SetHistoryLines` keeping
-//! no line, the arrows' order (`OnArrowPressed` first), `ClearPointsOffset` zeroing the offsets
-//! `SetPoint` gave.
+//! Recorded (2026-11-09, decision T289): `Raise` and `Lower`'s levels,
+//! `Insert` in place of the selection and its `OnTextChanged(true)` in the
+//! frame's update after, a selection given backwards (to the text's end),
+//! a box without `SetHistoryLines` keeping no line, `CopyFontObject`
+//! copying, `ClearPointsOffset` zeroing the offsets `SetPoint` gave.
+//! Unverified: the arrows' order (`OnArrowPressed` first).
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, Value, Vm};
@@ -155,21 +155,18 @@ fn selection(vm: &mut Vm, id: WidgetId, text: &str) -> Option<(usize, usize)> {
 }
 
 /// `HighlightText([start [, end]])`: selects from `start` (0) to `end`
-/// (the text's end; a negative one too), byte offsets as the cursor's.
+/// (the text's end; a negative one too, and one before `start`: recorded
+/// 2026-11-09, `HighlightText(4, 1)` on "abcdef" then `Insert("Z")` gives
+/// "abcdZ"), byte offsets as the cursor's.
 fn highlight_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let len = text_of(vm, id).len() as f64;
     let start = match vm.hidden(c.arg(2)) {
-        Value::Num(n) => n.max(0.0),
+        Value::Num(n) => n.clamp(0.0, len),
         _ => 0.0,
     };
     let end = match vm.hidden(c.arg(3)) {
-        Value::Num(n) if n >= 0.0 => n.min(len),
+        Value::Num(n) if n >= start => n.min(len),
         _ => len,
-    };
-    let (start, end) = if start <= end {
-        (start, end)
-    } else {
-        (end, start)
     };
     widgets::store(vm, id, HIGHLIGHT, &[Value::Num(start), Value::Num(end)]);
     Ok(vec![])
@@ -235,8 +232,9 @@ pub fn text_set(vm: &mut Vm, id: WidgetId) {
     unset(vm, id, "CursorPosition");
 }
 
-/// `EditBox:Insert(text)`: the text in, its `OnTextChanged(false)` in the
-/// frame's update, as `SetText`'s.
+/// `EditBox:Insert(text)`: the text in, its `OnTextChanged` in the frame's
+/// update, as `SetText`'s, but telling user input (`true`; recorded
+/// 2026-11-09, decision T289).
 fn insert_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let text = match vm.hidden(c.arg(2)) {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
@@ -247,8 +245,12 @@ fn insert_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         _ => String::new(),
     };
     insert(vm, id, &text);
-    if !engine(vm).world.text_set.contains(&id) {
-        engine_mut(vm).world.text_set.push(id);
+    let w = &mut engine_mut(vm).world;
+    if !w.text_set.contains(&id) {
+        w.text_set.push(id);
+    }
+    if !w.text_inserted.contains(&id) {
+        w.text_inserted.push(id);
     }
     Ok(vec![])
 }
@@ -377,10 +379,11 @@ fn same(a: Value, b: Value) -> bool {
 }
 
 /// A button's `Clear…Texture()`: the state's texture emptied (no file or
-/// atlas, hidden) but still the button's, `Get…Texture` answering it:
+/// atlas, still shown) and still the button's, `Get…Texture` answering it:
 /// Forever 70707's item buttons mask their normal texture after their
 /// `OnLoad`, in which the professions' recraft slot clears it (decision
-/// T576; unverified, tests/ingame/PROBES.md "The Camelot update").
+/// T576; recorded 2026-11-09 on 70862: the same texture, `GetTexture`
+/// nil, `IsShown` true).
 fn clear_state_texture(vm: &mut Vm, id: WidgetId, state: &str) -> Ret {
     crate::widgets::mark(crate::engine_mut(vm), id);
     let stem = format!("{state}Texture");
@@ -389,7 +392,6 @@ fn clear_state_texture(vm: &mut Vm, id: WidgetId, state: &str) -> Ret {
         .and_then(|v| v.first().copied())
         .and_then(|v| widgets::widget_of(vm, v));
     if let Some(r) = region {
-        engine_mut(vm).world.widgets[r.0].shown = false;
         widgets::unstore(vm, r, "Texture");
         widgets::unstore(vm, r, "Atlas");
     }

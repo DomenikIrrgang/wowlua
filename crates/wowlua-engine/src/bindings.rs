@@ -850,23 +850,17 @@ fn get_addon_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let (name, title, notes) = (a.name.clone(), meta("Title"), meta("Notes"));
     let on_demand = a.on_demand;
     let title = vm.str(&title.unwrap_or_else(|| name.clone()));
-    // A load-on-demand addon not loaded yet: "DEMAND_LOADED", the reason
-    // addons check before `LoadAddOn` (AtlasLoot's loader takes any other
-    // as the module being broken, and loaded none of its modules).
-    let loaded = engine(vm)
-        .world
-        .loaded_addons
-        .contains(&name.to_lowercase());
-    let reason = if on_demand && !loaded {
-        "DEMAND_LOADED"
-    } else {
-        ""
-    };
+    // A load-on-demand addon: not loadable, "DEMAND_LOADED", before
+    // `LoadAddOn` and after it alike (WoW Forever 70862, 2026-11-09:
+    // AtlasLoot's modules, loaded or not; decision T354), the reason addons
+    // check before `LoadAddOn` (AtlasLoot's loader takes any other as the
+    // module being broken, and loaded none of its modules).
+    let reason = if on_demand { "DEMAND_LOADED" } else { "" };
     Ok(vec![
         vm.str(&name),
         title,
         notes.map_or(Value::Nil, |n| vm.str(&n)),
-        Value::Bool(true),
+        Value::Bool(!on_demand),
         vm.str(reason),
         vm.str("INSECURE"),
     ])
@@ -1202,6 +1196,22 @@ pub fn binding_text(vm: &mut Vm, key: &str) -> String {
 /// recorded (`tests/ingame/PROBES.md`).
 pub fn binding_text_of(vm: &mut Vm, key: &str, abbreviate: bool) -> String {
     let mac = crate::engine(vm).platform == crate::Platform::Mac;
+    // A modifier's name: abbreviated with the client's `*_KEY_TEXT_ABBR`,
+    // else as it is; on a Mac the Command key's name, on Windows "META" as
+    // it is (recorded on both, decision T236).
+    let modifier = |vm: &mut Vm, name: &str| -> String {
+        let global = if name == "META" && mac { "CMD" } else { name };
+        let abbr = abbreviate
+            .then(|| global_text(vm, &format!("{global}_KEY_TEXT_ABBR")))
+            .flatten();
+        match abbr {
+            Some(a) => a,
+            None if name == "META" && mac => {
+                global_text(vm, "CMD_KEY_TEXT").unwrap_or_else(|| "CMD".to_string())
+            }
+            None => name.to_string(),
+        }
+    };
     // The modifiers, then the key (which may be "-" itself: "CTRL--").
     let mut rest = key;
     let mut parts = Vec::new();
@@ -1210,21 +1220,14 @@ pub fn binding_text_of(vm: &mut Vm, key: &str, abbreviate: bool) -> String {
             .into_iter()
             .find(|m| rest.starts_with(m) && rest.len() > m.len());
         let Some(m) = found else { break };
-        let name = &m[..m.len() - 1];
-        // On a Mac the Command key's name, on Windows "META" as it is
-        // (recorded on both, decision T236).
-        let global = if name == "META" && mac { "CMD" } else { name };
-        let abbr = abbreviate
-            .then(|| global_text(vm, &format!("{global}_KEY_TEXT_ABBR")))
-            .flatten();
-        parts.push(match abbr {
-            Some(a) => a,
-            None if name == "META" && mac => {
-                global_text(vm, "CMD_KEY_TEXT").unwrap_or_else(|| "CMD".to_string())
-            }
-            None => name.to_string(),
-        });
+        parts.push(modifier(vm, &m[..m.len() - 1]));
         rest = &rest[m.len()..];
+    }
+    // A modifier alone is named as one: "SHIFT" abbreviated "s", "META"
+    // "CMD" on a Mac (recorded 2026-11-09, decision T608).
+    if matches!(rest, "ALT" | "CTRL" | "SHIFT" | "META") {
+        parts.push(modifier(vm, rest));
+        return parts.join("-");
     }
     // A Mac's own key names first (`KEY_DELETE_MAC` "Del"; Windows' "Delete").
     let shown = mac

@@ -24,6 +24,12 @@ when each step ran. One step per frame, as lines typed one after another;
 a step's "about N seconds later" waits that long. What the steps make is
 hidden after. These items are covered: do not run them by hand again.
 
+**Ran on 2026-11-09** (WoW Forever 1.60.1.70862, a level 36 paladin with
+AtlasLoot and SuuUI): the answers, compared with the emulator's run of the
+same steps, are in "Answered by the batched run (2026-11-09)" below; the
+items they answered left the owed sections, and what stays open is marked
+in its section. Run it again only for new steps.
+
 - **Owed from the M12 screenshots**: 1 (both steps, and step 1 again after
   step 2; step 2 loads `AtlasLootClassic_Crafting` if it is installed, a
   load-on-demand addon, else the client answers for a missing one), 2, 3,
@@ -71,9 +77,6 @@ hidden after. These items are covered: do not run them by hand again.
   the world is drawn 1; Found with SuuUI 2 (SuuUI's font, if installed), 7
   and 9.
 
-wowlua answers M12.19.9 `100 false false` now (the item says `100 true
-true`, written before decision T605).
-
 The steps:
 
 1. On the desktop, in `tests/ingame`: `wowlua install --client _forever_`
@@ -90,23 +93,38 @@ The steps:
    `WTF/Account/<account>/SavedVariables/StdTest.lua`; its
    `StdTestState.engineOwed` holds the answers (not ingested: read it).
 
-**A mailbox walked away from** (new, 2026-11-09; SuuUI found that the game
-ends a mailbox interaction when you walk away; wowlua keeps it open at any
-distance). The scenario recorder records every event with its time
+**A mailbox walked away from** (recorded 2026-11-09 19:17, 70862; decision
+T609). Recorded: the interaction open at the start (MailFrame shown),
+`PLAYER_STARTED_MOVING` at 1.684 s, and at 2.240 s, 3.8 yards from where
+the player stood (2.5 at the position before, 2.052 s, still open):
+`SECURE_TRANSFER_CANCEL` twice, then
+`PLAYER_INTERACTION_MANAGER_FRAME_HIDE(17)` twice,
+`IsInteractingWithNpcOfType(17)` true at the first hide and false at the
+second; no `MAIL_CLOSED`, no hide of type 0, nothing else of the mail. The
+recorder has one frame for all events (`RegisterAllEvents`, one handler),
+so the game tells each twice. wowlua (before): open at any distance; now
+it ends past 5 yards (gossip's range: the mailbox's own place is not in
+the recording) with these events. Still open: the range. The steps, for a
+second recording with the mailbox's place (step 1 below):
+
+SuuUI found that the game ends a mailbox interaction when you walk away;
+wowlua kept it open at any distance. The scenario recorder records every event with its time
 (`MAIL_CLOSED`, `PLAYER_INTERACTION_MANAGER_FRAME_HIDE` with its type,
 `SECURE_TRANSFER_CANCEL`, …); for `mailwalk` it also records the player's
 position and whether the mailbox interaction is on, at the start, at those
 events and every quarter second the player moved half a yard. Nothing is
 read from the mail.
 
-1. Stand at a mailbox, out of combat, and right-click it so the mail window
-   opens.
-2. `/stdtest engine scenario mailwalk`
-3. Walk straight away from the mailbox (W), not closing the mail window,
+1. Walk into the mailbox until you stand against it (W pressed into it),
+   then `/run print(UnitPosition("player"))` and note the two numbers.
+2. Step back a yard, out of combat, and right-click the mailbox so the
+   mail window opens.
+3. `/stdtest engine scenario mailwalk`
+4. Walk straight away from the mailbox (W), not closing the mail window,
    until it closes by itself, then two more seconds. If it is still open
    60 yards away, stop there.
-4. `/stdtest engine scenario stop`
-5. `/reload`
+5. `/stdtest engine scenario stop`
+6. `/reload`
 
 Still by hand (screenshots, other players, combat, walking, a window
 opened by hand): Owed from the M12 screenshots 5, 6, 8 step 3, 9, 10, 12,
@@ -190,13 +208,8 @@ engine cannot get otherwise.
     8. `/run C_VideoOptions.SetGameWindowSize(1000, 700)`, then step 7 again (a size the monitor does not list).
     9. Untick "Use UI Scale", set the Window Size back, Apply.
 
-- **`GetBindingText(key, 1)` with modifiers** (batched 2026-11-09 in
-  `/stdtest engine owed`; the action bars' hotkeys):
-  `SHIFT-1`, `CTRL-ALT-2`, `META-E`, `SHIFT-MOUSEWHEELUP`, `SHIFT-NUMPAD1`.
-  Why: the engine shortens the modifiers with the client's
-  `*_KEY_TEXT_ABBR` strings and joins them with `-` (`s-1`), and keeps the
-  key's own name whole; neither the joining nor the key names are
-  recorded (M12's default-UI screenshot showed the hotkeys cut to `SHI…`).
+(The `GetBindingText(key, 1)` bullet was answered by the batched run,
+2026-11-09: "Answered by the batched run".)
 
 ## The answers battery's new calls
 
@@ -401,27 +414,13 @@ screenshot).
 The engine's guesses for methods that had no behaviour. Anywhere, out of
 combat; each step is one line to paste, then a screenshot of the chat.
 
-**Frame levels** (`Raise`, `Lower`):
+Steps 1 to 7 and 11 to 14 were answered by the batched run (2026-11-09,
+70862; "Answered by the batched run"). Step 4 stays as the set-up of 8 to
+10.
 
-1. `/run A=CreateFrame("Frame",nil,UIParent) B=CreateFrame("Frame",nil,UIParent) A:SetFrameStrata("FULLSCREEN_DIALOG") B:SetFrameStrata("FULLSCREEN_DIALOG") B:SetFrameLevel(7) A:Raise() print(A:GetFrameLevel(),B:GetFrameLevel())`
-2. `/run C=CreateFrame("Frame",nil,UIParent) C:SetFrameStrata("FULLSCREEN_DIALOG") C:SetFrameLevel(20) C:Hide() A:Raise() print(A:GetFrameLevel())`
-3. `/run A:Lower() print(A:GetFrameLevel(),B:GetFrameLevel())`
-
-Screenshot after step 3. The engine says 8 7, then 8 (a hidden frame
-doesn't count), then 0 7.
-
-**An edit box's selection** (`HighlightText`, `Insert`):
+**The selection on focus** (`HighlightText` in `OnEditFocusGained`):
 
 4. `/run E=CreateFrame("EditBox",nil,UIParent) E:SetSize(200,20) E:SetPoint("CENTER") E:SetFontObject(ChatFontNormal) E:SetAutoFocus(false) E:SetText("hello world") E:HighlightText(0,5) E:Insert("HELLO") print(E:GetText(),E:GetCursorPosition())`
-5. `/run E:SetScript("OnTextChanged",function(s,u) print("changed",u) end) E:Insert("!") print("after Insert")`
-6. `/run E:SetCursorPosition(1) E:SetText("abc") print(E:GetCursorPosition())`
-7. `/run E:SetText("abcdef") E:HighlightText(4,1) E:Insert("Z") print(E:GetText())`
-
-Screenshot after step 7. The engine says `HELLO world 5`; then "after
-Insert" before "changed false" (Insert's `OnTextChanged` comes in the next
-frame, as SetText's); then 3; then `aZef` (a selection given backwards is
-the same one).
-
 8. `/run E:SetScript("OnEditFocusGained",function(s) s:HighlightText() end) E:SetText("Sheep")`
 9. By hand: click into the box (in the middle of the screen), type `x`.
 10. `/run print(E:GetText()) E:ClearFocus() E:Hide()`
@@ -429,27 +428,6 @@ the same one).
 Screenshot after step 10. The engine says `x`: the text selected on focus
 stays selected after the click, and typing replaces it. If the click put
 the cursor somewhere instead, it says where the text went.
-
-**A font copied** (`CopyFontObject`):
-
-11. `/run F1=CreateFont("ProbeF1") F1:SetFont("Fonts\\FRIZQT__.TTF",14,"OUTLINE") F1:SetTextColor(1,0,0) F2=CreateFont("ProbeF2") F2:CopyFontObject(F1) F1:SetTextColor(0,1,0) print(F2:GetFont()) print(F2:GetTextColor())`
-
-Screenshot. The engine says the file, 14 and OUTLINE, then 1 0 0 1: a
-copy, not a link to the other font.
-
-**Anchors moved** (`AdjustPointsOffset`, `ClearPointsOffset`):
-
-12. `/run P=CreateFrame("Frame",nil,UIParent) P:SetPoint("TOPLEFT",10,20) P:AdjustPointsOffset(5,-5) print(select(4,P:GetPoint(1))) P:ClearPointsOffset() print(select(4,P:GetPoint(1)))`
-
-Screenshot. The engine says 15 15, then 0 0. If the client keeps the
-adjustment apart from the point, `GetPoint` may say 10 20 both times.
-
-**The clears**:
-
-13. `/run Q=CreateFrame("Button",nil,UIParent) Q:SetNormalTexture("Interface\\Buttons\\WHITE8X8") T=Q:GetNormalTexture() Q:ClearNormalTexture() print(Q:GetNormalTexture(),T:IsShown(),T:GetParent()==Q)`
-14. `/run M=CreateFrame("PlayerModel",nil,UIParent) M:SetModel(130737) M:ClearModel() print(M:GetModelFileID())`
-
-Screenshot after step 14. The engine says nil false true, then 0.
 
 **At a vendor** (the merchant's window open):
 
@@ -482,6 +460,8 @@ whether neutral ones count and how far it looks.
 **An edit box's history and arrows**:
 
 3. `/run H=CreateFrame("EditBox",nil,UIParent) H:SetSize(200,20) H:SetPoint("CENTER") H:SetFontObject(ChatFontNormal) H:SetAutoFocus(false) H:AddHistoryLine("one") H:AddHistoryLine("two") print(H:GetHistoryLines())`
+   (answered 2026-11-09 by the batched run: 0, as the engine; still the
+   set-up of 4 to 7)
 4. `/run H:SetScript("OnArrowPressed",function(s,k) print("arrow",k,s:GetText()) end) H:SetScript("OnTextChanged",function(s,u) print("changed",u,s:GetText()) end) H:SetFocus()`
 5. By hand: press Up twice, then Down twice.
 6. `/run H:SetHistoryLines(5) H:AddHistoryLine("three") H:SetFocus()`
@@ -507,12 +487,8 @@ then 1 (and no cursor info), then `CURSOR_CHANGED true 0 2 0` and 0.
 
 Screenshot. The engine tells `GROUP_ROSTER_UPDATE` at once and true.
 
-**A system line and Sign**:
-
-4. `/run SendSystemMessage("probe line") print(Sign(-3),Sign(0),Sign(2))`
-
-Screenshot. The engine shows "probe line" as a system message, then
--1 0 1.
+(Step 4, a system line and `Sign`, was answered by the batched run,
+2026-11-09: as the engine.)
 
 ## Regressions and other flavors
 
@@ -542,14 +518,19 @@ game, the character's clothes in wowlua).
    `/run M=WardrobeCollectionFrame.ItemsCollectionFrame.Models[1] print(M:GetCameraPosition()) print(M:GetCameraTarget()) print(M:GetPosition())`
    then `/run print(M:GetFacing(), M:GetPitch(), M:GetRoll()) print(M:IsUsingModelCenterToTransform()) print(M:TransformCameraSpaceToModelSpace(CreateVector3D(4,0,0)):GetXYZ())`
 3. `/run local m=CreateFrame("PlayerModel") m:SetSize(100,100) m:SetUnit("player") print(m:GetCameraDistance(), m:GetCameraPosition()) print(m:GetCameraTarget())`
-   Answers the model frame's own camera and field of view.
+   Answers the model frame's own camera and field of view. Recorded
+   2026-11-09 (70862, the batched run, a paladin's model in a frame never
+   shown): `-1.4979703116779e+30 2.8272478580475 -0.07107862085104
+   0.68821173906326`, then `-0.29772615432739 -0.074905693531036
+   0.74097633361816` (wowlua `0 0 0 0`, `0 0 0`). Open: the distance is no
+   number (the camera not set up before the frame draws); owed again with
+   the frame shown: `/run local m=CreateFrame("PlayerModel",nil,UIParent) m:SetSize(100,100) m:SetPoint("CENTER") m:SetUnit("player") C_Timer.After(0.5,function() print(m:GetCameraDistance(), m:GetCameraPosition()) print(m:GetCameraTarget()) m:Hide() end)`
 
 ## Textures the screenshots draw
 
-1. `/run local t=MainStatusTrackingBarContainer.bars and MainStatusTrackingBarContainer.bars[1] or nil print(t and t.StatusBar:GetStatusBarTexture():GetAtlas(), t and t.StatusBar:GetStatusBarTexture():GetTexture())`
-   with the experience bar shown: whether `SetStatusBarTexture(atlasName)`
-   makes the texture's atlas (wowlua: it does; `GetTexture` answers the
-   atlas's file ID, decision T356).
+(Items 1 and 4 were answered by the batched run, 2026-11-09: "Answered by
+the batched run".)
+
 2. An action button with a spell: `/run local b=ActionButton1 print(b.icon:GetDrawLayer()) print(b.SlotArt:GetDrawLayer()) print(b.icon:GetNumMaskTextures())`
    and a screenshot of it hovered: wowlua draws a masked texture over the
    unmasked ones of its layer and sublevel (the icon over the slot art).
@@ -558,17 +539,14 @@ game, the character's clothes in wowlua).
 3. `/run local t=UIParent:CreateTexture() print(t:IsSnappingToPixelGrid(), t:GetTexelSnappingBias())`:
    a fresh texture's pixel snapping (wowlua: true, 0). Answered
    (2026-10-23): true, 0.30000001192093; wowlua now gives the same.
-4. What `GetTexture` answers for an addon's own file, an atlas and a color
-   (decision T356; wowlua: the file's negative loose ID, the atlas's file
-   ID, nil), and what `GetTextureFilePath` answers (wowlua: the path set).
-   With an addon that ships a texture (here SuuUI's
-   `Interface\AddOns\SuuUI\media\logo`; use any file it has):
-   1. `/run T=UIParent:CreateTexture() print(T:SetTexture("Interface\\AddOns\\SuuUI\\media\\logo"), T:GetTexture(), T:GetTextureFileID(), T:GetTextureFilePath())`
-   2. `/run print(GetFileIDFromPath("Interface\\AddOns\\SuuUI\\media\\logo"))`
-   3. `/run T:SetAtlas("128-RedButton-Exit") print(T:GetTexture(), T:GetTextureFileID(), T:GetTextureFilePath())`
-   4. `/run T:SetColorTexture(1, 0, 0) print(T:GetTexture(), T:GetTextureFileID(), T:GetTextureFilePath())`
-   5. `/run print(GetFileIDFromPath("Interface\\AddOns\\NoSuchAddon\\x"), GetFileIDFromPath("Interface\\Buttons\\WHITE8X8"))`
-      (wowlua: nil, 130871; decision T355).
+5. **An addon's file that is there** (item 4 used SuuUI's
+   `Interface\AddOns\SuuUI\media\logo`, which SuuUI does not have: all nil).
+   SuuUI's `Media\Textures\Hatch.tga` is there:
+   1. `/run T=UIParent:CreateTexture() print(T:SetTexture("Interface\\AddOns\\SuuUI\\Media\\Textures\\Hatch"), T:GetTexture(), T:GetTextureFileID(), T:GetTextureFilePath())`
+   2. `/run print(GetFileIDFromPath("Interface\\AddOns\\SuuUI\\Media\\Fonts\\Figtree-Medium.ttf"), GetFileIDFromPath("Interface\\AddOns\\SuuUI\\Media\\Textures\\Hatch"))`
+
+   wowlua: the loose file's negative ID for both getters and the path for
+   `GetTextureFilePath` (decision T356, unverified).
 
 ## Minimap
 
@@ -600,7 +578,9 @@ player's arrow 32 by 32 UI units; neither is recorded on camelot.
 1. `/run local f=CreateFrame("Frame",nil,UIParent) f:SetSize(200,100) f:SetPoint("CENTER") local t=f:CreateTexture() t:SetSize(40,20) print(t:GetNumPoints(), t:GetSize())`
    then the same with a texture from XML that has `<Size>` and no
    `<Anchors>` (any addon's): wowlua fills the parent with an XML one
-   (2 points, the parent's size), leaves a Lua one unplaced.
+   (2 points, the parent's size), leaves a Lua one unplaced. The Lua half
+   answered 2026-11-09 (the batched run): `0 40 20`, as wowlua; the XML
+   half owed (an XML font string answered one point, decision T602).
 2. Open Settings, Mouse, hover the Mouse Look Speed slider with
    `/fstack` on, and note the thumb's left relative to the slider at the
    value shown, at the minimum and at the maximum (wowlua: it travels the
@@ -611,9 +591,10 @@ player's arrow 32 by 32 UI units; neither is recorded on camelot.
 
 ## Owed from the M12 screenshots (next beta, about 2026-11-07)
 
-Batched (2026-11-09, `/stdtest engine owed`, see the top): 1, 2, 3, 4,
-7, 8 steps 1-2, 11, 14, 16 steps 1-2, 17, 18 step 2, 19 steps 7 and 9, 20d
-steps 1-2, 20e step 3.
+Answered by the batched run (2026-11-09, 70862; "Answered by the batched
+run" below): 1, 2, 3, 4, 7, 11, 14 and 17 (taken out here), 8 steps 1-2,
+16 steps 1-2, 18 step 2, 19 steps 7 and 9, 20d steps 1-2 (and step 3
+without the character frame), 20e step 3.
 
 The camelot beta closed on 2026-10-24; these close what the screenshot work
 left as proposals. Each item stands alone: after a `/reload` (or an error)
@@ -621,21 +602,6 @@ start the item again from its first step. In the chat box `|` is escaped,
 so the lines write it as `\124`. Take the screenshots with the default UI
 alone unless an item names an addon.
 
-1. **Load-on-demand addons' reason** (decision T354; wowlua:
-   `DEMAND_LOADED` before loading, empty after). With AtlasLoot installed:
-   1. `/run for i=1,C_AddOns.GetNumAddOns() do local n,_,_,l,r=C_AddOns.GetAddOnInfo(i) if C_AddOns.IsAddOnLoadOnDemand(i) then print(n,tostring(l),"["..tostring(r).."]",C_AddOns.IsAddOnLoaded(i)) end end`
-   2. `/run print(C_AddOns.LoadAddOn("AtlasLootClassic_Crafting"), "["..tostring(select(5,C_AddOns.GetAddOnInfo("AtlasLootClassic_Crafting"))).."]")`
-2. **AceGUI's `SetDesaturation`** (AtlasLoot's options window: wowlua has
-   no such global, so AceGUI's checkbox errors):
-   1. `/run print(SetDesaturation, LibStub and LibStub("AceGUI-3.0",true) and select(2,LibStub("AceGUI-3.0")))`
-3. **Which point sets an edge** (decision T337; wowlua: `TOPLEFT` places
-   the left edge over `LEFT`, whatever order they were set in, so `50 50`;
-   `GetPoint(1)` stays the first set, `RIGHT`):
-   1. `/run F=CreateFrame("Frame",nil,UIParent) F:SetHeight(10) F:SetPoint("RIGHT",UIParent,"CENTER") F:SetPoint("LEFT",UIParent,"CENTER",-100,0) F:SetPoint("TOPLEFT",UIParent,"CENTER",-50,0)`
-   2. `/run print(UIParent:GetWidth()/2-F:GetLeft(), F:GetWidth(), (F:GetPoint(1)))`
-4. **A button's font objects by name** (decision T338; wowlua: a name
-   works, an unknown name unverified):
-   1. `/run local b=CreateFrame("Button",nil,UIParent) b:SetNormalFontObject("GameFontRed") print(b:GetNormalFontObject():GetName()) print(pcall(b.SetHighlightFontObject,b,"NoSuchFont"))`
 5. **Font strings over textures in one layer** (decision T340; wowlua: the
    text is drawn over the red, though made first):
    1. `/run F=CreateFrame("Frame",nil,UIParent) F:SetSize(240,60) F:SetPoint("CENTER") local s=F:CreateFontString(nil,"ARTWORK","GameFontNormalHuge") s:SetPoint("CENTER") s:SetText("TEXT ON TOP?")`
@@ -647,14 +613,13 @@ alone unless an item names an addon.
    1. `/run local p=CreateFrame("Frame",nil,UIParent) p:SetSize(200,100) p:SetPoint("CENTER") local a=p:CreateTexture(nil,"ARTWORK") a:SetPoint("LEFT") a:SetSize(120,100) a:SetColorTexture(0,0,1) P=p`
    2. `/run local c=CreateFrame("Frame",nil,P) c:SetUsingParentLevel(true) c:SetAllPoints() local g=c:CreateTexture(nil,"BACKGROUND") g:SetPoint("RIGHT") g:SetSize(120,100) g:SetColorTexture(0,1,0)`
    3. A screenshot: is the middle strip blue (wowlua) or green?
-7. **`SetFrameLevel` and descendants** (decision T343; wowlua: the
-   child raised by 5 moves with the parent, the grandchild stays one over
-   its parent):
-   1. `/run P=CreateFrame("Frame",nil,UIParent) C=CreateFrame("Frame",nil,P) C:SetFrameLevel(P:GetFrameLevel()+5) G=CreateFrame("Frame",nil,C) print(P:GetFrameLevel(),C:GetFrameLevel(),G:GetFrameLevel())`
-   2. `/run P:SetFrameLevel(P:GetFrameLevel()+10) print(P:GetFrameLevel(),C:GetFrameLevel(),G:GetFrameLevel())`
 8. **Inline textures in text** (decision T347; wowlua: the icon is as tall
    as the text for height 0, the atlas 20 by 20, each its width in the
-   line):
+   line). Steps 1 and 2 recorded 2026-11-09 (70862): `15.000000953674
+   11.666667938232`, then `53.289131164551 19.122459411621` (wowlua `16
+   12`, `56 12`): open, the line taller with the atlas; step 3 owed, and
+   with it `/run print(UIParent:GetEffectiveScale(), GetPhysicalScreenSize())`
+   (the screen's scale the measures were taken at):
    1. `/run S=UIParent:CreateFontString(nil,"OVERLAY","GameFontNormal") S:SetPoint("CENTER") S:SetText("ab") print(S:GetStringWidth(),S:GetStringHeight())`
    2. `/run S:SetText("a\124TInterface\\Icons\\INV_Misc_QuestionMark:0\124tb\124A:128-RedButton-Exit:20:20\124ac") print(S:GetStringWidth(),S:GetStringHeight())`
    3. A screenshot of the text in the middle of the screen.
@@ -669,9 +634,6 @@ alone unless an item names an addon.
     1. `/run local t=UIParent:CreateTexture() t:SetSize(200,50) t:SetPoint("CENTER") t:SetColorTexture(1,1,1) t:SetGradient("HORIZONTAL",CreateColor(1,0,0,1),CreateColor(0,0,1,1)) T=t`
     2. A screenshot.
     3. `/run T:SetRotation(math.pi/4)` and a screenshot.
-11. **`.png` and `.jpg` paths of `.blp` files** (decision T350; wowlua: a
-    `.tga` or `.png` the storage lacks is its `.blp`, a `.jpg` unverified):
-    1. `/run local t=UIParent:CreateTexture() for _,x in ipairs({".blp",".tga",".png",".jpg",""}) do print(x,t:SetTexture("Interface\\FriendsFrame\\StatusIcon-Online"..x),t:GetTexture()) end`
 12. **Text in a scaled frame** (decision T351; wowlua: 0.8 the size, the
     width the same in the frame's units):
     1. `/run F=CreateFrame("Frame",nil,UIParent) F:SetScale(0.8) F:SetSize(200,40) F:SetPoint("CENTER") S=F:CreateFontString(nil,"OVERLAY","GameFontNormal") S:SetPoint("CENTER") S:SetText("Scaled 0.8 text")`
@@ -681,23 +643,24 @@ alone unless an item names an addon.
     framed as a unit's portrait):
     1. `/run local t=UIParent:CreateTexture() t:SetSize(128,128) t:SetPoint("CENTER") SetPortraitTextureFromCreatureDisplayID(t,7970)`
     2. A screenshot (7970 is Taragaman the Hungerer, AtlasLoot's).
-14. **An unknown atlas** (decision T346; wowlua: `SetAtlas` leaves the
-    texture as it was; its answer unknown):
-    1. `/run local t=UIParent:CreateTexture() t:SetColorTexture(1,0,0) print(t:SetAtlas("NoSuchAtlas"), t:GetAtlas(), t:GetTexture())`
 15. **Restricted callback events** (decision T336; wowlua: refused from
     addon code, `ADDON_ACTION_FORBIDDEN` with `Frame:RegisterEventCallback()`).
     It shows a blocked-action message: `/reload` after it.
     1. `/run local f=CreateFrame("Frame") print(f:RegisterEventCallback("COMBAT_LOG_ENTRIES_CLEARED",print))`
 16. **Tooltip spacing** (decision T342; wowlua: 10 padding, 2 between
-    lines, 40 between a double line's sides):
+    lines, 40 between a double line's sides). Steps 1 and 2 recorded
+    2026-11-09 (70862): `250.88012695312 79.262634277344`, a frame later
+    the same, 3 lines (wowlua `320 78`): open with Owed from M13 item 1;
+    step 3 owed:
     1. `/run GameTooltip:SetOwner(UIParent,"ANCHOR_NONE") GameTooltip:SetPoint("CENTER") GameTooltip:AddLine("Title") GameTooltip:AddDoubleLine("Left","Right")`
     2. `/run GameTooltip:AddLine("A long line to see where and how a tooltip wraps its text",1,1,1,true) GameTooltip:Show() print(GameTooltip:GetSize())`
     3. A screenshot of the tooltip.
-17. **PvP ranks 5 to 14** (decision T345; wowlua's formula gives 24150 for
-    14, the table 24750):
-    1. `/run for n=5,14 do print(n,C_MajorFactions.GetTotalReputationForRenownLevel(2800,n)) end`
-    2. `/run for n=2,6 do local r=C_MajorFactions.GetRenownRewardsForLevel(2800,n) print(n,#r,r[1] and (r[1].name or r[1].itemID)) end`
-18. **The calendar's holidays** (open: wowlua shows no holiday events):
+18. **The calendar's holidays** (open: wowlua shows no holiday events).
+    Step 2 recorded 2026-11-09 (70862, "Answered by the batched run"):
+    November 2026's holidays, the same before and 2 s after
+    `C_Calendar.OpenCalendar()`; wowlua none. Open: the holidays' schedule
+    (the server's calendar, over the client's `Holidays` table); step 1
+    owed:
     1. Open the calendar on this month and take a screenshot.
     2. `/run local m=C_Calendar.GetMonthInfo(0) for d=1,m.numDays do for j=1,C_Calendar.GetNumDayEvents(0,d) do local e=C_Calendar.GetDayEvent(0,d,j) print(d,e.title,e.calendarType,e.sequenceType,e.eventID) end end`
 19. **The skill bars' fill.** In game (screenshot of 2026-10-23, build
@@ -711,7 +674,11 @@ alone unless an item names an addon.
     it reads 0 is open: rows made and initialized in the same frame are the
     likely cause, but Blizzard's micro menu and text-to-speech options read
     sizes of regions made moments before at login and need them at once
-    (unless they fail silently in game; step 1 shows it). Steps:
+    (unless they fail silently in game; step 1 shows it). Steps 7 and 9
+    recorded 2026-11-09 (70862): `0 15` (as wowlua), and `100.00003051758
+    true true`: a chain made in one call has its size at once and its
+    rectangles are valid once asked for (wowlua answered `100 false false`;
+    now as the game, decision T605). Steps 1 to 6 and 8 owed:
     1. `/console scriptErrors 1`, then `/reload`; note any error shown at
        login (`FrameUtil.lua:247`, `TextToSpeechFrame.lua:597`?), then
        `/console scriptErrors 0`.
@@ -749,13 +716,19 @@ alone unless an item names an addon.
     after it accepts).
 20d. **Mouse scripts turn the mouse on** (decision T365; wowlua: `false
     true true true true true`; the in-game suite's "Mouse script enables"
-    asks the same):
+    asks the same). Steps 1 and 2 recorded 2026-11-09 (70862): `false true
+    true`, `true false true`, as wowlua; step 3 without the character frame
+    opened `true true true` (wowlua `true false false`, now as the game).
+    Step 3 with the frame open owed:
     1. `/run local f=CreateFrame("Frame") local a=f:IsMouseEnabled() f:SetScript("OnMouseUp",function() end) local b=f:IsMouseEnabled() f:SetScript("OnMouseUp",nil) print(a,b,f:IsMouseEnabled())`
     2. `/run local g=CreateFrame("Frame") g:SetScript("OnEnter",function() end) local h=CreateFrame("Frame") h:SetScript("OnMouseWheel",function() end) print(g:IsMouseEnabled(),h:IsMouseEnabled(),h:IsMouseWheelEnabled())`
     3. Open the character frame (C) and type `/run local t=CharacterFrameModeTab2 print(t:IsMouseEnabled(),t:IsMouseClickEnabled(),t:IsMouseMotionEnabled())`
 20e. **`BNGetInfo()`** (two recordings disagree: the full probe of
     2026-10-20 has nothing, the answers of 2026-10-21 eight values; wowlua
-    answers the eight):
+    answers the eight). Step 3 recorded 2026-11-09 (70862): `0 true`, as
+    wowlua; and `select("#", BNGetInfo())` mid-session: 0 (a third
+    recording with nothing; wowlua 8, kept until steps 1 and 2 answer).
+    Steps 1 and 2 owed:
     1. Right after logging in (before opening anything): `/run print(select("#",BNGetInfo()),BNGetInfo())`
     2. `/reload`, then the same line again.
     3. `/run print(select("#",BNGetInfo("player")),BNConnected())`
@@ -770,48 +743,40 @@ alone unless an item names an addon.
 
 ## Owed from M13 (next beta, about 2026-11-07)
 
-Batched (2026-11-09, `/stdtest engine owed`, see the top): 1 (the
-widths), 2, 3.
+Answered by the batched run (2026-11-09, 70862; "Answered by the batched
+run" below): 3 (taken out here); 1's widths and 2 recorded, still open.
 
 What the M13 work (the client's tables in tests) guessed. Each item stands
 alone: after a `/reload` (or an error) start it again from its first step.
 Take a screenshot after each step that names one.
 
 1. **A tooltip's wrap width** (decision T393; wowlua wraps at the widest
-   other line, at least 300). Take a screenshot after each of:
+   other line, at least 300). The widths recorded 2026-11-09 (70862):
+   250.87994384766 and 229.17562866211, the same a frame later (wowlua 298
+   and 320): the client wraps narrower, its rule open; the screenshots
+   owed. Take a screenshot after each of:
    1. `/run GameTooltip:SetOwner(UIParent,"ANCHOR_CURSOR") GameTooltip:SetSpellByID(26573) GameTooltip:Show() print(GameTooltip:GetWidth())`
    2. `/run GameTooltip:SetOwner(UIParent,"ANCHOR_CURSOR") GameTooltip:AddLine("Short") GameTooltip:AddLine(string.rep("word ",60),1,1,1,true) GameTooltip:Show() print(GameTooltip:GetWidth())`
 2. **A spell's description with spell power** (decision T391; wowlua adds
    the coefficient times `GetSpellBonusDamage`): on a paladin with gear
-   that gives spell power:
+   that gives spell power. Recorded 2026-11-09 (70862, a level 36
+   paladin): `17 25`; Consecration "… doing 16 Holy damage over 8 sec … an
+   additional 38 damage over 8 sec."; Holy Light "Heals a friendly target
+   for 43 to 52." Not compared yet: the emulator's default world is a
+   level 1 warrior (32, and "39 to 47" with the installation); owed: the
+   same in a test with that paladin.
    1. `/run print(GetSpellBonusDamage(2), GetSpellBonusHealing())`
    2. `/run print(C_Spell.GetSpellDescription(26573))`
    3. `/run print(C_Spell.GetSpellDescription(635))`
-3. **Currencies, factions and mounts the character doesn't have**
-   (task #30: what the client answers for an ID it knows but the character
-   lacks):
-   1. `/dump C_CurrencyInfo.GetCurrencyInfo(1792)`
-   2. `/dump C_CurrencyInfo.GetCurrencyInfo(1901)`
-   3. `/dump C_Reputation.GetFactionDataByID(69)`
-   4. `/dump C_Reputation.GetFactionDataByID(930)`
-   5. `/dump C_MountJournal.GetMountInfoByID(6)`
-
 ## Owed from M14 (next beta, about 2026-11-07)
 
-Batched (2026-11-09, `/stdtest engine owed`, see the top): 1.
-
-1. **When `SETTINGS_PANEL_OPEN` comes** (decision T400; wowlua fires it
-   inside `C_SettingsUtil.OpenSettingsPanel`, at once). With the settings
-   closed:
-   1. `/run local f=CreateFrame("Frame") f:RegisterEvent("SETTINGS_PANEL_OPEN") f:SetScript("OnEvent",function(_,e,a,b) print("event",a,b,GetTime()) end) WOWLUA_F=f`
-   2. `/run print("before",GetTime()) C_SettingsUtil.OpenSettingsPanel() print("after",GetTime(),SettingsPanel:IsShown())`
-
-   Note the order of the three lines ("before", "event", "after"): is the
-   event before "after", and is the panel shown at "after"?
+All answered by the batched run (2026-11-09, 70862; "Answered by the
+batched run" below).
 
 ## Owed from the contributions in 0.13.5 (next beta, about 2026-11-07)
 
-Batched (2026-11-09, `/stdtest engine owed`, see the top): 1, 2, 4, 6.
+Answered by the batched run (2026-11-09, 70862; "Answered by the batched
+run" below): 1, 2 and 4 (taken out here); 6 recorded, still open.
 
 What pull requests #81 to #91 guessed. Their decisions (T485 to T490)
 stay proposals, open for review, until these answer. Each item stands
@@ -819,18 +784,6 @@ alone: after a `/reload` (or an error) start it again from its first step.
 After each step, note what it prints; take a screenshot where a step says
 so. "wowlua:" is what the engine answers now.
 
-1. **`GetTotemInfo` beyond the first four slots** (#81; slots 1 to 4
-   recorded empty, 5 to 8 guessed the same):
-   1. `/run for s=0,9 do print(s, select("#", GetTotemInfo(s)), GetTotemInfo(s)) end`
-
-   wowlua: slots 1 to 8 `7 false  0 0 nil 0 0`, slots 0 and 9 `0`.
-2. **Aura options left out** (#82; wowlua leaves out an optional structure
-   unless every field of it has a default):
-   1. `/dump C_AuraContainerUtil.ProcessCustomAuraButtonDurationTextOptions({})`
-   2. `/dump C_AuraContainerUtil.ProcessAuraTooltipBackdropOptions({ backdropInfo = {} })`
-
-   wowlua: the first has no `textColor` and no `textFormat`; the second
-   has `anchorOffsets` with `left = 0`.
 3. **`UNIT_IN_RANGE_UPDATE`** (decision T485): in a party with another
    player, who can walk away.
    1. `/run local f=CreateFrame("Frame") f:RegisterEvent("UNIT_IN_RANGE_UPDATE") f:SetScript("OnEvent",function(_,e,u,r) print(e,u,issecretvalue(r)) end) WOWLUA_RANGE=f`
@@ -840,14 +793,6 @@ so. "wowlua:" is what the engine answers now.
    wowlua: one line at each crossing of 38 yards, for `party1` only, with
    `true` (the payload secret). Note every token it names, and whether
    the payload is secret.
-4. **The heal prediction calculator** (decision T486):
-   1. `/run local c=CreateUnitHealPredictionCalculator() print(c:GetIncomingHealOverflowPercent(), c:GetMaximumHealthMode(), c:GetHealAbsorbMode(), c:GetDamageAbsorbClampMode(), c:GetHealAbsorbClampMode(), c:GetIncomingHealClampMode())`
-   2. `/run local c=CreateUnitHealPredictionCalculator() c:SetPredictedValues({health=60000,healthMax=100000,totalDamageAbsorbs=36000,totalHealAbsorbs=5000,totalIncomingHeals=12000,totalIncomingHealsFromHealer=8000}) print(c:GetIncomingHeals()) print(c:GetHealAbsorbs()) print(c:GetDamageAbsorbs()) print(c:GetMaximumIncomingHeals(), c:GetMaximumDamageAbsorbs(), c:GetMaximumHealAbsorbs())`
-   3. `/run local c=CreateUnitHealPredictionCalculator() c:SetPredictedValues({health=60000,healthMax=100000,totalDamageAbsorbs=36000,totalHealAbsorbs=5000,totalIncomingHeals=12000,totalIncomingHealsFromHealer=8000}) c:SetHealAbsorbMode(Enum.UnitHealAbsorbMode.Total) print(c:GetIncomingHeals()) print(c:GetHealAbsorbs()) print(c:GetDamageAbsorbs())`
-
-   wowlua: step 1 `1 0 0 0 0 0`; step 2 `7000 7000 0 false`, `0 false`,
-   `33000 true`, `40000 33000 60000`; step 3 `12000 8000 4000 false`,
-   `5000 false`, `28000 true`.
 5. **Shields and `UNIT_HEALTH`** (decision T486): on a character that can
    get an absorb shield (a priest's Power Word: Shield).
    1. `/run local f=CreateFrame("Frame") for _,e in ipairs({"UNIT_ABSORB_AMOUNT_CHANGED","UNIT_HEAL_ABSORB_AMOUNT_CHANGED","UNIT_HEALTH","UNIT_HEAL_PREDICTION"}) do f:RegisterUnitEvent(e,"player") end f:SetScript("OnEvent",function(_,e) print(GetTime(),e) end) WOWLUA_ABS=f`
@@ -867,6 +812,14 @@ so. "wowlua:" is what the engine answers now.
    wowlua: step 1 `0 0` before the timer, `0 10` and `0` after it; step 2 `0 10`, about
    `3`, `nil nil` (no scripts run); steps 3 and 4 `3` (a value set stops
    the timer); step 5 `0 10` and `10`; step 6 about `7`, then `0`.
+
+   Recorded 2026-11-09 (70862, the batched run): step 1 `0 0`, `0 0`,
+   `0`; step 2 `0 0`, `0 nil nil`; steps 3 and 4 `0`; step 5 `0 0`, `0`;
+   step 6 `0`, `0`: the bar followed no timer, its range 0 to 0 (also
+   over the 0 to 200 set before). Open (decision T487): whether the
+   duration read 0. Owed, one line each:
+   1. `/run local d=C_DurationUtil.CreateDuration() d:SetTimeFromStart(GetTime(),10) print(d:GetStartTime(), d:GetEndTime(), d:GetTotalDuration(), d:GetRemainingDuration(), d:IsZero())`
+   2. `/run local d=C_DurationUtil.CreateDuration() d:SetTimeFromStart(GetTime(),10) local b=CreateFrame("StatusBar",nil,UIParent) b:SetMinMaxValues(0,200) b:SetValue(50) b:SetTimerDuration(d) print(b:GetMinMaxValues()) print(b:GetValue())`
 7. **A frame anchored to a bar's fill, with a secret value** (decision
    T490): in a dungeon, where the player's health is secret in combat.
    1. Out of combat: `/run local b=CreateFrame("StatusBar",nil,UIParent) b:SetSize(200,20) b:SetPoint("CENTER") b:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8") local n=CreateFrame("Frame",nil,b) n:SetPoint("TOPLEFT",b:GetStatusBarTexture(),"TOPRIGHT") n:SetPoint("BOTTOMLEFT",b:GetStatusBarTexture(),"BOTTOMRIGHT") n:SetWidth(10) local t=n:CreateTexture() t:SetAllPoints() t:SetColorTexture(1,0,0) WOWLUA_HB=b WOWLUA_HN=n print(b:GetStatusBarTexture():GetNumPoints())`
@@ -1017,6 +970,148 @@ which calls a function safely and prints each answer with its type
 
    wowlua: untyped. Recorded: (to do)
 
+## Answered by the batched run (2026-11-09)
+
+`/stdtest engine owed` on WoW Forever 1.60.1.70862 (a level 36 paladin,
+AtlasLoot and SuuUI installed), compared with the emulator's run of the
+same steps (`wowlua test` with Blizzard's UI, camelot, the default world: a
+level 1 warrior, no addons; with `--game-data` where a game file's ID
+counts). "wowlua" is what 0.13.9 answered, "now" what it answers since.
+Float noise (`50.000061035156` for 50) is left out of the comparison.
+
+Owed from the M12 screenshots:
+
+- 1 (T354): AtlasLoot's seven load-on-demand modules each `false
+  [DEMAND_LOADED]` (`loadable` false), the loaded ones too (`…_Data`,
+  `…_DungeonsAndRaids` `true true`); `LoadAddOn("AtlasLootClassic_Crafting")`
+  `true [DEMAND_LOADED]`, the module then `false [DEMAND_LOADED] true
+  true`. wowlua: `loadable` true and the reason empty once loaded; now as
+  the game.
+- 2: `nil nil` (no `SetDesaturation`), as wowlua.
+- 3 (T337): `50 50 TOPLEFT`. wowlua `50 50 RIGHT`; now `TOPLEFT`
+  (`GetPoint` in `Enum.FramePoint`'s order).
+- 4 (T338): `GameFontRed`, `false Button:SetHighlightFontObject(): Usage:
+  ("fontname" or fontObject)`. wowlua's error was the documented usage;
+  now the game's words.
+- 7 (T343): `1 6 7`, `11 16 17`, as wowlua.
+- 8 steps 1-2 (T347): `15.000000953674 11.666667938232`,
+  `53.289131164551 19.122459411621`; wowlua `16 12`, `56 12`. Open (item
+  8 above).
+- 11 (T350): `true 374226` for `.blp`, `.tga`, `.png`, `.jpg` and none.
+  wowlua (with the installation): `.jpg` nil; now 374226.
+- 14 (T346): `nil nil nil`, as wowlua.
+- 16 steps 1-2 (T342): `250.88012695312 79.262634277344`, the same a
+  frame later, 3 lines; wowlua `320 78`, 3 lines. Open (item 16 above).
+- 17 (T345): ranks 5 to 14 `5250 6750 8400 10200 12150 14250 16600 19100
+  21750 24750`; ranks 2 to 6 one reward each, `Rank 2 Rewards` to `Rank
+  6 Rewards`. wowlua 16500, 18900 and 21450 for 11 to 13, no rewards; now
+  as the game.
+- 18 step 2: `month 11 2026 30`; Hallow's End to the 2nd, Call to Arms
+  (Darkspear Islands, Arathi Basin, Warsong Gulch, a week each in turn),
+  Darkmoon Faire the 9th to the 16th, Stranglethorn Fishing Extravaganza
+  each Sunday (no sequence type), the same after `OpenCalendar`. wowlua
+  none. Open (item 18 above).
+- 19 step 7: `0 15`, as wowlua; step 9: `100.00003051758 true true`;
+  wowlua `100 false false`; now `100 true true` (`IsRectValid`, T605).
+- 20d steps 1-2 (T365): `false true true`, `true false true`, as wowlua;
+  step 3 without the character frame: `true true true`; wowlua `true false
+  false`; now as the game.
+- 20e step 3: `0 true`, as wowlua; `select("#", BNGetInfo())` mid-session
+  0; wowlua 8. Open (item 20e above).
+
+Owed from M13:
+
+- 1 (T393): 250.87994384766 and 229.17562866211, the same a frame
+  later; wowlua 298 and 320. Open (M13 item 1).
+- 2 (T391): `PALADIN 36`, `17 25`; Consecration "… an additional 38
+  damage …", Holy Light "Heals a friendly target for 43 to 52." Not
+  compared (M13 item 2).
+- 3: `GetCurrencyInfo(1792)` Honor Points' table (quantity 0, max 25000),
+  as wowlua; `(1901)` nothing, as wowlua; `GetFactionDataByID(69)` and
+  `(930)` nil (wowlua's warrior has Darnassus: the character's);
+  `GetMountInfoByID(6)` `Brown Horse, 458, 132261, false, false, 0,
+  false, true, 1, false, false, 6, false`; wowlua nothing; now these
+  values (T608).
+
+Owed from M14:
+
+- 1 (T400): `before 221427.597`, `event nil nil 221427.597`, `after
+  221427.597 true`; a frame later shown, then closed. As wowlua.
+
+Owed from the contributions in 0.13.5:
+
+- 1 (#81): slots 1 to 8 `7 false  0 0 nil 0 0`, 0 and 9 `0`, as wowlua.
+- 2 (#82): `[1]={}`, as wowlua; `[1]={anchorOffsets={bottom=0, left=0,
+  right=0, top=0}, backdropInfo={}}`; wowlua filled `backdropInfo`'s
+  `insets`; now as the game (T608).
+- 4 (T486): step 1 `1.0499999523163 0 0 0 0 0`; step 2 `7000 7000 0
+  false`, `0 false`, `33000 true`, `44999.995231628 33000 60000`; step 3
+  `12000 8000 4000 false`, `5000 false`, `28000 true`. wowlua's overflow
+  1 (`40000 33000 60000`); now 1.05, as the game.
+- 6 (T487): the bar 0 to 0 and 0 throughout; wowlua followed the timer.
+  Open (0.13.5 item 6).
+
+Still to run:
+
+- `GetBindingText(key, 1)` with modifiers: `SHIFT-1 s-1 s-1 SHIFT-1`,
+  `CTRL-ALT-2 c-a-2 c-a-2 CTRL-ALT-2`, `META-E m-E m-E CMD-E`,
+  `SHIFT-MOUSEWHEELUP s-Mouse Wheel Up s-Mouse Wheel Up SHIFT-Mouse Wheel
+  Up`, `SHIFT-NUMPAD1 s-Num Pad 1 s-Num Pad 1 SHIFT-Num Pad 1`, the keys
+  alone as themselves (`1`, `2`, `E`, `Mouse Wheel Up`, `Num Pad 1`), as
+  wowlua; the modifiers alone `SHIFT s SHIFT`, `CTRL c CTRL`, `ALT a
+  ALT`, `META m CMD`; wowlua kept them whole (`SHIFT SHIFT SHIFT`); now as
+  the game (T608).
+
+Decision T605's open questions (SuuUI's case G):
+
+- `G` `place | now nil | next nil | 1s nil`; `I` and `M` `place | size
+  55x30 | now 112,-140 | next 112,-140 | 1s 112,-140`: as recorded
+  before, and as wowlua.
+- `Gq` `place | next nil | 1s nil`, as wowlua.
+- `Gh` `place | now nil | show | shown nil | next nil | 1s nil`, as
+  wowlua.
+- `Gh2` `place | show | next nil | 1s nil`; wowlua placed it (`place |
+  size 55x30 | show | next 112,-140 | 1s 112,-140`); now lost, as the
+  game (the layout pass lays out the frames anchored since first).
+- `T` `body asks 1.00002 | place | body asks 30 | size 55x30 | now
+  112,-140 | next 112,-140 | 1s 112,-140`, as wowlua.
+- `W` `place | body 30 | size 55x30 | now 112,-140 | next 112,-140 | 1s
+  112,-140`, as wowlua.
+
+Other sections:
+
+- Widget state (T289) 1-3: `1 7`, `1`, `1 7`; 4: `HELLO world 5`; 11:
+  `Fonts\FRIZQT__.TTF 13.999999046326 OUTLINE`, `1 0 0 1`; 12: `15 15`,
+  `0 0`: as wowlua. 5: `after Insert`, `changed true`; 6: `3`, then
+  `changed false`; 7: `abcdZ`, then `changed true` (one call). wowlua
+  `changed false` for the `Insert`s and `aZef`; now as the game. 13:
+  the texture, `true true`; wowlua `false` for `IsShown`; now shown. 14:
+  `nil`; wowlua 0; now nil.
+- Targeting and history (T291) 3: `0`; Leftovers (T295) 4: "probe line"
+  and `-1 0 1`: as wowlua.
+- Model frames' cameras 3: recorded, open (that section).
+- Textures the screenshots draw 1: `nil 137012`, as wowlua with the
+  installation. 4 (SuuUI has no `media\logo`): `true nil nil nil`; wowlua
+  gave the path for `GetTextureFilePath`, now nil; `nil`; `8063723
+  8063723 8063723` (wowlua's path nil, now the atlas's file ID); `nil nil
+  nil`; `nil 130871`, as wowlua with the installation.
+- Unanchored textures 1 (Lua): `0 40 20`, as wowlua.
+- The Camelot update 5: alpha 1; wowlua 0; now 1. 6: `true nil true`;
+  wowlua `true nil false`; now as the game.
+- Unanchored font strings (T602) 1: `1 1`; wowlua `2 2`. Open (that
+  section).
+- Names over units 1: `UnitNameNPC 0`, `UnitNameInteractiveNPC 1`,
+  `UnitNameHostleNPC 1`, `UnitNameFriendlySpecialNPCName 1`,
+  `UnitNameNonCombatCreatureName 0`, `nameplateShowAll 1`,
+  `nameplateShowEnemies 1`, `nameplateShowFriendlyNpcs 0`,
+  `nameplateMaxDistance 45.000000`: the client's defaults. wowlua's
+  default world has the three at 0 (the recorded fresh character's
+  settings), the rest the same; not a rule.
+- How far the world is drawn 1: `farclip 7000`, `terrainLodDist 500`,
+  `horizonStart 1900`, `lodObjectCullSize 18`, `lodObjectMinSize 0`,
+  `wmoLodDist 400`, as wowlua.
+- Found with SuuUI 2, 7 and 9: in their items.
+
 ## Answered on the beta's last day (2026-10-24)
 
 - PvP ranks (major faction 2800): `GetMajorFactionProgressionInfo` gives
@@ -1078,9 +1173,9 @@ Unverified numbers and answers from M13's movement and ranges. A paladin
 Any character, outdoors near a town's NPCs, with nameplates for friendly
 NPCs off.
 
-1. **The settings**: enter
-   `/run for _,n in ipairs({"UnitNameNPC","UnitNameInteractiveNPC","UnitNameHostleNPC","UnitNameFriendlySpecialNPCName","UnitNameNonCombatCreatureName","nameplateShowAll","nameplateShowEnemies","nameplateShowFriendlyNpcs","nameplateMaxDistance"}) do print(n, GetCVar(n)) end`.
-   Answers the settings wowlua reads.
+(Step 1, the settings, was answered by the batched run, 2026-11-09:
+"Answered by the batched run".)
+
 2. **A guard**: stand by a guard (a friendly NPC with nothing to sell)
    and note whether its name shows, then enter
    `/run SetCVar("UnitNameFriendlySpecialNPCName", 0)` and note whether
@@ -1099,9 +1194,9 @@ NPCs off.
 
 ## How far the world is drawn (decision T525)
 
-1. **The settings**: enter
-   `/run for _,n in ipairs({"farclip","terrainLodDist","horizonStart","lodObjectCullSize","lodObjectMinSize","wmoLodDist"}) do print(n, GetCVar(n)) end`.
-   Answers the view distance settings wowlua draws by.
+(Step 1, the settings, was answered by the batched run, 2026-11-09: as
+wowlua.)
+
 2. **Small things far away**: stand at Northshire's start facing the
    abbey, then walk back from it. Note at about which distance the
    lanterns and crates disappear (wowlua: where they look smaller than 18
@@ -1206,7 +1301,9 @@ trainers. These steps record them again on the updated client.
 5. **One color** (decision T554): `/run for _,c in ipairs(C_UIColor.GetColors()) do if c.baseTag=="COMPACT_UNIT_FRAME_FRIENDLY_HEALTH_COLOR" then print(c.color:GetRGBA()) end end`
 
    wowlua: `0.16862745583057 0.57647061347961 0.019607843831182 0`, the
-   installed table's alpha (0); 70425 answered 1. Recorded: (to do)
+   installed table's alpha (0); 70425 answered 1. Recorded 2026-11-09
+   (70862, the batched run): `0.16862745583057 0.57647061347961
+   0.019607843831182 1`; wowlua now answers 1 (decision T554).
 6. **A cleared normal texture** (decision T576): `/console scriptErrors 1`,
    then `/run local b=CreateFrame("Button") b:SetNormalTexture("Interface\\Buttons\\WHITE8X8") local t=b:GetNormalTexture() b:ClearNormalTexture() print(b:GetNormalTexture()==t, t:GetTexture(), t:IsShown())`
 
@@ -1214,7 +1311,9 @@ trainers. These steps record them again on the updated client.
    normal texture after their `OnLoad`, in which the professions' recraft
    slot clears it). Then open a profession's window and note whether
    `ItemButtonTemplate.lua:17: attempt to index a nil value` shows.
-   Recorded: (to do)
+   Recorded 2026-11-09 (70862, the batched run, the print only): `true nil
+   true`; wowlua now answers the same (decision T576). The profession
+   window's error still owed.
 
 ## The Classic clients' data (decision T554)
 
@@ -1558,7 +1657,10 @@ engine to close, with the steps that would record the game's answer.
    fitted. Steps (the numbers to compare with the engine's):
    - `/run local f=UIParent:CreateFontString(nil,"OVERLAY") f:SetFont("Interface\\AddOns\\SuuUI\\Media\\Fonts\\Figtree-Medium.ttf",11,"") f:SetWidth(160) f:SetText("Throw a handful into the campfire, transforming it into a violet flame.") print(f:GetStringHeight(), f:GetNumLines(), f:GetUnboundedStringWidth())`
 
-     Seen: (to do)
+     Seen (2026-11-09, 70862, the batched run): `SetFont true`, then
+     `32.5 3 368.33334350586`. Not compared yet: wowlua's run of the
+     batch has no SuuUI (its font missing: `33 3 380` with the fallback);
+     owed: the same line in SuuUI's tests.
 3. **A text's height can be a secret.** In a post-hook of a character
    window side pane's `LayoutRows` (Skills, Reputation or PvP rank), a
    wrapped row's `Label:GetStringHeight()` was a secret number ("attempt to
@@ -1601,7 +1703,11 @@ engine to close, with the steps that would record the game's answer.
    - `/run print(C_PetJournal.GetPetInfoByIndex(1))`
    - `/run local _,s=C_PetJournal.GetPetInfoByIndex(1) print(C_PetJournal.GetPetModelSceneInfoBySpeciesID(s), select(12, C_PetJournal.GetPetInfoBySpeciesID(s)))`
 
-     Seen: (to do)
+     Seen (2026-11-09, 70862, the batched run): `4 4 0`; the first pet
+     `BattlePet-0-… 5161 true nil 1 false false Mini Diablo 7831523 5
+     272328   false true false true true` (its GUID cut here); `1272 146956
+     0.25`. wowlua's journal has no pets (`0 0 0`, nothing): open until
+     the pet journal is modelled (`mock.setPets`).
 8. **Pet favourites and the locked journal.** Recorded in game
    (2026-11-07, 70755): `C_PetJournal.SetFavorite(petID, v)` takes 1 or 0
    (also "1"); `true`, `false` or a method call raise
@@ -1627,7 +1733,10 @@ engine to close, with the steps that would record the game's answer.
    - `/run for b=1,5 do print(b, C_Container.GetContainerNumFreeSlots(b)) end`
    - `/run for b=1,5 do local s=C_Container.ContainerIDToInventoryID(b) local id=GetInventoryItemID("player",s) print(b, id, id and C_Item.GetItemFamily(id)) end`
 
-     Seen: the family per bag, and which bags the reagent slot takes? (to do)
+     Seen (2026-11-09, 70862, the batched run, no profession bag):
+     bags 1 to 5 `0 0` free slots and family each (all full); their items
+     918, 4245, 221498, 4245 and 276892, family 0 each. As wowlua answers
+     a bag of family 0; a profession bag still owed.
 10. **Secret group finder results.** Forever handed a search result's
     `activityIDs` over as a secret (SuuUI's ForeverLFG on
     `LFG_LIST_SEARCH_RESULT_UPDATED`: `bad argument #1 to 'ipairs' (table
@@ -1838,7 +1947,10 @@ points until its first `SetPoint`, which replaces them.
 1. `/run local r=MapQuestInfoRewardsFrame print(r.QuestSessionBonusReward:GetNumPoints(), r.PlayerTitleText:GetNumPoints())`
 
    Seen: two counts (these two are anchored only for a quest-session
-   bonus or a title reward). wowlua: "2 2".
+   bonus or a title reward). wowlua: "2 2". Recorded 2026-11-09 (70862,
+   the batched run): `1 1`. Open: which point the client gives them; owed:
+   `/run local r=MapQuestInfoRewardsFrame print(r.PlayerTitleText:GetPoint(1)) print(r.QuestSessionBonusReward:GetPoint(1)) print(r.ItemReceiveText:GetNumPoints(), r.ItemReceiveText:GetPoint(1))`
+   right after a `/reload` (before the map is opened).
 2. Open the world map (M), and in its quest log click a quest whose
    rewards are XP and money, so its details show.
 3. `/run local r=MapQuestInfoRewardsFrame local t=r.ItemReceiveText print(t:GetNumPoints(), t:GetHeight(), t:GetStringHeight(), r:GetHeight())`

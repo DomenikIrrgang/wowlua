@@ -262,7 +262,7 @@ fn is_renderable_widget(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// A documented structure's value from the one given: each field given
-/// kept (a structure's processed in turn), each missing its documented
+/// kept as it is, each missing its documented
 /// `Default`, else its empty value (`C_AuraContainerUtil.Process…Options`:
 /// the options validated and completed; unverified: the client's
 /// validation errors).
@@ -287,12 +287,11 @@ fn processed(vm: &mut Vm, ty: &str, given: Value, depth: usize) -> Value {
             .get("Type")
             .and_then(serde_json::Value::as_str)
             .unwrap_or("");
+        // A field given is kept as given, a structure too: what it leaves
+        // out stays out (recorded 2026-11-09: `{ backdropInfo = {} }`'s
+        // `backdropInfo` comes back `{}`, no `insets`; decision T608).
         let v = if !v.is_nil() {
-            if depth < 6 {
-                processed(vm, field_ty, v, depth + 1)
-            } else {
-                v
-            }
+            v
         } else {
             let field_ty = api
                 .aliases
@@ -425,6 +424,17 @@ pub(crate) fn file_id_of_path(vm: &mut Vm, path: &str) -> Option<f64> {
     let ids = &mut crate::engine_mut(vm).world.file_ids;
     let next = -(ids.len() as f64) - 1.0;
     Some(*ids.entry(key).or_insert(next))
+}
+
+/// Whether a path names a file of an addon's folder that is not there (an
+/// addon not installed, or a file its folder lacks).
+pub(crate) fn missing_addon_file(vm: &Vm, path: &str) -> bool {
+    let path = path.to_ascii_lowercase().replace('/', "\\");
+    let key = match path.rsplit_once('.') {
+        Some((stem, ext)) if !ext.contains('\\') => stem,
+        _ => path.as_str(),
+    };
+    loose_file(vm, key) == Some(false)
 }
 
 /// Whether a path (lower case, back slashes, without its extension) is a

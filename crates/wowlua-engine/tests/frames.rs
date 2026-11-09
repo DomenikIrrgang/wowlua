@@ -1785,9 +1785,22 @@ local text = f:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
 text:SetHeight(10)
 text:SetPoint('TOPRIGHT', arrow, 'LEFT')
 text:SetPoint('TOPLEFT', 8, -8)
-return f:GetTop() - text:GetTop(), text:GetLeft() - f:GetLeft(), text:GetRight() - f:GetLeft()",
+-- (WoW Forever, 2026-11-09: `GetPoint` in that order too)
+local g = CreateFrame('Frame', nil, UIParent)
+g:SetHeight(10)
+g:SetPoint('RIGHT', UIParent, 'CENTER')
+g:SetPoint('LEFT', UIParent, 'CENTER', -100, 0)
+g:SetPoint('TOPLEFT', UIParent, 'CENTER', -50, 0)
+return f:GetTop() - text:GetTop(), text:GetLeft() - f:GetLeft(), text:GetRight() - f:GetLeft(),
+    UIParent:GetWidth() / 2 - g:GetLeft(), g:GetWidth(), (g:GetPoint(1)), (g:GetPoint(2)), (g:GetPoint(3)),
+    (text:GetPoint(1))",
     );
-    assert_eq!(r, ["8", "8", "100"]);
+    assert_eq!(
+        r,
+        [
+            "8", "8", "100", "50", "50", "TOPLEFT", "LEFT", "RIGHT", "TOPLEFT"
+        ]
+    );
 }
 
 /// `SetFormattedText` on a button gives its font string the text, as
@@ -1912,8 +1925,12 @@ local p = C_MajorFactions.GetMajorFactionProgressionInfo(2800)
 local r = C_MajorFactions.GetRenownRewardsForLevel(2800, 1)
 return string.lower(t:GetAtlas()), p.maxLevel, p.renownLevel, p.renownLevelThreshold,
     C_MajorFactions.GetTotalReputationForRenownLevel(2800, 4), C_MajorFactions.GetTotalReputationForRenownLevel(2800, 14),
-    r[1].name",
+    r[1].name, C_MajorFactions.GetTotalReputationForRenownLevel(2800, 11),
+    C_MajorFactions.GetTotalReputationForRenownLevel(2800, 13),
+    #C_MajorFactions.GetRenownRewardsForLevel(2800, 3), C_MajorFactions.GetRenownRewardsForLevel(2800, 3)[1].name",
     );
+    // (ranks 5 to 13 and the rewards of 2 to 6 as WoW Forever answered
+    // them, 2026-11-09)
     assert_eq!(
         r,
         [
@@ -1923,7 +1940,11 @@ return string.lower(t:GetAtlas()), p.maxLevel, p.renownLevel, p.renownLevelThres
             "750",
             "3900",
             "24750",
-            "Rank 1 Rewards"
+            "Rank 1 Rewards",
+            "16600",
+            "21750",
+            "1",
+            "Rank 3 Rewards"
         ]
     );
 }
@@ -2578,7 +2599,7 @@ return table.concat(out, ' ; '), t:GetWidth(), tostring(WrapTipTextLeft2:GetHeig
 /// `place()` anchors the item to the body and sets the body's height; the
 /// item's place is asked for at once ("now"), a frame later and a second
 /// later; the item's `OnSizeChanged` hook logs its size where it runs.
-const ANCHORS_PROBE: &str = "Log, Pending, Items, Names = {}, {}, {}, {}
+const ANCHORS_PROBE: &str = "Log, Pending, Items, Names, Shows = {}, {}, {}, {}, {}
 local function rect(f)
     local l, t = f:GetLeft(), f:GetTop()
     return l and string.format('%g,%g', l, t - UIParent:GetTop()) or 'nil'
@@ -2593,6 +2614,7 @@ function Case(name, o)
     Log[name] = log
     Names[#Names + 1] = name
     local P = CreateFrame('Frame', nil, UIParent)
+    if o.hidden then P:Hide() end
     local body = CreateFrame('Frame', nil, P)
     body:SetPoint('TOPLEFT', 12, -40)
     body:SetSize(1, 1)
@@ -2601,6 +2623,11 @@ function Case(name, o)
     local function fit() local _, h = body:GetSize(); P:SetHeight(40 + h + 12) end
     if o.script == 'fit' then body:SetScript('OnSizeChanged', fit)
     elseif o.script == 'empty' then body:SetScript('OnSizeChanged', function() end)
+    elseif o.script == 'self' then
+        body:SetScript('OnSizeChanged', function(self)
+            local _, h = self:GetSize()
+            log[#log + 1] = string.format('body asks %g', h)
+        end)
     elseif o.script == 'later' then body:SetScript('OnSizeChanged', function() C_Timer.After(0, fit) end) end
     P:SetHeight(40 + 1 + 12)
     local item = CreateFrame(o.frame and 'Frame' or 'Button', nil, body)
@@ -2610,27 +2637,45 @@ function Case(name, o)
         item:HookScript('OnSizeChanged', function(_, w, h) log[#log + 1] = string.format('size %gx%g', w, h) end)
     end
     P:SetPoint('TOPLEFT', 100, -100)
-    P:Show()
+    if not o.hidden then P:Show() end
     local function place()
         if o.heightFirst then body:SetHeight(30) end
         item:ClearAllPoints()
         item:SetPoint('TOPLEFT', body, 'TOPLEFT', 0, 0)
         if not o.heightFirst then body:SetHeight(30) end
         if o.fitNow then fit() end
+        if o.bodySize then log[#log + 1] = string.format('body %g', select(2, body:GetSize())) end
     end
-    local function watch()
-        note(log, 'now', item)
+    local function later()
         C_Timer.After(0, function() note(log, 'next', item) end)
         C_Timer.After(1, function() note(log, '1s', item) end)
+    end
+    local function watch()
+        if not o.quiet then note(log, 'now', item) end
+        if not o.hidden then later() end
     end
     Items[name] = { item = item, body = body, rect = rect, log = log }
     if o.atOnce then place(); watch(); return end
     Pending[#Pending + 1] = function() log[#log + 1] = 'place'; place(); watch() end
+    -- (built hidden: shown a frame after its place)
+    if o.hidden then
+        Shows[#Shows + 1] = function()
+            log[#log + 1] = 'show'
+            P:Show()
+            if not o.quiet then note(log, 'shown', item) end
+            later()
+        end
+    end
 end
 local driver = CreateFrame('Frame')
 driver:SetScript('OnUpdate', function(self)
-    self:SetScript('OnUpdate', nil)
+    if #Pending == 0 then
+        self:SetScript('OnUpdate', nil)
+        for _, f in ipairs(Shows) do f() end
+        return
+    end
     for _, f in ipairs(Pending) do f() end
+    Pending = {}
 end)
 ";
 
@@ -2687,6 +2732,39 @@ Case('P', { script = 'later' })",
             format!("N: place | {kept}"),
             format!("O: place | {lost}"),
             format!("P: place | {kept}"),
+        ]
+    );
+}
+
+/// What decision T605 left open, as WoW Forever answered it (`/stdtest
+/// engine owed`, 70862, 2026-11-09): the layout pass before the next frame
+/// loses the item as a query does (`Gq`: nothing asks before the frame's
+/// end), a panel built hidden too, asked while hidden or not (`Gh`,
+/// `Gh2`); a body whose size script asks for its own size and resizes
+/// nothing (`T`), and a body laid out for itself before the item is asked
+/// for (`W`), lose nothing.
+#[test]
+fn the_layout_pass_and_hidden_panels_lose_the_frame_as_a_query_does() {
+    let mut vm = vm();
+    let r = anchors_probe(
+        &mut vm,
+        "Case('Gq', { script = 'fit', quiet = true })
+Case('Gh', { script = 'fit', hidden = true })
+Case('Gh2', { script = 'fit', hidden = true, quiet = true })
+Case('T', { script = 'self' })
+Case('W', { script = 'fit', bodySize = true })",
+    );
+    let placed = "112,-140";
+    assert_eq!(
+        r,
+        [
+            "Gq: place | next nil | 1s nil".to_string(),
+            "Gh: place | now nil | show | shown nil | next nil | 1s nil".to_string(),
+            "Gh2: place | show | next nil | 1s nil".to_string(),
+            format!(
+                "T: body asks 1 | place | body asks 30 | size 55x30 | now {placed} | next {placed} | 1s {placed}"
+            ),
+            format!("W: place | body 30 | size 55x30 | now {placed} | next {placed} | 1s {placed}"),
         ]
     );
 }
