@@ -475,6 +475,39 @@ The WoW API the VM's code calls, per flavor.
   ID (the client may add flags to it), whether the setter is protected
   as the toggle is, the cursor's values and the icon's kind (`tests/ingame/PROBES.md`, "The
   pet's spellbook").
+- **Trainers.** A trainer (`mock.defineTrainer`) opened through its
+  gossip lists its services; as the list comes its first available
+  service is chosen (`GetTrainerSelectionIndex`), with no event.
+  `SelectTrainerService(i)` chooses the listed service `i`, any other
+  index none, and a change of the choice sends
+  `TRAINER_DESCRIPTION_UPDATE()` at once, in which Blizzard's trainer
+  frame takes it up; the same choice again sends nothing (decision T617;
+  unverified: at once rather than with the server's answer, the choice
+  with none available).
+- **Beast Training.** In WoW Forever a hunter's Beast Training is a
+  spell, not an NPC (reported by the user, 2026-11-10): the player's cast
+  of it (5149; inferred, of the client's two spells of that name) with a
+  pet out opens the trainer window in its pet mode, as an NPC opens the
+  class trainer but without gossip or the interaction manager's events:
+  `TRAINER_SHOW()`, then `TRAINER_UPDATE()` with the list
+  `mock.defineBeastTraining({ services })` gives (decision T618). While
+  it is open `C_Trainer.GetTrainerType()` answers `Enum.TrainerType.Pet`:
+  a service's cost is in the pet's training points
+  (`C_PetInfo.GetPetTrainingPoints`: all and spent, `mock.setPet`'s
+  `trainingPoints` and `trainingPointsUsed`, a change telling
+  `UNIT_PET_TRAINING_POINTS("pet")`) and its level the pet's; a service
+  the pet's spellbook holds is "used". `BuyTrainerService` from an
+  addon's code is forbidden there (`ADDON_ACTION_FORBIDDEN`, seen in
+  game: addons train with a secure click on the game's Train button); a
+  class trainer's stays allowed. Blizzard's Train, for a service the
+  points pay for, teaches it to the pet a round trip later: the chat's
+  "Your pet has learned a new ability", the spell in the pet's spellbook
+  (in place of one of the same name), its cost spent, `SPELLS_CHANGED`,
+  `TRAINER_UPDATE`; `C_SpellBook.IsSpellKnown(id, 1)` is true for it.
+  The window hidden (`CloseTrainer`) or the pet dismissed:
+  `TRAINER_CLOSED()`. Unverified beyond the spell opening the window, the
+  pet mode and the forbidden call (`tests/ingame/PROBES.md`, "Beast
+  Training").
 - **Layout.** A region's rectangle comes from its points as the client
   lays it out: each edge from the points that set it (a `LEFT` and a
   `RIGHT` point give the width, a `TOP` and a `BOTTOM` the height),
@@ -597,6 +630,15 @@ The WoW API the VM's code calls, per flavor.
   `ClearHistory` forgets them); the arrow keys run `OnArrowPressed`, left
   and right move the cursor, up and down step through the history (with
   `SetAltArrowKeyMode(true)` only while Alt is held; decision T291).
+- **Clicks.** `Button:Click([button [, isDown]])` runs the button's
+  `PreClick`, `OnClick` and `PostClick` with `button` (`"LeftButton"`)
+  and `isDown` (false), whatever it registered for, without `OnMouseDown`
+  or `OnMouseUp`. On a disabled button it does nothing, so a secure
+  button's `click` action on it does nothing either, and neither does a
+  button's `Click()` while its own runs (decision T616). The user's click
+  (`mock.click`) and a `CLICK` key binding run no click script on a
+  disabled button; unverified: the mouse's `OnMouseDown`, `OnMouseUp`,
+  `OnEnter` and `OnLeave` on it, which still run.
 - **Targeting.** Tab-targeting cycles the units of its kind within 40
   yards, nearest first (`TargetNearestEnemy([reverse])` and its kin);
   `TargetLastTarget`, `AssistUnit` and `FocusUnit` follow the units'

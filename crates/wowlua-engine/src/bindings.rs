@@ -300,8 +300,12 @@ pub fn run_command(vm: &mut Vm, command: &str, keystate: &str) {
             // by default the left button's up), as a mouse click: a button
             // left as it was clicks once, on the key's release, not on both
             // (decision T234).
+            // A disabled button's none, as a mouse click's and `Click()`'s
+            // (decision T616; unverified for a binding).
             let is_down = keystate == "down";
-            if !widgets::registered_click(vm, id, button, is_down) {
+            if !engine(vm).world.widgets[id.0].enabled
+                || !widgets::registered_click(vm, id, button, is_down)
+            {
                 return;
             }
             let button = vm.str(button);

@@ -992,9 +992,10 @@ fn is_valid_npc_interaction(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_Trainer.GetTrainerType()`: `Enum.TrainerType.General` (recorded: 0
-/// at all 14 class trainers probed; a profession trainer's unverified).
-fn get_trainer_type(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(0.0)])
+/// at all 14 class trainers probed; a profession trainer's unverified),
+/// `Pet` while a pet trainer is open (decision T618).
+fn get_trainer_type(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(crate::trainer::trainer_type(vm))])
 }
 
 /// `C_Trainer.GetCategorizeTrainerUI()`: the setting

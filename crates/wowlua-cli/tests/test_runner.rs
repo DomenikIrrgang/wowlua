@@ -3677,6 +3677,90 @@ end
     );
 }
 
+/// Beast Training with Blizzard's trainer frame (decisions T616 to T618):
+/// the pet's training points shown, the game's Train disabled until its
+/// frame has a choice the pet can pay for (its `Click()` and a secure
+/// button's `click` action on it do nothing meanwhile), a choice told with
+/// `SelectTrainerService` taken up by the frame (`TRAINER_DESCRIPTION_UPDATE`),
+/// Train teaching the pet.
+#[test]
+fn blizzard_ui_beast_training() {
+    blizzard_ui_test(
+        "tests/beast.test.wowlua",
+        r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local function chatHas(text: string): boolean
+    local frame = (_G :: any).ChatFrame1
+    for i = 1, frame:GetNumMessages() do
+        local line = frame:GetMessageInfo(i)
+        if type(line) == "string" and line:find(text, 1, true) then return true end
+    end
+    return false
+end
+
+@test("Beast Training")
+local function beast()
+    mock.setPlayer({ name = "Rexxar", level = 20, class = "HUNTER", race = "Orc" })
+    local p = mock.player :: any
+    local wolf = mock.spawnUnit({ name = "Wolf", level = 20, reaction = "friendly" })
+    mock.setPet(wolf, { trainingPoints = 10, spells = { { spell = 2649, name = "Growl", subName = "Rank 1" } } })
+    mock.defineBeastTraining({ services = {
+        { spell = 2649, name = "Growl", icon = 132270, level = 1, rank = "Rank 1", cost = 0 },
+        { spell = 17253, name = "Bite", icon = 132278, level = 8, rank = "Rank 1", cost = 3 },
+        { spell = 16827, name = "Claw", icon = 132140, level = 1, rank = "Rank 1", cost = 20 },
+    } })
+    -- Beast Training cast: the trainer window in its pet mode
+    p:useSpell(5149)
+    mock.waitSeconds(1)
+    local frame = (_G :: any).ClassTrainerFrame
+    local train = (_G :: any).ClassTrainerTrainButton
+    expect(frame).toBeShown()
+    expect(C_Trainer.GetTrainerType()).toBe(Enum.TrainerType.Pet)
+    expect(frame.trainingPoints).toBeShown()
+    expect(frame.money).never.toBeShown()
+    expect(select(2, GetTrainerServiceInfo(1))).toBe("used")
+    -- Train disabled: neither its Click() nor a secure click on it runs its OnClick
+    local trainClicks = 0
+    train:HookScript("OnClick", function() trainClicks = trainClicks + 1 end)
+    local secure = CreateFrame("Button", "BeastTrainClick", UIParent, "SecureActionButtonTemplate")
+    secure:SetSize(40, 20)
+    secure:SetPoint("CENTER")
+    secure:RegisterForClicks("AnyUp", "AnyDown")
+    secure:SetAttribute("type1", "click")
+    secure:SetAttribute("clickbutton1", train)
+    expect(train:IsEnabled()).toBe(false)
+    train:Click()
+    mock.click(secure)
+    mock.waitSeconds(1)
+    expect(trainClicks).toBe(0)
+    expect(C_SpellBook.IsSpellKnown(17253, Enum.SpellBookSpellBank.Pet)).toBe(false)
+    -- Claw chosen (more than the pet's points): the frame takes it up, Train stays off
+    SelectTrainerService(3)
+    expect(GetTrainerSelectionIndex()).toBe(3)
+    expect(frame.selectedService).toBe(3)
+    expect(train:IsEnabled()).toBe(false)
+    -- Bite chosen: Train on, the secure click teaches the pet
+    SelectTrainerService(2)
+    expect(frame.selectedService).toBe(2)
+    expect(train:IsEnabled()).toBe(true)
+    mock.click(secure)
+    mock.waitSeconds(1)
+    expect(trainClicks).toBe(1)
+    expect(chatHas("Your pet has learned a new ability: ")).toBe(true)
+    expect(C_SpellBook.IsSpellKnown(17253, Enum.SpellBookSpellBank.Pet)).toBe(true)
+    expect(select(2, C_PetInfo.GetPetTrainingPoints())).toBe(3)
+    expect(select(2, GetTrainerServiceInfo(2))).toBe("used")
+    HideUIPanel(frame)
+    mock.waitSeconds(0.5)
+    expect(frame).never.toBeShown()
+    expect(C_Trainer.GetTrainerType()).toBe(Enum.TrainerType.General)
+end
+"#,
+        "1 passed, 0 failed",
+    );
+}
+
 /// Every panel's key binding with Blizzard's UI, opened and closed, as the
 /// fresh character (the default) and as the recorded one (its profile):
 /// not a single Blizzard error, nothing refused.

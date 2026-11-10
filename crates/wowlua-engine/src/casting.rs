@@ -233,6 +233,11 @@ fn slots_changed(vm: &mut Vm, spell_id: f64) {
 /// and spell ID secret (`SecretWhenUnitSpellCastRestricted`; recorded for
 /// nameplates out of combat), its cast bar id never.
 fn fire_cast(vm: &mut Vm, event: &str, unit: UnitId, args: &[Value]) {
+    // The player's Beast Training opens the pet's trainer once cast
+    // (decision T618).
+    let beast = unit == units::PLAYER
+        && event == "UNIT_SPELLCAST_SUCCEEDED"
+        && matches!(args.get(1), Some(Value::Num(id)) if *id == crate::trainer::BEAST_TRAINING);
     let mut args = args.to_vec();
     if unit != units::PLAYER {
         for v in args.iter_mut().take(2) {
@@ -242,6 +247,9 @@ fn fire_cast(vm: &mut Vm, event: &str, unit: UnitId, args: &[Value]) {
         }
     }
     units::fire_unit(vm, event, unit, &args);
+    if beast {
+        crate::trainer::beast_training(vm);
+    }
 }
 
 fn events(channel: bool) -> (&'static str, &'static str) {

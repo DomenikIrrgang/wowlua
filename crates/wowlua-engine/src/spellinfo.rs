@@ -423,10 +423,6 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
 
-fn zero_zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(0.0), Value::Num(0.0)])
-}
-
 fn empty_list(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(vm.new_table())])
 }
@@ -1912,7 +1908,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Traits.TalentTestUnlearnSpells", nothing),
         // C_PetInfo: what `pets` does not model.
         ("C_PetInfo.GetPetFoodTypes", empty_list),
-        ("C_PetInfo.GetPetTrainingPoints", zero_zero),
         ("C_PetInfo.CanPetEatItem", no),
         ("C_PetInfo.IsPetActionPassive", no),
         ("C_PetInfo.GetPetTamersForMap", empty_list),
