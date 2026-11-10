@@ -286,8 +286,8 @@ fn combat_rating_bonus_for_value(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // -------------------------------------------------------- mouse, keys
 
-/// `IsKeyDown(key)`: a modifier the engine holds (Shift, Ctrl, Alt, the
-/// left ones or either); any other key or button up between the engine's
+/// `IsKeyDown(key)`: a modifier the engine holds (Shift, Ctrl, Alt, Cmd,
+/// the left ones or either); any other key or button up between the engine's
 /// actions (unverified: the right keys, `excludeBindingState`).
 fn is_key_down(vm: &mut Vm, c: NativeCall) -> Ret {
     let key = text(vm, c.arg(1)).unwrap_or_default().to_uppercase();
@@ -299,6 +299,9 @@ fn is_key_down(vm: &mut Vm, c: NativeCall) -> Ret {
         "SHIFT" | "LSHIFT" => Some(0),
         "CTRL" | "LCTRL" => Some(1),
         "ALT" | "LALT" => Some(2),
+        // Cmd as `META` or `LMETA` (unverified: the names the client
+        // takes for it, decision T624).
+        "META" | "LMETA" => Some(3),
         _ => None,
     };
     let down = i.is_some_and(|i| engine(vm).world.input.modifiers[i]);

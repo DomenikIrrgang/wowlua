@@ -148,6 +148,47 @@ return unpack(out)",
     );
 }
 
+/// The Mac's Cmd is a modifier (decision T624; WoW Forever on a Mac):
+/// `IsMetaKeyDown`, `IsModifierKeyDown`, `[mod:meta]` and `[mod]` with
+/// it held, `MODIFIER_STATE_CHANGED` as `LMETA`; Shift is not Cmd.
+#[test]
+fn cmd_is_a_modifier() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local out = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('MODIFIER_STATE_CHANGED')
+f:SetScript('OnEvent', function(_, _, key, down) out[#out + 1] = key .. ' ' .. down end)
+local function p()
+    local a = SecureCmdOptionParse('[mod:meta] meta; none')
+    local b, t = SecureCmdOptionParse('[mod] mod; none')
+    out[#out + 1] = table.concat({ tostring(IsMetaKeyDown()), tostring(IsModifierKeyDown()),
+        tostring(a), tostring(b), tostring(t), tostring(IsShiftKeyDown()), tostring(IsKeyDown('LMETA')) }, ' ')
+end
+mock.setModifiers({ meta = true })
+p()
+mock.setModifiers({})
+p()
+mock.setModifiers({ shift = true })
+p()
+mock.setModifiers({})
+return unpack(out)",
+    );
+    assert_eq!(
+        r,
+        [
+            "LMETA 1",
+            "true true meta mod nil false true",
+            "LMETA 0",
+            "false false none none nil false false",
+            "LSHIFT 1",
+            "false true none mod nil true false",
+            "LSHIFT 0",
+        ]
+    );
+}
+
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -254,4 +295,52 @@ mock.click(b)
 return tostring(b:GetAttribute('ran')), tostring(errs[1])",
     );
     assert_eq!(r, ["1", "nil"]);
+}
+
+/// A protected button's wrapped `OnClick`: its pre-body may name another
+/// button, which the handler then gets, or return false to stop the click
+/// (Blizzard's `SecureHandlers.lua`; an unprotected frame has no handle,
+/// and its pre-body does not run); `SecureCmdOptionParse` answers Cmd
+/// there, and Blizzard's chord string gets `META-` (decision T624; Cmd+Left
+/// as a right click turned off).
+#[test]
+fn a_wrapped_click_takes_the_button_its_pre_body_names() {
+    let Some(mut vm) = client() else {
+        eprintln!("skipped: the UI code is missing");
+        return;
+    };
+    let r = run(
+        &mut vm,
+        "local errs = {}
+seterrorhandler(function(e) errs[#errs + 1] = e end)
+C_CVar.SetCVar('MacUseCommandLeftClickAsRightClick', '0')
+local header = CreateFrame('Frame', 'WrapHeader', UIParent, 'SecureHandlerBaseTemplate')
+local got = {}
+local b = CreateFrame('Button', 'WrapButton', UIParent, 'SecureActionButtonTemplate')
+b:SetSize(20, 20)
+b:SetPoint('CENTER')
+b:RegisterForClicks('AnyUp')
+b:SetScript('OnClick', function(_, button) got[#got + 1] = button end)
+SecureHandlerWrapScript(b, 'OnClick', header, [[
+    if button == 'MiddleButton' then return false end
+    if SecureCmdOptionParse('[mod:meta] 1') then return 'cmd-' .. button end
+]])
+mock.click(b)
+mock.setModifiers({ meta = true })
+mock.click(b)
+mock.click(b, 'RightButton')
+mock.click(b, 'MiddleButton')
+local chord = CreateKeyChordStringUsingMetaKeyState('E')
+mock.setModifiers({})
+mock.click(b, 'RightButton')
+return table.concat(got, ' '), chord, tostring(errs[1])",
+    );
+    assert_eq!(
+        r,
+        [
+            "LeftButton cmd-LeftButton cmd-RightButton RightButton",
+            "META-E",
+            "nil"
+        ]
+    );
 }

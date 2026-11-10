@@ -97,6 +97,80 @@ return table.concat(Ran, ', '), tostring(took), tostring(unknown), GetBindingAct
     );
 }
 
+/// Cmd held makes a key's chord `META-` after the others (Blizzard's
+/// `CreateKeyChordStringUsingMetaKeyState` order: ALT, CTRL, SHIFT,
+/// META), and a modified click set to `META` follows it (decision T624).
+#[test]
+fn cmd_held_binds_as_meta() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "Ran = {}
+for _, name in ipairs({ 'PLAIN', 'CMD', 'ALL' }) do
+    mock.defineBinding('MYADDON_' .. name, function(state) Ran[#Ran + 1] = name end)
+end
+SetBinding('E', 'MYADDON_PLAIN')
+SetBinding('META-E', 'MYADDON_CMD')
+SetBinding('ALT-SHIFT-META-E', 'MYADDON_ALL')
+SetModifiedClick('MYADDON_CLICK', 'META')
+mock.setModifiers({ meta = true })
+mock.pressKey('E')
+local clicked = IsModifiedClick('MYADDON_CLICK')
+mock.setModifiers({ meta = true, alt = true, shift = true })
+mock.pressKey('E')
+mock.setModifiers({})
+mock.pressKey('E')
+return table.concat(Ran, ' '), GetBindingAction('META-E'), tostring(clicked), tostring(IsModifiedClick('MYADDON_CLICK'))",
+    );
+    assert_eq!(r, ["CMD ALL PLAIN", "MYADDON_CMD", "true", "false"]);
+}
+
+/// On the Mac, Cmd and the left button is a right click while
+/// `MacUseCommandLeftClickAsRightClick` is on (its default, 1): the click
+/// comes as `RightButton` with Cmd not held, which is held again after;
+/// off, a Cmd+Left click as itself; on Windows as itself (decision T624).
+#[test]
+fn cmd_left_click_is_a_right_click_on_the_mac() {
+    let mut vm = vm();
+    let src = "local out = {}
+local b = CreateFrame('Button', nil, UIParent)
+b:SetSize(20, 20)
+b:SetPoint('CENTER')
+b:RegisterForClicks('AnyUp')
+local function note(script)
+    return function(_, button) out[#out + 1] = script .. ' ' .. button .. ' ' .. tostring(IsMetaKeyDown()) end
+end
+b:SetScript('OnMouseDown', note('down'))
+b:SetScript('OnClick', note('click'))
+mock.setModifiers({ meta = true })
+mock.click(b)
+out[#out + 1] = 'after ' .. tostring(IsMetaKeyDown())
+C_CVar.SetCVar('MacUseCommandLeftClickAsRightClick', '0')
+mock.click(b)
+C_CVar.SetCVar('MacUseCommandLeftClickAsRightClick', '1')
+mock.click(b, 'RightButton')
+mock.setModifiers({})
+mock.click(b)
+return C_CVar.GetCVarDefault('MacUseCommandLeftClickAsRightClick'), table.concat(out, ', ')";
+    assert_eq!(
+        run(&mut vm, src),
+        [
+            "1",
+            "down RightButton false, click RightButton false, after true, \
+             down LeftButton true, click LeftButton true, \
+             down RightButton true, click RightButton true, \
+             down LeftButton false, click LeftButton false"
+        ]
+    );
+    let mut vm = self::vm();
+    wowlua_engine::set_platform(&mut vm, wowlua_engine::Platform::Windows);
+    let r = run(&mut vm, src);
+    assert!(
+        r[1].starts_with("down LeftButton true, click LeftButton true, after true"),
+        "{r:?}"
+    );
+}
+
 #[test]
 fn forever_characters_are_whispered_by_first_and_last_name() {
     let mut vm = vm();

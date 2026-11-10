@@ -1157,6 +1157,7 @@ fn is_modified_click(vm: &mut Vm, c: NativeCall) -> Ret {
         "SHIFT" => held[0],
         "CTRL" => held[1],
         "ALT" => held[2],
+        "META" => held[3],
         button if button.starts_with("BUTTON") => {
             let n = &button["BUTTON".len()..];
             match clicking.as_deref() {

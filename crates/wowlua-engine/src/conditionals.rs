@@ -302,12 +302,14 @@ fn test(vm: &mut Vm, name: &str, args: &[String], unit: &[u8]) -> Option<bool> {
 }
 
 /// `mod:<key>`: `shift`, `ctrl`, `alt` (either side, or `l`/`r` for one),
-/// else a modified click's action (`SELFCAST`: `IsModifiedClick`).
+/// `meta` (Cmd), else a modified click's action (`SELFCAST`: `IsModifiedClick`).
 fn modifier_held(vm: &mut Vm, key: &str) -> bool {
     let f = match key.to_ascii_lowercase().as_str() {
         "shift" => "IsShiftKeyDown",
         "ctrl" => "IsControlKeyDown",
         "alt" => "IsAltKeyDown",
+        // The Mac's Cmd (decision T624: `[mod:meta]` with Cmd held).
+        "meta" => "IsMetaKeyDown",
         "lshift" => "IsLeftShiftKeyDown",
         "rshift" => "IsRightShiftKeyDown",
         "lctrl" => "IsLeftControlKeyDown",
