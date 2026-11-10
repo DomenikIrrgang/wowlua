@@ -181,7 +181,17 @@ inside which a slow call was recorded is not, because the callers that were
 waiting for it are in that entry's stack. It is recorded with its time,
 function and location, the root that started the work (§7.3.2) and a stack
 from `debugstack()`. Only calls over the threshold pay for the stack. The last 200
-slow calls per addon are kept (decision T178). A frame whose total exceeds
+slow calls per addon are kept (decision T178), and so are each recording's
+**slowest**: the 100 slowest slow calls since it started, at most 3 per
+function (a slower call of a function that has 3 takes the place of its
+fastest), so a function that is slow hundreds of times cannot push out the
+rest. Every slow call is also summed per function and per root: the count,
+total and slowest time, when the slowest was (with its location and root,
+or for a root its function), and the first and last; past 200 functions or
+roots, new ones are summed as `(other)`. Each second of a recording names
+its **worst call**: its slowest slow call, or when it had none, its longest
+top-level call (a root, or a function no measured call ran under), with that
+call's time to 0.01 ms (decision T615). A frame whose total exceeds
 `frame-budget` (default 1 ms) is **over budget**, and so is a single call
 longer than it. A call that ends in a later frame than it started (a
 coroutine yielded inside it) counts its time but is neither a slow call nor
@@ -429,7 +439,7 @@ session, except those marked for export (§7.7.9).
 | flame | The same paths as a flame graph by total time, zoomable (needs call paths) |
 | by event | Time per root, with the function that took most of it |
 | timeline | Time per rendered frame against the frame budget, the garbage rate, and the recording's combats and pulls; selecting a frame lists what ran in it |
-| slow | The slow calls (§7.3.1), newest first, with root, recording and stack |
+| slow | The slow calls (§7.3.1), newest first, with root, recording and stack, then the recording's slowest |
 | garbage | The garbage rate and memory over time, then garbage per function (needs garbage per function) |
 | bench | Benchmarks (§7.7.6) |
 
@@ -505,14 +515,15 @@ the addon's other variables (decision T614).
 On the desktop, `wowlua prof report` reads them and writes a report
 ([Developer tooling §16.5](../toolchain/tooling.md#165-profiling-reports-wowlua-prof-report),
 decision T179). An exported recording keeps its statistics, call paths,
-frame times (bucketed) and slow calls; stacks are kept as text.
+frame times (bucketed) and slow calls; stacks are kept as text, each
+different stack once.
 
 `WowluaDevDB_<Addon>.exports` is an array with a table per exported
 recording (the same while it is shown in the window):
 
 | Field | Contents |
 |-------|----------|
-| `format` | `1` |
+| `format` | `2` (format 1, before T615, kept each slow call's stack as text in the call, and had no `slowest`, `slowFunctions`, `slowRoots`, `stacks` or per-second worst calls) |
 | `addon`, `version`, `profile`, `build`, `compiler` | The build that recorded it; `build` maps locations back (§7.6) |
 | `name`, `kind`, `detail` | Its name, `"live"`, `"combat"`, `"pull"` or `"manual"`, and a pull's encounter name |
 | `started`, `duration` | Its start as `time()` (Unix seconds) and its length in seconds |
@@ -522,9 +533,12 @@ recording (the same while it is shown in the window):
 | `paths` | With call paths: an array of `{ path = { root, name, … }, calls, total, self, max }` |
 | `roots` | By root: `kind` (`event`, `script`, `timer`, `slash`, `other`), `calls`, `total`, `max`, `top` (the function with the most own time under it) and `topSelf` |
 | `events`, `scripts`, `timers`, `commands` | The monitor's entries: `count`, `total`, `max`, `over`, `detail` (where it was set), `frames` (frames it ran in); events also `bursts` and `burstMax`, scripts `script` and for `OnUpdate` `showsNothing` |
-| `seconds` | Per second of the recording, arrays `frames`, `time`, `max` (slowest frame), `over`, `garbage` (the addon's) and `garbageAll` (all addons') |
+| `seconds` | Per second of the recording, arrays `frames`, `time`, `max` (slowest frame), `over`, `garbage` (the addon's), `garbageAll` (all addons'), `worst` (the worst call's name as its number in `names`, 0 for none) and `worstMs` (its time); `names` lists each worst call's name once |
 | `memory` | An array of `{ at, kb }` (seconds from the start) |
-| `slow` | The slow calls, newest first: `{ at, ms, name, location, root, recording, stack }` |
+| `slow` | The newest slow calls (up to 200), newest first: `{ at, ms, name, location, root, recording, stack }`, `stack` the number of its text in `stacks` (0 for none) |
+| `slowest` | The recording's slowest slow calls, slowest first, as in `slow` |
+| `slowFunctions`, `slowRoots` | Every slow call of the recording summed by function and by root: `count`, `total`, `max`, `at` (of the slowest), `first`, `last`; functions also `location` and `root` of the slowest, roots `name` (its function) |
+| `stacks` | The slow calls' stacks, each once |
 | `hints` | The hints of the recording: `{ code, subject, evidence, fix, recording, metric }` |
 
 Times are milliseconds unless named otherwise.

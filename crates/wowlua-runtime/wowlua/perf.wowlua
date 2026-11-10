@@ -6,8 +6,14 @@ local defaults = wl.perfDefaults ?? { callPaths = false, garbage = false, frameB
 const RING = 3600
 -- Seconds of per-second figures kept: two hours.
 const SECONDS = 7200
--- Slow calls kept, automatic recordings kept, names kept per frame.
+-- Slow calls kept: the newest, and a recording's slowest (at most a few per
+-- function, so one hot function cannot crowd out the rest); functions and
+-- roots whose slow calls are summed per recording. Automatic recordings
+-- kept, names kept per frame.
 const SLOW = 200
+const SLOWEST = 100
+const SLOWEST_PER = 3
+const SLOW_KEYS = 200
 const AUTO = 20
 const TOP = 8
 -- A burst: the same event handled this often within one frame.
@@ -17,6 +23,11 @@ local function now(): number
 end
 local function memory(): number
 	return collectgarbage("count")
+end
+-- A recording's slowest slow calls (slowest first) and its slow calls summed
+-- per function and per root (T615).
+local function keeper(): any
+	return { list = {}, per = {}, fns = {}, roots = {}, nFns = 0, nRoots = 0 }
 end
 
 local perf: any = {
@@ -53,9 +64,11 @@ local perf: any = {
 	-- The frame ring, by slot.
 	ring = { id = {}, time = {}, garbage = {}, garbageAll = {}, at = {}, names = {}, times = {} },
 	-- Per-second figures, by second number (`first` to `last`).
-	seconds = { first = 1, last = 0, at = {}, frames = {}, time = {}, max = {}, over = {}, garbage = {}, garbageAll = {} },
-	-- The slow calls, oldest first.
+	-- `worst` names the second's worst call and `worstMs` is its time.
+	seconds = { first = 1, last = 0, at = {}, frames = {}, time = {}, max = {}, over = {}, garbage = {}, garbageAll = {}, worst = {}, worstMs = {} },
+	-- The newest slow calls, oldest first; the `live` recording's slowest.
 	slow = {},
+	slowest = keeper(),
 	-- Each function's time per 4 seconds over the last minute.
 	trend = {},
 	trendBase = {},
@@ -75,6 +88,9 @@ wl.perf = perf
 local cur, curN, curRest = 0, 0, 0
 local curNames: string[], curTimes: number[] = {}, {}
 local secFrames, secTime, secMax, secOver, secGarbage, secAll, secStart = 0, 0, 0, 0, 0, 0, now()
+-- The second's slowest slow call, and its longest top-level call (the
+-- second's worst call when it had no slow call).
+local secSlow: string?, secSlowMs, secTop: string?, secTopMs = nil, 0, nil, 0
 local lastMemory = memory()
 
 -- The open recordings' maxima: `kind` is `fn`, `path`, `root`, `ev`, `sc`,
@@ -102,6 +118,9 @@ end
 -- Adds `elapsed` to the frame being measured, under `label`.
 local function addToFrame(label: string, elapsed: number)
 	cur += elapsed
+	if elapsed > secTopMs then
+		secTop, secTopMs = label, elapsed
+	end
 	for i = 1, curN do
 		if curNames[i] == label then
 			curTimes[i] += elapsed
@@ -117,10 +136,77 @@ local function addToFrame(label: string, elapsed: number)
 	end
 end
 
+-- A slow call into the sums of its function (`fns`) or root (`roots`); past
+-- SLOW_KEYS of them, new ones are summed as `(other)`.
+local function sum(k: any, kind: string, key: string, e: any)
+	local by = k[kind]
+	local a = by[key]
+	if not a then
+		local count = kind == "fns" and "nFns" or "nRoots"
+		if k[count] >= SLOW_KEYS then
+			key = "(other)"
+			a = by[key]
+		end
+		if not a then
+			a = { count = 0, total = 0, max = 0, first = e.at }
+			by[key] = a
+			k[count] += 1
+		end
+	end
+	a.count += 1
+	a.total += e.ms
+	a.last = e.at
+	if e.ms > a.max then
+		a.max, a.at = e.ms, e.at
+		if kind == "fns" then
+			a.location, a.root = e.location, e.root
+		else
+			a.name = e.name
+		end
+	end
+end
+
+-- A slow call into a keeper: summed, and kept when it is among the slowest
+-- (a function past SLOWEST_PER kept calls gives up its fastest one).
+local function keep(k: any, e: any)
+	sum(k, "fns", e.name, e)
+	sum(k, "roots", e.root, e)
+	local list, per = k.list, k.per
+	local n = #list
+	if n >= SLOWEST and e.ms <= list[n].ms then
+		return
+	end
+	local drop: number? = nil
+	if (per[e.name] ?? 0) >= SLOWEST_PER then
+		for i = n, 1, -1 do
+			if list[i].name == e.name then
+				drop = i
+				break
+			end
+		end
+		if drop and e.ms <= list[drop].ms then
+			return
+		end
+	elseif n >= SLOWEST then
+		drop = n
+	end
+	if drop then
+		local gone = list[drop].name
+		per[gone] = per[gone] > 1 and per[gone] - 1 or nil
+		table.remove(list, drop)
+	end
+	local i = #list
+	while i >= 1 and list[i].ms < e.ms do
+		i -= 1
+	end
+	table.insert(list, i + 1, e)
+	per[e.name] = (per[e.name] ?? 0) + 1
+end
+
 local function logSlow(name: string, location: string?, elapsed: number)
 	local open = perf.open
 	local rec = open[#open]
-	perf.slow[#perf.slow + 1] = {
+	local e = {
 		at = now(),
 		ms = elapsed,
 		name = name,
@@ -129,8 +215,16 @@ local function logSlow(name: string, location: string?, elapsed: number)
 		recording = rec and rec.name or "live",
 		stack = debugstack and debugstack(3) or "",
 	}
+	perf.slow[#perf.slow + 1] = e
 	if #perf.slow > SLOW then
 		table.remove(perf.slow, 1)
+	end
+	keep(perf.slowest, e)
+	for i = 1, #open do
+		keep(open[i].slowest, e)
+	end
+	if elapsed > secSlowMs then
+		secSlow, secSlowMs = name, elapsed
 	end
 end
 
@@ -435,7 +529,7 @@ local function render(rec: any, d: any, maxima: any?, ended: number): any
 	local prof, mon = wl.prof, wl.mon
 	local info = wl.devInfo ?? {}
 	local data = {
-		format = 1,
+		format = 2,
 		addon = addonName,
 		version = info.version,
 		profile = info.profile,
@@ -463,9 +557,13 @@ local function render(rec: any, d: any, maxima: any?, ended: number): any
 		scripts = {},
 		timers = {},
 		commands = {},
-		seconds = { frames = {}, time = {}, max = {}, over = {}, garbage = {}, garbageAll = {} },
+		seconds = { frames = {}, time = {}, max = {}, over = {}, garbage = {}, garbageAll = {}, worst = {}, worstMs = {}, names = {} },
 		memory = {},
 		slow = {},
+		slowest = {},
+		slowFunctions = {},
+		slowRoots = {},
+		stacks = {},
 	}
 	for name, s in pairs(d.functions) do
 		local live = prof?.stats[name]
@@ -512,6 +610,9 @@ local function render(rec: any, d: any, maxima: any?, ended: number): any
 		end
 	end
 	local sec = perf.seconds
+	-- The worst calls' names, each once: `worst` holds their numbers.
+	local nameAt: { [string]: number } = {}
+	local names = data.seconds.names
 	for i = math.max(rec.second ?? 1, sec.first), sec.last do
 		local n = #data.seconds.frames + 1
 		data.seconds.frames[n] = sec.frames[i]
@@ -520,6 +621,18 @@ local function render(rec: any, d: any, maxima: any?, ended: number): any
 		data.seconds.over[n] = sec.over[i]
 		data.seconds.garbage[n] = sec.garbage[i]
 		data.seconds.garbageAll[n] = sec.garbageAll[i]
+		local worst = sec.worst[i]
+		local at = 0
+		if worst then
+			at = nameAt[worst] ?? 0
+			if at == 0 then
+				at = #names + 1
+				names[at] = worst
+				nameAt[worst] = at
+			end
+		end
+		data.seconds.worst[n] = at
+		data.seconds.worstMs[n] = sec.worstMs[i] ?? 0
 	end
 	local samples, times = mon?.memory ?? {}, mon?.memoryAt ?? {}
 	for i, kb in ipairs(samples) do
@@ -528,18 +641,55 @@ local function render(rec: any, d: any, maxima: any?, ended: number): any
 			data.memory[#data.memory + 1] = { at = at - rec.at, kb = kb }
 		end
 	end
+	-- Slow calls; each stack is written once, in `stacks`, and the calls
+	-- hold its number.
+	local stackAt: { [string]: number } = {}
+	local function slowCall(s: any): any
+		local stack = 0
+		if s.stack and s.stack ~= "" then
+			stack = stackAt[s.stack] ?? 0
+			if stack == 0 then
+				stack = #data.stacks + 1
+				data.stacks[stack] = s.stack
+				stackAt[s.stack] = stack
+			end
+		end
+		return {
+			at = s.at - rec.at,
+			ms = s.ms,
+			name = s.name,
+			location = s.location,
+			root = s.root,
+			recording = s.recording,
+			stack = stack,
+		}
+	end
 	for i = #perf.slow, 1, -1 do
 		local s = perf.slow[i]
 		if s.at >= rec.at and s.at <= ended then
-			data.slow[#data.slow + 1] = {
-				at = s.at - rec.at,
-				ms = s.ms,
-				name = s.name,
-				location = s.location,
-				root = s.root,
-				recording = s.recording,
-				stack = s.stack,
-			}
+			data.slow[#data.slow + 1] = slowCall(s)
+		end
+	end
+	local k = rec.kind == "live" and perf.slowest or rec.slowest
+	if k then
+		for i, s in ipairs(k.list) do
+			data.slowest[i] = slowCall(s)
+		end
+		for _, kind in ipairs({ "fns", "roots" }) do
+			local into = kind == "fns" and data.slowFunctions or data.slowRoots
+			for key, a in pairs(k[kind]) do
+				into[key] = {
+					count = a.count,
+					total = a.total,
+					max = a.max,
+					at = a.at - rec.at,
+					first = a.first - rec.at,
+					last = a.last - rec.at,
+					location = a.location,
+					root = a.root,
+					name = a.name,
+				}
+			end
 		end
 	end
 	return data
@@ -596,6 +746,7 @@ function perf.start(kind: string, name: string?, detail: string?): any
 		second = perf.seconds.last + 1,
 		base = snapshot(),
 		max = { fn = {}, path = {}, root = {}, ev = {}, sc = {}, tm = {}, cm = {}, burst = {} },
+		slowest = keeper(),
 		callPaths = perf.callPaths,
 		garbage = perf.garbage,
 		running = true,
@@ -644,7 +795,7 @@ function perf.stop(rec: any, name: string?)
 	rec.lastFrame = perf.frame - 1
 	rec.data = perf.data(rec)
 	rec.running = false
-	rec.base, rec.carry = nil, nil
+	rec.base, rec.carry, rec.slowest = nil, nil, nil
 	for i, r in ipairs(perf.open) do
 		if r == rec then
 			table.remove(perf.open, i)
@@ -704,6 +855,7 @@ function perf.reset(what: string?)
 		perf.frames, perf.time, perf.over, perf.garbageAddon, perf.garbageAll, perf.garbageFns = 0, 0, 0, 0, 0, 0
 		perf.slow = {}
 	end
+	perf.slowest = keeper()
 	local base = snapshot()
 	for _, rec in ipairs(perf.open) do
 		rec.base = base
@@ -750,13 +902,22 @@ local function closeSecond(t: number)
 	sec.last = i
 	sec.at[i], sec.frames[i], sec.time[i], sec.max[i], sec.over[i], sec.garbage[i], sec.garbageAll[i] =
 		secStart, secFrames, secTime, secMax, secOver, secGarbage, secAll
+	-- The worst call: the slowest slow call, else the longest top-level call
+	-- (its time to 0.01 ms).
+	local worst, worstMs = secSlow, secSlowMs
+	if not worst then
+		worst, worstMs = secTop, secTopMs
+	end
+	sec.worst[i], sec.worstMs[i] = worst, math.floor(worstMs * 100 + 0.5) / 100
 	local old = i - SECONDS
 	if old >= sec.first then
 		sec.at[old], sec.frames[old], sec.time[old], sec.max[old], sec.over[old], sec.garbage[old], sec.garbageAll[old] =
 			nil, nil, nil, nil, nil, nil, nil
+		sec.worst[old], sec.worstMs[old] = nil, nil
 		sec.first = old + 1
 	end
 	secFrames, secTime, secMax, secOver, secGarbage, secAll, secStart = 0, 0, 0, 0, 0, 0, t
+	secSlow, secSlowMs, secTop, secTopMs = nil, 0, nil, 0
 	if i % 4 == 0 and wl.prof then
 		local slot = perf.trendSlot % 15 + 1
 		perf.trendSlot = slot

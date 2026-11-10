@@ -2374,6 +2374,13 @@ local function buildPerformance(console: any, U: any, PERF_VIEWS: any[], layout:
 			local s, i = data.seconds, S.tlSecond
 			out[#out + 1] = { cells = { `second {i}`, K.ms(s.time[i]), K.kb(s.garbage[i]) }, colors = { C.accent } }
 			out[#out + 1] = { cells = { `{K.count(s.frames[i])} frames, {K.count(s.over[i])} over budget, slowest {K.ms(s.max[i])} ms`, "", "" }, indent = 16, fonts = { "body" } }
+			local worst = s.worst and s.worst[i]
+			if type(worst) == "number" then
+				worst = s.names and s.names[worst]
+			end
+			if worst then
+				out[#out + 1] = { cells = { `worst call {worst}`, K.ms(s.worstMs and s.worstMs[i]), "" }, indent = 16, fonts = { "body" } }
+			end
 		end
 		local function summary(name: string, a: number, b: number?, fmt: (v: number) -> string)
 			local cells = { name, fmt(a), "" }
@@ -2403,8 +2410,17 @@ local function buildPerformance(console: any, U: any, PERF_VIEWS: any[], layout:
 			local change, tone = K.change(K.perMinute(#data.slow, data), K.perMinute(#other.slow, other))
 			out[#out + 1] = { cells = { `{#data.slow} slow calls, {K.ms(K.perMinute(#data.slow, data))} per minute`, "", "", "", change }, colors = { C.muted, C.ink, C.ink, C.ink, tone }, fonts = { "body" } }
 		end
-		for _, s in ipairs(data.slow) do
-			local open = S.slowOpen == s.stack .. s.at
+		-- Format 2 exports keep each stack once, in `stacks` (§7.7.9).
+		local function stackOf(s: any): string
+			if type(s.stack) == "number" then
+				return data.stacks and data.stacks[s.stack] or ""
+			end
+			return s.stack ?? ""
+		end
+		local function row(s: any, list: string)
+			local stack = stackOf(s)
+			local key = `{list}{s.at}{s.name}`
+			local open = S.slowOpen == key
 			out[#out + 1] = {
 				cells = { (open and "- " or "+ ") .. s.name, K.ms(s.ms), s.root, s.recording or data.name, string.format("+%.1f s", s.at) },
 				subs = { s.location },
@@ -2412,19 +2428,30 @@ local function buildPerformance(console: any, U: any, PERF_VIEWS: any[], layout:
 				colors = { C.ink, C.error, C.muted, C.muted, C.faint },
 				fonts = { "label", "numeric", "body", "body", "numeric" },
 				onClick = function()
-					S.slowOpen = (not open) and (s.stack .. s.at) or nil
+					S.slowOpen = (not open) and key or nil
 					console.refresh(true)
 				end,
 				onRightClick = function()
 					U.openMenu({ { label = "Copy", run = function()
-						U.copy(`{s.name} {K.ms(s.ms)} ms\n{s.stack}`)
+						U.copy(`{s.name} {K.ms(s.ms)} ms\n{stack}`)
 					end } })
 				end,
 			}
 			if open then
-				for line in tostring(s.stack or ""):gmatch("[^\n]+") do
+				for line in stack:gmatch("[^\n]+") do
 					out[#out + 1] = { cells = { line }, fonts = { "body" }, indent = 20 }
 				end
+			end
+		end
+		for _, s in ipairs(data.slow) do
+			row(s, "new")
+		end
+		-- The recording's slowest, slowest first (T615).
+		local slowest = data.slowest ?? {}
+		if #slowest > 0 then
+			out[#out + 1] = { cells = { "Slowest of the recording" }, colors = { C.muted }, fonts = { "label" } }
+			for _, s in ipairs(slowest) do
+				row(s, "top")
 			end
 		end
 		if #out == 0 then

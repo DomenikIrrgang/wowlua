@@ -6,7 +6,13 @@ local defaults = wl.perfDefaults or {callPaths = false, garbage = false, frameBu
 
 -- Seconds of per-second figures kept: two hours.
 
--- Slow calls kept, automatic recordings kept, names kept per frame.
+-- Slow calls kept: the newest, and a recording's slowest (at most a few per
+-- function, so one hot function cannot crowd out the rest); functions and
+-- roots whose slow calls are summed per recording. Automatic recordings
+-- kept, names kept per frame.
+
+
+
 
 
 
@@ -17,6 +23,11 @@ local function now()
 end
 local function memory()
 	return collectgarbage("count")
+end
+-- A recording's slowest slow calls (slowest first) and its slow calls summed
+-- per function and per root (T615).
+local function keeper()
+	return {list = {}, per = {}, fns = {}, roots = {}, nFns = 0, nRoots = 0}
 end
 
 local perf = {
@@ -53,9 +64,11 @@ nodes = {},
 -- The frame ring, by slot.
 ring = {id = {}, time = {}, garbage = {}, garbageAll = {}, at = {}, names = {}, times = {}},
 -- Per-second figures, by second number (`first` to `last`).
-seconds = {first = 1, last = 0, at = {}, frames = {}, time = {}, max = {}, over = {}, garbage = {}, garbageAll = {}},
--- The slow calls, oldest first.
+-- `worst` names the second's worst call and `worstMs` is its time.
+seconds = {first = 1, last = 0, at = {}, frames = {}, time = {}, max = {}, over = {}, garbage = {}, garbageAll = {}, worst = {}, worstMs = {}},
+-- The newest slow calls, oldest first; the `live` recording's slowest.
 slow = {},
+slowest = keeper(),
 -- Each function's time per 4 seconds over the last minute.
 trend = {},
 trendBase = {},
@@ -75,6 +88,9 @@ wl.perf = perf
 local cur, curN, curRest = 0, 0, 0
 local curNames, curTimes = {}, {}
 local secFrames, secTime, secMax, secOver, secGarbage, secAll, secStart = 0, 0, 0, 0, 0, 0, now()
+-- The second's slowest slow call, and its longest top-level call (the
+-- second's worst call when it had no slow call).
+local secSlow, secSlowMs, secTop, secTopMs = nil, 0, nil, 0
 local lastMemory = memory()
 
 -- The open recordings' maxima: `kind` is `fn`, `path`, `root`, `ev`, `sc`,
@@ -102,6 +118,9 @@ end
 -- Adds `elapsed` to the frame being measured, under `label`.
 local function addToFrame(label, elapsed) local curNames, curTimes = curNames, curTimes
 	cur = cur + elapsed
+	if elapsed > secTopMs then
+		secTop, secTopMs = label, elapsed
+	end
 	for i = 1, curN do
 		if curNames[i] == label then
 			curTimes[i] = curTimes[i] + elapsed
@@ -117,20 +136,95 @@ local function addToFrame(label, elapsed) local curNames, curTimes = curNames, c
 	end
 end
 
+-- A slow call into the sums of its function (`fns`) or root (`roots`); past
+-- SLOW_KEYS of them, new ones are summed as `(other)`.
+local function sum(k, kind, key, e)
+	local by = k[kind]
+	local a = by[key]
+	if not a then
+		local count = kind == "fns" and "nFns" or "nRoots"
+		if k[count] >= 200 then
+			key = "(other)"
+			a = by[key]
+		end
+		if not a then
+			a = {count = 0, total = 0, max = 0, first = e.at}
+			by[key] = a
+			k[count] = k[count] + 1
+		end
+	end
+	a.count = a.count + 1
+	a.total = a.total + e.ms
+	a.last = e.at
+	if e.ms > a.max then
+		a.max, a.at = e.ms, e.at
+		if kind == "fns" then
+			a.location, a.root = e.location, e.root
+		else
+			a.name = e.name
+		end
+	end
+end
+
+-- A slow call into a keeper: summed, and kept when it is among the slowest
+-- (a function past SLOWEST_PER kept calls gives up its fastest one).
+local function keep(k, e)
+	sum(k, "fns", e.name, e)
+	sum(k, "roots", e.root, e)
+	local list, per = k.list, k.per
+	local n = #list
+	if n >= 100 and e.ms <= list[n].ms then
+		return
+	end
+	local drop = nil
+	do local __wl_t2 = per[e.name] if __wl_t2 == nil then __wl_t2 = 0 end if (__wl_t2) >= 3 then
+			for i = n, 1, -1 do
+				if list[i].name == e.name then
+					drop = i
+					break
+				end
+			end
+			if drop and e.ms <= list[drop].ms then
+				return
+			end
+		elseif n >= 100 then
+			drop = n
+		end end
+	if drop then
+		local gone = list[drop].name
+		per[gone] = per[gone] > 1 and per[gone] - 1 or nil
+		table.remove(list, drop)
+	end
+	local i = #list
+	while i >= 1 and list[i].ms < e.ms do
+		i = i - 1
+	end
+	table.insert(list, i + 1, e)
+	do local __wl_t3 = per[e.name] if __wl_t3 == nil then __wl_t3 = 0 end per[e.name] = (__wl_t3) + 1 end
+end
+
 local function logSlow(name, location, elapsed) local perf = perf
 	local open = perf.open
 	local rec = open[#open]
-	do
-		local __wl_t3 = now()
+
+	local __wl_t5 = now()
 
 
 
-		local __wl_t2 = perf.root if __wl_t2 == nil then __wl_t2 = "other" end perf.slow[#perf.slow + 1] = {at = __wl_t3, ms = elapsed, name = name, location = location, root = __wl_t2,
-		recording = rec and rec.name or "live",
-		stack = debugstack and debugstack(3) or ""
-		} end
+	local __wl_t4 = perf.root if __wl_t4 == nil then __wl_t4 = "other" end local e = {at = __wl_t5, ms = elapsed, name = name, location = location, root = __wl_t4,
+	recording = rec and rec.name or "live",
+	stack = debugstack and debugstack(3) or ""
+	}
+	perf.slow[#perf.slow + 1] = e
 	if #perf.slow > 200 then
 		table.remove(perf.slow, 1)
+	end
+	keep(perf.slowest, e)
+	for i = 1, #open do
+		keep(open[i].slowest, e)
+	end
+	if elapsed > secSlowMs then
+		secSlow, secSlowMs = name, elapsed
 	end
 end
 
@@ -162,7 +256,7 @@ local function pop(label, location, elapsed, suspended, stat) local logged, perf
 	local d = perf.depth
 	if not suspended then
 		if elapsed > perf.frameBudget then
-			do local __wl_t4 = stat.over if __wl_t4 == nil then __wl_t4 = 0 end stat.over = (__wl_t4) + 1 end
+			do local __wl_t6 = stat.over if __wl_t6 == nil then __wl_t6 = 0 end stat.over = (__wl_t6) + 1 end
 		end
 		if elapsed > perf.slowCall and not logged[d] then
 			logSlow(label, location, elapsed)
@@ -187,7 +281,7 @@ end
 
 -- A profiled call starts: with call paths, its node below the running one.
 function perf.enter(name) local perf = perf
-	local __wl_t7 = perf.node if __wl_t7 == nil then local __wl_t5 = perf.root if __wl_t5 == nil then __wl_t5 = "other" end local __wl_t6 = perf.rootKind if __wl_t6 == nil then __wl_t6 = "other" end __wl_t7 = rootNode(__wl_t5, __wl_t6) end local parent = __wl_t7
+	local __wl_t9 = perf.node if __wl_t9 == nil then local __wl_t7 = perf.root if __wl_t7 == nil then __wl_t7 = "other" end local __wl_t8 = perf.rootKind if __wl_t8 == nil then __wl_t8 = "other" end __wl_t9 = rootNode(__wl_t7, __wl_t8) end local parent = __wl_t9
 	local node = parent.kids[name]
 	if not node then
 		node = {name = name, parent = parent, kids = {}, calls = 0, total = 0, self = 0, max = 0}
@@ -202,9 +296,9 @@ end
 -- profiled callees); `stat` is its statistics entry.
 function perf.done(name, location, elapsed, own, node, stat, suspended) local perf = perf
 	local depth = pop(name, location, elapsed, suspended, stat)
-	local __wl_t8 = perf.root if __wl_t8 == nil then __wl_t8 = "other" end local label = __wl_t8
-	local __wl_t10 = perf.roots[label] if __wl_t10 == nil then local __wl_t9 = perf.rootKind if __wl_t9 == nil then __wl_t9 = "other" end __wl_t10 = rootNode(label, __wl_t9) end local r = __wl_t10
-	do local __wl_t11 = r.fns[name] if __wl_t11 == nil then __wl_t11 = 0 end r.fns[name] = (__wl_t11) + own end
+	local __wl_t10 = perf.root if __wl_t10 == nil then __wl_t10 = "other" end local label = __wl_t10
+	local __wl_t12 = perf.roots[label] if __wl_t12 == nil then local __wl_t11 = perf.rootKind if __wl_t11 == nil then __wl_t11 = "other" end __wl_t12 = rootNode(label, __wl_t11) end local r = __wl_t12
+	do local __wl_t13 = r.fns[name] if __wl_t13 == nil then __wl_t13 = 0 end r.fns[name] = (__wl_t13) + own end
 	if node then
 		node.calls = node.calls + 1
 		node.total = node.total + elapsed
@@ -319,7 +413,7 @@ local function minus(a, b, fields, countField)
 				d[f] = v - (base and base[f] or 0)
 			end
 		end
-		do local __wl_t12 = d[countField] if __wl_t12 == nil then __wl_t12 = 0 end if (__wl_t12) > 0 then
+		do local __wl_t14 = d[countField] if __wl_t14 == nil then __wl_t14 = 0 end if (__wl_t14) > 0 then
 				out[k] = d
 			end end
 	end
@@ -335,7 +429,7 @@ local function plus(a, b, fields)
 		end
 		for _, f in ipairs(fields) do
 			if type(s[f]) == "number" then
-				do local __wl_t13 = d[f] if __wl_t13 == nil then __wl_t13 = 0 end d[f] = (__wl_t13) + s[f] end
+				do local __wl_t15 = d[f] if __wl_t15 == nil then __wl_t15 = 0 end d[f] = (__wl_t15) + s[f] end
 			end
 		end
 	end
@@ -344,24 +438,24 @@ end
 -- The figures of the recordings since `base` (nil: since load).
 local function delta(snap, base) local MON_FIELDS = MON_FIELDS
 
-	local __wl_t14 = base if __wl_t14 ~= nil then __wl_t14 = __wl_t14.functions end local __wl_t16 = minus(snap.functions, __wl_t14, FN_FIELDS, "calls")
-	local __wl_t15 = base if __wl_t15 ~= nil then __wl_t15 = __wl_t15.events end local __wl_t18 = minus(snap.events, __wl_t15, MON_FIELDS, "count")
-	local __wl_t17 = base if __wl_t17 ~= nil then __wl_t17 = __wl_t17.scripts end local __wl_t20 = minus(snap.scripts, __wl_t17, MON_FIELDS, "count")
-	local __wl_t19 = base if __wl_t19 ~= nil then __wl_t19 = __wl_t19.timers end local __wl_t22 = minus(snap.timers, __wl_t19, MON_FIELDS, "count")
-	local __wl_t21 = base if __wl_t21 ~= nil then __wl_t21 = __wl_t21.commands end local __wl_t24 = minus(snap.commands, __wl_t21, MON_FIELDS, "count")
-	local __wl_t23 = base if __wl_t23 ~= nil then __wl_t23 = __wl_t23.roots end local __wl_t26 = minus(snap.roots, __wl_t23, NODE_FIELDS, "calls")
-	local __wl_t25 = base if __wl_t25 ~= nil then __wl_t25 = __wl_t25.nodes end local __wl_t29 = minus(snap.nodes, __wl_t25, NODE_FIELDS, "calls")
-	local __wl_t27 = base if __wl_t27 ~= nil then __wl_t27 = __wl_t27.frames end local __wl_t28 = __wl_t27 if __wl_t28 == nil then __wl_t28 = 0 end
-	local __wl_t30 = base if __wl_t30 ~= nil then __wl_t30 = __wl_t30.time end local __wl_t31 = __wl_t30 if __wl_t31 == nil then __wl_t31 = 0 end
-	local __wl_t32 = base if __wl_t32 ~= nil then __wl_t32 = __wl_t32.over end local __wl_t33 = __wl_t32 if __wl_t33 == nil then __wl_t33 = 0 end
-	local __wl_t34 = base if __wl_t34 ~= nil then __wl_t34 = __wl_t34.garbageAddon end local __wl_t35 = __wl_t34 if __wl_t35 == nil then __wl_t35 = 0 end
-	local __wl_t36 = base if __wl_t36 ~= nil then __wl_t36 = __wl_t36.garbageAll end local __wl_t37 = __wl_t36 if __wl_t37 == nil then __wl_t37 = 0 end
-	local __wl_t38 = base if __wl_t38 ~= nil then __wl_t38 = __wl_t38.garbageFns end local __wl_t39 = __wl_t38 if __wl_t39 == nil then __wl_t39 = 0 end local d = {functions = __wl_t16, events = __wl_t18, scripts = __wl_t20, timers = __wl_t22, commands = __wl_t24, roots = __wl_t26, nodes = __wl_t29, frames = snap.frames - (__wl_t28), time = snap.time - (__wl_t31), over = snap.over - (__wl_t33), garbageAddon = snap.garbageAddon - (__wl_t35), garbageAll = snap.garbageAll - (__wl_t37), garbageFns = snap.garbageFns - (__wl_t39)
+	local __wl_t16 = base if __wl_t16 ~= nil then __wl_t16 = __wl_t16.functions end local __wl_t18 = minus(snap.functions, __wl_t16, FN_FIELDS, "calls")
+	local __wl_t17 = base if __wl_t17 ~= nil then __wl_t17 = __wl_t17.events end local __wl_t20 = minus(snap.events, __wl_t17, MON_FIELDS, "count")
+	local __wl_t19 = base if __wl_t19 ~= nil then __wl_t19 = __wl_t19.scripts end local __wl_t22 = minus(snap.scripts, __wl_t19, MON_FIELDS, "count")
+	local __wl_t21 = base if __wl_t21 ~= nil then __wl_t21 = __wl_t21.timers end local __wl_t24 = minus(snap.timers, __wl_t21, MON_FIELDS, "count")
+	local __wl_t23 = base if __wl_t23 ~= nil then __wl_t23 = __wl_t23.commands end local __wl_t26 = minus(snap.commands, __wl_t23, MON_FIELDS, "count")
+	local __wl_t25 = base if __wl_t25 ~= nil then __wl_t25 = __wl_t25.roots end local __wl_t28 = minus(snap.roots, __wl_t25, NODE_FIELDS, "calls")
+	local __wl_t27 = base if __wl_t27 ~= nil then __wl_t27 = __wl_t27.nodes end local __wl_t31 = minus(snap.nodes, __wl_t27, NODE_FIELDS, "calls")
+	local __wl_t29 = base if __wl_t29 ~= nil then __wl_t29 = __wl_t29.frames end local __wl_t30 = __wl_t29 if __wl_t30 == nil then __wl_t30 = 0 end
+	local __wl_t32 = base if __wl_t32 ~= nil then __wl_t32 = __wl_t32.time end local __wl_t33 = __wl_t32 if __wl_t33 == nil then __wl_t33 = 0 end
+	local __wl_t34 = base if __wl_t34 ~= nil then __wl_t34 = __wl_t34.over end local __wl_t35 = __wl_t34 if __wl_t35 == nil then __wl_t35 = 0 end
+	local __wl_t36 = base if __wl_t36 ~= nil then __wl_t36 = __wl_t36.garbageAddon end local __wl_t37 = __wl_t36 if __wl_t37 == nil then __wl_t37 = 0 end
+	local __wl_t38 = base if __wl_t38 ~= nil then __wl_t38 = __wl_t38.garbageAll end local __wl_t39 = __wl_t38 if __wl_t39 == nil then __wl_t39 = 0 end
+	local __wl_t40 = base if __wl_t40 ~= nil then __wl_t40 = __wl_t40.garbageFns end local __wl_t41 = __wl_t40 if __wl_t41 == nil then __wl_t41 = 0 end local d = {functions = __wl_t18, events = __wl_t20, scripts = __wl_t22, timers = __wl_t24, commands = __wl_t26, roots = __wl_t28, nodes = __wl_t31, frames = snap.frames - (__wl_t30), time = snap.time - (__wl_t33), over = snap.over - (__wl_t35), garbageAddon = snap.garbageAddon - (__wl_t37), garbageAll = snap.garbageAll - (__wl_t39), garbageFns = snap.garbageFns - (__wl_t41)
 	}
 	for label, r in pairs(d.roots) do
 		r.fns = {}
 		for k, v in pairs(snap.roots[label].fns) do
-			local __wl_t40 = base if __wl_t40 ~= nil then __wl_t40 = __wl_t40.roots[label] if __wl_t40 ~= nil then __wl_t40 = __wl_t40.fns[k] end end local __wl_t41 = __wl_t40 if __wl_t41 == nil then __wl_t41 = 0 end local was = __wl_t41
+			local __wl_t42 = base if __wl_t42 ~= nil then __wl_t42 = __wl_t42.roots[label] if __wl_t42 ~= nil then __wl_t42 = __wl_t42.fns[k] end end local __wl_t43 = __wl_t42 if __wl_t43 == nil then __wl_t43 = 0 end local was = __wl_t43
 			if v > was then
 				r.fns[k] = v - was
 			end
@@ -384,7 +478,7 @@ local function add(into, more) local MON_FIELDS = MON_FIELDS
 		local fns = into.roots[label].fns or {}
 		into.roots[label].fns = fns
 		for k, v in pairs(r.fns or {}) do
-			do local __wl_t42 = fns[k] if __wl_t42 == nil then __wl_t42 = 0 end fns[k] = (__wl_t42) + v end
+			do local __wl_t44 = fns[k] if __wl_t44 == nil then __wl_t44 = 0 end fns[k] = (__wl_t44) + v end
 		end
 	end
 	for _, f in ipairs({"frames", "time", "over", "garbageAddon", "garbageAll", "garbageFns"}) do
@@ -435,7 +529,7 @@ local function render(rec, d, maxima, ended) local perf = perf
 	local prof, mon = wl.prof, wl.mon
 	local info = wl.devInfo or {}
 	local data = {
-	format = 1,
+	format = 2,
 	addon = addonName,
 	version = info.version,
 	profile = info.profile,
@@ -463,19 +557,23 @@ local function render(rec, d, maxima, ended) local perf = perf
 	scripts = {},
 	timers = {},
 	commands = {},
-	seconds = {frames = {}, time = {}, max = {}, over = {}, garbage = {}, garbageAll = {}},
+	seconds = {frames = {}, time = {}, max = {}, over = {}, garbage = {}, garbageAll = {}, worst = {}, worstMs = {}, names = {}},
 	memory = {},
-	slow = {}
+	slow = {},
+	slowest = {},
+	slowFunctions = {},
+	slowRoots = {},
+	stacks = {}
 	}
 	for name, s in pairs(d.functions) do
 		local live = prof and prof.stats[name]
-		do local __wl_t44 = maxima if __wl_t44 then local __wl_t43 = maxima.fn[name] if __wl_t43 == nil then __wl_t43 = 0 end __wl_t44 = (__wl_t43) end s.max = __wl_t44 or (live and live.max or 0) end
+		do local __wl_t46 = maxima if __wl_t46 then local __wl_t45 = maxima.fn[name] if __wl_t45 == nil then __wl_t45 = 0 end __wl_t46 = (__wl_t45) end s.max = __wl_t46 or (live and live.max or 0) end
 		s.location = live and live.location
 		data.functions[name] = s
 	end
 	for node, s in pairs(d.nodes) do
 		s.path = pathOf(node)
-		do local __wl_t46 = maxima if __wl_t46 then local __wl_t45 = maxima.path[node] if __wl_t45 == nil then __wl_t45 = 0 end __wl_t46 = (__wl_t45) end s.max = __wl_t46 or node.max end
+		do local __wl_t48 = maxima if __wl_t48 then local __wl_t47 = maxima.path[node] if __wl_t47 == nil then __wl_t47 = 0 end __wl_t48 = (__wl_t47) end s.max = __wl_t48 or node.max end
 		local __wl_paths = data.paths __wl_paths[#__wl_paths + 1] = s
 	end
 	for label, s in pairs(d.roots) do
@@ -487,10 +585,10 @@ local function render(rec, d, maxima, ended) local perf = perf
 		end
 		local live = perf.roots[label]
 		do
-			local __wl_t47 = live if __wl_t47 ~= nil then __wl_t47 = __wl_t47.kind end local __wl_t48 = __wl_t47 if __wl_t48 == nil then __wl_t48 = "other" end
+			local __wl_t49 = live if __wl_t49 ~= nil then __wl_t49 = __wl_t49.kind end local __wl_t50 = __wl_t49 if __wl_t50 == nil then __wl_t50 = "other" end
 
 
-			local __wl_t50 = maxima if __wl_t50 then local __wl_t49 = maxima.root[label] if __wl_t49 == nil then __wl_t49 = 0 end __wl_t50 = (__wl_t49) end local __wl_t53 = __wl_t50 if not __wl_t53 then local __wl_t51 = live if __wl_t51 ~= nil then __wl_t51 = __wl_t51.max end local __wl_t52 = __wl_t51 if __wl_t52 == nil then __wl_t52 = 0 end __wl_t53 = (__wl_t52) end data.roots[label] = {kind = __wl_t48, calls = s.calls, total = s.total, max = __wl_t53,
+			local __wl_t52 = maxima if __wl_t52 then local __wl_t51 = maxima.root[label] if __wl_t51 == nil then __wl_t51 = 0 end __wl_t52 = (__wl_t51) end local __wl_t55 = __wl_t52 if not __wl_t55 then local __wl_t53 = live if __wl_t53 ~= nil then __wl_t53 = __wl_t53.max end local __wl_t54 = __wl_t53 if __wl_t54 == nil then __wl_t54 = 0 end __wl_t55 = (__wl_t54) end data.roots[label] = {kind = __wl_t50, calls = s.calls, total = s.total, max = __wl_t55,
 			top = top,
 			topSelf = topSelf
 			} end
@@ -499,11 +597,11 @@ local function render(rec, d, maxima, ended) local perf = perf
 		local short = ({events = "ev", scripts = "sc", timers = "tm", commands = "cm"})[kind]
 		for key, s in pairs(d[kind]) do
 			local live = mon and mon[kind][key]
-			do local __wl_t55 = maxima if __wl_t55 then local __wl_t54 = maxima[short][key] if __wl_t54 == nil then __wl_t54 = 0 end __wl_t55 = (__wl_t54) end local __wl_t58 = __wl_t55 if not __wl_t58 then local __wl_t56 = live if __wl_t56 ~= nil then __wl_t56 = __wl_t56.max end local __wl_t57 = __wl_t56 if __wl_t57 == nil then __wl_t57 = 0 end __wl_t58 = (__wl_t57) end s.max = __wl_t58 end
-			do local __wl_t59 = live if __wl_t59 ~= nil then __wl_t59 = __wl_t59.detail end s.detail = __wl_t59 end
-			do local __wl_t60 = live if __wl_t60 ~= nil then __wl_t60 = __wl_t60.script end s.script = __wl_t60 end
+			do local __wl_t57 = maxima if __wl_t57 then local __wl_t56 = maxima[short][key] if __wl_t56 == nil then __wl_t56 = 0 end __wl_t57 = (__wl_t56) end local __wl_t60 = __wl_t57 if not __wl_t60 then local __wl_t58 = live if __wl_t58 ~= nil then __wl_t58 = __wl_t58.max end local __wl_t59 = __wl_t58 if __wl_t59 == nil then __wl_t59 = 0 end __wl_t60 = (__wl_t59) end s.max = __wl_t60 end
+			do local __wl_t61 = live if __wl_t61 ~= nil then __wl_t61 = __wl_t61.detail end s.detail = __wl_t61 end
+			do local __wl_t62 = live if __wl_t62 ~= nil then __wl_t62 = __wl_t62.script end s.script = __wl_t62 end
 			if kind == "events" then
-				do local __wl_t62 = maxima if __wl_t62 then local __wl_t61 = maxima.burst[key] if __wl_t61 == nil then __wl_t61 = 0 end __wl_t62 = (__wl_t61) end local __wl_t65 = __wl_t62 if not __wl_t65 then local __wl_t63 = live if __wl_t63 ~= nil then __wl_t63 = __wl_t63.burstMax end local __wl_t64 = __wl_t63 if __wl_t64 == nil then __wl_t64 = 0 end __wl_t65 = (__wl_t64) end s.burstMax = __wl_t65 end
+				do local __wl_t64 = maxima if __wl_t64 then local __wl_t63 = maxima.burst[key] if __wl_t63 == nil then __wl_t63 = 0 end __wl_t64 = (__wl_t63) end local __wl_t67 = __wl_t64 if not __wl_t67 then local __wl_t65 = live if __wl_t65 ~= nil then __wl_t65 = __wl_t65.burstMax end local __wl_t66 = __wl_t65 if __wl_t66 == nil then __wl_t66 = 0 end __wl_t67 = (__wl_t66) end s.burstMax = __wl_t67 end
 			end
 			if s.script == "OnUpdate" and mon then
 				s.showsNothing = showsNothing(mon.objects[key])
@@ -512,7 +610,10 @@ local function render(rec, d, maxima, ended) local perf = perf
 		end
 	end
 	local sec = perf.seconds
-	do local __wl_t66 = rec.second if __wl_t66 == nil then __wl_t66 = 1 end for i = math.max(__wl_t66, sec.first), sec.last do
+	-- The worst calls' names, each once: `worst` holds their numbers.
+	local nameAt = {}
+	local names = data.seconds.names
+	do local __wl_t68 = rec.second if __wl_t68 == nil then __wl_t68 = 1 end for i = math.max(__wl_t68, sec.first), sec.last do
 			local __wl_frames = data.seconds.frames local n = #__wl_frames + 1
 			__wl_frames[n] = sec.frames[i]
 			data.seconds.time[n] = sec.time[i]
@@ -520,6 +621,18 @@ local function render(rec, d, maxima, ended) local perf = perf
 			data.seconds.over[n] = sec.over[i]
 			data.seconds.garbage[n] = sec.garbage[i]
 			data.seconds.garbageAll[n] = sec.garbageAll[i]
+			local worst = sec.worst[i]
+			local at = 0
+			if worst then
+				at = nameAt[worst] or 0
+				if at == 0 then
+					at = #names + 1
+					names[at] = worst
+					nameAt[worst] = at
+				end
+			end
+			data.seconds.worst[n] = at
+			do local __wl_t69 = sec.worstMs[i] if __wl_t69 == nil then __wl_t69 = 0 end data.seconds.worstMs[n] = __wl_t69 end
 		end end
 	local samples, times = mon and mon.memory or {}, mon and mon.memoryAt or {}
 	for i, kb in ipairs(samples) do
@@ -528,18 +641,55 @@ local function render(rec, d, maxima, ended) local perf = perf
 			local __wl_memory = data.memory __wl_memory[#__wl_memory + 1] = {at = at - rec.at, kb = kb}
 		end
 	end
+	-- Slow calls; each stack is written once, in `stacks`, and the calls
+	-- hold its number.
+	local stackAt = {}
+	local function slowCall(s)
+		local stack = 0
+		if s.stack and s.stack ~= "" then
+			stack = stackAt[s.stack] or 0
+			if stack == 0 then
+				local __wl_stacks = data.stacks stack = #__wl_stacks + 1
+				__wl_stacks[stack] = s.stack
+				stackAt[s.stack] = stack
+			end
+		end
+		return {
+		at = s.at - rec.at,
+		ms = s.ms,
+		name = s.name,
+		location = s.location,
+		root = s.root,
+		recording = s.recording,
+		stack = stack
+		}
+	end
 	for i = #perf.slow, 1, -1 do
 		local s = perf.slow[i]
 		if s.at >= rec.at and s.at <= ended then
-			local __wl_slow = data.slow __wl_slow[#__wl_slow + 1] = {
-			at = s.at - rec.at,
-			ms = s.ms,
-			name = s.name,
-			location = s.location,
-			root = s.root,
-			recording = s.recording,
-			stack = s.stack
-			}
+			local __wl_slow = data.slow __wl_slow[#__wl_slow + 1] = slowCall(s)
+		end
+	end
+	local k = rec.kind == "live" and perf.slowest or rec.slowest
+	if k then
+		for i, s in ipairs(k.list) do
+			data.slowest[i] = slowCall(s)
+		end
+		for _, kind in ipairs({"fns", "roots"}) do
+			local into = kind == "fns" and data.slowFunctions or data.slowRoots
+			for key, a in pairs(k[kind]) do
+				into[key] = {
+				count = a.count,
+				total = a.total,
+				max = a.max,
+				at = a.at - rec.at,
+				first = a.first - rec.at,
+				last = a.last - rec.at,
+				location = a.location,
+				root = a.root,
+				name = a.name
+				}
+			end
 		end
 	end
 	return data
@@ -563,8 +713,8 @@ end
 
 -- The frames of a recording still in the ring: first and last frame number.
 function perf.frameRange(rec)
-	local __wl_t67 = rec.lastFrame if __wl_t67 == nil then __wl_t67 = (perf.frame - 1) end local last = __wl_t67
-	local __wl_t68 = rec.frame if __wl_t68 == nil then __wl_t68 = 1 end local first = math.max(__wl_t68, perf.frame - 3600)
+	local __wl_t70 = rec.lastFrame if __wl_t70 == nil then __wl_t70 = (perf.frame - 1) end local last = __wl_t70
+	local __wl_t71 = rec.frame if __wl_t71 == nil then __wl_t71 = 1 end local first = math.max(__wl_t71, perf.frame - 3600)
 	return first, last
 end
 -- The figures of frame `id` while it is in the ring: time, the addon's
@@ -580,7 +730,7 @@ function perf.frameAt(id)
 end
 
 local function counted(kind) local perf = perf
-	do local __wl_t69 = perf.counts[kind] if __wl_t69 == nil then __wl_t69 = 0 end perf.counts[kind] = (__wl_t69) + 1 end
+	do local __wl_t72 = perf.counts[kind] if __wl_t72 == nil then __wl_t72 = 0 end perf.counts[kind] = (__wl_t72) + 1 end
 	return perf.counts[kind]
 end
 
@@ -596,6 +746,7 @@ function perf.start(kind, name, detail) local perf = perf
 	second = perf.seconds.last + 1,
 	base = snapshot(),
 	max = {fn = {}, path = {}, root = {}, ev = {}, sc = {}, tm = {}, cm = {}, burst = {}},
+	slowest = keeper(),
 	callPaths = perf.callPaths,
 	garbage = perf.garbage,
 	running = true
@@ -644,7 +795,7 @@ function perf.stop(rec, name) local perf = perf
 	rec.lastFrame = perf.frame - 1
 	rec.data = perf.data(rec)
 	rec.running = false
-	rec.base, rec.carry = nil, nil
+	rec.base, rec.carry, rec.slowest = nil, nil, nil
 	for i, r in ipairs(perf.open) do
 		if r == rec then
 			table.remove(perf.open, i)
@@ -704,6 +855,7 @@ function perf.reset(what) local perf = perf
 		perf.frames, perf.time, perf.over, perf.garbageAddon, perf.garbageAll, perf.garbageFns = 0, 0, 0, 0, 0, 0
 		perf.slow = {}
 	end
+	perf.slowest = keeper()
 	local base = snapshot()
 	for _, rec in ipairs(perf.open) do
 		rec.base = base
@@ -750,13 +902,22 @@ local function closeSecond(t) local perf = perf
 	sec.last = i
 	sec.at[i], sec.frames[i], sec.time[i], sec.max[i], sec.over[i], sec.garbage[i], sec.garbageAll[i] =
 	secStart, secFrames, secTime, secMax, secOver, secGarbage, secAll
+	-- The worst call: the slowest slow call, else the longest top-level call
+	-- (its time to 0.01 ms).
+	local worst, worstMs = secSlow, secSlowMs
+	if not worst then
+		worst, worstMs = secTop, secTopMs
+	end
+	sec.worst[i], sec.worstMs[i] = worst, math.floor(worstMs * 100 + 0.5) / 100
 	local old = i - 7200
 	if old >= sec.first then
 		sec.at[old], sec.frames[old], sec.time[old], sec.max[old], sec.over[old], sec.garbage[old], sec.garbageAll[old] =
 		nil, nil, nil, nil, nil, nil, nil
+		sec.worst[old], sec.worstMs[old] = nil, nil
 		sec.first = old + 1
 	end
 	secFrames, secTime, secMax, secOver, secGarbage, secAll, secStart = 0, 0, 0, 0, 0, 0, t
+	secSlow, secSlowMs, secTop, secTopMs = nil, 0, nil, 0
 	if i % 4 == 0 and wl.prof then
 		local slot = perf.trendSlot % 15 + 1
 		perf.trendSlot = slot
@@ -766,7 +927,7 @@ local function closeSecond(t) local perf = perf
 				tr = {}
 				perf.trend[name] = tr
 			end
-			do local __wl_t70 = perf.trendBase[name] if __wl_t70 == nil then __wl_t70 = 0 end tr[slot] = s.total - (__wl_t70) end
+			do local __wl_t73 = perf.trendBase[name] if __wl_t73 == nil then __wl_t73 = 0 end tr[slot] = s.total - (__wl_t73) end
 			perf.trendBase[name] = s.total
 		end
 	end
@@ -908,71 +1069,71 @@ local function kb(v)
 	return v >= 1024 and string.format("%.1f MB", v / 1024) or string.format("%.0f KB", v)
 end
 local function span(data)
-	local __wl_t71 = data.duration if __wl_t71 == nil then __wl_t71 = 0 end local d = __wl_t71
+	local __wl_t74 = data.duration if __wl_t74 == nil then __wl_t74 = 0 end local d = __wl_t74
 	return d >= 60 and string.format("%s (%.1f min)", data.name, d / 60) or string.format("%s (%d s)", data.name, d)
 end
 function perf.hints(data)
 	local out = {}
-	local __wl_t72 = data.frames if __wl_t72 == nil then __wl_t72 = 0 end local frames = math.max(__wl_t72, 1)
+	local __wl_t75 = data.frames if __wl_t75 == nil then __wl_t75 = 0 end local frames = math.max(__wl_t75, 1)
 	-- P7101: bursts of one event.
-	do local __wl_t73 = data.events if __wl_t73 == nil then __wl_t73 = {} end for event, s in pairs(__wl_t73) do
-			do local __wl_t74 = s.bursts if __wl_t74 == nil then __wl_t74 = 0 end if (__wl_t74) >= 10 then
+	do local __wl_t76 = data.events if __wl_t76 == nil then __wl_t76 = {} end for event, s in pairs(__wl_t76) do
+			do local __wl_t77 = s.bursts if __wl_t77 == nil then __wl_t77 = 0 end if (__wl_t77) >= 10 then
 					do
 
 
-						local __wl_t76 = n(s.count) local __wl_t77 = span(data) local __wl_t78 = n(s.bursts) local __wl_t75 = s.burstMax if __wl_t75 == nil then __wl_t75 = 0 end local __wl_t80 = tostring(event) .. " was handled " .. __wl_t76 .. " times in " .. __wl_t77 .. ", in bursts of 5 or more in " .. __wl_t78 .. " frames (up to " .. n(__wl_t75) .. " in one frame), " .. ms(s.total) .. " in all"
+						local __wl_t79 = n(s.count) local __wl_t80 = span(data) local __wl_t81 = n(s.bursts) local __wl_t78 = s.burstMax if __wl_t78 == nil then __wl_t78 = 0 end local __wl_t83 = tostring(event) .. " was handled " .. __wl_t79 .. " times in " .. __wl_t80 .. ", in bursts of 5 or more in " .. __wl_t81 .. " frames (up to " .. n(__wl_t78) .. " in one frame), " .. ms(s.total) .. " in all"
 
-						local __wl_t79 = data.duration if __wl_t79 == nil then __wl_t79 = 1 end out[#out + 1] = {code = "P7101", subject = event, evidence = __wl_t80, fix = "Collapse each burst into one call: give the function that does the work @throttle(0.1) or @nextFrame from wowlua:timer, and return early for units or bags the addon does not show", metric = s.bursts / math.max(__wl_t79, 1)
+						local __wl_t82 = data.duration if __wl_t82 == nil then __wl_t82 = 1 end out[#out + 1] = {code = "P7101", subject = event, evidence = __wl_t83, fix = "Collapse each burst into one call: give the function that does the work @throttle(0.1) or @nextFrame from wowlua:timer, and return early for units or bags the addon does not show", metric = s.bursts / math.max(__wl_t82, 1)
 						} end
 				end end
 		end end
 	-- P7102: an OnUpdate in nearly every frame while its frame shows nothing.
-	do local __wl_t81 = data.scripts if __wl_t81 == nil then __wl_t81 = {} end for key, s in pairs(__wl_t81) do
-			local __wl_t82 = s.frames if __wl_t82 == nil then __wl_t82 = 0 end local share = (__wl_t82) / frames
-			do local __wl_t84 = s.script == "OnUpdate" and s.showsNothing and share >= 0.9 if __wl_t84 then local __wl_t83 = data.duration if __wl_t83 == nil then __wl_t83 = 0 end __wl_t84 = (__wl_t83) >= 10 end if __wl_t84 then
+	do local __wl_t84 = data.scripts if __wl_t84 == nil then __wl_t84 = {} end for key, s in pairs(__wl_t84) do
+			local __wl_t85 = s.frames if __wl_t85 == nil then __wl_t85 = 0 end local share = (__wl_t85) / frames
+			do local __wl_t87 = s.script == "OnUpdate" and s.showsNothing and share >= 0.9 if __wl_t87 then local __wl_t86 = data.duration if __wl_t86 == nil then __wl_t86 = 0 end __wl_t87 = (__wl_t86) >= 10 end if __wl_t87 then
 					do
 
 
-						local __wl_t86 = string.format("%s ran in %d%% of the %s frames of %s while its frame showed nothing (%s), %s in all",
+						local __wl_t89 = string.format("%s ran in %d%% of the %s frames of %s while its frame showed nothing (%s), %s in all",
 						key, math.floor(share * 100), n(data.frames), span(data), s.showsNothing, ms(s.total))
 
-						local __wl_t85 = data.duration if __wl_t85 == nil then __wl_t85 = 1 end out[#out + 1] = {code = "P7102", subject = key, evidence = __wl_t86, fix = "Run the work on a timer, with every(0.1, fn) from wowlua:timer, or set the script in OnShow and clear it with SetScript(\"OnUpdate\", nil) in OnHide", metric = s.total / math.max(__wl_t85, 1)
+						local __wl_t88 = data.duration if __wl_t88 == nil then __wl_t88 = 1 end out[#out + 1] = {code = "P7102", subject = key, evidence = __wl_t89, fix = "Run the work on a timer, with every(0.1, fn) from wowlua:timer, or set the script in OnShow and clear it with SetScript(\"OnUpdate\", nil) in OnHide", metric = s.total / math.max(__wl_t88, 1)
 						} end
 				end end
 		end end
 	-- P7201: one function's share of the garbage.
-	local __wl_t87 = data.garbageFns if __wl_t87 == nil then __wl_t87 = 0 end local all = __wl_t87
-	do local __wl_t88 = data.functions if __wl_t88 == nil then __wl_t88 = {} end for name, s in pairs(__wl_t88) do
-			local __wl_t89 = s.selfGarbage if __wl_t89 == nil then __wl_t89 = 0 end local own = __wl_t89
+	local __wl_t90 = data.garbageFns if __wl_t90 == nil then __wl_t90 = 0 end local all = __wl_t90
+	do local __wl_t91 = data.functions if __wl_t91 == nil then __wl_t91 = {} end for name, s in pairs(__wl_t91) do
+			local __wl_t92 = s.selfGarbage if __wl_t92 == nil then __wl_t92 = 0 end local own = __wl_t92
 			if all > 0 and own >= 100 and own / all >= 0.25 then
 				do
 
 
-					local __wl_t91 = string.format("%s created %s, %d%% of the garbage the addon's functions made in %s, %s per call",
+					local __wl_t94 = string.format("%s created %s, %d%% of the garbage the addon's functions made in %s, %s per call",
 					name, kb(own), math.floor(own / all * 100), span(data), kb(own / math.max(s.calls, 1)))
 
-					local __wl_t90 = data.duration if __wl_t90 == nil then __wl_t90 = 1 end out[#out + 1] = {code = "P7201", subject = name, evidence = __wl_t91, fix = "Reuse tables instead of creating them per call (clear them with wipe), move closures that capture nothing out of loops and handlers, and cache strings and results that do not change", metric = own / math.max(__wl_t90, 1)
+					local __wl_t93 = data.duration if __wl_t93 == nil then __wl_t93 = 1 end out[#out + 1] = {code = "P7201", subject = name, evidence = __wl_t94, fix = "Reuse tables instead of creating them per call (clear them with wipe), move closures that capture nothing out of loops and handlers, and cache strings and results that do not change", metric = own / math.max(__wl_t93, 1)
 					} end
 			end
 		end end
 	-- P7301: single calls over the frame budget.
 	local function over(name, s, what)
-		do local __wl_t92 = s.over if __wl_t92 == nil then __wl_t92 = 0 end if (__wl_t92) > 0 then
+		do local __wl_t95 = s.over if __wl_t95 == nil then __wl_t95 = 0 end if (__wl_t95) > 0 then
 				do
 
 
 
-					local __wl_t93 = s.max if __wl_t93 == nil then __wl_t93 = 0 end local __wl_t95 = ms(__wl_t93) local __wl_t94 = data.frameBudget if __wl_t94 == nil then __wl_t94 = 1 end local __wl_t98 = ms(__wl_t94) local __wl_t99 = n(s.over) local __wl_t96 = s.calls if __wl_t96 == nil then __wl_t96 = s.count end local __wl_t97 = __wl_t96 if __wl_t97 == nil then __wl_t97 = 0 end local __wl_t101 = string.format("%s took %s in its slowest call, over the %s frame budget; %s of %s %s were over it in %s", name, __wl_t95, __wl_t98, __wl_t99, n(__wl_t97), what, span(data))
+					local __wl_t96 = s.max if __wl_t96 == nil then __wl_t96 = 0 end local __wl_t98 = ms(__wl_t96) local __wl_t97 = data.frameBudget if __wl_t97 == nil then __wl_t97 = 1 end local __wl_t101 = ms(__wl_t97) local __wl_t102 = n(s.over) local __wl_t99 = s.calls if __wl_t99 == nil then __wl_t99 = s.count end local __wl_t100 = __wl_t99 if __wl_t100 == nil then __wl_t100 = 0 end local __wl_t104 = string.format("%s took %s in its slowest call, over the %s frame budget; %s of %s %s were over it in %s", name, __wl_t98, __wl_t101, __wl_t102, n(__wl_t100), what, span(data))
 
-					local __wl_t100 = s.max if __wl_t100 == nil then __wl_t100 = 0 end out[#out + 1] = {code = "P7301", subject = name, evidence = __wl_t101, fix = "Spread the work across frames: run it as a job with jobs.start from wowlua:jobs and call ctx:check() in its loop, or wait for the end of combat", metric = __wl_t100
+					local __wl_t103 = s.max if __wl_t103 == nil then __wl_t103 = 0 end out[#out + 1] = {code = "P7301", subject = name, evidence = __wl_t104, fix = "Spread the work across frames: run it as a job with jobs.start from wowlua:jobs and call ctx:check() in its loop, or wait for the end of combat", metric = __wl_t103
 					} end
 			end end
 	end
-	do local __wl_t102 = data.functions if __wl_t102 == nil then __wl_t102 = {} end for name, s in pairs(__wl_t102) do
+	do local __wl_t105 = data.functions if __wl_t105 == nil then __wl_t105 = {} end for name, s in pairs(__wl_t105) do
 			over(name, s, "calls")
 		end end
 	for _, kind in ipairs({"events", "scripts", "timers", "commands"}) do
-		do local __wl_t103 = data[kind] if __wl_t103 == nil then __wl_t103 = {} end for key, s in pairs(__wl_t103) do
+		do local __wl_t106 = data[kind] if __wl_t106 == nil then __wl_t106 = {} end for key, s in pairs(__wl_t106) do
 				over(key, s, "runs")
 			end end
 	end

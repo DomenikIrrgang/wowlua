@@ -25,6 +25,9 @@ export const hooks = { work = function() end }
 export function heavy(work: () -> ())
     work()
 end
+export function side(work: () -> ())
+    work()
+end
 export function alloc(n: number): number
     local t = {}
     for i = 1, n do
@@ -71,7 +74,7 @@ fn package(profile: &str, test: &str) -> tempfile::TempDir {
         dir.path().join("tests/devtools.test.wowlua"),
         format!(
             "import test, expect from \"wowlua:test\"\nimport * as mock from \"wowlua:mock\"\n\
-             import hooks, ticker, poll, heavy from \"/main\"\n\
+             import hooks, ticker, poll, heavy, side from \"/main\"\n\
              local dev: any = _G.WOWLUA_DEV\nlocal function probe(): any return dev.addons.Probe end\n{test}"
         ),
     )
@@ -115,6 +118,17 @@ local function measures()
     expect(slow.ms >= 5).toBe(true)
     expect(slow.root).toBe("BAG_UPDATE")
     expect(type(slow.stack)).toBe("string")
+    -- The recording's slowest and its sums (T615); the export holds each
+    -- stack once, the calls its number.
+    local d = rec.data
+    expect(#d.slowest).toBe(1)
+    expect(d.slowest[1].name).toBe("heavy")
+    expect(d.slowFunctions.heavy.count).toBe(1)
+    expect(d.slowFunctions.heavy.root).toBe("BAG_UPDATE")
+    expect(d.slowRoots.BAG_UPDATE.name).toBe("heavy")
+    expect(d.slowRoots.BAG_UPDATE.max).toBe(d.slowest[1].ms)
+    expect(d.stacks[d.slow[1].stack]).toBe(slow.stack)
+    expect(d.slowest[1].stack).toBe(d.slow[1].stack)
     -- The last frame took its time.
     expect(perf.lastFrame >= 5).toBe(true)
     expect(perf.over > 0).toBe(true)
@@ -144,6 +158,80 @@ local function measures()
     local before = #perf.slow
     mock.fireEvent("BAG_UPDATE", 0)
     expect(#perf.slow).toBe(before)
+end
+"#,
+    );
+}
+
+/// A recording keeps its slowest calls when the newest 200 no longer hold
+/// them, at most 3 per function, sums every slow call by function and root,
+/// and names each second's worst call (§7.3.1, decision T615).
+#[test]
+fn slowest_calls_and_worst_per_second() {
+    run(
+        "",
+        r#"
+@test
+@noprofile
+local function keepsTheSlowest()
+    local perf = probe().runtime.perf
+    side(function() mock.spend(6) end)
+    hooks.work = function() mock.spend(50) end
+    mock.fireEvent("BAG_UPDATE", 0)
+    hooks.work = function() mock.spend(4) end
+    for _ = 1, 250 do
+        mock.fireEvent("BAG_UPDATE", 0)
+    end
+    mock.advanceFrames(120)
+    -- The newest 200 are all 4 ms calls of one function.
+    expect(#perf.slow).toBe(200)
+    for _, s in ipairs(perf.slow) do
+        expect(s.ms < 6).toBe(true)
+    end
+    local data = perf.data(perf.recordings[1])
+    local names = {}
+    for i, s in ipairs(data.slowest) do
+        names[i] = s.name
+    end
+    expect(table.concat(names, " ")).toBe("heavy side heavy heavy")
+    expect(data.slowest[1].ms >= 50).toBe(true)
+    expect(data.slowest[1].root).toBe("BAG_UPDATE")
+    local heavy = data.slowFunctions.heavy
+    expect(heavy.count).toBe(251)
+    expect(heavy.max).toBe(data.slowest[1].ms)
+    expect(heavy.total >= 1050).toBe(true)
+    expect(heavy.first <= heavy.at and heavy.at <= heavy.last).toBe(true)
+    expect(data.slowFunctions.side.root).toBe("other")
+    expect(data.slowRoots.BAG_UPDATE.count).toBe(251)
+    expect(data.slowRoots.other.name).toBe("side")
+    -- Each stack once: 204 calls listed, a few stacks.
+    expect(#data.slow + #data.slowest).toBe(204)
+    expect(#data.stacks <= 3).toBe(true)
+    -- The second with the 50 ms call names it.
+    local s = data.seconds
+    local worst = 0
+    for i = 1, #s.worstMs do
+        if s.worstMs[i] > (s.worstMs[worst] ?? 0) then
+            worst = i
+        end
+    end
+    expect(s.names[s.worst[worst]]).toBe("heavy")
+    expect(s.worstMs[worst] >= 50).toBe(true)
+    -- A second without slow calls names its longest top-level call.
+    hooks.work = function() mock.spend(0.5) end
+    mock.fireEvent("BAG_UPDATE", 0)
+    mock.advanceFrames(120)
+    s = perf.data(perf.recordings[1]).seconds
+    local found = false
+    for i = 1, #s.worst do
+        if s.names[s.worst[i]] == "BAG_UPDATE" then
+            found = s.worstMs[i] >= 0.5 and s.worstMs[i] < 1
+        end
+    end
+    expect(found).toBe(true)
+    -- A reset starts the live recording's slowest again.
+    perf.reset()
+    expect(#perf.data(perf.recordings[1]).slowest).toBe(0)
 end
 "#,
     );
@@ -203,7 +291,7 @@ local function records()
         perf.setExport(combat, true)
         local db: any = _G.WowluaDevDB_Probe
         expect(#db.exports).toBe(1)
-        expect(db.exports[1].format).toBe(1)
+        expect(db.exports[1].format).toBe(2)
         expect(db.exports[1].addon).toBe("Probe")
         expect(db.exports[1].name).toBe("combat 1")
         expect(db.exports[1].functions.handler.calls).toBe(2)
@@ -874,7 +962,7 @@ end
     assert_eq!(data["client"], "_retail_");
     assert_eq!(data["account"], "ACCOUNT1");
     let rec = &data["recordings"][0];
-    assert_eq!(rec["format"], 1);
+    assert_eq!(rec["format"], 2);
     assert_eq!(rec["addon"], "Probe");
     assert_eq!(rec["name"], "pull 1");
     assert_eq!(rec["kind"], "pull");
@@ -919,9 +1007,29 @@ end
     assert_eq!(slow.len(), 2, "{slow:?}");
     assert_eq!(slow[0]["root"], "/probe");
     assert_eq!(slow[1]["root"], "BAG_UPDATE");
-    // The stack, with its lines mapped to the source.
-    let stack = slow[0]["stack"].as_str().unwrap();
+    // The stack, kept once in `stacks`, with its lines mapped to the source.
+    let stacks = rec["stacks"].as_array().unwrap();
+    let at = slow[0]["stack"].as_u64().unwrap() as usize;
+    let stack = stacks[at - 1].as_str().unwrap();
     assert!(stack.contains("→ src/main.wowlua:"), "{stack}");
+    // The slowest and the sums by function and root (T615).
+    assert_eq!(rec["slowest"].as_array().unwrap().len(), 2, "{rec}");
+    assert_eq!(rec["slowFunctions"]["heavy"]["count"], 2);
+    assert!(
+        rec["slowFunctions"]["heavy"]["location"]
+            .as_str()
+            .unwrap()
+            .starts_with("src/main.wowlua:"),
+        "{rec}"
+    );
+    assert_eq!(rec["slowRoots"]["/probe"]["name"], "heavy");
+    // Each second's worst call by name.
+    let names = rec["seconds"]["names"].as_array().unwrap();
+    assert!(names.contains(&serde_json::json!("heavy")), "{names:?}");
+    assert!(
+        rec["seconds"]["worst"].as_array().unwrap().len()
+            == rec["seconds"]["frames"].as_array().unwrap().len()
+    );
     let hints: Vec<&str> = rec["hints"]
         .as_array()
         .unwrap()
