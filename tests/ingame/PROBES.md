@@ -2226,6 +2226,36 @@ game, and what wowlua does now.
    column's sixth, the fourth column's seventh) drew a second text over
    their names. To compare with the game's raid frames in the same state.
 
+## Animations after a hitch (decision T623)
+
+Found with SuuUI's windows on 2026-11-10: their fade-in (an alpha 0 to 1
+of 0.12 s) did not move while a test waited with `mock.advanceTime`, so
+a screenshot drew the window at alpha 0. wowlua now plays a group on the
+clock: a frame after a long one (a hitch) moves it by the whole time, and
+a repeating group that passes several lengths in one frame runs `OnLoop`
+once and goes on where the clock has it. Neither is seen in game yet.
+Each line in the chat, out of combat (step 3 freezes the game for three
+seconds, step 4 for 1.3 seconds):
+
+1. `/run F=CreateFrame("Frame",nil,UIParent) G=F:CreateAnimationGroup() A=G:CreateAnimation("Alpha") A:SetFromAlpha(1) A:SetToAlpha(0.5) A:SetDuration(30) G:SetScript("OnLoop",function(_,s) print("loop",s,GetTime()-P) end) G:SetScript("OnFinished",function() print("finished",GetTime()-P) end)`
+2. `/run G:Play() P=GetTime() print("playing",G:IsPlaying())`
+
+   wowlua: `playing true`.
+3. Within ten seconds of step 2: `/run local t=debugprofilestop() while debugprofilestop()-t<3000 do end print("before",G:GetElapsed(),GetTime()-P) C_Timer.After(0.1,function() print("after",G:GetElapsed(),GetTime()-P) end)`
+
+   Seen: on each line, the group's time and the time since its `Play`.
+   wowlua: on each line the two equal (within a frame), the `after`
+   line's about three seconds past the `before` line's (the hitch
+   counted whole). (to do)
+4. `/run G:Stop() A:SetDuration(0.5) G:SetLooping("REPEAT") G:Play() P=GetTime() local t=debugprofilestop() while debugprofilestop()-t<1300 do end C_Timer.After(0.1,function() print("after",G:GetElapsed(),GetTime()-P) G:Stop() end)`
+
+   Seen: the `loop` lines before the `after` line (how many, each with
+   its time) and the `after` line. wowlua: one `loop FORWARD` line
+   about 1.3 s after `Play`, then `after` with the group's time the time
+   since `Play` less whole repeats of 0.5 s (about 0.3 to 0.4 then).
+   (to do)
+5. `/run G:Stop() F:Hide()`
+
 ## A mouse script after the clicks were turned off (decision T365)
 
 Found with SuuUI on wowlua's main (2026-11-10): SuuUI's weapon enchant

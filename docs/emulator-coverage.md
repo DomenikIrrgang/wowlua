@@ -889,7 +889,7 @@ page changes only when a rule is added, removed or reworded.
 ### animations (2)
 
 - [animations.rs](../crates/wowlua-engine/src/animations.rs): Unverified: the timing within a frame (groups advance after the frame's `OnUpdate`s), that `Finish` runs `OnFinished`...
-- [animations.rs](../crates/wowlua-engine/src/animations.rs): Each region's effect from the groups playing: each animation from its start (its order's start, its delay) to its end...
+- [animations.rs](../crates/wowlua-engine/src/animations.rs): Each region's effect from the groups playing, each at its time at the clock's time now (decision T623: after `mock.ad...
 
 ### api (1)
 
@@ -2518,6 +2518,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - The trainer's choice (decision T617)
 - Beast Training (decision T618)
 - Found making SuuUI's store screenshots (2026-11-10)
+- Animations after a hitch (decision T623)
 - A mouse script after the clicks were turned off (decision T365)
 
 ## In-game regressions

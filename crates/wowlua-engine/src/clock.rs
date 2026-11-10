@@ -444,7 +444,8 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
             }
         }
         widgets::run_text_changes(vm);
-        crate::animations::tick(vm, ms / 1000.0);
+        // (by the clock's time, not the frame's: decision T623)
+        crate::animations::tick(vm);
         crate::movement::tick(vm, ms / 1000.0);
         crate::unitacts::tick(vm);
         crate::camera::tick(vm, ms / 1000.0);

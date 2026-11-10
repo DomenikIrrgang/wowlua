@@ -857,13 +857,10 @@ fn order_lengths(vm: &mut Vm, group: WidgetId) -> std::collections::BTreeMap<i64
     by_order
 }
 
-/// A group's time played: 0 unless it is playing (or paused).
+/// A group's time played at the clock's time now, as the scene draws it
+/// (decision T623): 0 unless it is playing (or paused).
 fn group_elapsed(vm: &Vm, group: WidgetId) -> f64 {
-    engine(vm)
-        .animations
-        .playing
-        .get(&group.0)
-        .map_or(0.0, |p| p.elapsed)
+    crate::animations::group_elapsed(vm, group)
 }
 
 /// An animation's time played within its duration.
