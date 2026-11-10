@@ -2527,7 +2527,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Animations after a hitch (decision T623)
 - A mouse script after the clicks were turned off (decision T365)
 - Cmd as a modifier (decision T624, 2026-11-10)
-- Mounts, pets and toys dragged (decision T625, 2026-11-10)
+- Mounts, pets and toys dragged (decision T626, 2026-11-10)
 
 ## In-game regressions
 

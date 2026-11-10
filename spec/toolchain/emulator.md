@@ -509,7 +509,7 @@ The WoW API the VM's code calls, per flavor.
   pet mode and the forbidden call (`tests/ingame/PROBES.md`, "Beast
   Training").
 - **Mounts, pets and toys on the cursor.** The collections' pickups put
-  them on the cursor as the game does (decision T625; probed in WoW
+  them on the cursor as the game does (decision T626; probed in WoW
   Forever, `tests/ingame/PROBES.md`, "Mounts, pets and toys dragged"):
   `C_MountJournal.Pickup(displayIndex)` the journal's displayed mount
   there (as `GetDisplayedMountID` sees it), `GetCursorInfo` answering

@@ -212,7 +212,7 @@ fn get_action_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// the player presses a spell (`casting::use_spell`, recorded). Other
 /// actions (items, macros) do nothing yet (unverified); nor do a mount's,
 /// a battle pet's and a toy's, as the journals' `SummonByID`,
-/// `SummonPetByGUID` and `UseToy` do nothing yet (decision T625).
+/// `SummonPetByGUID` and `UseToy` do nothing yet (decision T626).
 fn use_action(vm: &mut Vm, c: NativeCall) -> Ret {
     match slot(&c).and_then(|s| action(vm, s)) {
         Some(a) if a.kind == "spell" => match num(a.id) {

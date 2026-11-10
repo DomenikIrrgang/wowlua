@@ -59,11 +59,11 @@ pub enum Cursor {
     PetAction(f64, f64),
     Macro(f64),
     /// An item; a toy from the toy box is one without a source (decision
-    /// T625).
+    /// T626).
     Item(Held, Option<Source>),
-    /// A mount of the journal, by its mount ID (decision T625).
+    /// A mount of the journal, by its mount ID (decision T626).
     Mount(f64),
-    /// A battle pet, by its GUID (decision T625).
+    /// A battle pet, by its GUID (decision T626).
     BattlePet(String),
 }
 

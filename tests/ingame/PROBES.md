@@ -2369,7 +2369,7 @@ chat, one at a time:
    /run F:Hide()
    ```
 
-## Mounts, pets and toys dragged (decision T625, 2026-11-10)
+## Mounts, pets and toys dragged (decision T626, 2026-11-10)
 
 Found with SuuUI's collections window (released in 0.6.37), which lets a
 mount, a pet or a toy of yours be dragged onto an action bar: wowlua's

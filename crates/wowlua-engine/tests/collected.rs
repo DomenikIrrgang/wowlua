@@ -463,7 +463,7 @@ Pet = 'BattlePet-0-00000009B56D'
 function held() return join(' ', GetCursorInfo()) end
 ";
 
-/// A collected mount picked up from the journal's list (decision T625):
+/// A collected mount picked up from the journal's list (decision T626):
 /// `"mount"`, its ID and its place in `GetMountIDs()`; placed on a slot a
 /// `summonmount` action with the mount's icon; an uncollected one stays in
 /// the journal.
@@ -499,7 +499,7 @@ fn a_mount_picked_up_and_placed() {
     );
 }
 
-/// A battle pet picked up by its GUID (decision T625): `"battlepet"` and
+/// A battle pet picked up by its GUID (decision T626): `"battlepet"` and
 /// the GUID; placed a `summonpet` action; picked up from the slot again.
 #[test]
 fn a_battle_pet_picked_up_and_placed() {
@@ -520,7 +520,7 @@ fn a_battle_pet_picked_up_and_placed() {
     );
 }
 
-/// A toy the player has picked up from the toy box (decision T625): a
+/// A toy the player has picked up from the toy box (decision T626): a
 /// plain `"item"` with its ID and link, placed an item action with the
 /// item's icon; one the player lacks, nothing.
 #[test]
@@ -543,7 +543,7 @@ fn a_toy_picked_up_and_placed() {
 }
 
 /// Placed on a filled slot they swap with its action; `ClearCursor` and
-/// picking up anything else let them go (decision T625).
+/// picking up anything else let them go (decision T626).
 #[test]
 fn collections_on_the_cursor_swap_and_clear() {
     let mut vm = vm();
