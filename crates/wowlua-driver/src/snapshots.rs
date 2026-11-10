@@ -14,6 +14,8 @@ pub struct Found {
     /// The client folder (`_retail_`).
     pub client: String,
     pub account: String,
+    /// `Realm/Name` for a character's SavedVariables.
+    pub character: Option<String>,
     pub path: PathBuf,
     /// When it was taken (the game's `time()`), if recorded.
     pub at: Option<f64>,
@@ -33,7 +35,7 @@ pub fn find(
     account: Option<&str>,
 ) -> (Vec<Found>, Vec<String>) {
     let mut out = Vec::new();
-    let warnings = each_saved(wow, db, client, account, |client, account, path, value| {
+    let warnings = each_saved(wow, db, client, account, |place, value| {
         let Some(snapshot) = value.get("snapshot") else {
             return;
         };
@@ -41,9 +43,10 @@ pub fn find(
             return;
         };
         out.push(Found {
-            client,
-            account,
-            path,
+            client: place.client,
+            account: place.account,
+            character: place.character,
+            path: place.path,
             at: snapshot.get("at").and_then(Value::as_f64),
             profile: from_saved(profile.clone()),
             failed: crate::recordings::list(snapshot.get("failed").unwrap_or(&Value::Null))
@@ -287,6 +290,7 @@ WowluaDevDB_Probe = {
         Found {
             client: "_classic_era_".into(),
             account: "A".into(),
+            character: None,
             path: PathBuf::new(),
             at: snapshot.get("at").and_then(Value::as_f64),
             profile: from_saved(snapshot["profile"].clone()),

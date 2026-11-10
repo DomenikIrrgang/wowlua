@@ -20,9 +20,14 @@ fn describe(found: &Found) -> String {
         .filter_map(|e| e.get("name").and_then(Value::as_str).map(str::to_string))
         .collect();
     format!(
-        "{}  {}  {} ({})",
+        "{}  {}{}  {} ({})",
         found.client,
         found.account,
+        found
+            .character
+            .as_ref()
+            .map(|c| format!("  {c}"))
+            .unwrap_or_default(),
         commands::plural(found.exports.len(), "recording", "recordings"),
         names.join(", ")
     )
@@ -97,11 +102,16 @@ pub fn report(out: &Output, global: &GlobalArgs, args: &ProfReportArgs) -> bool 
                     }
                 ))
                 .with_note(format!(
-                    "they are in `<client>/WTF/Account/<account>/SavedVariables/{db}.lua`"
+                    "they are `{db}` in the addon's SavedVariables, \
+                     `<client>/WTF/Account/<account>/SavedVariables/{addon}.lua`"
                 ))
+                .with_note(
+                    "only recordings marked for export are saved: the others are gone \
+                     after /reload or logout",
+                )
                 .with_help(
-                    "in the game, right-click a recording in the dev window's performance tab, \
-                     choose Mark for export, then /reload",
+                    "in the game, right-click a recording in the dev window's performance tab \
+                     and choose Mark for export before you /reload or log out",
                 ),
             );
             out.flush(&mut session);

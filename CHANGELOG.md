@@ -14,6 +14,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `wowlua prof report` and `wowlua profile snapshot` find your exported recordings and snapshot where WoW saves them: in your addon's own SavedVariables file (`SavedVariables/<YourAddon>.lua`), also per character. Before, they only looked for a `WowluaDevDB_<YourAddon>.lua` that WoW never writes, and said nothing was exported. When there really is nothing, the message now says to choose **Mark for export** before `/reload` or logging out.
 - Walking away from an open mailbox closes it, as in the game: past 5 yards (`unit:setDistance`, or the player moving away) the mail ends with `SECURE_TRANSFER_CANCEL` and `PLAYER_INTERACTION_MANAGER_FRAME_HIDE`, and `C_PlayerInteractionManager.IsInteractingWithNpcOfType(17)` turns false. There is no `MAIL_CLOSED`, as in the game.
 - A frame anchored to a panel whose `OnSizeChanged` resizes the panel is lost as in the game also when nothing asks for its place before the frame ends, and when the panel was built hidden and shown later; before, wowlua placed it.
 - `IsRectValid()` answers true once a frame has been laid out (its size or place asked for, or the next frame), not always false.

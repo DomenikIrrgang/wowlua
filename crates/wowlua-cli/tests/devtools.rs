@@ -5,7 +5,7 @@
 
 use assert_cmd::Command;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn wowlua(dir: &Path) -> Command {
     let mut cmd = Command::cargo_bin("wowlua").unwrap();
@@ -646,9 +646,11 @@ fn profile_snapshot_writes_a_world_profile() {
         .path()
         .join("wow/_classic_era_/WTF/Account/ACC/SavedVariables");
     fs::create_dir_all(&sv).unwrap();
+    // In the addon's own file, after its own tables (decision T614).
     fs::write(
-        sv.join("WowluaDevDB_Probe.lua"),
-        r#"
+        sv.join("Probe.lua"),
+        OWN_SAVED_VARIABLES.to_string()
+            + r#"
 WowluaDevDB_Probe = {
 	["snapshot"] = {
 		["at"] = 1793170000,
@@ -801,16 +803,16 @@ end
     let file: mlua::LuaString = lua.load(format!("return {literal}")).eval().unwrap();
     let file = file.as_bytes().to_vec();
     let wow = dir.path().join("wow");
-    let place = |client: &str, account: &str| {
-        let sv = wow
-            .join(client)
-            .join("WTF/Account")
-            .join(account)
-            .join("SavedVariables");
+    // The client writes the TOC's SavedVariables, WowluaDevDB_Probe among
+    // the addon's own, into the addon's file (decision T614).
+    let mut addon_file = OWN_SAVED_VARIABLES.as_bytes().to_vec();
+    addon_file.extend_from_slice(&file);
+    let place = |dir: PathBuf| {
+        let sv = dir.join("SavedVariables");
         fs::create_dir_all(&sv).unwrap();
-        fs::write(sv.join("WowluaDevDB_Probe.lua"), &file).unwrap();
+        fs::write(sv.join("Probe.lua"), &addon_file).unwrap();
     };
-    place("_retail_", "ACCOUNT1");
+    place(wow.join("_retail_/WTF/Account/ACCOUNT1"));
     // An account without exports, and another addon's data, do not count.
     fs::create_dir_all(wow.join("_retail_/WTF/Account/EMPTY/SavedVariables")).unwrap();
     fs::write(
@@ -928,9 +930,10 @@ end
         .collect();
     assert!(hints.contains(&"P7301"), "{hints:?}");
 
-    // Several accounts and clients: without a terminal, the command lists
-    // them and asks for --client and --account.
-    place("_classic_", "OTHER");
+    // Several accounts and clients (here a character's SavedVariables, as
+    // with SavedVariablesPerCharacter): without a terminal, the command
+    // lists them and asks for --client and --account.
+    place(wow.join("_classic_/WTF/Account/OTHER/Golemagg/Suuna"));
     let (ok, text) = report(&[]);
     assert!(!ok, "{text}");
     assert!(text.contains("several accounts or clients"), "{text}");
@@ -938,7 +941,7 @@ end
         text.contains("_retail_  ACCOUNT1  1 recording (pull 1)"),
         "{text}"
     );
-    assert!(text.contains("_classic_  OTHER"), "{text}");
+    assert!(text.contains("_classic_  OTHER  Golemagg/Suuna"), "{text}");
     assert!(text.contains("--client"), "{text}");
     let (ok, text) = report(&[
         "--account",
@@ -963,5 +966,30 @@ end
     let (ok, text) = report(&["--account", "EMPTY"]);
     assert!(!ok, "{text}");
     assert!(text.contains("no exported recordings of Probe"), "{text}");
-    assert!(text.contains("Mark for export"), "{text}");
+    assert!(text.contains("SavedVariables/Probe.lua"), "{text}");
+    assert!(
+        text.contains("Mark for export before you /reload"),
+        "{text}"
+    );
 }
+
+/// An addon's own SavedVariables as the client writes them before the dev
+/// data in `<Addon>.lua`: text that looks like Lua's ends of tables and
+/// comments, and a variable named like the dev data's start, are skipped.
+const OWN_SAVED_VARIABLES: &str = r#"
+ProbeDB = {
+	["profiles"] = {
+		["Default"] = {
+			["note"] = "} -- not the end { \" ' [[",
+			["single"] = 'a \' }',
+			["long"] = [==[ ]] } ]=] still ]==],
+			["n"] = -1.5e-05,
+			[1] = true,
+		},
+	},
+}
+WowluaDevDB_ProbeX = {
+	["exports"] = "not this one",
+}
+ProbeCharDB = nil
+"#;
