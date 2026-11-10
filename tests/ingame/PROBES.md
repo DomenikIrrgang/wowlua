@@ -1510,6 +1510,24 @@ window's tabs need another look.
    Seen: red or blue? WoW Forever (2026-11-07): blue. wowlua now blue (it said red).
 7. **Gone**: `/run A:Hide() B:Hide()`
 
+Owed (decision T620, 2026-11-10): SuuUI's character window sets its side
+tabs' level after making the marker at that level, and the game draws the
+tab's label over the marker, though the marker was made later. wowlua now
+takes a level set to a new one as placing the frame anew, counted at the
+next frame drawn (step 4 set it back in the same `/run`). Steps 1 and 2
+again, then each line as its own `/run`:
+
+8. **Red away**: `/run A:SetFrameLevel(49)`
+9. **Red back, a frame later**: `/run A:SetFrameLevel(50)`
+
+   Seen: red or blue? wowlua: red.
+10. **Gone**: `/run A:Hide() B:Hide()`
+11. **SuuUI's tabs, red made first**: `/run T=CreateFrame("Frame",nil,UIParent) T:SetSize(200,200) T:SetPoint("CENTER") T:SetFrameLevel(40) C=CreateFrame("Frame",nil,T) C:SetAllPoints() local t=C:CreateTexture() t:SetAllPoints() t:SetColorTexture(1,0,0)`
+12. **Blue made at 43, then red set to 43**: `/run local h=CreateFrame("Frame",nil,T) h:SetAllPoints() h:SetFrameLevel(42) local x=CreateFrame("Frame",nil,h) x:SetSize(200,200) x:SetPoint("CENTER",60,60) local t=x:CreateTexture() t:SetAllPoints() t:SetColorTexture(0,0,1) C:SetFrameLevel(43) print(C:GetFrameLevel(), x:GetFrameLevel())`
+
+    Seen: `43 43`; red or blue where they overlap? wowlua: red.
+13. **Gone**: `/run T:Hide()`
+
 ## The mouse wheel over frames (decision T588)
 
 On Classic Era now, and again on WoW Forever from its launch on 5 November
@@ -1661,6 +1679,12 @@ engine to close, with the steps that would record the game's answer.
      `32.5 3 368.33334350586`. Not compared yet: wowlua's run of the
      batch has no SuuUI (its font missing: `33 3 380` with the fallback);
      owed: the same line in SuuUI's tests.
+
+     Compared (2026-11-10, decision T619): the numbers are a pixel of 5/6
+     (Figtree at 13 pixels), and the font file's glyphs by T392's rule give
+     the game's to the pixel: 442 wide, three lines of 13. wowlua measured
+     an addon's font as Friz Quadrata; it now measures it with the addon's
+     file (`crates/wowlua-engine/tests/frames.rs` replays the line).
 3. **A text's height can be a secret.** In a post-hook of a character
    window side pane's `LayoutRows` (Skills, Reputation or PvP rank), a
    wrapped row's `Label:GetStringHeight()` was a secret number ("attempt to
@@ -2162,3 +2186,42 @@ line in the chat:
 
     Seen: the error shown, and whether the window opens. wowlua: nothing
     opens (no error modelled). (to do)
+
+## Found making SuuUI's store screenshots (2026-11-10)
+
+SuuUI's store pictures (its draft PR #125, `tests/marketing/`) are made in
+wowlua with the 3D world. Where the emulator drew them otherwise than the
+game, and what wowlua does now.
+
+1. **Gaps inside words** (decision T619). SuuUI's Marcellus SC and Figtree
+   drew "SILVE RMANE", "CHARACTE R", "M ana", "Maevria' s"; in the game
+   (the user's screenshots of SuuUI's windows) the words are whole.
+   wowlua measured an addon's own font as Friz Quadrata and drew the real
+   font's glyphs at those advances. It now measures it with the addon's
+   file; the T392 rule matches the game's numbers of item 2 of "Found
+   with SuuUI on WoW Forever" to the pixel. Owed, to confirm the rule on
+   Marcellus SC: `/run local f=UIParent:CreateFontString(nil,"OVERLAY") f:SetFont("Interface\\AddOns\\SuuUI\\Media\\Fonts\\MarcellusSC-Regular.ttf",14,"") f:SetText("Silvermane Character") print(f:GetUnboundedStringWidth(), UIParent:GetEffectiveScale(), select(2, GetPhysicalScreenSize()))`
+
+   Seen: (to do) wowlua: the width at the screen and scale printed.
+2. **The chosen side tab's label under its marker** (decision T620): see
+   "Frames of the same level", steps 8 to 13.
+3. **Labels broken before their colon** (decision T621). Once Figtree
+   measured as itself, the character window's stat labels ("Health:",
+   one point, no width) broke into "Health" and ":" in wowlua: a line's
+   advances passed the width its own text gave it. In the game they are
+   one line. wowlua no longer wraps a font string at a width that is its
+   own text's. Owed: `/run local f=UIParent:CreateFontString(nil,"OVERLAY") f:SetFont("Interface\\AddOns\\SuuUI\\Media\\Fonts\\Figtree-Regular.ttf",13,"") f:SetPoint("CENTER") f:SetText("Movement Speed:") f:SetWidth(f:GetStringWidth()) print(f:GetNumLines(), f:GetStringWidth())`
+
+   Seen: whether a width set to the string's own width wraps it. wowlua:
+   two lines when the last glyph's advance passes its ink and one (T282's
+   rule), one otherwise.
+4. **Stormwind drawn upside down** (decision T622). Placed in the Trade
+   District by map position (`mock.moveTo({ mapID = 1453, x = 0.62, y =
+   0.70 })`), the player stood on the terrain under the city's streets (a
+   building's floors over it), and the camera saw the city's underside
+   above it. wowlua now stands a map position on the highest floor there.
+   Nothing to probe: the game always knows the height.
+5. **Two texts over each other on a raid frame** (seen, not looked into):
+   in the raid scene (`02-raid-healer`) two members' frames (the third
+   column's sixth, the fourth column's seventh) drew a second text over
+   their names. To compare with the game's raid frames in the same state.

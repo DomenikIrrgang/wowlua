@@ -124,6 +124,76 @@ end",
     );
 }
 
+/// A frame whose level is set anew takes its place among the frames of
+/// its new level then, on top of those made or set before (decision T620):
+/// SuuUI's character window sets its side tabs' level after making the
+/// chosen tab's marker at that level, and the game draws the tab's label
+/// over the marker. A level set and set back before the next frame keeps
+/// its place (T587); set back a frame later, it is on top again.
+#[test]
+fn a_frame_set_to_a_new_level_goes_on_top_of_that_level() {
+    let mut vm = vm();
+    let on_top = |vm: &mut Vm| {
+        let (k, _) = wowlua_engine::scene::pixel_scale(vm);
+        let id = wowlua_engine::scene::hit_test(vm, 50.0 * k, 50.0 * k).expect("a frame");
+        wowlua_engine::engine(vm).world.widgets[id.0]
+            .name
+            .clone()
+            .unwrap_or_default()
+    };
+    let frame = |vm: &mut Vm| wowlua_engine::clock::advance_frames(vm, 1, 1000.0 / 60.0);
+    // SuuUI's side tabs: Blizzard's tab made first, under the tabs' frame;
+    // the row and the marker's holder and box after it; the tab then set
+    // to the box's level.
+    run(
+        &mut vm,
+        "local tabs = CreateFrame('Frame', 'Tabs', UIParent)
+tabs:SetSize(100, 100)
+tabs:SetPoint('TOPLEFT')
+local tab = CreateFrame('Button', 'Tab', tabs)
+tab:SetAllPoints()
+tab:EnableMouse(true)",
+    );
+    frame(&mut vm);
+    let r = run(
+        &mut vm,
+        "local row = CreateFrame('Frame', 'Row', Tabs)
+row:SetAllPoints()
+local holder = CreateFrame('Frame', 'Holder', row)
+holder:SetAllPoints()
+holder:SetFrameLevel(row:GetFrameLevel() + 1)
+local box = CreateFrame('Frame', 'Box', holder)
+box:SetAllPoints()
+box:EnableMouse(true)
+Tab:SetFrameLevel(row:GetFrameLevel() + 2)
+return Tab:GetFrameLevel() == box:GetFrameLevel()",
+    );
+    assert_eq!(r, ["true"]);
+    let tab_set = on_top(&mut vm);
+    // Two frames made at one level, the first set away and back in one
+    // frame (kept under), then away a frame and back (on top).
+    run(
+        &mut vm,
+        "for _, name in ipairs({ 'Red', 'Blue' }) do
+    local f = CreateFrame('Frame', name, UIParent)
+    f:SetSize(100, 100)
+    f:SetPoint('TOPLEFT')
+    f:SetFrameLevel(50)
+    f:EnableMouse(true)
+end",
+    );
+    frame(&mut vm);
+    run(&mut vm, "Red:SetFrameLevel(49) Red:SetFrameLevel(50)");
+    frame(&mut vm);
+    let back_at_once = on_top(&mut vm);
+    run(&mut vm, "Red:SetFrameLevel(49)");
+    frame(&mut vm);
+    run(&mut vm, "Red:SetFrameLevel(50)");
+    frame(&mut vm);
+    let back_later = on_top(&mut vm);
+    assert_eq!([tab_set, back_at_once, back_later], ["Tab", "Blue", "Red"]);
+}
+
 /// A top-level frame shown is drawn, with what is in it, above the rest of
 /// its strata, its level kept; clicked, it is not raised (decision T586;
 /// TBC Anniversary and WoW Forever: a top-level window at level 2, shown,

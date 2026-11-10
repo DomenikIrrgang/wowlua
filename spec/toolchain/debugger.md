@@ -273,8 +273,11 @@ a difference.
 - **Order**: frame strata (`BACKGROUND` to `TOOLTIP`), the top-level frames
   raised (shown, the last raised on top) above the rest with
   what is in them (decision T586), frame level, then of
-  two frames at the same strata and level the one made later (decision
-  T587), then a
+  two frames at the same strata and level the one placed later: made, or
+  its strata or level set to a new one (`SetFrameLevel`, `Lower`, a
+  parent's level moving it, `SetFrameStrata`), the change counted when
+  the next frame is drawn, so one set back before that keeps its place
+  (decisions T587, T620), then a
   frame's regions (with those of its children on its level,
   `useParentLevel`, decision T341) by draw layer (`BACKGROUND`, `BORDER`, `ARTWORK`,
   `OVERLAY`, `HIGHLIGHT` while the mouse is over its button; a layer named
@@ -640,7 +643,8 @@ T310).
   heights. Glyph positions follow the engine's measured widths (§17.6), so
   layout does not depend on which font draws; a glyph the recorded widths
   lack is measured with the installation's font file (decision T392,
-  [Emulator §17.6](emulator.md)).
+  [Emulator §17.6](emulator.md)); an addon's own font with its file, from
+  the addon's folder (decision T619).
 - **Stand-ins**: a texture that cannot be read is drawn as a checkered
   magenta rectangle with its vertex color, so a missing image is visible;
   `--strict-assets` makes a missing file an error.

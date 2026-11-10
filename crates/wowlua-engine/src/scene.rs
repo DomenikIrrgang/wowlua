@@ -1387,7 +1387,9 @@ fn text_item_in(vm: &Vm, id: WidgetId, edit_box: bool, place: Option<Rect>) -> O
             None
         }
     };
+    // (not at a width that is its text's own: T621)
     let wraps = !edit_box
+        && !widgets::width_from_text(engine(vm), id)
         && widgets::font_chain_ref(vm, id, "WordWrap")
             .and_then(|v| v.first().copied())
             .is_none_or(|v| v.truthy());
@@ -1679,6 +1681,8 @@ fn merges_into_parent(vm: &mut Vm, id: WidgetId) -> bool {
 
 /// The visible frames, in draw order (back to front).
 fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
+    // (drawn: the levels set since the last frame take their places, T620)
+    widgets::settle_levels(vm);
     // (strata, the top-level frame raised it is in, level, the frame: T586)
     let mut frames: Vec<(usize, u64, f64, usize)> = Vec::new();
     // (walked from the widgets without a parent through the shown ones

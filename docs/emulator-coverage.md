@@ -2517,6 +2517,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - A disabled button (decision T616)
 - The trainer's choice (decision T617)
 - Beast Training (decision T618)
+- Found making SuuUI's store screenshots (2026-11-10)
 
 ## In-game regressions
 

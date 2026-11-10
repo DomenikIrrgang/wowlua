@@ -1332,11 +1332,16 @@ fn vector_xy(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![x, y])
 }
 
+/// How far over the terrain a place on a map looks down for its floor
+/// (decision T622): over Stormwind's cathedral.
+const ABOVE: f64 = 100.0;
+
 /// The player's place in the world as `UnitPosition` gives it: the
 /// north (`y`) and west (`x`) coordinates, the height and the instance.
 /// Not given: the map position's place on its map's world rectangle
 /// (`maps::world_rect`), the documentation's returns not nilable.
-/// Unverified: never recorded; the height (z) unknown, 0.
+/// Unverified: never recorded; the height (z) unknown, 0, and with the 3D
+/// world on the highest floor there (decision T622).
 pub(crate) fn player_world(vm: &mut Vm) -> Option<(f64, f64, f64, f64)> {
     let p = engine(vm).world.character.position.clone();
     let (y, x, z, instance) = match p.world {
@@ -1344,7 +1349,12 @@ pub(crate) fn player_world(vm: &mut Vm) -> Option<(f64, f64, f64, f64)> {
         None => {
             let (map, u, v) = (p.map_id?, p.x?, p.y?);
             let (instance, left, top, width, height) = crate::maps::world_rect(vm, map as i64)?;
-            (top - v * height, left - u * width, 0.0, instance)
+            let (y, x) = (top - v * height, left - u * width);
+            // A place on a map has no height: the highest floor there, as a
+            // search from above finds it (Stormwind's streets, its city's
+            // floors over the terrain, not the terrain under them: T622).
+            let z = crate::clientdata::ground(vm, instance, y, x).map_or(0.0, |g| g + ABOVE);
+            (y, x, z, instance)
         }
     };
     // (on the floor under them while the 3D world is on, T522, T524)
