@@ -102,6 +102,10 @@ pub struct Font {
     /// The client's tables and files, where the installation is at hand:
     /// its fonts measure what the recordings lack (decision T392).
     pub client: Option<std::sync::Arc<dyn crate::clientdata::ClientData>>,
+    /// The font file of an addon's folder it is
+    /// (`Interface\AddOns\<Name>\…`), where the folder has it: its glyphs
+    /// are measured with it (decision T619).
+    pub addon: Option<std::sync::Arc<fontdue::Font>>,
 }
 
 /// The region's font: its own or its font object's.
@@ -121,6 +125,7 @@ pub fn font_of(vm: &Vm, id: WidgetId) -> Font {
             Some(Value::Num(x)) => x,
             _ => 0.0,
         };
+    let addon = addon_font(vm, &file);
     let file = file
         .rsplit(['\\', '/'])
         .next()
@@ -132,7 +137,59 @@ pub fn font_of(vm: &Vm, id: WidgetId) -> Font {
         outline: flags.to_ascii_uppercase().contains("OUTLINE"),
         shadow_x,
         client: engine(vm).client_data.clone(),
+        addon,
     }
+}
+
+/// The font files of addons' folders read, by folder and path in it (lower
+/// case, back slashes): `None` for one the folder lacks or that is no font.
+type AddonFonts =
+    rustc_hash::FxHashMap<(std::path::PathBuf, String), Option<std::sync::Arc<fontdue::Font>>>;
+
+/// An addon's font file (`Interface\AddOns\<Name>\<path>`, either slash,
+/// any case), read from the addon's folder once (decision T619); none for
+/// a game file, an addon the client doesn't know or a file its folder
+/// lacks.
+fn addon_font(vm: &Vm, path: &str) -> Option<std::sync::Arc<fontdue::Font>> {
+    const PREFIX: &str = "interface\\addons\\";
+    let head = path.get(..PREFIX.len())?.replace('/', "\\");
+    if !head.eq_ignore_ascii_case(PREFIX) {
+        return None;
+    }
+    let (name, rel) = path[PREFIX.len()..].split_once(['\\', '/'])?;
+    let dir = engine(vm)
+        .world
+        .bindings
+        .addons
+        .iter()
+        .find(|a| a.name.eq_ignore_ascii_case(name))?
+        .files
+        .as_ref()?
+        .dir
+        .clone();
+    static FONTS: OnceLock<std::sync::Mutex<AddonFonts>> = OnceLock::new();
+    let key = (dir, rel.replace('/', "\\").to_ascii_lowercase());
+    let mut fonts = FONTS.get_or_init(Default::default).lock().ok()?;
+    if let Some(f) = fonts.get(&key) {
+        return f.clone();
+    }
+    let font = crate::bindings::find_addon_file(&key.0, rel, &[])
+        .and_then(|file| wowlua_host::read(file).ok())
+        .and_then(|bytes| fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default()).ok())
+        .map(std::sync::Arc::new);
+    fonts.insert(key, font.clone());
+    font
+}
+
+/// A glyph of a font file at a pixel size: its advance and the right edge
+/// of its ink, in pixels; none for a character the font lacks (decisions
+/// T392, T619: the client's fonts and the addons' are measured alike).
+pub fn measure_glyph(font: &fontdue::Font, px: u32, c: char) -> Option<(f32, f32)> {
+    if font.lookup_glyph_index(c) == 0 && c != ' ' {
+        return None;
+    }
+    let m = font.metrics(c, px as f32);
+    Some((m.advance_width, m.xmin as f32 + m.width as f32))
 }
 
 /// A glyph's advance and its width alone, in pixels: as recorded, where
@@ -142,7 +199,8 @@ pub fn font_of(vm: &Vm, id: WidgetId) -> Font {
 /// more, a space's its advance; checked against the recordings: 98.6 % of
 /// the advances and 95 % of the widths the same); else the recorded
 /// row's (its font's or Friz Quadrata's, scaled to the size), a
-/// character outside it as `?`.
+/// character outside it as `?`. An addon's font file measures its glyphs
+/// by the same rule, before the rest (decision T619).
 fn glyph(font: &Font, px: i64, c: char) -> (f64, f64) {
     Metrics::new(font, px).glyph(c)
 }
@@ -168,7 +226,13 @@ impl<'a> Metrics<'a> {
             px,
             recorded: g.row(&font.file, font.outline, 12).is_some(),
             row: row(font, px),
-            kern: g.kern.get(&font.file),
+            // (an addon's font: no pairs recorded, and SuuUI's have no
+            // kerning table)
+            kern: if font.addon.is_some() {
+                None
+            } else {
+                g.kern.get(&font.file)
+            },
         }
     }
 
@@ -180,11 +244,19 @@ impl<'a> Metrics<'a> {
         let (font, px, recorded) = (self.font, self.px, self.recorded);
         let i = c as u32;
         let ascii = (32..=126).contains(&i);
-        if !(recorded && ascii && (8..=45).contains(&px))
-            && let Some(client) = &font.client
-            && let Ok(size) = u32::try_from(px)
-            && let Some((advance, ink)) = client.glyph(&font.file, size, c)
-        {
+        let size = u32::try_from(px).ok();
+        let measured = font
+            .addon
+            .as_ref()
+            .zip(size)
+            .and_then(|(f, size)| measure_glyph(f, size, c))
+            .or_else(|| {
+                if recorded && ascii && (8..=45).contains(&px) {
+                    return None;
+                }
+                font.client.as_ref()?.glyph(&font.file, size?, c)
+            });
+        if let Some((advance, ink)) = measured {
             let advance = f64::from(advance).ceil();
             let width = if c == ' ' {
                 advance
@@ -682,6 +754,7 @@ fn layout_anew(
         outline: font.outline,
         shadow_x: font.shadow_x,
         client: font.client.clone(),
+        addon: font.addon.clone(),
     };
     let vis = visible(text);
     let full = width(vm, id, text);

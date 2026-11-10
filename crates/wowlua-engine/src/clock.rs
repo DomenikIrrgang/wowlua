@@ -395,6 +395,9 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
             }
         }
         widgets::run_size_changes(vm);
+        // (the frame before drawn: the levels set since take their places,
+        // T620)
+        widgets::settle_levels(vm);
         let count = engine(vm).world.widgets.len();
         let elapsed = Value::Num(ms / 1000.0);
         // The widgets given an `OnUpdate`, in creation order (one given it

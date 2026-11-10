@@ -93,6 +93,7 @@ fn line(vm: &Vm, text: &str, px: f64, x: f64, y: f64, color: [f32; 4]) -> (TextL
         outline: true,
         shadow_x: 0.0,
         client: engine(vm).client_data.clone(),
+        addon: None,
     };
     let g = crate::text::glyph_line_of(&font, px.round() as i64, text);
     let width = g.width_px as f32;

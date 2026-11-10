@@ -928,14 +928,10 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
         if let Some(g) = self.glyphs.lock().ok()?.get(&key) {
             return *g;
         }
-        let measured = self.font(font).and_then(|f| {
-            // (a character the font lacks is not measured)
-            if f.lookup_glyph_index(c) == 0 && c != ' ' {
-                return None;
-            }
-            let m = f.metrics(c, px as f32);
-            Some((m.advance_width, m.xmin as f32 + m.width as f32))
-        });
+        // (a character the font lacks is not measured)
+        let measured = self
+            .font(font)
+            .and_then(|f| wowlua_engine::text::measure_glyph(&f, px, c));
         self.glyphs.lock().ok()?.insert(key, measured);
         measured
     }

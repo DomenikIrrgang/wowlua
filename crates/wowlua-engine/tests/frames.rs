@@ -2543,6 +2543,159 @@ return w('Fonts\\\\ARHei.ttf', 'ab') / px, w('Fonts\\\\FRIZQT__.TTF', 'éé') / 
     assert_ne!(recorded[1], with_fonts[1], "{recorded:?}");
 }
 
+/// A city whose streets are a building's floor 15 yards over its terrain
+/// (Stormwind's).
+struct City;
+
+impl wowlua_engine::clientdata::ClientData for City {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn ground(&self, _map: u32, _north: f64, _west: f64) -> Option<f64> {
+        Some(10.0)
+    }
+    fn floor(&self, _map: u32, at: [f64; 3]) -> Option<f64> {
+        // (the highest floor no more than a step over the place)
+        Some(if at[2] + 0.6 >= 25.0 { 25.0 } else { 10.0 })
+    }
+}
+
+/// A place given on a map, without its height, stands on the highest
+/// floor there with the 3D world on (decision T622): Stormwind's streets,
+/// a building's floor over its terrain, not the terrain under the city
+/// (the player stood under it, the city drawn over the camera). A place
+/// given with its height keeps its own floor.
+#[test]
+fn a_place_on_a_map_stands_on_its_highest_floor() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(City));
+    wowlua_engine::set_world(&mut vm, true);
+    let r = run(
+        &mut vm,
+        "mock.moveTo({ mapID = 1453, zone = 'Stormwind City', x = 0.62, y = 0.70 })
+local y, x, street = UnitPosition('player')
+mock.moveTo({ world = { y = y, x = x, z = 10, instanceID = 0 } })
+local _, _, under = UnitPosition('player')
+return street, under",
+    );
+    assert_eq!(r, ["25", "10"]);
+}
+
+/// A font string without a width (one point, none set) is as wide as its
+/// text and not wrapped at that width (decision T621): with glyphs whose
+/// advance (11) passes their ink and one (10), "ab" is 21 pixels and its
+/// advances 22, and it stays one line. SuuUI's stat labels in Figtree
+/// ("Health:") broke before their colon.
+#[test]
+fn a_font_string_as_wide_as_its_text_is_not_wrapped() {
+    let mut vm = vm();
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Glyphs));
+    let r = run(
+        &mut vm,
+        "UIParent:SetScale(1)
+local px = 768 / select(2, GetPhysicalScreenSize())
+local fs = UIParent:CreateFontString()
+fs:SetFont('Fonts\\\\ARHei.ttf', 12, '')
+fs:SetShadowOffset(0, 0)
+fs:SetPoint('LEFT', 10, 0)
+fs:SetText('ab')
+local one = fs:GetStringHeight()
+fs:SetText('ab\\nab')
+local two = fs:GetStringHeight()
+fs:SetText('ab')
+return math.floor(fs:GetStringWidth() / px + 0.5), fs:GetNumLines(), tostring(fs:GetHeight() == one),
+    tostring(two == 2 * one)",
+    );
+    assert_eq!(r, ["21", "1", "true", "true"]);
+    let pass = wowlua_engine::scene::build(&mut vm);
+    let lines: Vec<usize> = pass
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            wowlua_engine::scene::Item::Text(t) => Some(t.lines.len()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(lines, [1], "drawn on one line");
+}
+
+/// An addon's own font is measured with its file (decision T619), with or
+/// without the installation: the client's glyph rule (T392) on Figtree
+/// gives the game's numbers for SuuUI's probe (WoW Forever, 2026-11-09, a
+/// pixel of 5/6: `32.5 3 368.33334350586`), and Marcellus SC's words their
+/// own widths. Measured as Friz Quadrata before, SuuUI's words drew with
+/// gaps in them ("SILVE RMANE", "M ana").
+#[test]
+fn an_addons_font_is_measured_with_its_file() {
+    let root = std::env::temp_dir().join(format!("wowlua-addonfont-{}", std::process::id()));
+    let dir = root.join("FontTest");
+    std::fs::create_dir_all(dir.join("Media")).unwrap();
+    std::fs::write(dir.join("FontTest.toc"), "## Title: FontTest\n").unwrap();
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    std::fs::copy(
+        manifest.join("tests/fonts/Figtree-Medium.ttf"),
+        dir.join("Media/Figtree-Medium.ttf"),
+    )
+    .unwrap();
+    std::fs::copy(
+        manifest.join("../wowlua-runtime/fonts/MarcellusSC-Regular.ttf"),
+        dir.join("Media/MarcellusSC-Regular.ttf"),
+    )
+    .unwrap();
+    let mut vm = vm();
+    wowlua_engine::set_screen(
+        &mut vm,
+        wowlua_engine::Screen {
+            width: 2048.0,
+            height: 1152.0,
+            dpi_scale: 1.0,
+            ui_scale: None,
+        },
+    );
+    let addon = wowlua_engine::ui::read_user_addon("camelot", &dir).expect("an addon");
+    let table = wowlua_vm::Value::Table(vm.new_table());
+    wowlua_engine::bindings::add_user_addon(&mut vm, &addon, table, false);
+    let r = run(
+        &mut vm,
+        "UIParent:SetScale(0.8)
+local px = 768 / (select(2, GetPhysicalScreenSize()) * UIParent:GetEffectiveScale())
+local function text(font, size, s, width)
+    local fs = UIParent:CreateFontString()
+    fs:SetFont(font, size, '')
+    fs:SetShadowOffset(0, 0)
+    if width then fs:SetWidth(width) end
+    fs:SetText(s)
+    return fs
+end
+local figtree = 'Interface\\\\AddOns\\\\FontTest\\\\Media\\\\Figtree-Medium.ttf'
+local marcellus = 'Interface/AddOns/fonttest/media/marcellussc-regular.ttf'
+local probe = text(figtree, 11, 'Throw a handful into the campfire, transforming it into a violet flame.', 160)
+return px, probe:GetStringHeight(), probe:GetNumLines(), probe:GetUnboundedStringWidth(),
+    text(marcellus, 13 * px, 'Silvermane'):GetStringWidth() / px,
+    text(marcellus, 13 * px, 'Character'):GetStringWidth() / px,
+    text(figtree, 13 * px, \"Maevria's\"):GetStringWidth() / px",
+    );
+    let _ = std::fs::remove_dir_all(&root);
+    let n: Vec<f64> = r.iter().map(|v| v.parse().unwrap()).collect();
+    assert!((n[0] - 5.0 / 6.0).abs() < 1e-6, "{r:?}");
+    assert!((n[1] - 32.5).abs() < 1e-3, "{r:?}");
+    assert_eq!(n[2], 3.0, "{r:?}");
+    assert!((n[3] - 368.33334350586).abs() < 1e-3, "{r:?}");
+    // (each glyph's advance rounded up, the last one's ink and one)
+    let words: Vec<f64> = n[4..].iter().map(|v| v.round()).collect();
+    assert_eq!(words, [69.0, 68.0, 60.0], "{r:?}");
+}
+
 /// `Raise()` keeps a frame's level and its panes' (decision T586): a window
 /// raised as it opens keeps its panes over its background (the spellbook's
 /// `PlayerSpellsFrame` once drew its pages under it).

@@ -563,7 +563,10 @@ The WoW API the VM's code calls, per flavor.
   the width; a word wider than the line is cut between characters (at
   least one a line), and without `SetNonSpaceWrap(true)` the rest of the
   text then fills the lines character by character and the string is
-  truncated. `GetNumLines` counts every line the text breaks into, also
+  truncated. A font string without a width of its own (none set, not
+  two points across) is as wide as its widest line and is not wrapped at
+  that width, though a line's advances may pass it (decision T621).
+  `GetNumLines` counts every line the text breaks into, also
   with word wrap off or beyond `SetMaxLines`; the height is the lines
   shown; held to fewer lines, the last shown line ends in an ellipsis (one
   glyph three periods wide) and `GetStringWidth` is the shown text's;
@@ -579,9 +582,15 @@ The WoW API the VM's code calls, per flavor.
   a space's its advance; checked against the recordings, 98.6 % of the
   advances and 95 % of the widths are the same. Without it, such a glyph
   is the recorded Friz Quadrata's (scaled to the size), a character outside
-  ASCII a `?`'s. Unverified: kerning beyond the recorded pairs (none), an
-  outlined font's glyphs (as the plain one's), a font of an addon's (not
-  in the installation: as without it).
+  ASCII a `?`'s. A font file of an addon's folder
+  (`Interface\AddOns\<Name>\…`: the addon under test's, a `test.addons`
+  one's) is measured with that file by the same rule, with or without the
+  installation, before the recordings (decision T619; SuuUI's probe on WoW
+  Forever, Figtree Medium at 13 pixels: the game's width, height and lines
+  to the pixel), and drawn where it measures, so its words draw without
+  gaps; a character the file lacks is measured as above. Unverified:
+  kerning beyond the recorded pairs (none; an addon's font none), an
+  outlined font's glyphs (as the plain one's).
 - **Atlases.** Every atlas of the client, from its own tables (decision
   T238): sizes, files, texture coordinates and tiling as the client gives
   them; an atlas it lacks is none.

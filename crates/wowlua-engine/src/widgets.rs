@@ -118,10 +118,15 @@ pub struct Widget {
     /// The Lua line that made it: chunk name and line (an inspector's
     /// "created at", decision T484); none from the client's own loading.
     pub created: Option<(std::rc::Rc<[u8]>, u32)>,
-    /// When it was made (decision T587): of two frames at the same strata
-    /// and level the later is drawn on top, whatever level, strata or
-    /// showing changed since.
+    /// When it was made, or its strata or level last set anew (decisions
+    /// T587, T620): of two frames at the same strata and level the later
+    /// is drawn on top; a change undone before the next frame drawn, and
+    /// showing, change nothing.
     pub placed: u64,
+    /// Its strata and level were set since the last frame drawn: the
+    /// strata's rank and the level it was drawn at then, and when they
+    /// were last set (decision T620).
+    pub level_set: Option<(usize, f64, u64)>,
     /// When it was last raised as a top-level frame (shown; decision
     /// T586), 0 never: it and what is in it are drawn above the
     /// rest of its strata, the one raised last on top, its level kept.
@@ -208,6 +213,9 @@ pub struct World {
     pub scene_order_valid: bool,
     /// The next frame's place stamp (decision T587).
     pub next_placed: u64,
+    /// The frames whose strata or level was set since the last frame
+    /// drawn (decision T620).
+    pub level_changes: Vec<usize>,
     /// The next top-level frame's raise stamp (decision T586).
     pub next_raised: u64,
     /// The widgets that ever registered for events: the ones an event
@@ -740,6 +748,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         scroll_parent: None,
         created: vm.caller_place(1),
         placed: 0,
+        level_set: None,
         raised: 0,
         on_update_mode: 1,
         rect_seen: std::cell::Cell::new(true),
@@ -3241,17 +3250,39 @@ fn unplaced_size(vm: &Vm, id: WidgetId, w: f64, h: f64) -> (f64, f64) {
     if engine(vm).world.widgets[id.0].class != "FontString" || (w != 0.0 && h != 0.0) {
         return (w, h);
     }
-    let w = if w == 0.0 {
-        text_extent(vm, id, None).0
+    let (w, wrap) = if w == 0.0 {
+        (text_extent(vm, id, None).0, None)
     } else {
-        w
+        (w, Some(w))
     };
     let h = if h == 0.0 {
-        text_extent(vm, id, Some(w)).1
+        text_extent(vm, id, wrap).1
     } else {
         h
     };
     (w, h)
+}
+
+/// Whether a font string's width is its text's: no width set and not
+/// two points across (decision T621). Its text is not wrapped at it: each
+/// line as long as it is, as in the game (SuuUI's stat labels, one point
+/// each, stayed on one line).
+pub fn width_from_text(e: &Engine, id: WidgetId) -> bool {
+    let w = &e.world.widgets[id.0];
+    if w.class != "FontString" || w.width != 0.0 {
+        return false;
+    }
+    let across = |side: &str| w.points.iter().any(|p| p.point.contains(side));
+    !(across("LEFT") && across("RIGHT"))
+}
+
+/// The width a font string's text wraps at: its laid-out width, none when
+/// that is its text's own (decision T621).
+pub(crate) fn wrap_width(vm: &mut Vm, id: WidgetId) -> Option<f64> {
+    if width_from_text(engine(vm), id) {
+        return None;
+    }
+    Some(laid_out_size(vm, id).0).filter(|w| *w > 0.0)
 }
 
 /// The stored arguments of setter `stem`, read without interning (for the
@@ -3684,11 +3715,14 @@ fn laid_out_rect(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -
         slot.get_or_insert(ay);
     }
     let text = w.class == "FontString";
-    let width = if text && w.width == 0.0 {
+    let own_width = text && w.width == 0.0;
+    let width = if own_width {
         text_extent(vm, id, None).0 * s
     } else {
         w.width * s
     };
+    // (its text not wrapped at a width that is its own: T621)
+    let wraps = !own_width || (left.is_some() && right.is_some());
     // A right edge left of the left one, a top below the bottom: no size,
     // at the left and bottom points (recorded: `GetWidth()` and
     // `GetHeight()` 0, `GetRect()` at the LEFT and BOTTOM points'
@@ -3701,7 +3735,7 @@ fn laid_out_rect(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -
         (None, None, None) => (0.0, width),
     };
     let height = if text && w.height == 0.0 {
-        text_extent(vm, id, Some(width / s)).1 * s
+        text_extent(vm, id, wraps.then_some(width / s)).1 * s
     } else {
         w.height * s
     };
@@ -4277,20 +4311,37 @@ fn set_on_update_mode(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// with it (`SetFrameLevel`, `Raise`, `Lower`).
 pub(crate) fn set_level(vm: &mut Vm, id: WidgetId, level: f64) {
     let old = frame_level(vm, id);
-    store(vm, id, "FrameLevel", &[Value::Num(level)]);
     let delta = level - old;
     if delta != 0.0 {
+        let mut moved: Vec<(WidgetId, Option<f64>)> = Vec::new();
         let mut stack = engine(vm).world.widgets[id.0].children.clone();
         while let Some(child) = stack.pop() {
-            let props = engine(vm).world.widgets[child.0].props;
-            if let Some(Value::Num(n)) =
-                stored_args(vm, props, "FrameLevel").and_then(|v| v.first().copied())
-            {
-                store(vm, child, "FrameLevel", &[Value::Num((n + delta).max(0.0))]);
+            if kind(engine(vm), child) & KIND_REGION != 0 {
+                continue;
             }
+            let props = engine(vm).world.widgets[child.0].props;
+            let own = match stored_args(vm, props, "FrameLevel").and_then(|v| v.first().copied()) {
+                Some(Value::Num(n)) => Some(n),
+                _ => None,
+            };
+            moved.push((child, own));
             stack.extend(engine(vm).world.widgets[child.0].children.iter().copied());
         }
+        // (moved with it, in the order they are drawn in, which they keep;
+        // those following it, at the levels they had: T620)
+        moved.sort_by_key(|(w, _)| engine(vm).world.widgets[w.0].placed);
+        for &(child, _) in &moved {
+            note_level_set(vm, child);
+        }
+        store(vm, id, "FrameLevel", &[Value::Num(level)]);
+        for (child, own) in moved {
+            if let Some(n) = own {
+                store(vm, child, "FrameLevel", &[Value::Num((n + delta).max(0.0))]);
+            }
+        }
+        return;
     }
+    store(vm, id, "FrameLevel", &[Value::Num(level)]);
 }
 
 /// `SetUsingParentLevel(using)`: kept; using its parent's, a frame drops
@@ -4433,8 +4484,8 @@ fn get_string_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let w = if shown.is_empty() {
         0.0
     } else {
-        let max = laid_out_size(vm, id).0;
-        crate::text::layout_in(vm, id, &shown, (max > 0.0).then_some(max)).width
+        let max = wrap_width(vm, id);
+        crate::text::layout_in(vm, id, &shown, max).width
     };
     let width = Value::Num(w);
     Ok(vec![if secret { vm.secret_wrap(width) } else { width }])
@@ -4926,6 +4977,42 @@ pub fn reorder(e: &mut Engine) {
     e.world.scene_order_valid = false;
 }
 
+/// A frame's strata or level is about to be set (decision T620): the
+/// strata and level it is drawn at kept, the first time since the last
+/// frame drawn, and the time of the change.
+fn note_level_set(vm: &mut Vm, id: WidgetId) {
+    let drawn = match engine(vm).world.widgets[id.0].level_set {
+        Some((strata, level, _)) => (strata, level),
+        None => (strata_rank(vm, id), frame_level(vm, id)),
+    };
+    let world = &mut engine_mut(vm).world;
+    let stamp = world.next_placed;
+    world.next_placed += 1;
+    if world.widgets[id.0].level_set.is_none() {
+        world.level_changes.push(id.0);
+    }
+    world.widgets[id.0].level_set = Some((drawn.0, drawn.1, stamp));
+}
+
+/// A frame is drawn (decision T620): each frame whose strata or level was
+/// set since the last one, and differs from what it was drawn at, takes
+/// its place among the frames of its strata and level from the time it
+/// was last set (on top of those made or set before); one set back as it
+/// was keeps its place.
+pub fn settle_levels(vm: &mut Vm) {
+    let changed = std::mem::take(&mut engine_mut(vm).world.level_changes);
+    for i in changed {
+        let Some((strata, level, stamp)) = engine_mut(vm).world.widgets[i].level_set.take() else {
+            continue;
+        };
+        let now = (strata_rank(vm, WidgetId(i)), frame_level(vm, WidgetId(i)));
+        if now != (strata, level) {
+            engine_mut(vm).world.widgets[i].placed = stamp;
+            reorder(engine_mut(vm));
+        }
+    }
+}
+
 /// The setters whose values order the frames (T543).
 const ORDER_STEMS: [&str; 3] = ["FrameStrata", "FrameLevel", "UsingParentLevel"];
 
@@ -5349,6 +5436,7 @@ pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
         });
         if !same {
             reorder(engine_mut(vm));
+            note_level_set(vm, id);
         }
     }
     mark(engine_mut(vm), id);
@@ -5433,6 +5521,7 @@ fn button_texture(vm: &mut Vm, id: WidgetId, kind: &str) -> Value {
 pub(crate) fn unstore(vm: &mut Vm, id: WidgetId, stem: &str) {
     if ORDER_STEMS.contains(&stem) {
         reorder(engine_mut(vm));
+        note_level_set(vm, id);
     }
     mark(engine_mut(vm), id);
     let props = engine(vm).world.widgets[id.0].props;

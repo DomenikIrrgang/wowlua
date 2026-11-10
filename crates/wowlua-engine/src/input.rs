@@ -441,10 +441,12 @@ pub fn edit_box_key(vm: &mut Vm, key: &str) -> bool {
 }
 
 /// The shown frames taking keys (`EnableKeyboard`, or a key script),
-/// the top first: by strata, then level, then the later made. Edit boxes
+/// the top first: by strata, then level, then the later placed. Edit boxes
 /// take keys by their focus alone (the chat's box, shown with a key
 /// script, keeps no key from the bindings).
 fn keyboard_frames(vm: &mut Vm) -> Vec<WidgetId> {
+    // (the levels set since the last frame take their places, T620)
+    widgets::settle_levels(vm);
     let mut frames: Vec<(usize, i64, u64, usize)> = Vec::new();
     // Only a widget a keyboard setting was stored for can take keys
     // (`World::keyboard`); the stem interned as when every widget but an

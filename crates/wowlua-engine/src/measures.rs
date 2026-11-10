@@ -22,13 +22,9 @@ fn laid_out(vm: &mut Vm, id: WidgetId) -> Option<crate::text::Layout> {
     if text.is_empty() {
         return None;
     }
-    let width = widgets::laid_out_size(vm, id).0;
-    Some(crate::text::layout_in(
-        vm,
-        id,
-        &text,
-        (width > 0.0).then_some(width),
-    ))
+    // (not wrapped at a width that is its text's own: T621)
+    let width = widgets::wrap_width(vm, id);
+    Some(crate::text::layout_in(vm, id, &text, width))
 }
 
 /// `GetNumLines()`: every line the text breaks into at its width, also
