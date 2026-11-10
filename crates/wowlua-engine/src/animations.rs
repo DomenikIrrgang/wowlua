@@ -1,10 +1,13 @@
 //! Animation groups and animations: objects a region makes
-//! (`CreateAnimationGroup`, `<Animations>` in XML), played on the frame
-//! clock. Nothing is drawn; what code can see is: `Play` runs `OnPlay`, a
-//! group finishes once its animations' time passed (the orders one after
-//! another, the animations of an order together: start delay, duration,
-//! end delay), running `OnFinished`, or `OnLoop` when it repeats; `Stop`
-//! runs `OnStop`, `Finish` finishes now.
+//! (`CreateAnimationGroup`, `<Animations>` in XML), played on the clock
+//! (decision T623): a playing group's time is the clock's since it began
+//! to play, less the time it was paused, so time `mock.advanceTime`
+//! passes plays it on as a long frame would. What code can see is: `Play`
+//! runs `OnPlay`, a group finishes once its animations' time passed (the
+//! orders one after another, the animations of an order together: start
+//! delay, duration, end delay), running `OnFinished` at the next frame,
+//! or `OnLoop` when it repeats; `Stop` runs `OnStop`, `Finish` finishes
+//! now. The scene draws a group where it is at the clock's time.
 //!
 //! Unverified: the timing within a frame (groups advance after the
 //! frame's `OnUpdate`s), that `Finish` runs `OnFinished` at once, and the
@@ -21,8 +24,33 @@ use crate::{engine, engine_mut};
 /// A playing (or paused) group.
 #[derive(Clone, Copy, Default)]
 pub struct Playing {
+    /// Its time played when it last moved (a frame's tick, a pause).
     pub elapsed: f64,
     pub paused: bool,
+    /// The clock (`vm.clock.elapsed_ms`) when it last moved, began to
+    /// play or resumed: the time since then is its own while not paused.
+    pub since_ms: f64,
+}
+
+impl Playing {
+    /// A group beginning to play at the clock's time now.
+    fn starting(vm: &Vm) -> Playing {
+        Playing {
+            elapsed: 0.0,
+            paused: false,
+            since_ms: vm.clock.elapsed_ms,
+        }
+    }
+
+    /// Its time played at the clock's time now: the time it had when it
+    /// last moved, and the clock's since then unless it is paused.
+    pub fn elapsed_now(&self, vm: &Vm) -> f64 {
+        if self.paused {
+            self.elapsed
+        } else {
+            self.elapsed + ((vm.clock.elapsed_ms - self.since_ms) / 1000.0).max(0.0)
+        }
+    }
 }
 
 /// The groups playing now, by widget.
@@ -52,30 +80,24 @@ fn animations(vm: &Vm, group: WidgetId) -> Vec<WidgetId> {
 
 /// A group's length: its orders one after another, each as long as its
 /// longest animation.
-fn group_duration(vm: &mut Vm, group: WidgetId) -> f64 {
-    let mut by_order: std::collections::BTreeMap<i64, f64> = Default::default();
-    for a in animations(vm, group) {
-        let order = stored_number(vm, a, "Order") as i64;
-        let length = stored_number(vm, a, "StartDelay")
-            + stored_number(vm, a, "Duration")
-            + stored_number(vm, a, "EndDelay");
-        let slot = by_order.entry(order).or_insert(0.0);
-        *slot = slot.max(length);
-    }
+fn group_duration(vm: &Vm, group: WidgetId) -> f64 {
     // Not `sum`: no animations last 0, not -0.
-    by_order.values().fold(0.0, |a, b| a + b)
+    order_lengths(vm, group).values().fold(0.0, |a, b| a + b)
 }
 
 fn play(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let start = Playing::starting(vm);
     let resumed = {
         let p = &mut engine_mut(vm).animations.playing;
         match p.get_mut(&id.0) {
+            // On from where it paused: the clock's time from now.
             Some(state) if state.paused => {
                 state.paused = false;
+                state.since_ms = start.since_ms;
                 true
             }
             _ => {
-                p.insert(id.0, Playing::default());
+                p.insert(id.0, start);
                 false
             }
         }
@@ -99,10 +121,18 @@ pub fn stop_group(vm: &mut Vm, id: WidgetId) {
 }
 
 fn pause(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    if let Some(state) = engine_mut(vm).animations.playing.get_mut(&id.0) {
-        state.paused = true;
-        widgets::run_script(vm, id, "OnPause", &[]);
+    let Some(state) = engine(vm).animations.playing.get(&id.0).copied() else {
+        return Ok(vec![]);
+    };
+    // Its time stops where the clock has it now.
+    let elapsed = state.elapsed_now(vm);
+    let now = vm.clock.elapsed_ms;
+    if let Some(s) = engine_mut(vm).animations.playing.get_mut(&id.0) {
+        s.elapsed = elapsed;
+        s.since_ms = now;
+        s.paused = true;
     }
+    widgets::run_script(vm, id, "OnPause", &[]);
     Ok(vec![])
 }
 
@@ -202,9 +232,39 @@ fn get_animation_groups(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
         .collect())
 }
 
-/// Moves the playing groups by `seconds`: finished ones run `OnFinished`
-/// (or, repeating, `OnLoop`).
-pub fn tick(vm: &mut Vm, seconds: f64) {
+/// Whether a group repeats (`SetLooping` other than `NONE`).
+fn looping(vm: &Vm, group: WidgetId) -> bool {
+    let props = engine(vm).world.widgets[group.0].props;
+    matches!(
+        widgets::stored_ref(vm, props, "Looping").and_then(|v| v.first().copied()),
+        Some(Value::Str(s)) if !vm.str_bytes(s).eq_ignore_ascii_case(b"NONE")
+    )
+}
+
+/// A playing group's time played at the clock's time now (decision T623),
+/// as the scene draws it and `GetElapsed` reads it: within its length (a
+/// repeating group's in its current repeat), 0 when it is not playing.
+pub fn group_elapsed(vm: &Vm, group: WidgetId) -> f64 {
+    let Some(state) = engine(vm).animations.playing.get(&group.0) else {
+        return 0.0;
+    };
+    let t = state.elapsed_now(vm);
+    let length = group_duration(vm, group);
+    if t < length {
+        t
+    } else if looping(vm, group) && length > 0.0 {
+        t.rem_euclid(length)
+    } else {
+        length
+    }
+}
+
+/// Each frame: the playing groups move to the clock's time (decision
+/// T623), by the time since each last moved (a frame's, and the time
+/// `mock.advanceTime` passed before it); finished ones run `OnFinished`,
+/// repeating ones `OnLoop`, on in their next repeat.
+pub fn tick(vm: &mut Vm) {
+    let now = vm.clock.elapsed_ms;
     let ids: Vec<usize> = engine(vm).animations.playing.keys().copied().collect();
     for i in ids {
         let id = WidgetId(i);
@@ -214,22 +274,26 @@ pub fn tick(vm: &mut Vm, seconds: f64) {
         if state.paused {
             continue;
         }
-        let elapsed = state.elapsed + seconds;
+        let elapsed = state.elapsed_now(vm);
         let duration = group_duration(vm, id);
         if elapsed < duration {
             if let Some(s) = engine_mut(vm).animations.playing.get_mut(&i) {
                 s.elapsed = elapsed;
+                s.since_ms = now;
             }
             continue;
         }
-        let props = engine(vm).world.widgets[i].props;
-        let looping = matches!(
-            widgets::stored_args(vm, props, "Looping").and_then(|v| v.first().copied()),
-            Some(Value::Str(s)) if !vm.str_bytes(s).eq_ignore_ascii_case(b"NONE")
-        );
-        if looping {
+        if looping(vm, id) {
+            // A frame longer than a repeat (or several) ends where the
+            // clock has it; one `OnLoop`.
+            let into = if duration > 0.0 {
+                elapsed.rem_euclid(duration)
+            } else {
+                0.0
+            };
             if let Some(s) = engine_mut(vm).animations.playing.get_mut(&i) {
-                s.elapsed = 0.0;
+                s.elapsed = into;
+                s.since_ms = now;
             }
             let state = vm.str("FORWARD");
             widgets::run_script(vm, id, "OnLoop", &[state]);
@@ -290,17 +354,34 @@ pub struct Effect {
     pub flip: Option<(u32, u32, u32)>,
 }
 
-/// Each region's effect from the groups playing: each animation from its
-/// start (its order's start, its delay) to its end, linear; an alpha held
-/// at its end until the group ends, a later order's over an earlier's.
+/// The lengths of a group's orders, by order: each its longest
+/// animation's (start delay, duration, end delay).
+fn order_lengths(vm: &Vm, group: WidgetId) -> std::collections::BTreeMap<i64, f64> {
+    let mut lengths: std::collections::BTreeMap<i64, f64> = Default::default();
+    for a in animations(vm, group) {
+        let o = stored_ref_number(vm, a, "Order").unwrap_or(0.0) as i64;
+        let len = stored_ref_number(vm, a, "StartDelay").unwrap_or(0.0)
+            + stored_ref_number(vm, a, "Duration").unwrap_or(0.0)
+            + stored_ref_number(vm, a, "EndDelay").unwrap_or(0.0);
+        let slot = lengths.entry(o).or_insert(0.0);
+        *slot = slot.max(len);
+    }
+    lengths
+}
+
+/// Each region's effect from the groups playing, each at its time at the
+/// clock's time now (decision T623: after `mock.advanceTime`, before a
+/// frame, where it is now): each animation from its start (its order's
+/// start, its delay) to its end, linear; an alpha held at its end until
+/// the group ends, a later order's over an earlier's.
 /// Unverified: the smoothings' curves (linear here).
 pub fn effects(vm: &Vm) -> HashMap<usize, Effect> {
     let mut out: HashMap<usize, Effect> = HashMap::new();
     let e = engine(vm);
-    let mut groups: Vec<(usize, Playing)> =
-        e.animations.playing.iter().map(|(k, v)| (*k, *v)).collect();
-    groups.sort_by_key(|g| g.0);
-    for (g, state) in groups {
+    let mut groups: Vec<usize> = e.animations.playing.keys().copied().collect();
+    groups.sort();
+    for g in groups {
+        let elapsed = group_elapsed(vm, WidgetId(g));
         let mut anims: Vec<(i64, WidgetId)> = animations(vm, WidgetId(g))
             .into_iter()
             .map(|a| (stored_ref_number(vm, a, "Order").unwrap_or(0.0) as i64, a))
@@ -308,28 +389,20 @@ pub fn effects(vm: &Vm) -> HashMap<usize, Effect> {
         anims.sort_by_key(|a| a.0);
         // Each order's start: the earlier orders' lengths.
         let mut order_start: std::collections::BTreeMap<i64, f64> = Default::default();
-        let mut lengths: std::collections::BTreeMap<i64, f64> = Default::default();
-        for (o, a) in &anims {
-            let len = stored_ref_number(vm, *a, "StartDelay").unwrap_or(0.0)
-                + stored_ref_number(vm, *a, "Duration").unwrap_or(0.0)
-                + stored_ref_number(vm, *a, "EndDelay").unwrap_or(0.0);
-            let slot = lengths.entry(*o).or_insert(0.0);
-            *slot = slot.max(len);
-        }
         let mut t0 = 0.0;
-        for (o, len) in &lengths {
+        for (o, len) in &order_lengths(vm, WidgetId(g)) {
             order_start.insert(*o, t0);
             t0 += len;
         }
         for (o, a) in anims {
             let start = order_start.get(&o).copied().unwrap_or(0.0)
                 + stored_ref_number(vm, a, "StartDelay").unwrap_or(0.0);
-            if state.elapsed < start {
+            if elapsed < start {
                 continue;
             }
             let duration = stored_ref_number(vm, a, "Duration").unwrap_or(0.0);
             let p = if duration > 0.0 {
-                ((state.elapsed - start) / duration).clamp(0.0, 1.0)
+                ((elapsed - start) / duration).clamp(0.0, 1.0)
             } else {
                 1.0
             };

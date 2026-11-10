@@ -452,6 +452,166 @@ return tostring(g:IsPlaying()), g:GetDuration(), a:GetObjectType(), #{ g:GetAnim
     assert_eq!(end, ["play,finished"]);
 }
 
+/// Animations follow the clock (decision T623): time `mock.advanceTime`
+/// passes plays a group on, read at once (`GetProgress`, `GetElapsed`);
+/// it finishes at the next frame, as the game's after a long frame.
+#[test]
+fn animations_follow_the_time_advance_time_passes() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    let r = run(
+        &mut vm,
+        "Seen = {}
+local f = CreateFrame('Frame', nil, UIParent)
+local g = f:CreateAnimationGroup()
+local a = g:CreateAnimation('Alpha')
+a:SetFromAlpha(0)
+a:SetToAlpha(1)
+a:SetDuration(0.5)
+g:SetScript('OnFinished', function() Seen[#Seen + 1] = 'finished' end)
+g:Play()
+local function r(x) return math.floor(x * 1e6 + 0.5) / 1e6 end
+mock.advanceTime(0.3)
+local p1, e1 = r(g:GetProgress()), r(a:GetElapsed())
+mock.advanceTime(0.5)
+local p2, playing = g:GetProgress(), tostring(g:IsPlaying())
+mock.advanceFrames(1)
+return p1, e1, p2, playing, tostring(g:IsPlaying()), table.concat(Seen, ',')",
+    );
+    assert_eq!(r, ["0.6", "0.3", "1", "true", "false", "finished"]);
+}
+
+/// A group played after time passed starts at 0: the time before its
+/// `Play` is not its own (decision T623).
+#[test]
+fn an_animation_played_after_advance_time_starts_at_its_beginning() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+local g = f:CreateAnimationGroup()
+g:CreateAnimation('Alpha'):SetDuration(1)
+mock.advanceTime(5)
+g:Play()
+local before = g:GetElapsed()
+mock.advanceFrames(1)
+return before, math.abs(g:GetElapsed() - 1 / 60) < 1e-6 and 'one frame' or g:GetElapsed(), tostring(g:IsPlaying())",
+    );
+    assert_eq!(r, ["0", "one frame", "true"]);
+}
+
+/// A paused group's time stops: the time passed while it is paused is not
+/// its own, and it resumes from where it paused (decision T623).
+#[test]
+fn a_paused_animation_ignores_the_time_passed_while_paused() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+local g = f:CreateAnimationGroup()
+g:CreateAnimation('Alpha'):SetDuration(1)
+g:Play()
+mock.advanceTime(0.2)
+g:Pause()
+mock.advanceTime(5)
+mock.advanceFrames(1)
+local paused, at = tostring(g:IsPaused()), math.floor(g:GetElapsed() * 1e6 + 0.5) / 1e6
+g:Play()
+mock.advanceTime(0.1)
+local resumed = g:GetElapsed()
+mock.advanceTime(0.75)
+mock.advanceFrames(1)
+return paused, at, math.abs(resumed - 0.3) < 1e-6 and '0.3' or resumed, tostring(g:IsPlaying())",
+    );
+    assert_eq!(r, ["true", "0.2", "0.3", "false"]);
+}
+
+/// A repeating group across several of its lengths: one `OnLoop` at the
+/// next frame, on where the clock has it (decision T623).
+#[test]
+fn a_looping_animation_lands_where_the_clock_has_it() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    let r = run(
+        &mut vm,
+        "local loops = 0
+local f = CreateFrame('Frame', nil, UIParent)
+local g = f:CreateAnimationGroup()
+g:SetLooping('REPEAT')
+g:CreateAnimation('Alpha'):SetDuration(0.5)
+g:SetScript('OnLoop', function() loops = loops + 1 end)
+g:Play()
+mock.advanceTime(1.2)
+local drawn = g:GetElapsed()
+mock.advanceFrames(1)
+local want = (1.2 + 1 / 60) % 0.5
+return math.abs(drawn - 0.2) < 1e-6 and 'drawn' or drawn,
+    math.abs(g:GetElapsed() - want) < 1e-6 and 'on' or g:GetElapsed(), loops, tostring(g:IsPlaying())",
+    );
+    assert_eq!(r, ["drawn", "on", "1", "true"]);
+}
+
+/// The scene draws a group where it is at the clock's time, before a
+/// frame: a window's fade-in (SuuUI's: a translation of no time, then a
+/// translation and an alpha of 0.12 s) after `mock.advanceTime` shows the
+/// window at its full alpha (decision T623).
+#[test]
+fn the_scene_draws_an_animation_at_the_clocks_time() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    run(
+        &mut vm,
+        "local f = CreateFrame('Frame', 'FadeWindow', UIParent)
+f:SetSize(100, 100)
+f:SetPoint('CENTER')
+local bg = f:CreateTexture(nil, 'ARTWORK')
+bg:SetAllPoints()
+bg:SetColorTexture(1, 1, 1)
+local g = f:CreateAnimationGroup()
+local jump = g:CreateAnimation('Translation')
+jump:SetOrder(1)
+jump:SetOffset(0, -10)
+jump:SetDuration(0)
+local slide = g:CreateAnimation('Translation')
+slide:SetOrder(2)
+slide:SetOffset(0, 10)
+slide:SetDuration(0.12)
+local fade = g:CreateAnimation('Alpha')
+fade:SetOrder(2)
+fade:SetFromAlpha(0)
+fade:SetToAlpha(1)
+fade:SetDuration(0.12)
+g:Play()
+FadeGroup = g",
+    );
+    let alpha = |vm: &Vm| {
+        let fx = wowlua_engine::animations::effects(vm);
+        fx.values().find_map(|e| e.alpha).expect("the fade's alpha")
+    };
+    assert_eq!(alpha(&vm), 0.0);
+    run(&mut vm, "mock.advanceTime(0.06)");
+    assert!((alpha(&vm) - 0.5).abs() < 1e-6);
+    run(&mut vm, "mock.advanceTime(0.5)");
+    assert_eq!(alpha(&vm), 1.0);
+    let r = run(
+        &mut vm,
+        "return tostring(FadeGroup:IsPlaying()), FadeGroup:GetProgress()",
+    );
+    assert_eq!(r, ["true", "1"]);
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let q = scene
+        .items
+        .iter()
+        .find_map(|i| match i {
+            wowlua_engine::scene::Item::Quad(q) => Some(q.clone()),
+            _ => None,
+        })
+        .expect("the window's background");
+    assert!((q.color[3] - 1.0).abs() < 1e-6, "{:?}", q.color);
+}
+
 /// A hidden edit box's `SetText`: its `OnTextChanged` waits until the box
 /// shows, then comes in that frame after `OnUpdate` (as `/stdtest engine
 /// textchange` recorded on Forever).
@@ -850,7 +1010,7 @@ flip:SetDuration(1)
 AnimGroup = g
 g:Play()",
     );
-    wowlua_engine::animations::tick(&mut vm, 0.6);
+    wowlua_engine::clock::advance(&mut vm, 0.6);
     let fx = wowlua_engine::animations::effects(&vm);
     let e = fx.values().next().copied().expect("the glow's effect");
     assert!((e.alpha.unwrap() - 0.4).abs() < 1e-9, "{e:?}");
@@ -868,7 +1028,8 @@ g:Play()",
         .expect("the glow");
     assert_eq!(&q.texcoord[..2], &[0.0, 0.5]);
     assert!((q.color[3] - 0.4).abs() < 1e-6);
-    wowlua_engine::animations::tick(&mut vm, 0.6);
+    wowlua_engine::clock::advance(&mut vm, 0.6);
+    wowlua_engine::clock::advance_frames(&mut vm, 1, 1000.0 / 60.0);
     let r = run(
         &mut vm,
         "return tostring(AnimGroup:IsPlaying()), AnimFrame.Glow:GetAlpha()",

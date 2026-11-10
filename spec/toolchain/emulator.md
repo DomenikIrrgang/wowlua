@@ -648,6 +648,21 @@ The WoW API the VM's code calls, per flavor.
   (`mock.click`) and a `CLICK` key binding run no click script on a
   disabled button; unverified: the mouse's `OnMouseDown`, `OnMouseUp`,
   `OnEnter` and `OnLeave` on it, which still run.
+- **Animations.** An animation group plays on the clock, as the game's
+  follow real time (decision T623): a playing group's time is the
+  clock's since its `Play`, less the time it was paused (`Pause` stops
+  it where it is, `Play` resumes it from there), so time
+  `mock.advanceTime` passes plays it on as one long frame would, and the
+  time before its `Play` is not its own. Groups move at each frame, after
+  its `OnUpdate`s: one whose time passed its length runs `OnFinished`
+  then, or, repeating, `OnLoop` once and goes on where the clock has it
+  in its next repeat. Between frames, `GetElapsed` and `GetProgress` (the
+  group's and its animations') and the scene (§18.9) read it at the
+  clock's time now, held at its end until the frame that finishes it.
+  `Restart`, `Stop` and `Finish` start it again, stop it and finish it
+  at once. Unverified (`tests/ingame/PROBES.md`, "Animations after a
+  hitch"): that a frame after a hitch jumps a group ahead by the whole
+  time, and that a repeat spanning several lengths runs `OnLoop` once.
 - **Targeting.** Tab-targeting cycles the units of its kind within 40
   yards, nearest first (`TargetNearestEnemy([reverse])` and its kin);
   `TargetLastTarget`, `AssistUnit` and `FocusUnit` follow the units'
