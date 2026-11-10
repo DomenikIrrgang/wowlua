@@ -2518,6 +2518,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - The trainer's choice (decision T617)
 - Beast Training (decision T618)
 - Found making SuuUI's store screenshots (2026-11-10)
+- A mouse script after the clicks were turned off (decision T365)
 
 ## In-game regressions
 
