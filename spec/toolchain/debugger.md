@@ -305,8 +305,10 @@ a difference.
 - **Lines** (`Line` regions), status bars' and sliders' textures at their
   value, cooldowns' swipes, and a frame's backdrop (from its template's
   mixin, as any texture) are textures too.
-- **Animations**: the groups playing show their animations' current
-  state: an alpha animation's value (linear) in place of its region's own
+- **Animations**: the groups playing show their animations' state at
+  the clock's time now (decision T623: after `mock.advanceTime`, before
+  the next frame, where they are now; §17.6): an alpha animation's value
+  (linear) in place of its region's own
   alpha, a flip book's frame (its rows, columns and frame count). A group
   set to its final alpha keeps its alpha animations' end values when it
   finishes, as `GetAlpha` reads them.

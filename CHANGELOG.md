@@ -16,6 +16,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Animations follow the clock: time passed with `mock.advanceTime` plays them on (they finish at the next frame), `GetProgress()` and `GetElapsed()` read where they are now, and a `wowlua screenshot` draws them there, so a window's fade-in no longer looks missing after a test waited with `mock.advanceTime`. Time before an animation's `Play` and while it is paused doesn't count.
 - `Button:Click()` on a disabled button does nothing, as in the game: no `OnClick`, so a secure button's `click` action on a disabled button does nothing either. `Click(button, isDown)` passes `isDown` on, and a button's `Click()` inside its own click does nothing. A `CLICK` key binding on a disabled button does nothing too.
 - `SelectTrainerService` sends `TRAINER_DESCRIPTION_UPDATE` when the choice changes, so Blizzard's trainer window follows a choice your addon makes. An index past the list clears the choice, and a trainer's list comes with its first available service already chosen, as the game's trainers showed.
 - `C_SpellBook.IsSpellKnown(id, Enum.SpellBookSpellBank.Pet)` is true for every spell in your pet's spellbook (`mock.setPet`'s `spells`), not only for spells a test defined as known.
