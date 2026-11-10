@@ -1369,9 +1369,12 @@ export function setSortResult(bags: table)
     engine().setSortResult(bags)
 end
 
---- The modifier keys held (the left ones): `MODIFIER_STATE_CHANGED`;
---- `IsShiftKeyDown` and the others follow.
-export function setModifiers(keys: { shift?: boolean, ctrl?: boolean, alt?: boolean })
+--- The modifier keys held (the left ones; `meta` is the Mac's Cmd):
+--- `MODIFIER_STATE_CHANGED`; `IsShiftKeyDown`, `IsMetaKeyDown` and the
+--- others follow. On the Mac, `click` with Cmd and the left button is a
+--- right click while `MacUseCommandLeftClickAsRightClick` is on (the game's
+--- default).
+export function setModifiers(keys: { shift?: boolean, ctrl?: boolean, alt?: boolean, meta?: boolean })
     engine().setModifiers(keys)
 end
 

@@ -28,8 +28,8 @@ pub struct Input {
     pub mouse_focus: Option<WidgetId>,
     /// The edit box with the keyboard focus.
     pub keyboard_focus: Option<WidgetId>,
-    /// Shift, Ctrl and Alt held (the left keys).
-    pub modifiers: [bool; 3],
+    /// Shift, Ctrl, Alt and Meta (the Mac's Cmd) held (the left keys).
+    pub modifiers: [bool; 4],
     /// The user's actions running (a click, typing, a key): scripts' and
     /// focus changes' `userInput`.
     pub user_actions: u32,
@@ -135,10 +135,17 @@ pub fn as_user<T>(vm: &mut Vm, f: impl FnOnce(&mut Vm) -> T) -> T {
     out
 }
 
-const MODIFIERS: [(&str, &str); 3] = [("shift", "LSHIFT"), ("ctrl", "LCTRL"), ("alt", "LALT")];
+const MODIFIERS: [(&str, &str); 4] = [
+    ("shift", "LSHIFT"),
+    ("ctrl", "LCTRL"),
+    ("alt", "LALT"),
+    ("meta", "LMETA"),
+];
 
-/// `setModifiers({ shift?, ctrl?, alt? })`: the keys held (the left ones);
-/// `MODIFIER_STATE_CHANGED(key, 1 | 0)` for each that changes.
+/// `setModifiers({ shift?, ctrl?, alt?, meta? })`: the keys held (the left
+/// ones; `meta` the Mac's Cmd, decision T624);
+/// `MODIFIER_STATE_CHANGED(key, 1 | 0)` for each that changes (Cmd's
+/// `LMETA`: `/stdtest engine input` recorded it).
 pub fn control_set_modifiers(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(t) = c.arg(1) else {
         return Err(vm.error("mock.setModifiers: a table of the keys held expected"));
@@ -201,6 +208,14 @@ fn is_alt_key_down(vm: &mut Vm, _c: NativeCall) -> Ret {
     held(vm, 2)
 }
 
+/// `IsMetaKeyDown()`: the Mac's Cmd held (decision T624: Forever on a Mac,
+/// true with Cmd held).
+fn is_meta_key_down(vm: &mut Vm, _c: NativeCall) -> Ret {
+    held(vm, 3)
+}
+
+/// `IsModifierKeyDown()`: any of Shift, Ctrl, Alt and Cmd held (decision
+/// T624: true with Cmd alone held).
 fn is_modifier_key_down(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(
         engine(vm).world.input.modifiers.iter().any(|m| *m),
@@ -241,17 +256,23 @@ pub fn control_hover(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `click(frame, button)`: the user's click on a visible frame: the mouse
 /// over it (`OnEnter`), `GLOBAL_MOUSE_DOWN`, `OnMouseDown`,
 /// `GLOBAL_MOUSE_UP`, `OnMouseUp`, then a button's click scripts unless it
-/// is disabled.
+/// is disabled. On the Mac, Cmd and the left button is a right click
+/// while `MacUseCommandLeftClickAsRightClick` is on (`cmd_left_as_right`).
 pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = widget_arg(vm, &c, 1, "mock.click")?;
     if !widgets::visible(engine(vm), id) {
         let name = label(vm, id);
         return Err(vm.error(&format!("mock.click: {name} is not visible")));
     }
-    let button = match c.arg(2) {
+    let mut button = match c.arg(2) {
         Value::Str(s) => Value::Str(s),
         _ => vm.str("LeftButton"),
     };
+    let as_right = cmd_left_as_right(vm, button);
+    if as_right {
+        button = vm.str("RightButton");
+        engine_mut(vm).world.input.modifiers[3] = false;
+    }
     // The mouse is over what it clicks.
     mouse_onto(vm, Some(id));
     as_user(vm, |vm| {
@@ -306,7 +327,28 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
         widgets::fire_event(vm, "GLOBAL_MOUSE_UP", &[button]);
         engine_mut(vm).world.input.clicking = outer;
     });
+    if as_right {
+        engine_mut(vm).world.input.modifiers[3] = true;
+    }
     Ok(vec![])
+}
+
+/// Whether a click is the Mac's Cmd+Left as a right click (decision
+/// T624): the Mac client, Cmd held, the left button, and
+/// `MacUseCommandLeftClickAsRightClick` on (its default 1, recorded on the
+/// Mac; Options > Mac). The game gave SuuUI's box a plain right click:
+/// the click comes as `RightButton`, Cmd not held while it runs (no
+/// `MODIFIER_STATE_CHANGED`; unverified: `IsMetaKeyDown` inside it, and
+/// on Windows, where wowlua leaves the click as it is).
+fn cmd_left_as_right(vm: &mut Vm, button: Value) -> bool {
+    let left = match vm.hidden(button) {
+        Value::Str(s) => vm.str_bytes(s) == b"LeftButton",
+        _ => false,
+    };
+    left && engine(vm).platform == crate::Platform::Mac
+        && engine(vm).world.input.modifiers[3]
+        && crate::framescript::cvar_get(vm, "MacUseCommandLeftClickAsRightClick")
+            .is_some_and(|v| v.trim() != "0" && !v.trim().is_empty())
 }
 
 /// `slide(slider, value)`: the slider's thumb dragged to `value` as the
@@ -508,15 +550,20 @@ const MODIFIER_KEYS: &[&str] = &[
     "LSHIFT", "RSHIFT", "LCTRL", "RCTRL", "LALT", "RALT", "LMETA", "RMETA",
 ];
 
-/// The key with the modifiers held, as bindings name it (`ALT-CTRL-SHIFT-`
+/// The key with the modifiers held, as bindings name it (`ALT-CTRL-SHIFT-META-`
 /// order, Blizzard's `CreateKeyChordStringUsingMetaKeyState`).
 fn chord(vm: &Vm, key: &str) -> String {
     if MODIFIER_KEYS.contains(&key) {
         return key.to_string();
     }
-    let [shift, ctrl, alt] = engine(vm).world.input.modifiers;
+    let [shift, ctrl, alt, meta] = engine(vm).world.input.modifiers;
     let mut out = String::new();
-    for (held, name) in [(alt, "ALT-"), (ctrl, "CTRL-"), (shift, "SHIFT-")] {
+    for (held, name) in [
+        (alt, "ALT-"),
+        (ctrl, "CTRL-"),
+        (shift, "SHIFT-"),
+        (meta, "META-"),
+    ] {
         if held {
             out.push_str(name);
         }
@@ -690,7 +737,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("IsLeftAltKeyDown", is_alt_key_down),
         ("IsRightAltKeyDown", right_key_down),
         ("IsModifierKeyDown", is_modifier_key_down),
-        ("IsMetaKeyDown", right_key_down),
+        ("IsMetaKeyDown", is_meta_key_down),
     ]
 }
 

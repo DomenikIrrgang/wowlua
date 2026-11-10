@@ -2292,3 +2292,79 @@ explicit `SetMouseClickEnabled(false)`. Each line in the chat:
 
    Seen: (to do). wowlua: `false true false` (`IsMouseEnabled` is its
    own flag; the wiki says it is true only with both on).
+
+## Cmd as a modifier (decision T624, 2026-11-10)
+
+Found with SuuUI's click-target menu (its draft PR #132): a Cmd click
+with something bound renames the click in its secure `OnClick` wrap, and
+wowlua could not hold Cmd (`IsMetaKeyDown` always false). Answered in
+WoW Forever on the user's Mac, each line
+`IsMetaKeyDown(), IsModifierKeyDown(), SecureCmdOptionParse("[mod:meta] meta; none"), SecureCmdOptionParse("[mod] mod; none")`
+(the last `nil` that one's second return):
+
+- Cmd held: `true true meta mod nil`.
+- Nothing held: `false false none none nil`.
+- Shift held: `false true none mod nil`.
+
+wowlua before: `false false none none nil` with Cmd held (no way to hold
+it); now as the game, with `mock.setModifiers({ meta = true })`.
+
+Also seen in Blizzard's code, nothing to change:
+
+- The secure templates' modifier prefix (`SecureButton_GetModifierPrefix`)
+  knows only shift, ctrl and alt: a Cmd click is a plain click to their
+  attributes. That is Blizzard's Lua, which wowlua runs as it is.
+- `SecureCmdOptionParse` and `IsModifiedClick` are in the restricted
+  environment (`Blizzard_RestrictedAddOnEnvironment`'s list), so a
+  secure snippet can ask for Cmd with `[mod:meta]`; `IsMetaKeyDown` is
+  not.
+
+### Cmd+Left as a right click (decision T624)
+
+Seen in game the same day: with Options > Mac > "Use Command + Left
+Click as Right Click" on (`MacUseCommandLeftClickAsRightClick`), a
+Cmd+Left click on a SuuUI box (its `OnMouseDown` reading the button and
+`IsMetaKeyDown`) came as a plain right click: `RightButton`, Cmd not
+seen as held. The CVar's default is 1 (recorded on the Mac:
+`data/camelot-cvars.txt`). wowlua now gives `mock.click` with Cmd held
+and the left button on the Mac client a `RightButton` click with Cmd let
+go while it runs (held again after), unless the CVar is 0. Owed, to
+settle what the click sees of Cmd and the CVar off. Each line in the
+chat, one at a time:
+
+1. Make a green square in the middle that prints each mouse script:
+
+   ```
+   /run F=CreateFrame("Button",nil,UIParent) F:SetSize(200,200) F:SetPoint("CENTER") F:RegisterForClicks("AnyUp") local t=F:CreateTexture() t:SetAllPoints() t:SetColorTexture(0,0.5,0,0.5) for _,s in ipairs({"OnMouseDown","OnMouseUp","OnClick"}) do F:SetScript(s,function(_,b) print(s,b,IsMetaKeyDown(),IsModifierKeyDown(),SecureCmdOptionParse("[mod:meta] meta; none")) end) end
+   ```
+
+2. Print the setting and its default:
+
+   ```
+   /run print(C_CVar.GetCVar("MacUseCommandLeftClickAsRightClick"),C_CVar.GetCVarDefault("MacUseCommandLeftClickAsRightClick"))
+   ```
+
+   wowlua: `1 1`.
+3. Hold Cmd, left-click the green square, let go of Cmd.
+
+   Seen: (to do) the three lines. wowlua: `OnMouseDown RightButton false
+   false none`, the same for `OnMouseUp` and `OnClick`.
+4. Turn the setting off:
+
+   ```
+   /run C_CVar.SetCVar("MacUseCommandLeftClickAsRightClick","0")
+   ```
+
+5. Hold Cmd, left-click the green square, let go of Cmd.
+
+   Seen: (to do). wowlua: `OnMouseDown LeftButton true true meta`, the
+   same for `OnMouseUp` and `OnClick`.
+6. Turn the setting back on and remove the square:
+
+   ```
+   /run C_CVar.SetCVar("MacUseCommandLeftClickAsRightClick","1")
+   ```
+
+   ```
+   /run F:Hide()
+   ```
