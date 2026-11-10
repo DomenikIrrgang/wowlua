@@ -12,6 +12,8 @@ pub struct Found {
     /// The client folder (`_retail_`).
     pub client: String,
     pub account: String,
+    /// `Realm/Name` for a character's SavedVariables.
+    pub character: Option<String>,
     pub path: PathBuf,
     /// The exported recordings (`format` 1).
     pub exports: Vec<Value>,
@@ -65,7 +67,7 @@ pub fn find(
     account: Option<&str>,
 ) -> (Vec<Found>, Vec<String>) {
     let mut out = Vec::new();
-    let warnings = each_saved(wow, db, client, account, |client, account, path, value| {
+    let warnings = each_saved(wow, db, client, account, |place, value| {
         let exports: Vec<Value> = value
             .get("exports")
             .map(list)
@@ -75,9 +77,10 @@ pub fn find(
             .collect();
         if !exports.is_empty() {
             out.push(Found {
-                client,
-                account,
-                path,
+                client: place.client,
+                account: place.account,
+                character: place.character,
+                path: place.path,
                 exports,
             });
         }
@@ -85,16 +88,52 @@ pub fn find(
     (out, warnings)
 }
 
-/// Calls `f` with the client folder, account, file and value of every
-/// SavedVariables file of the installation that has the variable `db`
-/// (the `client` and `account` given only); a warning for each file that
-/// can't be read.
+/// Where a SavedVariables file with the dev data was found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Place {
+    /// The client folder (`_retail_`).
+    pub client: String,
+    pub account: String,
+    /// `Realm/Name` for a character's SavedVariables, `None` for the
+    /// account's.
+    pub character: Option<String>,
+    pub path: PathBuf,
+}
+
+/// Whether the SavedVariables file `file` can hold the variable `db`: the
+/// client writes the variables an addon's TOC lists (`SavedVariables`,
+/// `SavedVariablesPerCharacter`) into a file named after the addon, so
+/// `WowluaDevDB_<Addon>`, which dev builds add to the addon's own list,
+/// is in `<Addon>.lua`; a file named after the variable is read too.
+fn may_hold(file: &str, db: &str) -> bool {
+    file.strip_suffix(".lua")
+        .is_some_and(|stem| stem == db || db_name(stem) == db)
+}
+
+/// The files in `dir` that may hold `db`, sorted.
+fn candidates(dir: &Path, db: &str) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = crate::host::read_dir(dir)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|p| may_hold(&file_name(p), db) && !crate::host::is_dir(p))
+        .collect();
+    out.sort();
+    out
+}
+
+/// Calls `f` with the place and value of every SavedVariables file of the
+/// installation that has the variable `db` (the `client` and `account`
+/// given only): the account's (`WTF/Account/<account>/SavedVariables`) and
+/// each character's (`WTF/Account/<account>/<realm>/<name>/SavedVariables`),
+/// in the addon's own file or one named after the variable; a warning for
+/// each file that can't be read. Only `db` is made into JSON: the addon's
+/// other variables are skipped over.
 pub fn each_saved(
     wow: &Path,
     db: &str,
     client: Option<&str>,
     account: Option<&str>,
-    mut f: impl FnMut(String, String, PathBuf, Value),
+    mut f: impl FnMut(Place, Value),
 ) -> Vec<String> {
     let mut warnings = Vec::new();
     for folder in sorted_dirs(wow) {
@@ -109,17 +148,42 @@ pub fn each_saved(
             {
                 continue;
             }
-            let path = dir.join("SavedVariables").join(format!("{db}.lua"));
-            let Ok(bytes) = crate::host::read(&path) else {
-                continue;
-            };
-            match parse_saved(&bytes) {
-                Ok(vars) => {
-                    if let Some((_, v)) = vars.into_iter().find(|(n, _)| n == db) {
-                        f(client_name.clone(), account_name, path, v);
+            // The account's files, then each character's.
+            let mut dirs: Vec<(Option<String>, PathBuf)> = vec![(None, dir.join("SavedVariables"))];
+            for realm in sorted_dirs(&dir) {
+                let realm_name = file_name(&realm);
+                if realm_name.eq_ignore_ascii_case("SavedVariables") {
+                    continue;
+                }
+                for character in sorted_dirs(&realm) {
+                    let saved = character.join("SavedVariables");
+                    if crate::host::is_dir(&saved) {
+                        let name = format!("{realm_name}/{}", file_name(&character));
+                        dirs.push((Some(name), saved));
                     }
                 }
-                Err(e) => warnings.push(format!("cannot read `{}`: {e}", path.display())),
+            }
+            for (character, saved) in dirs {
+                for path in candidates(&saved, db) {
+                    let Ok(bytes) = crate::host::read(&path) else {
+                        continue;
+                    };
+                    match saved_variable(&bytes, db) {
+                        Ok(Some(v)) => {
+                            let place = Place {
+                                client: client_name.clone(),
+                                account: account_name.clone(),
+                                character: character.clone(),
+                                path,
+                            };
+                            f(place, v);
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            warnings.push(format!("cannot read `{}`: {e}", path.display()));
+                        }
+                    }
+                }
             }
         }
     }
@@ -217,6 +281,34 @@ pub fn parse_saved(bytes: &[u8]) -> Result<Vec<(String, Value)>, String> {
         p.expect(b'=')?;
         let value = p.value()?;
         out.push((name, value));
+        p.skip();
+        if p.peek() == Some(b';') {
+            p.i += 1;
+        }
+    }
+}
+
+/// The variable `name` of a SavedVariables file as JSON (as `parse_saved`
+/// reads it), or `None` when the file doesn't set it. The file's other
+/// variables are only scanned past, not built, so an addon's own large
+/// tables cost little. The last assignment wins, as when the client loads
+/// the file.
+pub fn saved_variable(bytes: &[u8], name: &str) -> Result<Option<Value>, String> {
+    let mut p = Parser { s: bytes, i: 0 };
+    let mut out = None;
+    loop {
+        p.skip();
+        if p.i >= p.s.len() {
+            return Ok(out);
+        }
+        let var = p.name().ok_or_else(|| p.error("a variable name"))?;
+        p.skip();
+        p.expect(b'=')?;
+        if var == name {
+            out = Some(p.value()?);
+        } else {
+            p.skip_value()?;
+        }
         p.skip();
         if p.peek() == Some(b';') {
             p.i += 1;
@@ -342,6 +434,83 @@ impl Parser<'_> {
                 _ => Err(self.error("a value")),
             },
         }
+    }
+
+    /// Past a value without building it: a table is scanned for its
+    /// closing brace, past strings, long brackets and comments.
+    fn skip_value(&mut self) -> Result<(), String> {
+        self.skip();
+        match self.peek() {
+            Some(b'{') => {
+                let mut depth = 0usize;
+                loop {
+                    match self.peek() {
+                        None => return Err(self.error("`}`")),
+                        Some(b'{') => {
+                            depth += 1;
+                            self.i += 1;
+                        }
+                        Some(b'}') => {
+                            depth -= 1;
+                            self.i += 1;
+                            if depth == 0 {
+                                return Ok(());
+                            }
+                        }
+                        Some(b'"' | b'\'') => self.skip_string()?,
+                        Some(b'-') if self.s.get(self.i + 1) == Some(&b'-') => self.skip(),
+                        Some(b'[') => match self.long_open() {
+                            Some(level) => self.skip_long(level),
+                            None => self.i += 1,
+                        },
+                        Some(_) => self.i += 1,
+                    }
+                }
+            }
+            Some(b'"' | b'\'') => self.skip_string(),
+            Some(b'[') => match self.long_open() {
+                Some(level) => {
+                    self.skip_long(level);
+                    Ok(())
+                }
+                None => Err(self.error("a value")),
+            },
+            _ => self.value().map(|_| ()),
+        }
+    }
+
+    /// Past a quoted string.
+    fn skip_string(&mut self) -> Result<(), String> {
+        let quote = self.s[self.i];
+        self.i += 1;
+        loop {
+            match self.peek() {
+                None => return Err(self.error("the end of a string")),
+                Some(b'\\') => self.i += 2,
+                Some(b) => {
+                    self.i += 1;
+                    if b == quote {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+
+    /// Past a long bracket's text and its closing bracket.
+    fn skip_long(&mut self, level: usize) {
+        let rest = &self.s[self.i..];
+        let mut at = 0;
+        while let Some(off) = rest[at..].iter().position(|&b| b == b']') {
+            let close = at + off;
+            let equals = rest[close + 1..].iter().take_while(|&&b| b == b'=').count();
+            if equals == level && rest.get(close + 1 + level) == Some(&b']') {
+                self.i += close + 2 + level;
+                return;
+            }
+            at = close + 1;
+        }
+        self.i = self.s.len();
     }
 
     fn number(&mut self) -> Result<Value, String> {
@@ -602,5 +771,46 @@ Other = "x"
     #[test]
     fn names() {
         assert_eq!(db_name("My-Addon"), "WowluaDevDB_My_Addon");
+        // The addon's own file, or one named after the variable.
+        assert!(may_hold("My-Addon.lua", "WowluaDevDB_My_Addon"));
+        assert!(may_hold("WowluaDevDB_My_Addon.lua", "WowluaDevDB_My_Addon"));
+        assert!(!may_hold("My-Addon.lua.bak", "WowluaDevDB_My_Addon"));
+        assert!(!may_hold("Other.lua", "WowluaDevDB_My_Addon"));
+    }
+
+    #[test]
+    fn one_variable_among_the_addon_s_own() {
+        let text = br#"
+SuuDB = {
+	["a"] = "} -- { \" ' [[",
+	["b"] = 'x \' }',
+	["c"] = [==[ ]] } ]=] ]==],
+	-- a comment with }
+	["d"] = { { -1.5e-05, true, nil }, },
+}
+SuuCount = 3
+SuuName = "x"
+WowluaDevDB_Suu = {
+	["exports"] = {
+		{ ["format"] = 1, ["name"] = "live" }, -- [1]
+	},
+}
+SuuLast = { [1] = 1 }
+"#;
+        let v = saved_variable(text, "WowluaDevDB_Suu").unwrap().unwrap();
+        assert_eq!(v["exports"][0]["name"], "live");
+        assert_eq!(
+            saved_variable(text, "SuuCount").unwrap(),
+            Some(Value::from(3))
+        );
+        assert_eq!(saved_variable(text, "Missing").unwrap(), None);
+        // The same as reading every variable.
+        let all = parse_saved(text).unwrap();
+        for (name, value) in &all {
+            assert_eq!(saved_variable(text, name).unwrap().as_ref(), Some(value));
+        }
+        // A broken table before it is an error.
+        let err = saved_variable(b"A = {\n[\"x\"] = \"}\"\nB = 1", "B").unwrap_err();
+        assert!(err.contains("`}`"), "{err}");
     }
 }

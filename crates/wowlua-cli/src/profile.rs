@@ -20,7 +20,10 @@ fn describe(found: &Found) -> String {
         .at
         .map(|t| format!("taken {}", crate::prof::date_time(t as i64)))
         .unwrap_or_else(|| "taken at an unknown time".into());
-    format!("{}  {}  {at}", found.client, found.account)
+    match &found.character {
+        Some(c) => format!("{}  {}  {c}  {at}", found.client, found.account),
+        None => format!("{}  {}  {at}", found.client, found.account),
+    }
 }
 
 /// Asks which of several snapshots to write, on a terminal.
@@ -100,7 +103,8 @@ pub fn snapshot(out: &Output, global: &GlobalArgs, args: &ProfileSnapshotArgs) -
             session.push(
                 Diagnostic::plain_error(format!("no snapshot of {addon} in `{}`", wow.display()))
                     .with_note(format!(
-                        "it is in `<client>/WTF/Account/<account>/SavedVariables/{db}.lua`"
+                        "it is `{db}` in the addon's SavedVariables, \
+                         `<client>/WTF/Account/<account>/SavedVariables/{addon}.lua`"
                     ))
                     .with_help("in the game, with a dev build: /wl snapshot, then /reload"),
             );

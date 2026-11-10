@@ -1178,15 +1178,26 @@ self-contained HTML page and opens it in the browser (`--no-open` only writes
 it). The default output is `dist/reports/<Name>-<date>.html` (the date as
 `YYYY-MM-DD`, UTC); `--out` sets another path.
 
-- **Finding the data.** The command reads `WowluaDevDB_<Addon>.lua` of the
-  current package from the SavedVariables folders of the WoW installation,
+- **Finding the data.** The command reads the variable `WowluaDevDB_<Addon>`
+  of the current package from the SavedVariables of the WoW installation,
   found as for `wowlua dev` ([CLI §12.5](cli.md#125-wow-installation-integration)):
-  `--wow`, `WOWLUA_WOW_PATH`, the global config, then auto-detection. Every
-  client folder and every account under `WTF/Account/` is searched; only
-  exports of format 1 count. When more than one has exported recordings, the
-  command lists them and asks, or takes `--client` and `--account` (decision
-  T179). Without a terminal to ask on, it lists them and fails. None found is
-  an error that says how to export.
+  `--wow`, `WOWLUA_WOW_PATH`, the global config, then auto-detection. The
+  client writes the variables a TOC lists into a file named after the addon,
+  and dev builds list the variable among the addon's own `SavedVariables`,
+  so it is in `<Addon>.lua`, after the addon's own tables (decision T614).
+  The command reads `<Addon>.lua` and a file named `WowluaDevDB_<Addon>.lua`,
+  in the account's `SavedVariables` folder and in every character's
+  (`WTF/Account/<account>/<realm>/<character>/SavedVariables`, as with
+  `SavedVariablesPerCharacter`). Only that variable is read into data; the
+  file's other variables are scanned past, so a large addon file stays
+  cheap. Every client folder and every account under `WTF/Account/` is
+  searched; only exports of format 1 count. When more than one place has
+  exported recordings, the command lists them (a character's with its
+  `<realm>/<character>`) and asks, or takes `--client` and `--account`
+  (decision T179). Without a terminal to ask on, it lists them and fails.
+  None found is an error that names the file and says that only recordings
+  marked for export before the `/reload` or logout are saved.
+  `wowlua profile snapshot` (§16.1.4) finds the snapshot the same way.
 - **What it shows.** Every exported recording (`--recording <name>` selects
   some; a name that was not exported is an error),
   with the functions table, the call tree and flame graph when call paths

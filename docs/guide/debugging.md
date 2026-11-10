@@ -137,8 +137,11 @@ the stacks are mapped back to your source lines as `wowlua trace` does, with
 the build each recording was made with. The page is self-contained and
 nothing is uploaded.
 
-The command looks in every client folder (`_retail_`, `_classic_`, …) and
-every account under `WTF/Account/`. When more than one has exported
+The recordings are in your addon's own SavedVariables file,
+`WTF/Account/<account>/SavedVariables/<Name>.lua`, next to your addon's
+saved data. The command looks in every client folder (`_retail_`,
+`_classic_`, …), every account under `WTF/Account/` and every character's
+SavedVariables. When more than one has exported
 recordings of the addon, it lists them and asks which one; in a script, pick
 one with `--client` and `--account`:
 

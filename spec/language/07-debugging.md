@@ -499,6 +499,9 @@ saved. It hides itself while the window is open and during cinematics
 Recordings can be marked for export in the window. Marked recordings are
 written to the addon's `WowluaDevDB_<Addon>` SavedVariables, which WoW saves
 on `/reload` and on logout, so the window reminds of a pending `/reload`.
+Recordings not marked are not saved: they end with the session. WoW writes
+the variable into the addon's own SavedVariables file, `<Addon>.lua`, with
+the addon's other variables (decision T614).
 On the desktop, `wowlua prof report` reads them and writes a report
 ([Developer tooling §16.5](../toolchain/tooling.md#165-profiling-reports-wowlua-prof-report),
 decision T179). An exported recording keeps its statistics, call paths,
