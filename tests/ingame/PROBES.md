@@ -2255,3 +2255,40 @@ seconds, step 4 for 1.3 seconds):
    since `Play` less whole repeats of 0.5 s (about 0.3 to 0.4 then).
    (to do)
 5. `/run G:Stop() F:Hide()`
+
+## A mouse script after the clicks were turned off (decision T365)
+
+Found with SuuUI on wowlua's main (2026-11-10): SuuUI's weapon enchant
+icon turns its mouse motion on and its clicks off
+(`SetMouseMotionEnabled(true)`, `SetMouseClickEnabled(false)`), and only
+then sets `OnEnter` and `OnLeave` for its tooltip. Since T365 took WoW
+Forever's `CharacterFrameModeTab2` (`true true true`), wowlua turns the
+clicks and the motion on with any mouse script, so the icon takes clicks
+again; 0.13.9 turned on only `IsMouseEnabled`'s own flag.
+warcraft.wiki.gg says a mouse script implies `EnableMouse(true)`, motion
+scripts too since 9.0.1 ("full mouse input"), but the side tab has click
+and motion scripts both, and no recording sets a script after an
+explicit `SetMouseClickEnabled(false)`. Each line in the chat:
+
+1. `/run local f=CreateFrame("Frame") f:SetMouseMotionEnabled(true) f:SetMouseClickEnabled(false) print(f:IsMouseEnabled(),f:IsMouseClickEnabled(),f:IsMouseMotionEnabled()) f:SetScript("OnEnter",function() end) print(f:IsMouseEnabled(),f:IsMouseClickEnabled(),f:IsMouseMotionEnabled())`
+
+   Seen: (to do). wowlua: `false false true`, then `true true true`;
+   SuuUI's test expected the clicks to stay off.
+2. `/run local g=CreateFrame("Frame") g:SetScript("OnEnter",function() end) print(g:IsMouseEnabled(),g:IsMouseClickEnabled(),g:IsMouseMotionEnabled())`
+
+   Seen: (to do). wowlua: `true true true` (a motion script alone turns
+   the clicks on too).
+3. `/run local h=CreateFrame("Frame") h:SetMouseClickEnabled(true) h:SetMouseMotionEnabled(false) h:SetScript("OnMouseUp",function() end) print(h:IsMouseEnabled(),h:IsMouseClickEnabled(),h:IsMouseMotionEnabled())`
+
+   Seen: (to do). wowlua: `true true true`.
+4. `/run local k=CreateFrame("Frame") k:EnableMouse(false) k:SetScript("OnEnter",function() end) print(k:IsMouseEnabled(),k:IsMouseClickEnabled(),k:IsMouseMotionEnabled())`
+
+   Seen: (to do). wowlua: `true true true` (an explicit
+   `EnableMouse(false)` before does not keep it off).
+5. `/run local m=CreateFrame("Frame") m:SetMouseMotionEnabled(true) m:SetMouseClickEnabled(false) m:HookScript("OnEnter",function() end) print(m:IsMouseEnabled(),m:IsMouseClickEnabled(),m:IsMouseMotionEnabled())`
+
+   Seen: (to do). wowlua: `true true true`.
+6. `/run local n=CreateFrame("Frame") n:SetMouseClickEnabled(true) print(n:IsMouseEnabled(),n:IsMouseClickEnabled(),n:IsMouseMotionEnabled())`
+
+   Seen: (to do). wowlua: `false true false` (`IsMouseEnabled` is its
+   own flag; the wiki says it is true only with both on).

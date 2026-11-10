@@ -2519,6 +2519,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Beast Training (decision T618)
 - Found making SuuUI's store screenshots (2026-11-10)
 - Animations after a hitch (decision T623)
+- A mouse script after the clicks were turned off (decision T365)
 
 ## In-game regressions
 
