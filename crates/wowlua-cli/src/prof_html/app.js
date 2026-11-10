@@ -1,5 +1,5 @@
 // wowlua's performance report (`wowlua prof report`, spec Tooling §16.5):
-// the recordings the dev window exported (format 1, Debugging §7.7.9),
+// the recordings the dev window exported (formats 1 and 2, Debugging §7.7.9),
 // drawn from the data in #data. The address names the recording and the
 // view: "#/2/flame" is the third recording's flame graph.
 "use strict";
@@ -54,6 +54,11 @@ function series(x, len) {
   for (let i = 0; i < (len || out.length); i++) if (out[i] == null) out[i] = 0;
   return out;
 }
+// A Lua array's element `i` (1-based), written as an array or by key.
+function at1(x, i) {
+  if (Array.isArray(x)) return x[i - 1];
+  return x && typeof x === "object" ? x[String(i)] : undefined;
+}
 function share(part, whole) {
   const p = Math.max(0, Math.min(100, pct(part, whole)));
   return `<span class="share" title="${p.toFixed(1)}%"><i style="width:${p.toFixed(1)}%"></i></span>`;
@@ -66,12 +71,21 @@ function prepare(r) {
   r.rootList = byName(r.roots).map(([name, s]) => Object.assign({ name }, s));
   r.pathList = list(r.paths).map((p) => Object.assign({}, p, { path: list(p.path) })).filter((p) => p.path.length > 0);
   r.slowList = list(r.slow);
+  // Format 2: the recording's slowest calls, the slow calls summed per
+  // function and root, and each stack once in `stacks` (a call holds its
+  // number).
+  r.slowestList = list(r.slowest);
+  r.slowFns = byName(r.slowFunctions).map(([name, v]) => Object.assign({}, v, { name }));
+  r.slowRootList = byName(r.slowRoots).map(([name, v]) => Object.assign({}, v, { name, fn: v.name }));
+  r.slowCount = r.slowFns.length ? r.slowFns.reduce((a, f) => a + num(f.count), 0) : r.slowList.length;
   r.hintList = list(r.hints);
   r.memList = list(r.memory);
   const s = r.seconds || {};
   const len = Math.max(series(s.frames).length, series(s.time).length);
   r.sec = {};
-  for (const k of ["frames", "time", "max", "over", "garbage", "garbageAll"]) r.sec[k] = series(s[k], len);
+  for (const k of ["frames", "time", "max", "over", "garbage", "garbageAll", "worstMs"]) r.sec[k] = series(s[k], len);
+  // Each second's worst call by name (format 2; older exports have none).
+  r.sec.worst = series(s.worst, len).map((i) => (i > 0 && at1(s.names, i)) || null);
   r.monitor = {};
   for (const k of ["events", "scripts", "timers", "commands"]) {
     r.monitor[k] = byName(r[k]).map(([name, v]) => Object.assign({ name }, v));
@@ -133,7 +147,7 @@ function header(r, at) {
   const recs = RECS.length > 1 ? '<div class="recs">' + RECS.map((x, i) =>
     `<a href="#/${i}/${at.view}" class="${i === at.rec ? "on" : ""}">${esc(x.name)}<small>${esc(x.kind === "pull" ? (x.detail || "pull") : x.kind)} · ${duration(x.duration)}</small></a>`
   ).join("") + "</div>" : "";
-  const counts = { slow: r.slowList.length, overview: r.hintList.length };
+  const counts = { slow: r.slowCount, overview: r.hintList.length };
   const nav = "<nav>" + VIEWS.map(([k, label]) =>
     `<a href="#/${at.rec}/${k}" class="${k === at.view ? "on" : ""}">${label}${counts[k] ? `<span class="count">${counts[k]}</span>` : ""}</a>`
   ).join("") + "</nav>";
@@ -161,7 +175,8 @@ function overview(r) {
     tile(ms(frames ? num(r.time) / frames : 0), "addon time per frame", `${ms(r.time)} in all`),
     tile(n(r.over), "frames over the budget", `${pct(num(r.over), frames).toFixed(1)}% · budget ${ms(r.frameBudget)}`, num(r.over) > 0 ? "bad" : "good"),
     tile(ms(worst), "slowest frame", ""),
-    tile(String(r.slowList.length), "slow calls", `over ${ms(r.slowCall)}`, r.slowList.length ? "mid" : ""),
+    tile(n(r.slowCount), "slow calls", `over ${ms(r.slowCall)}` +
+      (r.slowestList.length ? `, slowest ${ms(r.slowestList[0].ms)} in ${esc(r.slowestList[0].name)}` : ""), r.slowCount ? "mid" : ""),
     tile(kb(num(r.garbageAddon) / dur) + "/s", "garbage", `${kb(r.garbageAddon)} in all`),
     tile(kb(num(r.garbageAll) / dur) + "/s", "garbage, all addons", `the addon: ${pct(num(r.garbageAddon), num(r.garbageAll)).toFixed(1)}%`),
     tile(r.callPaths ? "on" : "off", "call paths", r.garbage ? "garbage per function on" : "garbage per function off"),
@@ -314,8 +329,13 @@ function barChart(values, opts) {
   }).join("");
   const line = opts.line ? `<line x1="0" x2="${len}" y1="${h - (opts.line / top) * h}" y2="${h - (opts.line / top) * h}" class="stroke-budget" stroke-width="1" vector-effect="non-scaling-stroke"/>` : "";
   const legend = (opts.legend || []).map(([cls, label]) => `<span><i class="${cls}"></i>${esc(label)}</span>`).join("");
+  // Numbered marks above bars (the chart is 180px tall).
+  const marks = (opts.marks || []).map((m) => {
+    const y = Math.max(0, (1 - Math.min(values[m.i], top) / top) * 180 - 16);
+    return `<span class="mark" style="left:${(((m.i + 0.5) / len) * 100).toFixed(2)}%;top:${y.toFixed(0)}px">${esc(m.label)}</span>`;
+  }).join("");
   return `<div class="chart">${legend ? `<div class="legend">${legend}</div>` : ""}<div class="plot"><div class="y"><span>${opts.fmt(top)}</span><span>${opts.fmt(top / 2)}</span><span>0</span></div>` +
-    `<div class="area"><svg viewBox="0 0 ${len} ${h}" preserveAspectRatio="none" role="img" aria-label="${esc(opts.label)}">${rects}${extra}${line}</svg>` +
+    `<div class="area"><svg viewBox="0 0 ${len} ${h}" preserveAspectRatio="none" role="img" aria-label="${esc(opts.label)}">${rects}${extra}${line}</svg>${marks}` +
     `<div class="axis"><span>0 s</span><span>${duration(span / 2)}</span><span>${duration(span)}</span></div></div></div></div>`;
 }
 
@@ -327,15 +347,32 @@ function timelineChart(r) {
     line: budget,
     fmt: ms,
     cls: (i, v) => v > budget ? "fill-bad" : "fill-accent",
-    title: (i, v) => `${duration(i)}: ${n(s.frames[i])} frames, slowest ${ms(v)}, average ${ms(avg[i])}, ${n(s.over[i])} over the budget`,
+    title: (i, v) => `${duration(i)}: ${n(s.frames[i])} frames, slowest ${ms(v)}, average ${ms(avg[i])}, ${n(s.over[i])} over the budget` +
+      (s.worst[i] ? `; worst call ${s.worst[i]} (${ms(s.worstMs[i])})` : ""),
     overlay: [{ values: avg, cls: "stroke-text" }],
+    marks: spikes(r).map((x, k) => ({ i: x.i, label: String(k + 1) })),
     legend: [["bg-accent", "slowest frame per second"], ["bg-bad", "over the budget"], ["bg-text", "average frame"], ["bg-bad", `budget ${ms(budget)} (dashed)`]],
-  });
+  }) + spikeList(r);
+}
+
+// The slowest seconds over the budget with the name of their worst call:
+// the numbered marks on the frame time chart.
+const SPIKES = 8;
+function spikes(r) {
+  const s = r.sec, budget = num(r.frameBudget);
+  return s.max.map((v, i) => ({ i, max: v })).filter((x) => x.max > budget && s.worst[x.i])
+    .sort((a, b) => b.max - a.max).slice(0, SPIKES);
+}
+function spikeList(r) {
+  const s = r.sec, marks = spikes(r);
+  if (!marks.length) return "";
+  return '<ol class="spikes">' + marks.map((x) => `<li><span>${duration(x.i)}</span><span class="r ${x.max > num(r.frameBudget) ? "bad" : ""}">${ms(x.max)}</span>` +
+    `<span title="${esc(s.worst[x.i])}">${esc(s.worst[x.i])}</span><span class="r muted">${ms(s.worstMs[x.i])}</span></li>`).join("") + "</ol>";
 }
 
 function timelineView(r) {
   const s = r.sec;
-  const rows = s.max.map((v, i) => ({ i, max: v, frames: s.frames[i], time: s.time[i], over: s.over[i] }))
+  const rows = s.max.map((v, i) => ({ i, max: v, frames: s.frames[i], time: s.time[i], over: s.over[i], worst: s.worst[i], worstMs: s.worstMs[i] }))
     .filter((x) => x.frames > 0).sort((a, b) => b.max - a.max).slice(0, 15);
   const overChart = barChart(s.over, {
     label: "frames over the budget per second", fmt: (v) => v.toFixed(0), min: 1,
@@ -343,21 +380,54 @@ function timelineView(r) {
   });
   return `<section><h2>Frame time</h2><p class="muted">The addon's time in each rendered frame, bucketed per second, against the frame budget of ${ms(r.frameBudget)}.</p>${timelineChart(r)}</section>` +
     `<section><h2>Frames over the budget</h2>${overChart}</section>` +
-    (rows.length ? `<section><h2>Slowest seconds</h2><div class="table-wrap"><table><thead><tr><th>At</th><th>Frames</th><th>Slowest frame</th><th>Average</th><th>Over budget</th><th>Addon time</th></tr></thead><tbody>` +
-      rows.map((x) => `<tr><td>${duration(x.i)}</td><td>${n(x.frames)}</td><td class="${x.max > num(r.frameBudget) ? "bad" : ""}">${ms(x.max)}</td><td>${ms(x.time / x.frames)}</td><td>${n(x.over)}</td><td>${ms(x.time)}</td></tr>`).join("") +
+    (rows.length ? `<section><h2>Slowest seconds</h2><div class="table-wrap"><table><thead><tr><th>At</th><th>Frames</th><th>Slowest frame</th><th>Average</th><th>Over budget</th><th>Addon time</th><th class="l">Worst call</th><th>Its time</th></tr></thead><tbody>` +
+      rows.map((x) => `<tr><td>${duration(x.i)}</td><td>${n(x.frames)}</td><td class="${x.max > num(r.frameBudget) ? "bad" : ""}">${ms(x.max)}</td><td>${ms(x.time / x.frames)}</td><td>${n(x.over)}</td><td>${ms(x.time)}</td>` +
+        `<td class="l name" title="${esc(x.worst || "")}">${esc(x.worst || "")}</td><td>${x.worst ? ms(x.worstMs) : ""}</td></tr>`).join("") +
       "</tbody></table></div></section>" : "");
 }
 
 function stackHtml(text) {
   return esc(text).split("\n").map((l) => /^\s*→ /.test(l) ? `<span class="mapped">${l}</span>` : l).join("\n");
 }
+// A slow call's stack: format 2 holds its number in `stacks`, format 1 the text.
+function stackText(r, s) {
+  if (typeof s.stack === "number") return s.stack > 0 ? at1(r.stacks, s.stack) || "" : "";
+  return s.stack || "";
+}
+function slowRows(r, rows) {
+  return `<div class="slow"><div class="head"><span>At</span><span class="r">Time</span><span>Function</span><span>Location</span><span>Root</span></div>` +
+    rows.map((s) => {
+      const stack = stackText(r, s);
+      return `<details><summary><span>${duration(s.at)}</span><span class="r ${num(s.ms) > num(r.frameBudget) ? "bad" : ""}">${ms(s.ms)}</span>` +
+        `<span title="${esc(s.name)}">${esc(s.name)}</span><span class="muted" title="${esc(s.location)}">${esc(s.location)}</span><span class="muted" title="${esc(s.root)}">${esc(s.root)}</span></summary>` +
+        `<pre class="stack">${stack ? stackHtml(stack) : "(no stack)"}</pre></details>`;
+    }).join("") + "</div>";
+}
+// The slow calls summed per function or per root, slowest first.
+function slowSums(r, rows, byFunction) {
+  const sorted = rows.slice().sort((a, b) => num(b.max) - num(a.max));
+  const extra = byFunction ? '<th class="l">Location</th><th class="l">Root of the slowest</th>' : '<th class="l">Function of the slowest</th>';
+  return `<div class="table-wrap"><table><thead><tr><th class="l">${byFunction ? "Function" : "Root"}</th><th>Slow calls</th><th>Total</th><th>Slowest</th><th>At</th><th>First</th><th>Last</th>${extra}</tr></thead><tbody>` +
+    sorted.map((x) => `<tr><td class="l name" title="${esc(x.name)}">${esc(x.name)}</td><td>${n(x.count)}</td><td>${ms(x.total)}</td>` +
+      `<td class="${num(x.max) > num(r.frameBudget) ? "bad" : ""}">${ms(x.max)}</td><td>${duration(x.at)}</td><td>${duration(x.first)}</td><td>${duration(x.last)}</td>` +
+      (byFunction ? `<td class="l loc">${esc(x.location)}</td><td class="l muted" title="${esc(x.root)}">${esc(x.root)}</td>` : `<td class="l">${esc(x.fn)}</td>`) +
+      "</tr>").join("") + "</tbody></table></div>";
+}
 function slowView(r) {
-  if (!r.slowList.length) return `<section><p class="note">No call took longer than ${ms(r.slowCall)} in this recording.</p></section>`;
-  return `<section><p class="muted">Calls longer than ${ms(r.slowCall)}, newest first; only the deepest slow call of a stack is listed, its callers are in its stack. Click one for its stack.</p>` +
-    `<div class="slow"><div class="head"><span>At</span><span class="r">Time</span><span>Function</span><span>Location</span><span>Root</span></div>` +
-    r.slowList.map((s) => `<details><summary><span>${duration(s.at)}</span><span class="r ${num(s.ms) > num(r.frameBudget) ? "bad" : ""}">${ms(s.ms)}</span>` +
-      `<span title="${esc(s.name)}">${esc(s.name)}</span><span class="muted" title="${esc(s.location)}">${esc(s.location)}</span><span class="muted">${esc(s.root)}</span></summary>` +
-      `<pre class="stack">${s.stack ? stackHtml(s.stack) : "(no stack)"}</pre></details>`).join("") + "</div></section>";
+  if (!r.slowList.length && !r.slowestList.length) return `<section><p class="note">No call took longer than ${ms(r.slowCall)} in this recording.</p></section>`;
+  const rule = "only the deepest slow call of a stack is listed, its callers are in its stack. Click one for its stack.";
+  let out = "";
+  if (r.slowestList.length) {
+    out += `<section><h2>Slowest</h2><p class="muted">The recording's slowest calls over ${ms(r.slowCall)}, slowest first, at most three per function; ${rule}</p>${slowRows(r, r.slowestList)}</section>` +
+      `<section><h2>By function</h2><p class="muted">All ${plural(r.slowCount, "slow call", "slow calls")} of the recording, summed per function.</p>${slowSums(r, r.slowFns, true)}</section>` +
+      `<section><h2>By root</h2><p class="muted">The same, summed per root: the event, script, timer or slash command that started the work.</p>${slowSums(r, r.slowRootList, false)}</section>`;
+  } else {
+    out += '<section><p class="note">This recording was exported by an older wowlua, which kept only the newest slow calls.</p></section>';
+  }
+  if (r.slowList.length) {
+    out += `<section><h2>Newest</h2><p class="muted">The last ${plural(r.slowList.length, "slow call", "slow calls")} of the recording, newest first; ${rule}</p>${slowRows(r, r.slowList)}</section>`;
+  }
+  return out;
 }
 
 function garbageView(r) {

@@ -2374,6 +2374,13 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 			local s, i = data.seconds, S.tlSecond
 			out[#out + 1] = {cells = {"second " .. tostring(i), K.ms(s.time[i]), K.kb(s.garbage[i])}, colors = {C.accent}}
 			out[#out + 1] = {cells = {tostring(K.count(s.frames[i])) .. " frames, " .. tostring(K.count(s.over[i])) .. " over budget, slowest " .. tostring(K.ms(s.max[i])) .. " ms", "", ""}, indent = 16, fonts = {"body"}}
+			local worst = s.worst and s.worst[i]
+			if type(worst) == "number" then
+				worst = s.names and s.names[worst]
+			end
+			if worst then
+				out[#out + 1] = {cells = {"worst call " .. tostring(worst), K.ms(s.worstMs and s.worstMs[i]), ""}, indent = 16, fonts = {"body"}}
+			end
 		end
 		local function summary(name, a, b, fmt) local C = C
 			local cells = {name, fmt(a), ""}
@@ -2395,7 +2402,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 	end
 
 	-- slow: the slow calls, newest first.
-	function sub.slow(_, _, _, data, other, _) local C, K, S = C, K, S
+	function sub.slow(_, _, _, data, other, _) local C, K = C, K
 		layout(true, 2, 0)
 		U.clearCanvas()
 		local out = {}
@@ -2403,8 +2410,17 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 			local change, tone = K.change(K.perMinute(#data.slow, data), K.perMinute(#other.slow, other))
 			out[#out + 1] = {cells = {#data.slow .. " slow calls, " .. tostring(K.ms(K.perMinute(#data.slow, data))) .. " per minute", "", "", "", change}, colors = {C.muted, C.ink, C.ink, C.ink, tone}, fonts = {"body"}}
 		end
-		for _, s in ipairs(data.slow) do
-			local open = S.slowOpen == s.stack .. s.at
+		-- Format 2 exports keep each stack once, in `stacks` (§7.7.9).
+		local function stackOf(s)
+			if type(s.stack) == "number" then
+				return data.stacks and data.stacks[s.stack] or ""
+			end
+			do local __wl_t65 = s.stack if __wl_t65 == nil then __wl_t65 = "" end return __wl_t65 end
+		end
+		local function row(s, list) local C, out = C, out
+			local stack = stackOf(s)
+			local key = list .. tostring(s.at) .. tostring(s.name)
+			local open = S.slowOpen == key
 			out[#out + 1] = {
 			cells = {(open and "- " or "+ ") .. s.name, K.ms(s.ms), s.root, s.recording or data.name, string.format("+%.1f s", s.at)},
 			subs = {s.location},
@@ -2412,19 +2428,30 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 			colors = {C.ink, C.error, C.muted, C.muted, C.faint},
 			fonts = {"label", "numeric", "body", "body", "numeric"},
 			onClick = function()
-				S.slowOpen = (not open) and (s.stack .. s.at) or nil
+				S.slowOpen = (not open) and key or nil
 				console.refresh(true)
 			end,
 			onRightClick = function()
-				U.openMenu({{label = "Copy", run = function() local s = s
-					U.copy(tostring(s.name) .. " " .. tostring(K.ms(s.ms)) .. " ms\n" .. tostring(s.stack))
+				U.openMenu({{label = "Copy", run = function()
+					U.copy(tostring(s.name) .. " " .. tostring(K.ms(s.ms)) .. " ms\n" .. stack)
 				end}})
 			end
 			}
 			if open then
-				for line in tostring(s.stack or ""):gmatch("[^\n]+") do
+				for line in stack:gmatch("[^\n]+") do
 					out[#out + 1] = {cells = {line}, fonts = {"body"}, indent = 20}
 				end
+			end
+		end
+		for _, s in ipairs(data.slow) do
+			row(s, "new")
+		end
+		-- The recording's slowest, slowest first (T615).
+		local __wl_t66 = data.slowest if __wl_t66 == nil then __wl_t66 = {} end local slowest = __wl_t66
+		if #slowest > 0 then
+			out[#out + 1] = {cells = {"Slowest of the recording"}, colors = {C.muted}, fonts = {"label"}}
+			for _, s in ipairs(slowest) do
+				row(s, "top")
 			end
 		end
 		if #out == 0 then
@@ -2450,11 +2477,11 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 		local n = math.min(#s.garbage, math.floor(cw / 3))
 		local most = 0
 		for i = #s.garbage - n + 1, #s.garbage do
-			do local __wl_t65 = s.garbage[i] if __wl_t65 == nil then __wl_t65 = 0 end local __wl_t66 = allSeconds[i] if __wl_t66 == nil then __wl_t66 = 0 end most = math.max(most, __wl_t65, __wl_t66) end
+			do local __wl_t67 = s.garbage[i] if __wl_t67 == nil then __wl_t67 = 0 end local __wl_t68 = allSeconds[i] if __wl_t68 == nil then __wl_t68 = 0 end most = math.max(most, __wl_t67, __wl_t68) end
 		end
 		for k = 1, n do
 			local i = #s.garbage - n + k
-			local __wl_t67 = allSeconds[i] if __wl_t67 == nil then __wl_t67 = 0 end local __wl_t68 = s.garbage[i] if __wl_t68 == nil then __wl_t68 = 0 end local a, v = __wl_t67, __wl_t68
+			local __wl_t69 = allSeconds[i] if __wl_t69 == nil then __wl_t69 = 0 end local __wl_t70 = s.garbage[i] if __wl_t70 == nil then __wl_t70 = 0 end local a, v = __wl_t69, __wl_t70
 			U.rect(4 + (k - 1) * 3, 18, 2, most > 0 and a / most * 78 or 1, C.line)
 			U.rect(4 + (k - 1) * 3, 18, 2, most > 0 and v / most * 78 or 1, C.note)
 		end
@@ -2463,7 +2490,7 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 		for _, m in ipairs(mem) do
 			top = math.max(top, m.kb)
 		end
-		local __wl_t69 = data.duration if __wl_t69 == nil then __wl_t69 = 1 end local span = math.max(__wl_t69, 1)
+		local __wl_t71 = data.duration if __wl_t71 == nil then __wl_t71 = 1 end local span = math.max(__wl_t71, 1)
 		for _, m in ipairs(mem) do
 			U.rect(4 + m.at / span * cw, 18 + (top > 0 and m.kb / top * 78 or 0), 3, 3, C.accent)
 		end
@@ -2476,37 +2503,37 @@ local function buildPerformance(console, U, PERF_VIEWS, layout)
 		-- The garbage rate: the addon's own, and all addons' (the whole Lua
 		-- state).
 		for _, kind in ipairs({{"garbage rate of this addon", "garbageAddon"}, {"garbage rate of all addons", "garbageAll"}}) do
-			local __wl_t70 = data[kind[2]] if __wl_t70 == nil then __wl_t70 = 0 end local __wl_t71 = data.duration if __wl_t71 == nil then __wl_t71 = 1 end local rate = (__wl_t70) / math.max(__wl_t71, 1)
+			local __wl_t72 = data[kind[2]] if __wl_t72 == nil then __wl_t72 = 0 end local __wl_t73 = data.duration if __wl_t73 == nil then __wl_t73 = 1 end local rate = (__wl_t72) / math.max(__wl_t73, 1)
 			local cells = {kind[1], K.kb(rate) .. "/s", "", "", ""}
 			local colors = {C.muted, C.ink}
 			if other then
-				local __wl_t72 = other[kind[2]] if __wl_t72 == nil then __wl_t72 = 0 end local __wl_t73 = other.duration if __wl_t73 == nil then __wl_t73 = 1 end local change, tone = K.change(rate, (__wl_t72) / math.max(__wl_t73, 1))
+				local __wl_t74 = other[kind[2]] if __wl_t74 == nil then __wl_t74 = 0 end local __wl_t75 = other.duration if __wl_t75 == nil then __wl_t75 = 1 end local change, tone = K.change(rate, (__wl_t74) / math.max(__wl_t75, 1))
 				cells[5], colors[5] = change, tone
 			end
 			out[#out + 1] = {cells = cells, colors = colors, fonts = {"body"}}
 		end
-		do local __wl_t75 = not data.garbage if __wl_t75 then local __wl_t74 = data.garbageFns if __wl_t74 == nil then __wl_t74 = 0 end __wl_t75 = (__wl_t74) == 0 end if __wl_t75 then
+		do local __wl_t77 = not data.garbage if __wl_t77 then local __wl_t76 = data.garbageFns if __wl_t76 == nil then __wl_t76 = 0 end __wl_t77 = (__wl_t76) == 0 end if __wl_t77 then
 				for _, r in ipairs(needs("garbage", "Garbage per function", perf)) do
 					out[#out + 1] = r
 				end
 			else
 				local rows = {}
 				for name, f in pairs(data.functions) do
-					do local __wl_t76 = f.garbage if __wl_t76 == nil then __wl_t76 = 0 end if (__wl_t76) > 0 then
+					do local __wl_t78 = f.garbage if __wl_t78 == nil then __wl_t78 = 0 end if (__wl_t78) > 0 then
 							rows[#rows + 1] = {name = name, f = f}
 						end end
 				end
 				table.sort(rows, function(a, b)
-					do local __wl_t77 = a.f.selfGarbage if __wl_t77 == nil then __wl_t77 = 0 end local __wl_t78 = b.f.selfGarbage if __wl_t78 == nil then __wl_t78 = 0 end return (__wl_t77) > (__wl_t78) end
+					do local __wl_t79 = a.f.selfGarbage if __wl_t79 == nil then __wl_t79 = 0 end local __wl_t80 = b.f.selfGarbage if __wl_t80 == nil then __wl_t80 = 0 end return (__wl_t79) > (__wl_t80) end
 				end)
-				local __wl_t79 = data.garbageFns if __wl_t79 == nil then __wl_t79 = 0 end local all = math.max(__wl_t79, 0.001)
+				local __wl_t81 = data.garbageFns if __wl_t81 == nil then __wl_t81 = 0 end local all = math.max(__wl_t81, 0.001)
 				for _, r in ipairs(rows) do
 					local f = r.f
-					local __wl_t81 = K.kb(f.selfGarbage) local __wl_t82 = K.kb(f.garbage) local __wl_t80 = f.garbage if __wl_t80 == nil then __wl_t80 = 0 end local __wl_t84 = K.kb((__wl_t80) / math.max(f.calls, 1)) local __wl_t83 = f.selfGarbage if __wl_t83 == nil then __wl_t83 = 0 end local c = {r.name, __wl_t81, __wl_t82, __wl_t84, string.format("%d%%", math.floor((__wl_t83) / all * 100))}
+					local __wl_t83 = K.kb(f.selfGarbage) local __wl_t84 = K.kb(f.garbage) local __wl_t82 = f.garbage if __wl_t82 == nil then __wl_t82 = 0 end local __wl_t86 = K.kb((__wl_t82) / math.max(f.calls, 1)) local __wl_t85 = f.selfGarbage if __wl_t85 == nil then __wl_t85 = 0 end local c = {r.name, __wl_t83, __wl_t84, __wl_t86, string.format("%d%%", math.floor((__wl_t85) / all * 100))}
 					local tones = {C.ink, C.ink, C.ink, C.ink, C.muted}
 					if other then
 						local o = other.functions[r.name]
-						do local __wl_t86 = K.perMinute(f.selfGarbage, data) local __wl_t85 = o if __wl_t85 ~= nil then __wl_t85 = __wl_t85.selfGarbage end c[5], tones[5] = K.change(__wl_t86, K.perMinute(__wl_t85, other)) end
+						do local __wl_t88 = K.perMinute(f.selfGarbage, data) local __wl_t87 = o if __wl_t87 ~= nil then __wl_t87 = __wl_t87.selfGarbage end c[5], tones[5] = K.change(__wl_t88, K.perMinute(__wl_t87, other)) end
 					end
 					out[#out + 1] = {cells = c, colors = tones}
 				end
@@ -2651,9 +2678,9 @@ local function buildHud(console, reg) local K = K
 				end
 				local sec = perf.seconds
 				local errors = d.runtime.errors and #d.runtime.errors.list or 0
-				do local __wl_t88 = name:sub(1, 20) local __wl_t89 = K.ms(perf.lastFrame) local __wl_t90 = K.ms(total / math.max(frames, 1)) local __wl_t87 = sec.garbage[sec.last] if __wl_t87 == nil then __wl_t87 = 0 end r.fs:SetText(string.format("%-20s %6s %6s %8s %6s", __wl_t88, __wl_t89, __wl_t90, K.kb(__wl_t87), errors > 0 and tostring(errors) or "-")) end
+				do local __wl_t90 = name:sub(1, 20) local __wl_t91 = K.ms(perf.lastFrame) local __wl_t92 = K.ms(total / math.max(frames, 1)) local __wl_t89 = sec.garbage[sec.last] if __wl_t89 == nil then __wl_t89 = 0 end r.fs:SetText(string.format("%-20s %6s %6s %8s %6s", __wl_t90, __wl_t91, __wl_t92, K.kb(__wl_t89), errors > 0 and tostring(errors) or "-")) end
 				r.fs:SetTextColor(unpack(errors > 0 and C.error or C.ink))
-				do local __wl_t91 = perf.lastOver if __wl_t91 == nil then __wl_t91 = -10 end r.flash:SetShown(t - (__wl_t91) < 1) end
+				do local __wl_t93 = perf.lastOver if __wl_t93 == nil then __wl_t93 = -10 end r.flash:SetShown(t - (__wl_t93) < 1) end
 				r:SetScript("OnClick", function()
 					console.openOn(name, 2)
 				end)
@@ -2690,7 +2717,7 @@ local function buildHud(console, reg) local K = K
 			state.wanted = saved.shown == true
 			if saved.point and saved.point ~= "" then
 				hud:ClearAllPoints()
-				do local __wl_t92 = saved.x if __wl_t92 == nil then __wl_t92 = 0 end local __wl_t93 = saved.y if __wl_t93 == nil then __wl_t93 = 0 end hud:SetPoint(saved.point, UIParent, saved.point, __wl_t92, __wl_t93) end
+				do local __wl_t94 = saved.x if __wl_t94 == nil then __wl_t94 = 0 end local __wl_t95 = saved.y if __wl_t95 == nil then __wl_t95 = 0 end hud:SetPoint(saved.point, UIParent, saved.point, __wl_t94, __wl_t95) end
 			end
 			break
 		end
@@ -2822,7 +2849,7 @@ local __wl_addons2 = reg.addons if not __wl_addons2[addonName] then
 end
 __wl_addons2[addonName] = dev
 
-local __wl_t94 = wl.devInfo if __wl_t94 ~= nil then __wl_t94 = __wl_t94.runtime end local __wl_t95 = __wl_t94 if __wl_t95 == nil then __wl_t95 = 0 end local VERSION = __wl_t95
+local __wl_t96 = wl.devInfo if __wl_t96 ~= nil then __wl_t96 = __wl_t96.runtime end local __wl_t97 = __wl_t96 if __wl_t97 == nil then __wl_t97 = 0 end local VERSION = __wl_t97
 
 -- This runtime's console replaces older ones.
 local function install()
@@ -2895,7 +2922,7 @@ local function install()
 			rows[#rows + 1] = {name = name, s = s}
 		end
 		table.sort(rows, function(a, b)
-			do local __wl_t96 = a.s[key] if __wl_t96 == nil then __wl_t96 = 0 end local __wl_t97 = b.s[key] if __wl_t97 == nil then __wl_t97 = 0 end return (__wl_t96) > (__wl_t97) end
+			do local __wl_t98 = a.s[key] if __wl_t98 == nil then __wl_t98 = 0 end local __wl_t99 = b.s[key] if __wl_t99 == nil then __wl_t99 = 0 end return (__wl_t98) > (__wl_t99) end
 		end)
 		return rows
 	end
@@ -2906,9 +2933,9 @@ local function install()
 		for i = 1, math.min(top, #rows) do
 			local r = rows[i]
 			local s = r.s
-			do local __wl_t111 = pad(r.name, 34) local __wl_t98 = s.calls if __wl_t98 == nil then __wl_t98 = s.count end local __wl_t99 = __wl_t98 if __wl_t99 == nil then __wl_t99 = 0 end local __wl_t110 = pad(__wl_t99, 8, true) local __wl_t100 = s.total if __wl_t100 == nil then __wl_t100 = 0 end local __wl_t109 = pad(ms(__wl_t100), 9, true)
-				local __wl_t101 = s.self if __wl_t101 == nil then __wl_t101 = s.total end local __wl_t102 = __wl_t101 if __wl_t102 == nil then __wl_t102 = 0 end local __wl_t108 = pad(ms(__wl_t102), 9, true) local __wl_t103 = s.max if __wl_t103 == nil then __wl_t103 = 0 end local __wl_t107 = pad(ms(__wl_t103), 9, true)
-				local __wl_t104 = s.total if __wl_t104 == nil then __wl_t104 = 0 end local __wl_t105 = s.calls if __wl_t105 == nil then __wl_t105 = s.count end local __wl_t106 = __wl_t105 if __wl_t106 == nil then __wl_t106 = 1 end say(__wl_t111 .. __wl_t110 .. __wl_t109 .. __wl_t108 .. __wl_t107 .. pad(ms((__wl_t104) / math.max(__wl_t106, 1)), 9, true)) end
+			do local __wl_t113 = pad(r.name, 34) local __wl_t100 = s.calls if __wl_t100 == nil then __wl_t100 = s.count end local __wl_t101 = __wl_t100 if __wl_t101 == nil then __wl_t101 = 0 end local __wl_t112 = pad(__wl_t101, 8, true) local __wl_t102 = s.total if __wl_t102 == nil then __wl_t102 = 0 end local __wl_t111 = pad(ms(__wl_t102), 9, true)
+				local __wl_t103 = s.self if __wl_t103 == nil then __wl_t103 = s.total end local __wl_t104 = __wl_t103 if __wl_t104 == nil then __wl_t104 = 0 end local __wl_t110 = pad(ms(__wl_t104), 9, true) local __wl_t105 = s.max if __wl_t105 == nil then __wl_t105 = 0 end local __wl_t109 = pad(ms(__wl_t105), 9, true)
+				local __wl_t106 = s.total if __wl_t106 == nil then __wl_t106 = 0 end local __wl_t107 = s.calls if __wl_t107 == nil then __wl_t107 = s.count end local __wl_t108 = __wl_t107 if __wl_t108 == nil then __wl_t108 = 1 end say(__wl_t113 .. __wl_t112 .. __wl_t111 .. __wl_t110 .. __wl_t109 .. pad(ms((__wl_t106) / math.max(__wl_t108, 1)), 9, true)) end
 		end
 		if #rows == 0 then
 			say("(no data yet)")
@@ -2929,7 +2956,7 @@ local function install()
 	function commands.list() local reg = reg
 		for _, n in ipairs(reg.order) do
 			local i = (reg.addons[n]).info
-			do local __wl_t112 = i.version if __wl_t112 == nil then __wl_t112 = "?" end local __wl_t113 = i.profile if __wl_t113 == nil then __wl_t113 = "?" end local __wl_t114 = i.build if __wl_t114 == nil then __wl_t114 = "?" end say(n .. " " .. tostring(__wl_t112) .. " · " .. tostring(__wl_t113) .. " · build " .. tostring(__wl_t114)) end
+			do local __wl_t114 = i.version if __wl_t114 == nil then __wl_t114 = "?" end local __wl_t115 = i.profile if __wl_t115 == nil then __wl_t115 = "?" end local __wl_t116 = i.build if __wl_t116 == nil then __wl_t116 = "?" end say(n .. " " .. tostring(__wl_t114) .. " · " .. tostring(__wl_t115) .. " · build " .. tostring(__wl_t116)) end
 		end
 	end
 
@@ -3253,7 +3280,7 @@ local function install()
 		C_Timer.After(0.5, function()
 			local profile = s.take()
 			putBack()
-			local __wl_t115 = profile.errors if __wl_t115 == nil then __wl_t115 = {} end local failed = __wl_t115
+			local __wl_t117 = profile.errors if __wl_t117 == nil then __wl_t117 = {} end local failed = __wl_t117
 			profile.errors = nil
 			devDB(d.name).snapshot = {at = time(), profile = profile, failed = failed}
 			say(tostring(d.name) .. ": snapshot taken" .. (#failed > 0 and " (" .. #failed .. " parts failed)" or "") .. "; /reload, then wowlua profile snapshot <name>")

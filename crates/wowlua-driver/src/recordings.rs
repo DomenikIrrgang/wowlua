@@ -73,7 +73,11 @@ pub fn find(
             .map(list)
             .unwrap_or_default()
             .into_iter()
-            .filter(|e| e.get("format").and_then(Value::as_f64) == Some(1.0))
+            .filter(|e| {
+                e.get("format")
+                    .and_then(Value::as_f64)
+                    .is_some_and(|f| f == 1.0 || f == 2.0)
+            })
             .collect();
         if !exports.is_empty() {
             out.push(Found {
@@ -201,24 +205,50 @@ pub fn list(v: &Value) -> Vec<Value> {
 
 // ------------------------------------------------------------ locations --
 
+/// Where a text to map goes: an entry's field (`list[i].field`, in an array
+/// or, by key, an object), or an element of `stacks`.
+enum Slot {
+    Field(&'static str, String, &'static str),
+    Stack(usize),
+}
+
 /// The recording's game locations mapped to source lines as `wowlua trace`
 /// does, with the build id it was recorded with: the slow calls' stacks
-/// (each line followed by its `→ src/x.wowlua:12 in name`), and locations
-/// of built files.
+/// (each line followed by its `→ src/x.wowlua:12 in name`; format 2 keeps
+/// each stack once, in `stacks`), and locations of built files.
 pub fn map_locations(project: &Project, rec: &mut Value) {
     let build = rec.get("build").and_then(Value::as_str).map(str::to_string);
     // Every text to map, by where it goes.
     let mut texts: Vec<String> = Vec::new();
-    let mut slots: Vec<(&'static str, usize, &'static str)> = Vec::new();
-    if let Some(Value::Array(slow)) = rec.get("slow") {
-        for (i, s) in slow.iter().enumerate() {
+    let mut slots: Vec<Slot> = Vec::new();
+    for list in ["slow", "slowest", "slowFunctions"] {
+        let entries: Vec<(String, &Value)> = match rec.get(list) {
+            Some(Value::Array(a)) => a
+                .iter()
+                .enumerate()
+                .map(|(i, s)| (i.to_string(), s))
+                .collect(),
+            Some(Value::Object(o)) => o.iter().map(|(k, s)| (k.clone(), s)).collect(),
+            _ => Vec::new(),
+        };
+        for (key, s) in entries {
             for field in ["stack", "location"] {
                 if let Some(t) = s.get(field).and_then(Value::as_str)
                     && !t.is_empty()
                 {
                     texts.push(t.to_string());
-                    slots.push(("slow", i, field));
+                    slots.push(Slot::Field(list, key.clone(), field));
                 }
+            }
+        }
+    }
+    if let Some(Value::Array(stacks)) = rec.get("stacks") {
+        for (i, t) in stacks.iter().enumerate() {
+            if let Some(t) = t.as_str()
+                && !t.is_empty()
+            {
+                texts.push(t.to_string());
+                slots.push(Slot::Stack(i));
             }
         }
     }
@@ -235,10 +265,23 @@ pub fn map_locations(project: &Project, rec: &mut Value) {
     if parts.len() != texts.len() {
         return;
     }
-    for ((list, i, field), text) in slots.into_iter().zip(parts) {
+    for (slot, text) in slots.into_iter().zip(parts) {
+        let (list, key, field) = match slot {
+            Slot::Stack(i) => {
+                if let Some(s) = rec.get_mut("stacks").and_then(|l| l.get_mut(i)) {
+                    *s = Value::String(text);
+                }
+                continue;
+            }
+            Slot::Field(list, key, field) => (list, key, field),
+        };
         let Some(entry) = rec
             .get_mut(list)
-            .and_then(|l| l.get_mut(i))
+            .and_then(|l| match l {
+                Value::Array(a) => key.parse::<usize>().ok().and_then(|i| a.get_mut(i)),
+                Value::Object(o) => o.get_mut(&key),
+                _ => None,
+            })
             .and_then(Value::as_object_mut)
         else {
             continue;
@@ -776,6 +819,32 @@ Other = "x"
         assert!(may_hold("WowluaDevDB_My_Addon.lua", "WowluaDevDB_My_Addon"));
         assert!(!may_hold("My-Addon.lua.bak", "WowluaDevDB_My_Addon"));
         assert!(!may_hold("Other.lua", "WowluaDevDB_My_Addon"));
+    }
+
+    /// Exports of format 1 (before T615) still read, besides format 2;
+    /// other formats are left out.
+    #[test]
+    fn formats_one_and_two() {
+        let wow = tempfile::tempdir().unwrap();
+        let dir = wow.path().join("_retail_/WTF/Account/ONE/SavedVariables");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("Suu.lua"),
+            "WowluaDevDB_Suu = {\n[\"exports\"] = {\n\
+             { [\"format\"] = 1, [\"name\"] = \"old\" },\n\
+             { [\"format\"] = 2, [\"name\"] = \"new\" },\n\
+             { [\"format\"] = 3, [\"name\"] = \"later\" },\n},\n}\n",
+        )
+        .unwrap();
+        let (found, warnings) = find(wow.path(), "WowluaDevDB_Suu", None, None);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(found.len(), 1);
+        let names: Vec<&str> = found[0]
+            .exports
+            .iter()
+            .filter_map(|e| e["name"].as_str())
+            .collect();
+        assert_eq!(names, ["old", "new"]);
     }
 
     #[test]

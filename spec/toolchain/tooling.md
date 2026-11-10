@@ -1191,7 +1191,7 @@ it). The default output is `dist/reports/<Name>-<date>.html` (the date as
   `SavedVariablesPerCharacter`). Only that variable is read into data; the
   file's other variables are scanned past, so a large addon file stays
   cheap. Every client folder and every account under `WTF/Account/` is
-  searched; only exports of format 1 count. When more than one place has
+  searched; only exports of formats 1 and 2 count. When more than one place has
   exported recordings, the command lists them (a character's with its
   `<realm>/<character>`) and asks, or takes `--client` and `--account`
   (decision T179). Without a terminal to ask on, it lists them and fails.
@@ -1201,8 +1201,11 @@ it). The default output is `dist/reports/<Name>-<date>.html` (the date as
 - **What it shows.** Every exported recording (`--recording <name>` selects
   some; a name that was not exported is an error),
   with the functions table, the call tree and flame graph when call paths
-  were on, the frame timeline with the frame budget, the slow calls with
-  their stacks, the garbage view and the hints found in that recording, in
+  were on, the frame timeline with the frame budget and its worst seconds
+  numbered with the name of their worst call, the slow calls with their
+  stacks (the recording's slowest, the sums by function and by root, then
+  the newest; an export of format 1 has only the newest), the garbage view
+  and the hints found in that recording, in
   the style of the wowlua website. Locations are mapped back to source lines
   as `wowlua trace` does (§16.4), using the build id stored with each
   recording.

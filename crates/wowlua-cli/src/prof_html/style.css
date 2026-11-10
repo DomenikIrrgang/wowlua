@@ -76,7 +76,15 @@ button { font: inherit; color: var(--text); background: var(--panel); border: 1p
 .plot { display: flex; gap: 8px; }
 .plot .y { display: flex; flex-direction: column; justify-content: space-between; color: var(--faint);
   font-size: 11px; text-align: right; min-width: 56px; padding-bottom: 22px; }
-.plot .area { flex: 1; min-width: 0; }
+.plot .area { flex: 1; min-width: 0; position: relative; }
+.chart .mark { position: absolute; transform: translateX(-50%); font-size: 10px; line-height: 14px; padding: 0 4px;
+  color: var(--text); background: var(--raised); border: 1px solid var(--line); pointer-events: none; }
+.spikes { margin: 8px 0 0; padding: 0 0 0 28px; font-size: 12px; }
+.spikes li { padding: 2px 0; }
+.spikes li span { display: inline-block; vertical-align: top; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spikes li span:nth-child(1) { width: 70px; } .spikes li span:nth-child(2) { width: 80px; }
+.spikes li span:nth-child(3) { max-width: calc(100% - 250px); margin: 0 12px; } .spikes li span:nth-child(4) { width: 70px; }
+.spikes .r { text-align: right; }
 .fill-accent { fill: var(--accent); } .fill-bad { fill: var(--bad); } .fill-note { fill: var(--note); }
 .fill-faint { fill: var(--line); }
 .stroke-budget { stroke: var(--bad); stroke-dasharray: 4 3; }
