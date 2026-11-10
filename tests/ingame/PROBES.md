@@ -2368,3 +2368,31 @@ chat, one at a time:
    ```
    /run F:Hide()
    ```
+
+## Mounts, pets and toys dragged (decision T625, 2026-11-10)
+
+Found with SuuUI's collections window (released in 0.6.37), which lets a
+mount, a pet or a toy of yours be dragged onto an action bar: wowlua's
+`C_MountJournal.Pickup`, `C_PetJournal.PickupPet` and
+`C_ToyBox.PickupToyBoxItem` did nothing, so the drag could not be
+tested. Answered in WoW Forever on the user's Mac:
+
+- `C_MountJournal.Pickup(1); print(GetCursorInfo())`: `mount 3111 36`,
+  the displayed mount's ID and a second number that is not the display
+  index (1). warcraft.wiki.gg calls it the mount's index in the journal;
+  wowlua answers its place in `GetMountIDs()` (unverified: the recorded
+  journal has mount 3111 24th).
+- `C_PetJournal.PickupPet(guid)`, then `GetCursorInfo()`:
+  `battlepet BattlePet-0-00000009B56D`, the type and the GUID.
+- `C_ToyBox.PickupToyBoxItem(280740)`, then `GetCursorInfo()`:
+  `item 280740 [Shen'dorei Windwell]`, a plain item with its ID and link.
+- Placed on action bars by dragging, `GetActionInfo(slot)`: a mount
+  `summonmount 3130 nil` (its mount ID), a pet
+  `summonpet BattlePet-0-00000009B56B nil` (its GUID), a toy
+  `item 280740 nil` (a plain item action).
+
+wowlua before: nothing on the cursor for any of them. Now as the game.
+Still open: what the mount's second number is, an uncollected mount
+picked up (`Pickup` of a not collected one's index), a toy the player
+lacks, `Pickup(0)` (the random favourite), and the `CURSOR_CHANGED`
+types.

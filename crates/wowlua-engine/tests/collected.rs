@@ -439,3 +439,134 @@ fn a_sources_item_name_and_quality() {
         "nil Plain Cloak 2 Plain Cloak 2"
     );
 }
+
+const PICKUPS: &str = "Events = {}
+function join(sep, ...)
+    local out = {}
+    for i = 1, select('#', ...) do out[i] = tostring((select(i, ...))) end
+    return table.concat(out, sep)
+end
+local f = CreateFrame('Frame')
+f:RegisterEvent('ACTIONBAR_SHOWGRID')
+f:RegisterEvent('ACTIONBAR_HIDEGRID')
+f:RegisterEvent('CURSOR_CHANGED')
+f:SetScript('OnEvent', function(_, e, ...) Events[#Events + 1] = join(':', e, ...) end)
+mock.defineSpell(900001, { name = 'Swift Test Horse', iconID = 132261 })
+mock.setMounts({
+    [11] = { spellID = 900001 },
+    [13] = { name = 'Zebra', spellID = 900003, collected = false },
+})
+mock.defineItem(801, { name = 'Toy Drum', icon = 134001, quality = 1 }, { cached = true })
+mock.defineItem(803, { name = 'Abacus', icon = 134003, quality = 3 }, { cached = true })
+mock.setToys({ [801] = true, [803] = { collected = false } })
+Pet = 'BattlePet-0-00000009B56D'
+function held() return join(' ', GetCursorInfo()) end
+";
+
+/// A collected mount picked up from the journal's list (decision T625):
+/// `"mount"`, its ID and its place in `GetMountIDs()`; placed on a slot a
+/// `summonmount` action with the mount's icon; an uncollected one stays in
+/// the journal.
+#[test]
+fn a_mount_picked_up_and_placed() {
+    let mut vm = vm();
+    run(&mut vm, PICKUPS);
+    assert_eq!(
+        joined(
+            &mut vm,
+            "C_MountJournal.Pickup(1)
+            local cursor, events = held(), table.concat(Events, ',')
+            PlaceAction(12)
+            return cursor, events, select('#', GetCursorInfo()), join(' ', GetActionInfo(12)),
+                GetActionTexture(12)"
+        ),
+        "mount 11 1 ACTIONBAR_SHOWGRID,CURSOR_CHANGED:false:17:0:0 0 summonmount 11 nil 132261"
+    );
+    assert_eq!(
+        joined(
+            &mut vm,
+            "C_MountJournal.SetCollectedFilterSetting(2, true)
+            local zebra
+            for i = 1, C_MountJournal.GetNumDisplayedMounts() do
+                if C_MountJournal.GetDisplayedMountID(i) == 13 then zebra = i end
+            end
+            C_MountJournal.Pickup(zebra)
+            C_MountJournal.Pickup(0)
+            C_MountJournal.Pickup(99)
+            return zebra, select('#', GetCursorInfo())"
+        ),
+        "2 0"
+    );
+}
+
+/// A battle pet picked up by its GUID (decision T625): `"battlepet"` and
+/// the GUID; placed a `summonpet` action; picked up from the slot again.
+#[test]
+fn a_battle_pet_picked_up_and_placed() {
+    let mut vm = vm();
+    run(&mut vm, PICKUPS);
+    assert_eq!(
+        joined(
+            &mut vm,
+            "C_PetJournal.PickupPet(Pet)
+            local cursor, events = held(), table.concat(Events, ',')
+            PlaceAction(13)
+            local info = join(' ', GetActionInfo(13))
+            PickupAction(13)
+            return cursor, events, info, held(), tostring(HasAction(13))"
+        ),
+        "battlepet BattlePet-0-00000009B56D ACTIONBAR_SHOWGRID,CURSOR_CHANGED:false:16:0:0 \
+         summonpet BattlePet-0-00000009B56D nil battlepet BattlePet-0-00000009B56D false"
+    );
+}
+
+/// A toy the player has picked up from the toy box (decision T625): a
+/// plain `"item"` with its ID and link, placed an item action with the
+/// item's icon; one the player lacks, nothing.
+#[test]
+fn a_toy_picked_up_and_placed() {
+    let mut vm = vm();
+    run(&mut vm, PICKUPS);
+    assert_eq!(
+        joined(
+            &mut vm,
+            "C_ToyBox.PickupToyBoxItem(803)
+            local lacked = select('#', GetCursorInfo())
+            C_ToyBox.PickupToyBoxItem(801)
+            local cursor = held()
+            PlaceAction(14)
+            return lacked, cursor, select('#', GetCursorInfo()), join(' ', GetActionInfo(14)),
+                GetActionTexture(14)"
+        ),
+        "0 item 801 |cnIQ1:|Hitem:801::::::::60::::::::::|h[Toy Drum]|h|r 0 item 801 134001"
+    );
+}
+
+/// Placed on a filled slot they swap with its action; `ClearCursor` and
+/// picking up anything else let them go (decision T625).
+#[test]
+fn collections_on_the_cursor_swap_and_clear() {
+    let mut vm = vm();
+    run(&mut vm, PICKUPS);
+    assert_eq!(
+        joined(
+            &mut vm,
+            "C_PetJournal.PickupPet(Pet)
+            PlaceAction(13)
+            C_MountJournal.Pickup(1)
+            PickupAction(13)
+            local swapped = (GetActionInfo(13)) .. ' ' .. held()
+            Events = {}
+            C_ToyBox.PickupToyBoxItem(801)
+            local toy, events = held(), table.concat(Events, ',')
+            C_PetJournal.PickupPet(Pet)
+            local pet = held()
+            ClearCursor()
+            return swapped, toy, events, pet, select('#', GetCursorInfo())"
+        ),
+        "summonmount battlepet BattlePet-0-00000009B56D \
+         item 801 |cnIQ1:|Hitem:801::::::::60::::::::::|h[Toy Drum]|h|r \
+         ACTIONBAR_HIDEGRID,CURSOR_CHANGED:true:0:16:0,ACTIONBAR_SHOWGRID,CURSOR_CHANGED:false:1:0:0 \
+         battlepet BattlePet-0-00000009B56D 0"
+    );
+}

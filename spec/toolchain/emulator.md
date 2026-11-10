@@ -508,6 +508,31 @@ The WoW API the VM's code calls, per flavor.
   `TRAINER_CLOSED()`. Unverified beyond the spell opening the window, the
   pet mode and the forbidden call (`tests/ingame/PROBES.md`, "Beast
   Training").
+- **Mounts, pets and toys on the cursor.** The collections' pickups put
+  them on the cursor as the game does (decision T625; probed in WoW
+  Forever, `tests/ingame/PROBES.md`, "Mounts, pets and toys dragged"):
+  `C_MountJournal.Pickup(displayIndex)` the journal's displayed mount
+  there (as `GetDisplayedMountID` sees it), `GetCursorInfo` answering
+  `"mount"`, its mount ID and its index in the journal (its place in
+  `GetMountIDs()`); `C_PetJournal.PickupPet(petGUID)` the battle pet,
+  `"battlepet"` and its GUID (wowlua has no pet journal yet: any GUID is
+  taken); `C_ToyBox.PickupToyBoxItem(itemID)` a toy the player has as a
+  plain item, `"item"`, its ID and its link. Placed on an action slot
+  (`PlaceAction`, a drag onto an action button, a swap through
+  `PickupAction`) a mount is a `summonmount` action of its mount ID, a
+  pet a `summonpet` action of its GUID (`GetActionInfo`: the type, the
+  ID, no subtype), a toy an `item` action; `GetActionTexture` answers
+  the mount's icon (`GetMountInfoByID`'s), the pet's
+  (`GetPetInfoByPetID`'s, none without a pet journal) and the item's.
+  Picked up from the slot they are on the cursor again; `ClearCursor` and
+  any other pickup let them go. Using such a slot does what
+  `SummonByID`, `SummonPetByGUID` and `UseToy` do: nothing yet.
+  Unverified: the cursor's second number for a mount (the probe's mount
+  3111 answered 36, no list wowlua knows has it there), an uncollected
+  mount or a toy the player lacks (not picked up here), the random
+  favourite (`Pickup(0)`, nothing here), `CURSOR_CHANGED`'s types (16
+  and 17, `Enum.UICursorType`; a toy's 1, an item's), the grid shown for
+  them, `CursorHasItem` for a toy (true here).
 - **Layout.** A region's rectangle comes from its points as the client
   lays it out: each edge from the points that set it (a `LEFT` and a
   `RIGHT` point give the width, a `TOP` and a `BOTTOM` the height),

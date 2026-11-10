@@ -210,7 +210,9 @@ fn get_action_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `UseAction(slot, unit, button, isKeyPress)` (an action button's click,
 /// Blizzard's `SecureActionButton_OnClick`): a spell action pressed as
 /// the player presses a spell (`casting::use_spell`, recorded). Other
-/// actions (items, macros) do nothing yet (unverified).
+/// actions (items, macros) do nothing yet (unverified); nor do a mount's,
+/// a battle pet's and a toy's, as the journals' `SummonByID`,
+/// `SummonPetByGUID` and `UseToy` do nothing yet (decision T625).
 fn use_action(vm: &mut Vm, c: NativeCall) -> Ret {
     match slot(&c).and_then(|s| action(vm, s)) {
         Some(a) if a.kind == "spell" => match num(a.id) {

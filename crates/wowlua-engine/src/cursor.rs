@@ -40,6 +40,7 @@ use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
 
 use crate::actions::Action;
 use crate::character::Held;
+use crate::leftovers2::ask;
 use crate::{engine, engine_mut, widgets};
 
 /// Where a held item came from.
@@ -57,11 +58,18 @@ pub enum Cursor {
     /// A spell of the pet's spellbook: its ID and slot (decision T599).
     PetAction(f64, f64),
     Macro(f64),
+    /// An item; a toy from the toy box is one without a source (decision
+    /// T625).
     Item(Held, Option<Source>),
+    /// A mount of the journal, by its mount ID (decision T625).
+    Mount(f64),
+    /// A battle pet, by its GUID (decision T625).
+    BattlePet(String),
 }
 
 impl Cursor {
-    /// `Enum.UICursorType`: none 0, item 1, spell 3, pet action 4, macro 7.
+    /// `Enum.UICursorType`: none 0, item 1, spell 3, pet action 4, macro 7,
+    /// battle pet 16, mount 17 (the last two unverified).
     fn kind(&self) -> f64 {
         match self {
             Cursor::Empty => 0.0,
@@ -69,6 +77,8 @@ impl Cursor {
             Cursor::Spell(_) => 3.0,
             Cursor::PetAction(..) => 4.0,
             Cursor::Macro(_) => 7.0,
+            Cursor::BattlePet(_) => 16.0,
+            Cursor::Mount(_) => 17.0,
         }
     }
 }
@@ -278,7 +288,7 @@ fn pickup_action(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(action) = engine_mut(vm).world.character.actions.remove(&slot) else {
         return Ok(vec![]);
     };
-    let held = held_action(&action);
+    let held = held_action(vm, &action);
     put_down(vm);
     pick_up(vm, held);
     fire(vm, "ACTIONBAR_SLOT_CHANGED", &[Value::Num(slot as f64)]);
@@ -287,10 +297,15 @@ fn pickup_action(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// What an action is on the cursor.
-fn held_action(action: &Action) -> Cursor {
+fn held_action(vm: &Vm, action: &Action) -> Cursor {
     let id = num(action.id).unwrap_or(0.0);
     match action.kind.as_str() {
         "macro" => Cursor::Macro(id),
+        "summonmount" => Cursor::Mount(id),
+        "summonpet" => Cursor::BattlePet(match action.id {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => String::new(),
+        }),
         "item" => Cursor::Item(
             Held {
                 id: id as i64,
@@ -354,6 +369,31 @@ fn place_action(vm: &mut Vm, c: NativeCall) -> Ret {
             usable: (true, false),
             ..Action::default()
         },
+        // A mount: `summonmount` and its mount ID, no subtype; its icon the
+        // journal's (recorded `GetActionInfo`: summonmount 3130 nil).
+        Cursor::Mount(id) => {
+            let info = ask(vm, "C_MountJournal.GetMountInfoByID", &[Value::Num(id)]);
+            Action {
+                kind: "summonmount".into(),
+                id: Value::Num(id),
+                texture: info.get(2).copied().unwrap_or(Value::Nil),
+                usable: (true, false),
+                ..Action::default()
+            }
+        }
+        // A battle pet: `summonpet` and its GUID (recorded); its icon the
+        // pet journal's, none while it has no pets.
+        Cursor::BattlePet(guid) => {
+            let guid = vm.str(&guid);
+            let info = ask(vm, "C_PetJournal.GetPetInfoByPetID", &[guid]);
+            Action {
+                kind: "summonpet".into(),
+                id: guid,
+                texture: info.get(8).copied().unwrap_or(Value::Nil),
+                usable: (true, false),
+                ..Action::default()
+            }
+        }
     };
     for v in [action.id, action.sub_type, action.texture] {
         widgets::keep(vm, v);
@@ -362,7 +402,8 @@ fn place_action(vm: &mut Vm, c: NativeCall) -> Ret {
     let old = engine_mut(vm).world.character.actions.insert(slot, action);
     // A filled slot's action onto the cursor (see the module).
     if let Some(old) = old {
-        pick_up(vm, held_action(&old));
+        let held = held_action(vm, &old);
+        pick_up(vm, held);
     }
     fire(vm, "ACTIONBAR_SLOT_CHANGED", &[Value::Num(slot as f64)]);
     fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
@@ -1246,7 +1287,95 @@ fn get_cursor_info(vm: &mut Vm, _c: NativeCall) -> Ret {
             let link = crate::character::link_of(vm, &held).unwrap_or(Value::Nil);
             vec![vm.str("item"), Value::Num(held.id as f64), link]
         }
+        // The mount's ID and, as warcraft.wiki.gg says, its index in the
+        // journal: its place in `GetMountIDs()` (unverified: the probe's
+        // mount 3111 answered 36, which no list wowlua knows has).
+        Cursor::Mount(id) => {
+            let index = mount_index(vm, id).map_or(Value::Nil, Value::Num);
+            vec![vm.str("mount"), Value::Num(id), index]
+        }
+        Cursor::BattlePet(guid) => vec![vm.str("battlepet"), vm.str(&guid)],
     })
+}
+
+/// A mount's place (from 1) in the journal's `GetMountIDs()`.
+fn mount_index(vm: &mut Vm, id: f64) -> Option<f64> {
+    let Some(Value::Table(t)) = ask(vm, "C_MountJournal.GetMountIDs", &[]).first().copied() else {
+        return None;
+    };
+    let n = vm.heap.table(t).border();
+    (1..=n).find_map(|i| {
+        matches!(vm.heap.table(t).get(Value::Num(i as f64)), Value::Num(n) if n == id)
+            .then_some(i as f64)
+    })
+}
+
+/// `C_MountJournal.Pickup(displayIndex)`: the journal's displayed mount
+/// there (`GetDisplayedMountID`'s) onto the cursor, a collected one
+/// (recorded: `"mount"`, its ID; unverified: an uncollected one, nothing
+/// here; index 0, the random favourite, nothing here).
+fn pickup_mount(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(index) = num(vm.hidden(c.arg(1))) else {
+        return Ok(vec![]);
+    };
+    let id = ask(
+        vm,
+        "C_MountJournal.GetDisplayedMountID",
+        &[Value::Num(index)],
+    )
+    .first()
+    .copied()
+    .and_then(num)
+    .filter(|id| *id > 0.0);
+    let Some(id) = id else {
+        return Ok(vec![]);
+    };
+    let info = ask(vm, "C_MountJournal.GetMountInfoByID", &[Value::Num(id)]);
+    if !info.get(10).is_some_and(|v| v.truthy()) {
+        return Ok(vec![]);
+    }
+    put_down(vm);
+    pick_up(vm, Cursor::Mount(id));
+    Ok(vec![])
+}
+
+/// `C_PetJournal.PickupPet(petGUID)`: the battle pet onto the cursor
+/// (recorded: `"battlepet"`, its GUID). wowlua has no pet journal yet: any
+/// GUID is taken.
+fn pickup_pet(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Str(s) = vm.hidden(c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    let guid = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+    if guid.is_empty() {
+        return Ok(vec![]);
+    }
+    put_down(vm);
+    pick_up(vm, Cursor::BattlePet(guid));
+    Ok(vec![])
+}
+
+/// `C_ToyBox.PickupToyBoxItem(itemID)`: a toy the player has onto the
+/// cursor as its item (recorded: `"item"`, its ID, its link); one the
+/// player lacks, nothing (unverified).
+fn pickup_toy(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(id) = num(vm.hidden(c.arg(1))) else {
+        return Ok(vec![]);
+    };
+    if !ask(vm, "PlayerHasToy", &[Value::Num(id)])
+        .first()
+        .is_some_and(|v| v.truthy())
+    {
+        return Ok(vec![]);
+    }
+    put_down(vm);
+    let held = Held {
+        id: id as i64,
+        count: 1.0,
+        ..Held::default()
+    };
+    pick_up(vm, Cursor::Item(held, None));
+    Ok(vec![])
 }
 
 fn has(vm: &Vm, kind: f64) -> Ret {
@@ -1286,6 +1415,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("PickupMacro", pickup_macro),
         ("PickupAction", pickup_action),
         ("PlaceAction", place_action),
+        ("C_MountJournal.Pickup", pickup_mount),
+        ("C_PetJournal.PickupPet", pickup_pet),
+        ("C_ToyBox.PickupToyBoxItem", pickup_toy),
         ("C_Container.PickupContainerItem", pickup_container_item),
         ("PickupContainerItem", pickup_container_item),
         ("PickupInventoryItem", pickup_inventory_item),

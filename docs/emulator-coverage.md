@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,110 of the 5,115 documented camelot functions have
-  behaviour (99.9%): 1,062 modelled, 352 answered from recordings, 3,696 by a
+  behaviour (99.9%): 1,063 modelled, 352 answered from recordings, 3,695 by a
   documentation-based fill-in. Of all 7,180 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,205 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,209 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -225,7 +225,7 @@ ones together):
 | `C_Minimap` | 23 | 0 | 1 | 22 | 0 |
 | `C_ModelInfo` | 8 | 4 | 0 | 4 | 0 |
 | `C_ModifiedInstance` | 1 | 0 | 0 | 1 | 0 |
-| `C_MountJournal` | 50 | 19 | 3 | 28 | 0 |
+| `C_MountJournal` | 50 | 20 | 3 | 27 | 0 |
 | `C_MythicPlus` | 21 | 0 | 1 | 20 | 0 |
 | `C_NamePlate` | 4 | 3 | 0 | 1 | 0 |
 | `C_NamePlateManager` | 4 | 0 | 1 | 3 | 0 |
@@ -240,7 +240,7 @@ ones together):
 | `C_PerksProgram` | 24 | 0 | 0 | 24 | 0 |
 | `C_PetBattles` | 56 | 3 | 8 | 45 | 0 |
 | `C_PetInfo` | 14 | 3 | 0 | 10 | 1 |
-| `C_PetJournal` | 80 | 2 | 3 | 75 | 0 |
+| `C_PetJournal` | 80 | 3 | 3 | 74 | 0 |
 | `C_PhotoSharing` | 11 | 0 | 1 | 10 | 0 |
 | `C_Ping` | 6 | 0 | 2 | 4 | 0 |
 | `C_PlayerChoice` | 7 | 0 | 3 | 4 | 0 |
@@ -306,7 +306,7 @@ ones together):
 | `C_TimerunningUI` | 1 | 0 | 0 | 1 | 0 |
 | `C_TooltipComparison` | 3 | 0 | 0 | 3 | 0 |
 | `C_TooltipInfo` | 82 | 13 | 0 | 69 | 0 |
-| `C_ToyBox` | 26 | 14 | 0 | 12 | 0 |
+| `C_ToyBox` | 26 | 15 | 0 | 11 | 0 |
 | `C_ToyBoxInfo` | 6 | 3 | 0 | 3 | 0 |
 | `C_TradeInfo` | 4 | 0 | 0 | 4 | 0 |
 | `C_TradeSkillUI` | 146 | 70 | 0 | 76 | 0 |
@@ -346,14 +346,14 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,180 | 1,678 | 433 | 5,064 | 5 |
+| **All** | 7,180 | 1,681 | 433 | 5,061 | 5 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,115 | 1,062 | 352 | 3,696 | 5 |
-| the client's other C functions (`/stdtest inventory`) | 2,065 | 616 | 81 | 1,368 | 0 |
+| Blizzard's API documentation | 5,115 | 1,063 | 352 | 3,695 | 5 |
+| the client's other C functions (`/stdtest inventory`) | 2,065 | 618 | 81 | 1,366 | 0 |
 | the engine's own, in neither list | 16 | 15 | 0 | 1 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
@@ -378,7 +378,7 @@ The modules that answer, by how many functions and methods:
 | `globalsinfo` | fill-in | 524 |
 | `content` | fill-in | 519 |
 | `leftovers2` | fill-in | 388 |
-| `collections` | fill-in | 377 |
+| `collections` | fill-in | 374 |
 | `social` | fill-in | 373 |
 | `recorded` | recorded | 317 |
 | `questinfo` | fill-in | 316 |
@@ -429,12 +429,12 @@ The modules that answer, by how many functions and methods:
 | `taxi` | model | 20 |
 | `party` | model | 19 |
 | `widgetdata` | recorded | 19 |
+| `cursor` | model | 18 |
 | `input` | model | 18 |
 | `replies` | model | 18 |
 | `movement` | model | 16 |
 | `traits` | model | 16 |
 | `clock` | model | 15 |
-| `cursor` | model | 15 |
 | `animations` | model | 14 |
 | `bank` | model | 14 |
 | `chatwindows` | model | 13 |
@@ -849,7 +849,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,205 rules unverified: each rests on Blizzard's
+The engine's code marks 1,209 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1186,9 +1186,10 @@ page changes only when a rule is added, removed or reworded.
 
 - [coverage.rs](../crates/wowlua-engine/src/coverage.rs): A fill-in module's answer, from the documentation, Blizzard's UI code and the function's name (`fill_ins`; unverified).
 
-### cursor (13)
+### cursor (17)
 
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Unverified: picking up while holding something else, moving within one bag, money.
+- [cursor.rs](../crates/wowlua-engine/src/cursor.rs): `Enum.UICursorType`: none 0, item 1, spell 3, pet action 4, macro 7, battle pet 16, mount 17 (the last two unverified).
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Whether holding it shows the click bindings' highlights: a spell, a macro (see the module), a pet's spell (Blizzard's...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Whether holding it shows the action bars' grid: a spell, a macro, an item but a trade good or a quest item (recorded:...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): `C_SpellBook.PickupSpellBookItem(slot, bank)`: the slot's spell; for an addon in combat, blocked (decision T253; Bliz...
@@ -1201,6 +1202,9 @@ page changes only when a rule is added, removed or reworded.
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): The items whose counts a packet's moves changed, as the client told them (`bags`' sort and swap): the backpack's slot...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): The server stacked the items (recorded once, SuuUI's `/suu probe bagsort`: ten from bag 5 onto four in bag 1): for ea...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): As warcraft.wiki.gg's GetCursorInfo says and Blizzard's click binding frame reads it: the spell's ID, its slot in the...
+- [cursor.rs](../crates/wowlua-engine/src/cursor.rs): The mount's ID and, as warcraft.wiki.gg says, its index in the journal: its place in `GetMountIDs()` (unverified: the...
+- [cursor.rs](../crates/wowlua-engine/src/cursor.rs): `C_MountJournal.Pickup(displayIndex)`: the journal's displayed mount there (`GetDisplayedMountID`'s) onto the cursor,...
+- [cursor.rs](../crates/wowlua-engine/src/cursor.rs): `C_ToyBox.PickupToyBoxItem(itemID)`: a toy the player has onto the cursor as its item (recorded: `"item"`, its ID, it...
 
 ### curves (15)
 
@@ -2523,6 +2527,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Animations after a hitch (decision T623)
 - A mouse script after the clicks were turned off (decision T365)
 - Cmd as a modifier (decision T624, 2026-11-10)
+- Mounts, pets and toys dragged (decision T625, 2026-11-10)
 
 ## In-game regressions
 
