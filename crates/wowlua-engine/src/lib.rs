@@ -28,6 +28,7 @@ pub mod character;
 pub mod chat;
 pub mod chatwindows;
 pub mod classic;
+pub mod clickbindings;
 pub mod clientdata;
 pub mod clock;
 pub mod collected;
@@ -1366,6 +1367,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("clock", clock::behaviours()),
         Behaviours::new("units", units::behaviours()),
         Behaviours::new("units", units::more_behaviours()),
+        Behaviours::new("clickbindings", clickbindings::behaviours()),
         Behaviours::new("targeting", targeting::behaviours()),
         Behaviours::new("leftovers3", leftovers3::behaviours()),
         Behaviours::new("curves", curves::behaviours()),

@@ -2368,3 +2368,98 @@ chat, one at a time:
    ```
    /run F:Hide()
    ```
+
+## Click bindings (decision T625, 2026-11-10)
+
+Found with SuuUI's mouseover bindings: in game a unit frame
+(`SecureUnitButtonTemplate`) with `*type1 = target` did nothing on
+Shift-Left or Alt-Left, and a friend-only spell on Ctrl-Left
+(`ctrl-helpbutton1` set, no `ctrl-type1`) did nothing either. Blizzard's
+`SecureUnitButton_OnClick` reads the click's type first, sees `target`,
+finds no click binding for the click and returns. wowlua let both
+through: its `MakeModifiers()` answered 0 whatever was held, and its
+`GetBindingType` ignored the modifiers.
+
+Answered in WoW Forever on the user's Mac (2026-11-10):
+
+- `C_ClickBindings.GetProfileInfo()`: exactly two entries,
+  `{type=3, actionID=1, button="LeftButton", modifiers=0}` and
+  `{type=3, actionID=2, button="RightButton", modifiers=0}`: the
+  interactions Target and OpenContextMenu.
+- `GetStringFromModifiers(n)`: 1 `SHIFT`, 2 `SHIFT`, 4 `CTRL`, 8 `CTRL`,
+  16 `ALT`, 32 `ALT`, 64 `META`, 128 `META`; 256 and 512 an empty string.
+  Each modifier has two bits, its left and its right key.
+- One Shift held: `MakeModifiers()` 3 (both bits),
+  `C_ClickBindings.GetBindingType("LeftButton", 3)` 0 (None),
+  `C_ClickBindings.GetEffectiveInteractionButton("LeftButton", 3)` nil.
+
+wowlua now keeps the profile per character (`SetProfileByInfo`,
+`ResetCurrentProfile`), answers `MakeModifiers()` from the keys held
+(Shift 3, Ctrl 12, Alt 48, Cmd 192) and `GetBindingType` for exactly the
+button and modifiers, so both clicks do nothing as in the game.
+
+### Owed: a moved interaction and an event on a change
+
+wowlua gives a moved interaction's effective button as its default
+button (Target `LeftButton`, the menu `RightButton`, as
+`SecureUnitButton_OnClick`'s comment says), fires no event when the
+profile changes, and joins several modifiers' names with `-` in the
+`ALT-CTRL-SHIFT-META` order. None is seen in game yet. Each line in the
+chat, one at a time, out of combat. Step 7 puts your own click bindings
+back as they were.
+
+1. Keep your click bindings to put them back later:
+
+   ```
+   /run CBSAVE=C_ClickBindings.GetProfileInfo() print(#CBSAVE)
+   ```
+
+2. Make a frame that prints every event while `CBW` is set:
+
+   ```
+   /run CBF=CreateFrame("Frame") CBF:RegisterAllEvents() CBF:SetScript("OnEvent",function(_,e,...) if CBW then print("event",e,...) end end)
+   ```
+
+3. Move Target to Shift-Left (the menu stays on Right) and watch the
+   events for a second:
+
+   ```
+   /run CBW=true C_ClickBindings.SetProfileByInfo({{type=3,actionID=1,button="LeftButton",modifiers=3},{type=3,actionID=2,button="RightButton",modifiers=0}}) C_Timer.After(1,function() CBW=nil print("done") end)
+   ```
+
+   Seen: (to do) every `event` line before `done`, and any error.
+   wowlua: only `done`.
+4. Ask for the left button with Shift and without:
+
+   ```
+   /run print(C_ClickBindings.GetBindingType("LeftButton",3),C_ClickBindings.GetEffectiveInteractionButton("LeftButton",3),C_ClickBindings.GetBindingType("LeftButton",0),C_ClickBindings.GetEffectiveInteractionButton("LeftButton",0))
+   ```
+
+   Seen: (to do). wowlua: `3 LeftButton 0 nil`.
+5. Swap them, Target on Right and the menu on Left:
+
+   ```
+   /run C_ClickBindings.SetProfileByInfo({{type=3,actionID=1,button="RightButton",modifiers=0},{type=3,actionID=2,button="LeftButton",modifiers=0}})
+   ```
+
+6. Ask for both buttons:
+
+   ```
+   /run print(C_ClickBindings.GetEffectiveInteractionButton("RightButton",0),C_ClickBindings.GetEffectiveInteractionButton("LeftButton",0))
+   ```
+
+   Seen: (to do). wowlua: `LeftButton RightButton`.
+7. Put your click bindings back and stop the event frame:
+
+   ```
+   /run C_ClickBindings.SetProfileByInfo(CBSAVE) CBF:UnregisterAllEvents() print(#C_ClickBindings.GetProfileInfo())
+   ```
+
+   Seen: the same number as in step 1.
+8. Several modifiers' names together:
+
+   ```
+   /run print(GetStringFromModifiers(3),GetStringFromModifiers(51),GetStringFromModifiers(255))
+   ```
+
+   Seen: (to do). wowlua: `SHIFT ALT-SHIFT ALT-CTRL-SHIFT-META`.
