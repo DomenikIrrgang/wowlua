@@ -2065,25 +2065,6 @@ fn get_inspect_arena_data(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0); 5])
 }
 
-/// `GetStringFromModifiers(modifiers)`: the keys a modifier mask holds,
-/// as a binding writes them (the full probe: 0 "", 1 "SHIFT"; the other
-/// bits, a left and a right key each for shift, control and alt as
-/// `Enum.ModifierKey` orders them, and their order, unverified).
-fn get_string_from_modifiers(vm: &mut Vm, c: NativeCall) -> Ret {
-    let mask = num_arg(vm, &c, 1).unwrap_or(0.0) as u64;
-    let mut keys = Vec::new();
-    for (bits, name) in [
-        (0b11_0000, "ALT"),
-        (0b00_1100, "CTRL"),
-        (0b00_0011, "SHIFT"),
-    ] {
-        if mask & bits != 0 {
-            keys.push(name);
-        }
-    }
-    Ok(vec![vm.str(&keys.join("-"))])
-}
-
 /// `GetMonitorName(index)`: the recorded monitors' (1 the system's
 /// default, nil and true; 2 a named one; 3 none, nil and false); a
 /// monitor index below 1 none, nil and false (the full probe: -1 and 0);
@@ -2129,7 +2110,6 @@ fn probed() -> Vec<(&'static str, NativeFn)> {
         ("GetSourceLocation", get_source_location),
         ("GetFunctionCPUUsage", get_function_cpu_usage),
         ("GetInspectArenaData", get_inspect_arena_data),
-        ("GetStringFromModifiers", get_string_from_modifiers),
         ("GetMonitorName", get_monitor_name),
         ("IsMovieLocal", is_movie_at_hand),
         ("IsMoviePlayable", is_movie_at_hand),

@@ -360,13 +360,11 @@ const DOCUMENTED_EMPTY: &[&str] = &[
     "C_TradeSkillUI.GetProfessionSpells",
     // The script throttles: none.
     "GetScriptBucketThrottleLimits",
-    // Input the engine does not simulate; the click-binding modifiers
-    // none held as `MakeModifiers` would say without keys down.
+    // Input the engine does not simulate.
     "SimulateMouseClick",
     "SimulateMouseDown",
     "SimulateMouseUp",
     "SimulateMouseWheel",
-    "MakeModifiers",
     // The target priority highlight and a Battle.net outage: nothing to
     // show.
     "TargetPriorityHighlightStart",

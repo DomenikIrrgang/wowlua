@@ -322,6 +322,15 @@ pub fn run_text(vm: &mut Vm, body: &str) {
     engine_mut(vm).world.macro_stopped = outer;
 }
 
+/// Runs the macro at `index` (a click binding's, `ExecuteBinding`); none
+/// there, nothing.
+pub fn run_at(vm: &mut Vm, index: f64) {
+    if let Some(at) = find(vm, Value::Num(index)) {
+        let body = get(vm, at).body;
+        run_text(vm, &body);
+    }
+}
+
 /// `C_Macro.RunMacroText(text, button)`: the text run as a macro (a
 /// secure button's `macrotext`). The click's button is what `[button]`
 /// sees (`GetMouseButtonClicked`; unverified for a call outside a click).

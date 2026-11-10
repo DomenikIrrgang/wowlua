@@ -1775,11 +1775,6 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("C_NamePlate.GetNamePlates", get_name_plates),
         ("IsInGroup", is_in_group),
         ("TargetUnit", target_unit),
-        (
-            "C_ClickBindings.GetEffectiveInteractionButton",
-            effective_interaction_button,
-        ),
-        ("C_ClickBindings.GetBindingType", click_binding_type),
         ("ClearTarget", clear_target_call),
         ("IsInRaid", is_in_raid),
         ("GetNumGroupMembers", get_num_group_members),
@@ -2910,48 +2905,6 @@ pub fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
     let id = Value::Num(new.map_or(-1.0, |n| n.0 as f64));
     let echo = vm.native_with("targetEcho", target_echo, vec![id]);
     crate::clock::after_engine(vm, delay, echo);
-}
-
-/// `C_ClickBindings.GetEffectiveInteractionButton(button, modifiers)`: the
-/// default interaction bindings' (a unit frame's left click targets, its
-/// right click opens the menu): the button itself (unverified: not
-/// recorded; `GetBindingType("LeftButton", 0)` recorded an interaction);
-/// nil for a name that is no mouse button (the full probe, 1.60.1: `"x"`
-/// and `""` with any modifiers).
-fn effective_interaction_button(vm: &mut Vm, c: NativeCall) -> Ret {
-    if let Some(r) =
-        crate::recorded::lookup(vm, "C_ClickBindings.GetEffectiveInteractionButton", &c)
-    {
-        return Ok(r);
-    }
-    let button = match vm.hidden(c.arg(1)) {
-        Value::Str(s) => vm.str_bytes(s).to_vec(),
-        _ => Vec::new(),
-    };
-    let mouse = matches!(
-        button.as_slice(),
-        b"LeftButton" | b"RightButton" | b"MiddleButton"
-    ) || button
-        .strip_prefix(b"Button")
-        .is_some_and(|n| !n.is_empty() && n.iter().all(u8::is_ascii_digit));
-    Ok(vec![if mouse { c.arg(1) } else { Value::Nil }])
-}
-
-/// `C_ClickBindings.GetBindingType(button, modifiers)`: the recorded
-/// answer (the left button unmodified: an interaction), else the right
-/// button unmodified an interaction too (its default: the unit's menu;
-/// unverified), else none.
-fn click_binding_type(vm: &mut Vm, c: NativeCall) -> Ret {
-    if let Some(r) = crate::recorded::lookup(vm, "C_ClickBindings.GetBindingType", &c) {
-        return Ok(r);
-    }
-    let button = match vm.hidden(c.arg(1)) {
-        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
-        _ => String::new(),
-    };
-    let plain = matches!(vm.hidden(c.arg(2)), Value::Num(0.0) | Value::Nil);
-    let interaction = plain && (button == "LeftButton" || button == "RightButton");
-    Ok(vec![Value::Num(if interaction { 3.0 } else { 0.0 })])
 }
 
 /// `TargetUnit(unit)` (protected: a unit frame's click), `ClearTarget()`.
