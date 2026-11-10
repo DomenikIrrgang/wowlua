@@ -508,6 +508,35 @@ The WoW API the VM's code calls, per flavor.
   `TRAINER_CLOSED()`. Unverified beyond the spell opening the window, the
   pet mode and the forbidden call (`tests/ingame/PROBES.md`, "Beast
   Training").
+- **Click bindings.** The character has the game's click bindings
+  profile (`C_ClickBindings`; decision T625): by default two
+  interactions (`Enum.ClickBindingType.Interaction`, 3), Target
+  (`Enum.ClickBindingInteraction.Target`, 1) on `LeftButton` and the
+  unit's menu (`OpenContextMenu`, 2) on `RightButton`, no modifiers, as
+  WoW Forever answers. `GetProfileInfo()` answers copies of its entries
+  (`{ type, actionID, button, modifiers }`); `SetProfileByInfo(infoVec)`
+  replaces it by the list's entries in order, `ResetCurrentProfile()`
+  restores the default; neither tells an event (unverified: the
+  documentation names none). `GetBindingType(button, modifiers)` is the
+  type of the entry with exactly that button and those modifiers, else
+  `None` (0); `GetEffectiveInteractionButton(button, modifiers)` is, for
+  an interaction there, its default button (Target `LeftButton`, the menu
+  `RightButton`: what Blizzard's `SecureUnitButton_OnClick` reads the
+  frame's `type` with, as its comment says; unverified for a moved
+  interaction), else nil. `ExecuteBinding(unit, button, modifiers)` presses
+  a spell entry's spell as the player does (as `UseAction`; unverified: on
+  the clicked unit) and runs a macro entry's macro by index; a pet action
+  does nothing yet. `MakeModifiers()` is the modifier keys held, each key
+  both its bits, its left and its right key's (one Shift held answered 3
+  in game): Shift 3, Ctrl 12, Alt 48, Meta 192. `GetStringFromModifiers(n)`
+  names each bit as the game does (1 and 2 `SHIFT`, 4 and 8 `CTRL`, 16 and
+  32 `ALT`, 64 and 128 `META`, other bits nothing), several joined with
+  `-` in a binding's order, `ALT-CTRL-SHIFT-META` (unverified). So
+  Blizzard's unit frames act as in the game: a click whose `type` is
+  `target`, `menu` or `togglemenu` does nothing where the profile has no
+  binding for the click (Shift-Left on a frame with `*type1` `target` by
+  default), and a spell or macro binding goes to `ExecuteBinding` before
+  the frame's attributes.
 - **Mounts, pets and toys on the cursor.** The collections' pickups put
   them on the cursor as the game does (decision T626; probed in WoW
   Forever, `tests/ingame/PROBES.md`, "Mounts, pets and toys dragged"):

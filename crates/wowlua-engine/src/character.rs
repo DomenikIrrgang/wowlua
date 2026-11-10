@@ -100,6 +100,8 @@ pub struct Character {
     pub cursor_money: f64,
     /// The saved equipment sets (`equipsets.rs`).
     pub equipment_sets: Vec<crate::equipsets::EquipmentSet>,
+    /// The click bindings' profile (`clickbindings.rs`).
+    pub click_bindings: crate::clickbindings::ClickBindings,
 }
 
 impl Default for Character {
@@ -126,6 +128,7 @@ impl Default for Character {
             cursor: Default::default(),
             cursor_money: 0.0,
             equipment_sets: Vec::new(),
+            click_bindings: Default::default(),
         }
     }
 }

@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,110 of the 5,115 documented camelot functions have
-  behaviour (99.9%): 1,063 modelled, 352 answered from recordings, 3,695 by a
+  behaviour (99.9%): 1,069 modelled, 351 answered from recordings, 3,690 by a
   documentation-based fill-in. Of all 7,180 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
@@ -28,12 +28,12 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,209 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,211 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| camelot | 5,115 | 5,110 (99.9%) | 352 | 1,477 | 1,477 (100.0%) | all |
-| standard | 4,871 | 4,523 (92.9%) | 0 | 1,438 | 1,431 (99.5%) | none |
+| camelot | 5,115 | 5,110 (99.9%) | 351 | 1,477 | 1,477 (100.0%) | all |
+| standard | 4,871 | 4,524 (92.9%) | 0 | 1,438 | 1,431 (99.5%) | none |
 | vanilla | 3,221 | 2,909 (90.3%) | 0 | 1,360 | 1,349 (99.2%) | none |
 | tbc | 3,221 | 2,909 (90.3%) | 0 | 1,360 | 1,349 (99.2%) | none |
 | mists | 3,222 | 2,906 (90.2%) | 0 | 1,360 | 1,349 (99.2%) | none |
@@ -60,7 +60,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 773 | 97 | 1,232 | 0 |
+| `(globals)` | 2,102 | 775 | 97 | 1,230 | 0 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -107,7 +107,7 @@ ones together):
 | `C_ClassColor` | 1 | 0 | 1 | 0 | 0 |
 | `C_ClassTalents` | 31 | 1 | 15 | 15 | 0 |
 | `C_ClassTrial` | 2 | 0 | 0 | 2 | 0 |
-| `C_ClickBindings` | 9 | 2 | 3 | 4 | 0 |
+| `C_ClickBindings` | 9 | 6 | 2 | 1 | 0 |
 | `C_ClientScene` | 1 | 0 | 1 | 0 | 0 |
 | `C_Club` | 84 | 9 | 2 | 73 | 0 |
 | `C_ClubFinder` | 55 | 0 | 6 | 49 | 0 |
@@ -346,13 +346,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,180 | 1,681 | 433 | 5,061 | 5 |
+| **All** | 7,180 | 1,687 | 432 | 5,056 | 5 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,115 | 1,063 | 352 | 3,695 | 5 |
+| Blizzard's API documentation | 5,115 | 1,069 | 351 | 3,690 | 5 |
 | the client's other C functions (`/stdtest inventory`) | 2,065 | 618 | 81 | 1,366 | 0 |
 | the engine's own, in neither list | 16 | 15 | 0 | 1 | 0 |
 
@@ -373,15 +373,15 @@ The modules that answer, by how many functions and methods:
 
 | Module | Kind | Functions and methods |
 |--------|------|----------------------:|
-| `extras` | fill-in | 1,486 |
+| `extras` | fill-in | 1,483 |
 | `widgets` | model | 638 |
-| `globalsinfo` | fill-in | 524 |
+| `globalsinfo` | fill-in | 523 |
 | `content` | fill-in | 519 |
-| `leftovers2` | fill-in | 388 |
+| `leftovers2` | fill-in | 387 |
 | `collections` | fill-in | 374 |
 | `social` | fill-in | 373 |
-| `recorded` | recorded | 317 |
 | `questinfo` | fill-in | 316 |
+| `recorded` | recorded | 316 |
 | `systeminfo` | fill-in | 308 |
 | `iteminfo` | fill-in | 228 |
 | `methods3` | fill-in | 214 |
@@ -393,7 +393,7 @@ The modules that answer, by how many functions and methods:
 | `methods2` | fill-in | 131 |
 | `objects2` | model | 111 |
 | `widgetops` | fill-in | 111 |
-| `units` | model | 94 |
+| `units` | model | 92 |
 | `guild` | model | 80 |
 | `extras` | model | 78 |
 | `tradeskill` | model | 71 |
@@ -452,6 +452,7 @@ The modules that answer, by how many functions and methods:
 | `standins` | model | 9 |
 | `timeline` | model | 9 |
 | `auras` | model | 8 |
+| `clickbindings` | model | 8 |
 | `chat` | model | 7 |
 | `damagemeter` | model | 7 |
 | `clientdata` | model | 6 |
@@ -849,7 +850,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,209 rules unverified: each rests on Blizzard's
+The engine's code marks 1,211 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1060,6 +1061,14 @@ page changes only when a rule is added, removed or reworded.
 
 - [classic.rs](../crates/wowlua-engine/src/classic.rs): `C_LootHistory.GetNumItems()`: no loot rolls (the group's are not modelled; unverified).
 - [classic.rs](../crates/wowlua-engine/src/classic.rs): `C_ProductChoice.GetChoices()`: no product choices (unverified).
+
+### clickbindings (5)
+
+- [clickbindings.rs](../crates/wowlua-engine/src/clickbindings.rs): Probed in WoW Forever on the Mac (2026-11-10, `tests/ingame/PROBES.md`, "Click bindings"): the profile's two interact...
+- [clickbindings.rs](../crates/wowlua-engine/src/clickbindings.rs): `GetStringFromModifiers(modifiers)`: the keys a mask holds (probed: 0 "", 1 and 2 "SHIFT", 4 and 8 "CTRL", 16 and 32...
+- [clickbindings.rs](../crates/wowlua-engine/src/clickbindings.rs): `C_ClickBindings.SetProfileByInfo(infoVec)`: the profile replaced by the list's `{ type, actionID, button, modifiers...
+- [clickbindings.rs](../crates/wowlua-engine/src/clickbindings.rs): `C_ClickBindings.GetEffectiveInteractionButton(button, modifiers)`: for an interaction bound there, the interaction's...
+- [clickbindings.rs](../crates/wowlua-engine/src/clickbindings.rs): `C_ClickBindings.ExecuteBinding(unit, button, modifiers)` (Blizzard's unit frames' click on a spell or macro binding)...
 
 ### clientdata (1)
 
@@ -1367,7 +1376,7 @@ page changes only when a rule is added, removed or reworded.
 - [gamedata.rs](../crates/wowlua-engine/src/gamedata.rs): The item subclasses the answers probe did not ask (it asked classes 0, 1, 2, 4, 6, 7, 9, 11, 12, 13 and 15), as Atlas...
 - [gamedata.rs](../crates/wowlua-engine/src/gamedata.rs): The functions with behaviour here.
 
-### globalsinfo (72)
+### globalsinfo (71)
 
 - [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): Each answer names its source: a recording (`/stdtest engine answers`, `tests/client/forever-camelot-answers.lua`), Bl...
 - [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `IsDualWielding()`: a weapon in the off hand (a shield or a held item is armor).
@@ -1440,7 +1449,6 @@ page changes only when a rule is added, removed or reworded.
 - [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `CanInitiateWarGame(index)`: no war game to start, with the war game type's player counts (the full probe: 1 answers...
 - [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `GetSourceLocation()`: where the caller is, its chunk's name (a file's path, or the code of a string chunk) and line...
 - [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `GetFunctionCPUUsage(func [, includeSubroutines])`: no CPU used, no calls profiled; asked without a function, the C c...
-- [globalsinfo.rs](../crates/wowlua-engine/src/globalsinfo.rs): `GetStringFromModifiers(modifiers)`: the keys a modifier mask holds, as a binding writes them (the full probe: 0 "",...
 
 ### gossip (2)
 
@@ -2242,7 +2250,7 @@ page changes only when a rule is added, removed or reworded.
 - [unitnames.rs](../crates/wowlua-engine/src/unitnames.rs): Whether the game's name settings show a unit's name (decision T534): another player's by friend or foe; an NPC's all...
 - [unitnames.rs](../crates/wowlua-engine/src/unitnames.rs): A unit's name color: an NPC's its reaction's (red, yellow, green), another player's blue unless hostile (unverified:...
 
-### units (52)
+### units (50)
 
 - [units.rs](../crates/wowlua-engine/src/units.rs): Unverified until probed: the player's defaults; GUID formats; the order of the events a change fires (a unit event fi...
 - [units.rs](../crates/wowlua-engine/src/units.rs): Each class's ID, file and name (enUS; the client's for Paladin, `UnitClass`; the others unverified).
@@ -2275,8 +2283,6 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine/src/units.rs): A unit's threat on `mob`: whether tanking, the status, the scaled and raw percentages, the value; none off its list.
 - [units.rs](../crates/wowlua-engine/src/units.rs): `unit:softTarget(other [, kind])` (the player): the soft target of `kind` ("enemy", "friend", "interact"; by default...
 - [units.rs](../crates/wowlua-engine/src/units.rs): A hostile target on someone: that one's flags, by its tokens with targettarget (recorded, `talents`: the fox on the p...
-- [units.rs](../crates/wowlua-engine/src/units.rs): `C_ClickBindings.GetEffectiveInteractionButton(button, modifiers)`: the default interaction bindings' (a unit frame's...
-- [units.rs](../crates/wowlua-engine/src/units.rs): `C_ClickBindings.GetBindingType(button, modifiers)`: the recorded answer (the left button unmodified: an interaction)...
 - [units.rs](../crates/wowlua-engine/src/units.rs): `unit:update(data)`: the fields of a unit's data (`spawnUnit`'s, a world profile's unit or character) that `data` nam...
 - [units.rs](../crates/wowlua-engine/src/units.rs): What of `n` the unit's damage absorbs (`heal`: its heal absorbs) take, used up, `UNIT_ABSORB_AMOUNT_CHANGED` (`UNIT_H...
 - [units.rs](../crates/wowlua-engine/src/units.rs): The death's events.
@@ -2527,6 +2533,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Animations after a hitch (decision T623)
 - A mouse script after the clicks were turned off (decision T365)
 - Cmd as a modifier (decision T624, 2026-11-10)
+- Click bindings (decision T625, 2026-11-10)
 - Mounts, pets and toys dragged (decision T626, 2026-11-10)
 
 ## In-game regressions
