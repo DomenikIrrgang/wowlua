@@ -2003,3 +2003,162 @@ health and power), not seen. To check it, each line in the chat:
    Seen: whether a bar's secret value counts. wowlua: "true false" (only
    texts count).
 7. Leave combat, then `/run S:Hide()`
+
+## A disabled button (decision T616)
+
+Found with SuuUI's Beast Training on WoW Forever 1.60.1, 2026-11-10: the
+game's Train button, disabled by Blizzard's trainer frame, did nothing
+when SuuUI's secure button clicked it (`type = "click"`, its
+`clickbutton` the Train button), where wowlua ran its `OnClick` and
+bought. warcraft.wiki.gg's `Button:Click` says the same: nothing for a
+disabled button or one already being clicked, `button` and `isDown`
+passed on, `RegisterForClicks` ignored, no `OnMouseDown`/`OnMouseUp`.
+wowlua now follows that. Not seen, left as wowlua had it: what the
+mouse's own clicks and motion do on a disabled button (wowlua: no click
+script, but `OnMouseDown`, `OnMouseUp`, `OnEnter` and `OnLeave` run).
+Blizzard's 317 buttons with `motionScriptsWhileDisabled="true"` suggest a
+disabled button gets no `OnEnter`/`OnLeave` without it. Each line in the
+chat, out of combat:
+
+1. `/run B=CreateFrame("Button",nil,UIParent,"UIPanelButtonTemplate") B:SetSize(120,30) B:SetPoint("CENTER") B:SetText("Probe") for _,s in ipairs({"PreClick","OnClick","PostClick","OnMouseDown","OnMouseUp","OnEnter","OnLeave"}) do B:SetScript(s,function(_,a,b) print(s,a,b) end) end`
+2. `/run B:Disable() B:Click() print("clicked")`
+
+   wowlua: only `clicked`. Seen (SuuUI's report, not this line): nothing
+   ran. (to do)
+3. Move the mouse onto the button, click it with the left button, then
+   move the mouse off it.
+
+   Seen: which of `OnEnter`, `OnMouseDown`, `OnMouseUp`, `PreClick`,
+   `OnClick`, `PostClick`, `OnLeave` print, in order. wowlua: `OnEnter`,
+   `OnMouseDown`, `OnMouseUp`, `OnLeave` (no click script). (to do)
+4. `/run B:SetMotionScriptsWhileDisabled(true)`, then move the mouse onto
+   the button and off it again.
+
+   Seen: whether `OnEnter` and `OnLeave` print now (and did not in step
+   3). wowlua: both, as in step 3. (to do)
+5. `/run B:Enable() B:SetScript("OnClick",function(self,a,b) print("OnClick",a,b) self:Click() end) B:Click("RightButton", true)`
+
+   wowlua: `PreClick RightButton true`, `OnClick RightButton true`,
+   `PostClick RightButton true`, once each (the inner `Click()` does
+   nothing). (to do)
+6. `/run B:Hide()`
+
+## The trainer's choice (decision T617)
+
+Blizzard's trainer frame takes the game's choice up in
+`TRAINER_DESCRIPTION_UPDATE` (`ClassTrainer_SetSelection(…
+GetTrainerSelectionIndex())`), and its handler selects again, so the
+event can only come for a change. SuuUI's Beast Training relies on it
+(its Train is a secure click on the game's Train, which trains the
+frame's choice). Recorded so far: the trainer scenario has no event when
+the warrior clicked the first service, and 11 of the 14 class trainers
+probed read the first available service as the choice with the window
+open (the other three, with none available, read 2). wowlua chooses the
+first available service as the list comes, with no event, and sends
+`TRAINER_DESCRIPTION_UPDATE` at once for each change by
+`SelectTrainerService`; an index past the list chooses none. Inferred,
+not seen: the event at once (warcraft.wiki.gg says `SelectTrainerService`
+notifies the server; the answer may come a round trip later), and the
+choice when none is available. At any class trainer, its window just
+opened with Blizzard's frame, nothing clicked in it yet, each line in
+the chat:
+
+1. `/run print("choice", GetTrainerSelectionIndex(), GetNumTrainerServices()) for i=1,GetNumTrainerServices() do print(i, (GetTrainerServiceInfo(i)), select(2, GetTrainerServiceInfo(i))) end`
+
+   Seen: the choice before anything was clicked, and each service's
+   state. wowlua: the first `available` service's index (nil with none).
+   (to do)
+2. `/run E=CreateFrame("Frame") E:RegisterEvent("TRAINER_DESCRIPTION_UPDATE") E:SetScript("OnEvent",function(_,e) print(e, GetTime(), GetTrainerSelectionIndex()) end)`
+3. `/run local n=GetTrainerSelectionIndex()==2 and 3 or 2 print("before", GetTime(), GetTrainerSelectionIndex()) SelectTrainerService(n) print("after", n, GetTime(), GetTrainerSelectionIndex())`
+
+   Seen: whether `TRAINER_DESCRIPTION_UPDATE` prints, and where: between
+   `before` and `after` (at once) or later (with the server's answer; wait
+   two seconds). wowlua: between them, at the same time, with the new
+   index. (to do)
+4. `/run local n=GetTrainerSelectionIndex() print("again", n) SelectTrainerService(n) print("after again", GetTrainerSelectionIndex())`
+
+   wowlua: no event (the same choice). (to do)
+5. `/run print("past", GetTime()) SelectTrainerService(GetNumTrainerServices()+1) print("after past", GetTime(), GetTrainerSelectionIndex())`
+
+   wowlua: the event with nil, then `after past nil`. (to do)
+6. Click the first row of Blizzard's list, wait two seconds, then click
+   the second row.
+
+   Seen: an event for each click, or only for the one that changed the
+   choice? wowlua: only for a change. (to do)
+7. `/run E:UnregisterAllEvents()`, then close the window.
+
+## Beast Training (decision T618)
+
+Reported by the user (2026-11-10): in WoW Forever Beast Training is a
+hunter's spell, not an NPC. Casting it opens the game's trainer window
+(`ClassTrainerFrame`) in its pet mode: `C_Trainer.GetTrainerType()` is
+`Enum.TrainerType.Pet`, with training points and the trainer's functions
+and events. Seen in game earlier (SuuUI's code says so):
+`BuyTrainerService` from an addon's code is forbidden there ("Forbidden"),
+so SuuUI trains with a secure click on the game's Train button. Seen (a
+hunter's screenshot, 2026-11-10, reported by SuuUI, not a probe): the
+list shows the pet's known abilities as available with no cost, not as
+used.
+
+wowlua models the rest on Blizzard's trainer code, the API documentation
+and TBC's pet frame, none of it recorded: the cast of 5149 (inferred: the
+client names 5149 and 5300 Beast Training) opens the window with
+`TRAINER_SHOW` then `TRAINER_UPDATE`, without the interaction manager's
+events; "used" for a service the pet's spellbook holds (the API's
+meaning of the state); the pet's dismissal closes it with
+`TRAINER_CLOSED` only. With a hunter, the pet out, out of combat, each
+line in the chat:
+
+1. Before casting: `/run print("points", C_PetInfo.GetPetTrainingPoints()) print("level", UnitLevel("pet"), "type", C_Trainer.GetTrainerType())`
+
+   wowlua: the pet's points (all, spent), its level, type `0`. (to do)
+2. `/run local n=C_Spell.GetSpellInfo("Beast Training") print("spell", n and n.spellID, n and n.name) B=CreateFrame("Frame") for _,e in ipairs({"TRAINER_SHOW","TRAINER_UPDATE","TRAINER_CLOSED","PLAYER_INTERACTION_MANAGER_FRAME_SHOW","PLAYER_INTERACTION_MANAGER_FRAME_HIDE","UNIT_SPELLCAST_SUCCEEDED"}) do B:RegisterEvent(e) end B:SetScript("OnEvent",function(_,e,a,b,c) print(GetTime(), e, a, b, c) end)`
+
+   Seen: Beast Training's spell ID (wowlua: 5149). (to do)
+3. Cast Beast Training from the spellbook, wait two seconds.
+
+   Seen: the events in order with their times. wowlua:
+   `UNIT_SPELLCAST_SUCCEEDED player … 5149`, then `TRAINER_SHOW`,
+   `TRAINER_UPDATE`, no interaction manager's event. (to do)
+4. Nothing clicked in the window yet: `/run print("type", C_Trainer.GetTrainerType(), "n", GetNumTrainerServices(), "choice", GetTrainerSelectionIndex()) for _,f in ipairs({"available","unavailable","used"}) do print(f, GetTrainerServiceTypeFilter(f)) end`
+
+   wowlua: type `3`, the list's size, the first available service's
+   index; the filters as at a class trainer (`used` off). (to do)
+5. `/run for i=1,GetNumTrainerServices() do print(i, GetTrainerServiceInfo(i)) end`
+
+   Seen: name, state, icon, level, rank, category of each. (to do)
+6. `/run for i=1,GetNumTrainerServices() do local t=C_TooltipInfo.GetTrainerService(i) local id=t and t.id print(i, (GetTrainerServiceInfo(i)), "cost", GetTrainerServiceCost(i), "level", GetTrainerServiceLevelReq(i), "spell", id, "known", id and C_SpellBook.IsSpellKnown(id, Enum.SpellBookSpellBank.Pet)) end`
+
+   Seen: each one's cost (training points?), level, spell, and whether
+   the pet knows it. The open question: a known one's state (step 5) and
+   cost here. wowlua: known ones `used`, their cost the service's. (to do)
+7. `/run local u=GetTrainerServiceTypeFilter("used") SetTrainerServiceTypeFilter("used", true) for i=1,GetNumTrainerServices() do print(i, GetTrainerServiceInfo(i)) end SetTrainerServiceTypeFilter("used", u)`
+
+   Seen: whether more services show with `used` on, and their state.
+   (to do)
+8. `/run print("pet book", C_SpellBook.HasPetSpells()) for i=1,(C_SpellBook.HasPetSpells() or 0) do print(i, C_SpellBook.GetSpellBookItemName(i, Enum.SpellBookSpellBank.Pet)) end`
+
+   Seen: the pet's spellbook, to compare with steps 5 and 6. (to do)
+9. Only if the pet has an ability to learn anyway (this spends training
+   points): `/run P=CreateFrame("Frame") for _,e in ipairs({"UNIT_PET_TRAINING_POINTS","TRAINER_UPDATE","TRAINER_DESCRIPTION_UPDATE","SPELLS_CHANGED","PET_BAR_UPDATE","LEARNED_SPELL_IN_SKILL_LINE","CHAT_MSG_SYSTEM"}) do P:RegisterEvent(e) end P:SetScript("OnEvent",function(_,e,a) print(GetTime(), e, a) end)`,
+   then choose that ability in Blizzard's list, click Train, wait two
+   seconds, and `/run print("points", C_PetInfo.GetPetTrainingPoints()) P:UnregisterAllEvents()`
+
+   Seen: the events in order with their times, and the points after.
+   wowlua: a round trip after Train, `CHAT_MSG_SYSTEM` ("Your pet has
+   learned a new ability: …"), `UNIT_PET_TRAINING_POINTS pet`,
+   `SPELLS_CHANGED`, `TRAINER_UPDATE`; the points' spent part up by the
+   cost. (to do)
+10. Dismiss the pet (Dismiss Pet) with the window open, wait two seconds.
+
+    Seen: whether the window closes, and which events print (step 2's
+    frame). wowlua: `TRAINER_CLOSED` only; Blizzard's window stays
+    shown. (to do)
+11. Close the window, then `/run print("type", C_Trainer.GetTrainerType()) B:UnregisterAllEvents()`
+
+    wowlua: `0`. (to do)
+12. Without a pet (dismissed), cast Beast Training.
+
+    Seen: the error shown, and whether the window opens. wowlua: nothing
+    opens (no error modelled). (to do)

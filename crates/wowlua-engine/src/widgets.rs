@@ -4581,14 +4581,30 @@ fn is_forbidden(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(engine(vm).world.widgets[id.0].forbidden)])
 }
 
+/// `Click([button [, isDown]])`: the button's `PreClick`, `OnClick` and
+/// `PostClick` with `button` (`"LeftButton"` by default) and `isDown`
+/// (false by default), whatever it registered for (`RegisterForClicks`),
+/// no `OnMouseDown` or `OnMouseUp`. A disabled button's does nothing, and
+/// so does a button's while its own runs (decision T616: the API's
+/// documentation on warcraft.wiki.gg, SuuUI's report from the game; a
+/// secure button's `click` action is a `Click()` of the button it names).
 fn click(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    if !engine(vm).world.widgets[id.0].enabled || engine(vm).world.input.clicked.contains(&id) {
+        return Ok(vec![]);
+    }
     let button = match c.arg(2) {
         Value::Str(s) => Value::Str(s),
         _ => vm.str("LeftButton"),
     };
-    run_script(vm, id, "PreClick", &[button, Value::Bool(false)]);
-    run_script(vm, id, "OnClick", &[button, Value::Bool(false)]);
-    run_script(vm, id, "PostClick", &[button, Value::Bool(false)]);
+    let down = Value::Bool(vm.hidden(c.arg(3)).truthy());
+    engine_mut(vm).world.input.clicked.push(id);
+    run_script(vm, id, "PreClick", &[button, down]);
+    run_script(vm, id, "OnClick", &[button, down]);
+    run_script(vm, id, "PostClick", &[button, down]);
+    let clicked = &mut engine_mut(vm).world.input.clicked;
+    if let Some(at) = clicked.iter().rposition(|w| *w == id) {
+        clicked.remove(at);
+    }
     Ok(vec![])
 }
 

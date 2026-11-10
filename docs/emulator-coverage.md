@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,110 of the 5,115 documented camelot functions have
-  behaviour (99.9%): 1,061 modelled, 352 answered from recordings, 3,697 by a
+  behaviour (99.9%): 1,062 modelled, 352 answered from recordings, 3,696 by a
   documentation-based fill-in. Of all 7,180 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,195 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,203 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -239,7 +239,7 @@ ones together):
 | `C_PerksActivities` | 10 | 0 | 1 | 9 | 0 |
 | `C_PerksProgram` | 24 | 0 | 0 | 24 | 0 |
 | `C_PetBattles` | 56 | 3 | 8 | 45 | 0 |
-| `C_PetInfo` | 14 | 2 | 0 | 11 | 1 |
+| `C_PetInfo` | 14 | 3 | 0 | 10 | 1 |
 | `C_PetJournal` | 80 | 2 | 3 | 75 | 0 |
 | `C_PhotoSharing` | 11 | 0 | 1 | 10 | 0 |
 | `C_Ping` | 6 | 0 | 2 | 4 | 0 |
@@ -346,13 +346,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,180 | 1,677 | 433 | 5,065 | 5 |
+| **All** | 7,180 | 1,678 | 433 | 5,064 | 5 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,115 | 1,061 | 352 | 3,697 | 5 |
+| Blizzard's API documentation | 5,115 | 1,062 | 352 | 3,696 | 5 |
 | the client's other C functions (`/stdtest inventory`) | 2,065 | 616 | 81 | 1,368 | 0 |
 | the engine's own, in neither list | 16 | 15 | 0 | 1 | 0 |
 
@@ -385,8 +385,8 @@ The modules that answer, by how many functions and methods:
 | `systeminfo` | fill-in | 308 |
 | `iteminfo` | fill-in | 228 |
 | `methods3` | fill-in | 214 |
-| `spellinfo` | fill-in | 198 |
 | `vm` | model | 198 |
+| `spellinfo` | fill-in | 197 |
 | `unitinfo` | fill-in | 172 |
 | `blanks` | fill-in | 153 |
 | `stats` | model | 136 |
@@ -424,8 +424,8 @@ The modules that answer, by how many functions and methods:
 | `widgetops` | model | 24 |
 | `camera` | model | 22 |
 | `trainer` | model | 22 |
+| `pets` | model | 21 |
 | `models` | model | 20 |
-| `pets` | model | 20 |
 | `taxi` | model | 20 |
 | `party` | model | 19 |
 | `widgetdata` | recorded | 19 |
@@ -849,7 +849,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,195 rules unverified: each rests on Blizzard's
+The engine's code marks 1,203 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -970,10 +970,11 @@ page changes only when a rule is added, removed or reworded.
 - [batch.rs](../crates/wowlua-engine/src/batch.rs): Recorded once, `quest`'s level up (69.677): the player's specialization's update between the bags' and the spells' co...
 - [batch.rs](../crates/wowlua-engine/src/batch.rs): One `UNIT_AURA` update telling another's changes too: its lists lengthened, its other fields kept (a secret list as i...
 
-### bindings (16)
+### bindings (17)
 
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): Unverified: `GetBinding`'s results beyond the command and keys, and the addons' reasons and security strings.
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): The command a key runs: a priority override's, an override's, else the key's binding (`GetBindingAction(key, true)`;...
+- [bindings.rs](../crates/wowlua-engine/src/bindings.rs): Only the clicks the button registered for (`RegisterForClicks`: by default the left button's up), as a mouse click: a...
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): Whether a binding command exists: a binding's (`Bindings.xml`), or a `CLICK`, `SPELL`, `MACRO` or `ITEM` one (unverif...
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): `SetBinding(key [, command])`: whether it bound.
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): `C_KeyBindings.GetBindingByKey(key)`: the command the key runs, nil for none (unverified: with overrides).
@@ -1869,12 +1870,14 @@ page changes only when a rule is added, removed or reworded.
 - [party.rs](../crates/wowlua-engine/src/party.rs): `C_PartyInfo.IsPartyFull()`: a party of five (recorded: not with two; unverified: full, a raid).
 - [party.rs](../crates/wowlua-engine/src/party.rs): `C_PartyInfo.ConvertToRaid()`: the leader's party a raid (`GROUP_ROSTER_UPDATE`; unverified: its other events and mes...
 
-### pets (7)
+### pets (9)
 
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): The player's pet.
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): Unverified: the events' order and their units, the default bar, the damage percentage by happiness (classic's 125, 10...
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): Its stats (`pet:setStats`); the default character's stand-ins until a test gives them (unverified).
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): The hunter's bar (unverified: classic's layout).
+- [pets.rs](../crates/wowlua-engine/src/pets.rs): `C_PetInfo.GetPetTrainingPoints()`: the pet's training points, all and spent; `0, 0` without a pet (as before the pet...
+- [pets.rs](../crates/wowlua-engine/src/pets.rs): A pet trainer's service taught to the pet (decision T618): into its spellbook (in place of a rank of the same name, e...
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): `GetPetIcon()`: the pet's icon, else its first spell's; nil without a pet (the full probe) or either (unverified).
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): `GetPetActionCooldown(slot)`: none, `0, 0, 0` (recorded without a pet, every slot; with one unverified).
 - [pets.rs](../crates/wowlua-engine/src/pets.rs): `GetPetActionSlotUsable(slot)`: an action there, the pet alive; with no pet, any slot (the full probe: -1, 0, 1 and 2...
@@ -2141,15 +2144,20 @@ page changes only when a rule is added, removed or reworded.
 - [tradeskill.rs](../crates/wowlua-engine/src/tradeskill.rs): Unverified: what follows the last cast, one held.
 - [tradeskill.rs](../crates/wowlua-engine/src/tradeskill.rs): A new slot's bag told at once (recorded: the first copper and bronze bars; unverified: the wheel's in the backpack, t...
 
-### trainer (8)
+### trainer (13)
 
+- [trainer.rs](../crates/wowlua-engine/src/trainer.rs): The trainer's choice (`SelectTrainerService`, `GetTrainerSelectionIndex`, decision T617): the first available service...
+- [trainer.rs](../crates/wowlua-engine/src/trainer.rs): Beast Training (decision T618): in WoW Forever a hunter's spell, not an NPC (reported by the user, 2026-11-10): the p...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): Unverified: a profession trainer, the filters' list kept until the window reopens, a spell bought without room on the...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): A rank no data gives a level (its service reads 0, no learn level recorded, not in SuuUI's data): estimated between t...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): The class's spellbook tabs after General, by skill line (Classic's; unverified: Forever's beyond the warrior's Fury 3).
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): Whether the character knows a recorded service's spell (`has`: the spells it has): it, or a higher rank of it (unveri...
+- [trainer.rs](../crates/wowlua-engine/src/trainer.rs): The pet gone (dismissed): Beast Training's window closes (`TRAINER_CLOSED()`; unverified).
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): `SetTrainerServiceTypeFilter(type, on)`: the list again, its update (unverified).
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): `player:learn(spells, { quiet? })`: spells (an ID or a list) the player has trained, known from then on (`IsSpellKnow...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): `player:unlearn(spells)`: spells (an ID or a list) the player no longer knows (`SPELLS_CHANGED`; unverified).
+- [trainer.rs](../crates/wowlua-engine/src/trainer.rs): A pet trainer's service taught (decision T618): the message, the pet's spellbook and points (`pets::teach`), the list...
+- [trainer.rs](../crates/wowlua-engine/src/trainer.rs): Beast Training: no NPC, no interaction (unverified).
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): A class trainer's: a recorded one's as its data has them; an explicit one's (unverified) no skill or ability required...
 
 ### traits (11)
@@ -2506,6 +2514,9 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Draw layer case (decision T597)
 - Unanchored font strings (decision T602)
 - A secret scroll range (decision T607)
+- A disabled button (decision T616)
+- The trainer's choice (decision T617)
+- Beast Training (decision T618)
 
 ## In-game regressions
 

@@ -1027,10 +1027,13 @@ export type PetSpell = {
 --- with `actions` in their slots. Its spellbook (the pet's bank of the
 --- `C_SpellBook` functions, `C_SpellBook.HasPetSpells`) holds `spells`, in
 --- their order, else the bar's spells; `icon` is what `GetPetIcon`
---- answers (else its first spell's). Called again for the same pet, it
---- changes what `opts` gives (`UNIT_HAPPINESS`, `UNIT_PET_EXPERIENCE`,
---- `PET_BAR_UPDATE`; its spells `SPELLS_CHANGED`).
-export function setPet(pet: MockUnit?, opts: { hunter?: boolean, happiness?: number, loyalty?: string, xp?: number, xpMax?: number, actions?: { [number]: PetAction }, spells?: PetSpell[], icon?: number | string }?)
+--- answers (else its first spell's). `trainingPoints` are all the
+--- training points it has and `trainingPointsUsed` those spent
+--- (`C_PetInfo.GetPetTrainingPoints`), what a pet trainer's services cost.
+--- Called again for the same pet, it changes what `opts` gives
+--- (`UNIT_HAPPINESS`, `UNIT_PET_EXPERIENCE`, `PET_BAR_UPDATE`; its spells
+--- `SPELLS_CHANGED`; its points `UNIT_PET_TRAINING_POINTS("pet")`).
+export function setPet(pet: MockUnit?, opts: { hunter?: boolean, happiness?: number, loyalty?: string, xp?: number, xpMax?: number, actions?: { [number]: PetAction }, spells?: PetSpell[], icon?: number | string, trainingPoints?: number, trainingPointsUsed?: number }?)
     engine().setPet(pet, opts)
 end
 
@@ -1629,8 +1632,37 @@ end
 --- "WARRIOR" }`: the class's services as the client listed them (the
 --- NPC's own list if recorded), each one's state the character's. Buying a
 --- service teaches the spell (onto the action bar's first empty slot).
+--- As a list comes, its first available service is chosen;
+--- `SelectTrainerService` choosing another sends
+--- `TRAINER_DESCRIPTION_UPDATE`.
 export function defineTrainer(npc: MockUnit, data: table)
     engine().defineTrainer(npc, data)
+end
+
+--- A service of Beast Training: the spell it teaches the pet, its name,
+--- icon, rank, the pet's level it needs and its cost in training points.
+export type BeastTrainingService = {
+    spell: number,
+    name: string,
+    icon?: number,
+    rank?: string,
+    level?: number,
+    cost?: number,
+}
+
+--- What the hunter's Beast Training lists (`{ greeting?, services }`).
+--- Beast Training is a spell, not an NPC: the player casting it (5149,
+--- `mock.player:useSpell(5149)`, an action button) with a pet out opens
+--- the trainer window in its pet mode (`TRAINER_SHOW`, `TRAINER_UPDATE`;
+--- `C_Trainer.GetTrainerType()` is `Enum.TrainerType.Pet` while it is
+--- open). A service's `cost` is in the pet's training points
+--- (`mock.setPet`'s `trainingPoints`) and its `level` the pet's; one the
+--- pet's spellbook holds is "used". An addon's `BuyTrainerService` is
+--- forbidden there, as in the game: the game's Train button (a secure
+--- click on it) teaches the pet. The window closes with
+--- `TRAINER_CLOSED` when hidden or when the pet leaves.
+export function defineBeastTraining(data: { greeting?: string, services: BeastTrainingService[] })
+    engine().defineBeastTraining(data)
 end
 
 --- A flight master's taxi map: `{ mapID, nodes = { { name, nodeID, x, y,

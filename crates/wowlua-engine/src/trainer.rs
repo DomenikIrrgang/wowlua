@@ -25,6 +25,41 @@
 //! through (available and unavailable on, used off: recorded) as the
 //! window opened or a filter changed; a service learned meanwhile stays.
 //!
+//! The trainer's choice (`SelectTrainerService`, `GetTrainerSelectionIndex`,
+//! decision T617): the first available service as its list comes
+//! (recorded: the selection 11 of 14 class trainers probed read with the
+//! window open; the scenario's click on that one sent nothing), no event
+//! for it. `SelectTrainerService(i)` selects a listed service, any other
+//! index none (Blizzard's "> count effectively resets it"); a change sends
+//! `TRAINER_DESCRIPTION_UPDATE()` at once, as Blizzard's trainer frame takes
+//! the game's choice up in it and selects again there (the same one again:
+//! nothing). Unverified: the event at once rather than a round trip later,
+//! and with none available the choice none (three probes read 2).
+//!
+//! Beast Training (decision T618): in WoW Forever a hunter's spell, not
+//! an NPC (reported by the user, 2026-11-10): the player's cast of it
+//! (`BEAST_TRAINING`) with a pet out opens the trainer window in its pet
+//! mode, the list `defineBeastTraining({ services })` gives:
+//! `TRAINER_SHOW()`, `TRAINER_UPDATE()` (no interaction manager's events:
+//! Forever's UI shows the trainer frame on `TRAINER_SHOW`).
+//! `C_Trainer.GetTrainerType()` is `Enum.TrainerType.Pet` while it is open;
+//! its services' costs are the pet's training points
+//! (`C_PetInfo.GetPetTrainingPoints`, `mock.setPet`'s `trainingPoints`),
+//! their levels the pet's. A service is "used" once the pet's spellbook
+//! holds it (as the API documents the state), "available" from the pet's
+//! level, else "unavailable". `BuyTrainerService(i)` from an addon's code
+//! is forbidden there (`ADDON_ACTION_FORBIDDEN`, seen in game: addons
+//! train with a secure click on the game's Train button); from Blizzard's,
+//! available and the points enough: a round trip later "Your pet has
+//! learned a new ability: …", the spell in the pet's spellbook (a rank of
+//! the same name replaced), its cost spent
+//! (`UNIT_PET_TRAINING_POINTS("pet")`, `SPELLS_CHANGED`), `TRAINER_UPDATE()`;
+//! no money, nothing on the action bar. `CloseTrainer()` (the window
+//! hidden) and the pet's leaving: `TRAINER_CLOSED()`. Unverified: the rest
+//! of it (no recording; Forever listed the pet's known abilities as
+//! available at no cost in a hunter's screenshot, `tests/ingame/PROBES.md`),
+//! the spell's ID (5149, of the two the client names Beast Training).
+//!
 //! Unverified: a profession trainer, the filters' list kept until the
 //! window reopens, a spell bought without room on the bar (none pushed?),
 //! the spellbook's new entry (not kept), the money packet's delay beyond
@@ -48,6 +83,9 @@ const MONEY_AFTER: f64 = 0.093;
 const RANK_DATA_AFTER: f64 = 0.013;
 /// `Enum.PlayerInteractionType.Trainer`.
 const TRAINER: f64 = 7.0;
+/// The hunter's Beast Training (inferred: of the client's two spells of
+/// that name, 5149 and 5300, the one classic's hunters cast).
+pub const BEAST_TRAINING: f64 = 5149.0;
 
 #[derive(Default)]
 pub struct Trainers {
@@ -57,6 +95,11 @@ pub struct Trainers {
     pub open: Option<UnitId>,
     pub listed: bool,
     pub selected: Option<usize>,
+    /// Whether the trainer open is Beast Training, the pet's (decision
+    /// T618).
+    pub pet: bool,
+    /// Beast Training's list (`defineBeastTraining`).
+    pub beast: Option<TableRef>,
     /// Whether the services' ranks waiting for their data have it.
     pub ranks_loaded: bool,
     /// The spells learned here.
@@ -484,6 +527,7 @@ pub fn open(vm: &mut Vm, npc: UnitId) {
     {
         let t = &mut engine_mut(vm).world.trainers;
         t.open = Some(npc);
+        t.pet = false;
         t.listed = false;
         t.selected = None;
         t.ranks_loaded = false;
@@ -499,6 +543,12 @@ pub fn open(vm: &mut Vm, npc: UnitId) {
         &[Value::Num(TRAINER)],
     );
     engine_mut(vm).world.trainers.listed = true;
+    // The first available service chosen as the list comes (decision T617).
+    let first = services(vm)
+        .iter()
+        .position(|s| kind(vm, s) == "available")
+        .map(|i| i + 1);
+    engine_mut(vm).world.trainers.selected = first;
     fire(vm, "TRAINER_UPDATE", &[]);
     // A rank waiting for its data: it comes a moment later (recorded).
     let waiting: Vec<f64> = services(vm).iter().filter_map(|s| s.rank_data).collect();
@@ -633,6 +683,63 @@ fn player_knows_ability(vm: &Vm, key: &'static str, ability: &str) -> bool {
     ability_known(key, ability, &has, &named)
 }
 
+/// The open trainer's table: Beast Training's, else the NPC's.
+fn open_data(t: &Trainers) -> Option<TableRef> {
+    t.open?;
+    if t.pet {
+        return t.beast;
+    }
+    t.open.and_then(|n| t.defined.get(&n.0).copied())
+}
+
+/// `defineBeastTraining({ greeting?, services = { { spell, name, icon,
+/// level, rank, cost } } })`: what Beast Training lists (decision T618).
+pub fn control_define_beast(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Table(t) = c.arg(1) else {
+        return Err(vm.error("defineBeastTraining: a table of its services expected"));
+    };
+    widgets::keep(vm, Value::Table(t));
+    engine_mut(vm).world.trainers.beast = Some(t);
+    Ok(vec![])
+}
+
+/// The player's Beast Training cast: with a pet out and its list defined,
+/// the trainer window in its pet mode (decision T618).
+pub fn beast_training(vm: &mut Vm) {
+    if engine(vm).units.pet.is_none() || engine(vm).world.trainers.beast.is_none() {
+        return;
+    }
+    {
+        let t = &mut engine_mut(vm).world.trainers;
+        t.open = Some(units::PLAYER);
+        t.pet = true;
+        t.listed = false;
+        t.selected = None;
+        t.ranks_loaded = false;
+        t.key = None;
+        t.loading = HashMap::new();
+        t.shown = Vec::new();
+    }
+    fire(vm, "TRAINER_SHOW", &[]);
+    engine_mut(vm).world.trainers.listed = true;
+    let first = services(vm)
+        .iter()
+        .position(|s| kind(vm, s) == "available")
+        .map(|i| i + 1);
+    engine_mut(vm).world.trainers.selected = first;
+    fire(vm, "TRAINER_UPDATE", &[]);
+}
+
+/// The pet gone (dismissed): Beast Training's window closes
+/// (`TRAINER_CLOSED()`; unverified).
+pub fn pet_left(vm: &mut Vm) {
+    let t = &engine(vm).world.trainers;
+    if t.open.is_some() && t.pet {
+        engine_mut(vm).world.trainers.open = None;
+        fire(vm, "TRAINER_CLOSED", &[]);
+    }
+}
+
 fn services(vm: &mut Vm) -> Vec<Service> {
     let t = &engine(vm).world.trainers;
     if !t.listed {
@@ -665,7 +772,7 @@ fn services(vm: &mut Vm) -> Vec<Service> {
             })
             .collect();
     }
-    let Some(data) = t.open.and_then(|n| t.defined.get(&n.0).copied()) else {
+    let Some(data) = open_data(t) else {
         return vec![];
     };
     let Value::Table(list) = field(vm, data, "services") else {
@@ -704,6 +811,9 @@ fn kind(vm: &Vm, s: &Service) -> &'static str {
     if let Some((key, i)) = s.recorded {
         return state_of(vm, key, &listed(key)[i - 1]);
     }
+    if engine(vm).world.trainers.pet {
+        return pet_kind(vm, s);
+    }
     if engine(vm).world.trainers.learned.contains(&s.spell) {
         "used"
     } else if engine(vm).units.list[units::PLAYER.0].level >= s.level {
@@ -711,6 +821,29 @@ fn kind(vm: &Vm, s: &Service) -> &'static str {
     } else {
         "unavailable"
     }
+}
+
+/// A pet trainer's service's state (decision T618): "used" in the pet's
+/// spellbook, "available" from the pet's level, else (no pet too)
+/// "unavailable".
+fn pet_kind(vm: &Vm, s: &Service) -> &'static str {
+    let Some(pet) = engine(vm).units.pet else {
+        return "unavailable";
+    };
+    if crate::pets::in_book(vm, s.spell as f64) {
+        "used"
+    } else if engine(vm).units.list[pet.0].level >= s.level {
+        "available"
+    } else {
+        "unavailable"
+    }
+}
+
+/// `C_Trainer.GetTrainerType()`: `Enum.TrainerType.Pet` (3) while Beast
+/// Training is open (decision T618), else `General` (0).
+pub fn trainer_type(vm: &Vm) -> f64 {
+    let t = &engine(vm).world.trainers;
+    if t.open.is_some() && t.pet { 3.0 } else { 0.0 }
 }
 
 fn get_num_trainer_services(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -759,10 +892,7 @@ fn get_trainer_service_skill_line(vm: &mut Vm, c: NativeCall) -> Ret {
 fn get_trainer_greeting_text(vm: &mut Vm, _c: NativeCall) -> Ret {
     let t = &engine(vm).world.trainers;
     let key = t.key;
-    let greeting = t
-        .open
-        .and_then(|n| t.defined.get(&n.0).copied())
-        .map(|d| field(vm, d, "greeting"));
+    let greeting = open_data(t).map(|d| field(vm, d, "greeting"));
     Ok(match (greeting, key) {
         (Some(Value::Str(s)), _) => vec![Value::Str(s)],
         (_, Some(key)) => answer_values(vm, key, "GetTrainerGreetingText()"),
@@ -909,7 +1039,9 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `GetTrainerSelectionIndex()`: nothing until one is selected (recorded).
+/// `GetTrainerSelectionIndex()`: nothing before the list comes (recorded),
+/// then its first available service until another is chosen (decision
+/// T617).
 fn get_trainer_selection_index(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(engine(vm)
         .world
@@ -920,9 +1052,20 @@ fn get_trainer_selection_index(vm: &mut Vm, _c: NativeCall) -> Ret {
         .unwrap_or_else(|| vec![Value::Nil]))
 }
 
+/// `SelectTrainerService(i)`: a listed service chosen, any other index
+/// none; a change sends `TRAINER_DESCRIPTION_UPDATE()` at once (decision
+/// T617).
 fn select_trainer_service(vm: &mut Vm, c: NativeCall) -> Ret {
-    if let Some((i, _)) = service(vm, &c) {
-        engine_mut(vm).world.trainers.selected = Some(i);
+    let Value::Num(_) = vm.hidden(c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    if engine(vm).world.trainers.open.is_none() {
+        return Ok(vec![]);
+    }
+    let new = service(vm, &c).map(|(i, _)| i);
+    let old = std::mem::replace(&mut engine_mut(vm).world.trainers.selected, new);
+    if old != new {
+        fire(vm, "TRAINER_DESCRIPTION_UPDATE", &[]);
     }
     Ok(vec![])
 }
@@ -932,6 +1075,26 @@ fn buy_trainer_service(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((i, s)) = service(vm, &c) else {
         return Ok(vec![]);
     };
+    if engine(vm).world.trainers.pet {
+        // An addon's call forbidden (seen in game).
+        if crate::protection::tainted(vm) {
+            let action = crate::protection::action_name(vm);
+            crate::protection::refuse(vm, "ADDON_ACTION_FORBIDDEN", action);
+            return Ok(vec![]);
+        }
+        let (total, used) = crate::pets::training_points(vm);
+        if kind(vm, &s) != "available" || total - used < s.cost {
+            return Ok(vec![]);
+        }
+        let delay = crate::clock::server_delay(vm);
+        let later = vm.native_with(
+            "trainerPetTaught",
+            pet_taught as NativeFn,
+            vec![Value::Num(i as f64)],
+        );
+        crate::clock::after_engine(vm, delay, later);
+        return Ok(vec![]);
+    }
     if kind(vm, &s) != "available" || engine(vm).world.character.money < s.cost {
         return Ok(vec![]);
     }
@@ -1096,6 +1259,44 @@ fn taught(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// A pet trainer's service taught (decision T618): the message, the pet's
+/// spellbook and points (`pets::teach`), the list's update. Unverified.
+fn pet_taught(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(Value::Num(i)) = c.upvals.first().copied() else {
+        return Ok(vec![]);
+    };
+    if engine(vm).world.trainers.open.is_none() {
+        return Ok(vec![]);
+    }
+    let Some(s) = services(vm).get(i as usize - 1).cloned() else {
+        return Ok(vec![]);
+    };
+    let (total, used) = crate::pets::training_points(vm);
+    if pet_kind(vm, &s) != "available" || total - used < s.cost {
+        return Ok(vec![]);
+    }
+    let text = |vm: &Vm, v: Value| match v {
+        Value::Str(n) => String::from_utf8_lossy(vm.str_bytes(n)).into_owned(),
+        _ => String::new(),
+    };
+    let name = text(vm, s.name);
+    let rank = text(vm, s.rank);
+    let link = format!("|cff71d5ff|Hspell:{}:0|h[{name}]|h|r", s.spell);
+    let format = match vm.get_global("ERR_PET_LEARN_ABILITY_S") {
+        Value::Str(f) => String::from_utf8_lossy(vm.str_bytes(f)).into_owned(),
+        _ => "Your pet has learned a new ability: %s.".into(),
+    };
+    crate::chat::game_message(
+        vm,
+        "CHAT_MSG_SYSTEM",
+        &format.replacen("%s", &link, 1),
+        None,
+    );
+    crate::pets::teach(vm, s.spell as f64, &name, &rank, s.icon, s.cost);
+    fire(vm, "TRAINER_UPDATE", &[]);
+    Ok(vec![])
+}
+
 /// The money's packet: the cost paid, the skill's line learned.
 fn paid(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(Value::Num(cost)) = c.upvals.first().copied() else {
@@ -1116,6 +1317,11 @@ fn paid(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `CloseTrainer()`: `TRAINER_CLOSED()`, the interaction's hides.
 fn close_trainer(vm: &mut Vm, _c: NativeCall) -> Ret {
     if engine_mut(vm).world.trainers.open.take().is_none() {
+        return Ok(vec![]);
+    }
+    // Beast Training: no NPC, no interaction (unverified).
+    if engine(vm).world.trainers.pet {
+        fire(vm, "TRAINER_CLOSED", &[]);
         return Ok(vec![]);
     }
     engine_mut(vm).units.npc = None;

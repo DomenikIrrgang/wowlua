@@ -4,7 +4,7 @@
 //! it unverified.
 //!
 //! `mock.setPet(unit, { hunter, happiness, loyalty, xp, xpMax, actions,
-//! spells, icon })`:
+//! spells, icon, trainingPoints, trainingPointsUsed })`:
 //! the unit is the player's pet (`pet`: `UNIT_PET("player")`,
 //! `PET_BAR_UPDATE`, `UNIT_HAPPINESS("pet")`); called again for the same
 //! pet it changes what it gives (its happiness: `UNIT_HAPPINESS`; its
@@ -32,7 +32,12 @@
 //! button, `TogglePetAutocast`); `C_SpellBook.PickupSpellBookItem`
 //! puts it on the cursor as a `"petaction"` (`cursor.rs`). `GetPetIcon`:
 //! the `icon` given, else its first spell's. A change of its spells is
-//! told by `SPELLS_CHANGED`, as Blizzard's spellbook listens.
+//! told by `SPELLS_CHANGED`, as Blizzard's spellbook listens. Its
+//! training points (`trainingPoints`, all it has; `trainingPointsUsed`,
+//! those spent) are what a pet trainer's services cost
+//! (`C_PetInfo.GetPetTrainingPoints`; a change
+//! `UNIT_PET_TRAINING_POINTS("pet")`); a service bought goes into its
+//! spellbook ([`teach`], decision T618).
 //!
 //! Unverified: the events' order and their units, the default bar, the
 //! damage percentage by happiness (classic's 125, 100, 75), cooldowns
@@ -117,6 +122,9 @@ pub struct Pets {
     /// Its stats (`pet:setStats`); the default character's stand-ins
     /// until a test gives them (unverified).
     pub stats: crate::stats::Stats,
+    /// Its training points: all it has, and those spent at a pet trainer
+    /// (`C_PetInfo.GetPetTrainingPoints`, decision T618).
+    pub training_points: (f64, f64),
 }
 
 const SLOTS: usize = 10;
@@ -173,6 +181,9 @@ pub fn control_set_pet(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let spells_before = book_ids(vm);
     let Some(id) = unit else {
+        if engine(vm).units.pet.is_some() {
+            crate::trainer::pet_left(vm);
+        }
         if engine_mut(vm).units.pet.take().is_some() {
             engine_mut(vm).world.pets = Pets::default();
             let player = vm.str("player");
@@ -201,9 +212,15 @@ pub fn control_set_pet(vm: &mut Vm, c: NativeCall) -> Ret {
             icon: Texture::None,
             attacking: false,
             stats: crate::stats::defaults(),
+            training_points: (0.0, 0.0),
         };
     }
     let (mut happy_changed, mut xp_changed, mut bar_changed) = (false, false, false);
+    let points_before = if new {
+        (0.0, 0.0)
+    } else {
+        engine(vm).world.pets.training_points
+    };
     if let Some(t) = opts {
         if let Value::Bool(b) = get(vm, t, "hunter") {
             engine_mut(vm).world.pets.hunter = b;
@@ -251,7 +268,18 @@ pub fn control_set_pet(vm: &mut Vm, c: NativeCall) -> Ret {
         if !icon.is_nil() {
             engine_mut(vm).world.pets.icon = Texture::of(vm, icon);
         }
+        let (total, used) = engine(vm).world.pets.training_points;
+        let total = match get(vm, t, "trainingPoints") {
+            Value::Num(n) => n,
+            _ => total,
+        };
+        let used = match get(vm, t, "trainingPointsUsed") {
+            Value::Num(n) => n,
+            _ => used,
+        };
+        engine_mut(vm).world.pets.training_points = (total, used);
     }
+    let points_changed = engine(vm).world.pets.training_points != points_before;
     let player = vm.str("player");
     let pet_token = vm.str("pet");
     if new {
@@ -260,6 +288,9 @@ pub fn control_set_pet(vm: &mut Vm, c: NativeCall) -> Ret {
         fire(vm, "UNIT_PET", &[player]);
         fire(vm, "PET_BAR_UPDATE", &[]);
         fire(vm, "UNIT_HAPPINESS", &[pet_token]);
+        if points_changed {
+            fire(vm, "UNIT_PET_TRAINING_POINTS", &[pet_token]);
+        }
         if spells_changed {
             fire(vm, "SPELLS_CHANGED", &[]);
         }
@@ -274,6 +305,9 @@ pub fn control_set_pet(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     if bar_changed {
         fire(vm, "PET_BAR_UPDATE", &[]);
+    }
+    if points_changed {
+        fire(vm, "UNIT_PET_TRAINING_POINTS", &[pet_token]);
     }
     if spells_changed {
         fire(vm, "SPELLS_CHANGED", &[]);
@@ -450,6 +484,63 @@ pub fn book_texture(vm: &mut Vm, slot: f64) -> Value {
 /// Whether `spell` is in the pet's spellbook.
 pub fn in_book(vm: &Vm, spell: f64) -> bool {
     book(vm).iter().any(|s| s.spell == spell)
+}
+
+/// The pet's training points, all and spent (none without a pet).
+pub fn training_points(vm: &Vm) -> (f64, f64) {
+    match pet(vm) {
+        Some(_) => engine(vm).world.pets.training_points,
+        None => (0.0, 0.0),
+    }
+}
+
+/// `C_PetInfo.GetPetTrainingPoints()`: the pet's training points, all and
+/// spent; `0, 0` without a pet (as before the pet trainer, decision T618;
+/// unverified).
+fn get_pet_training_points(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let (total, used) = training_points(vm);
+    Ok(vec![Value::Num(total), Value::Num(used)])
+}
+
+/// A pet trainer's service taught to the pet (decision T618): into its
+/// spellbook (in place of a rank of the same name, else at its end), its
+/// cost spent of the pet's training points (`UNIT_PET_TRAINING_POINTS`),
+/// the spells' change told (`SPELLS_CHANGED`). Unverified: all of it.
+pub fn teach(vm: &mut Vm, spell: f64, name: &str, rank: &str, icon: Value, cost: f64) {
+    if pet(vm).is_none() {
+        return;
+    }
+    let texture = Texture::of(vm, icon);
+    let pets = &mut engine_mut(vm).world.pets;
+    let mut spells = book_spells(pets);
+    let new = BookSpell {
+        spell,
+        name: name.to_string(),
+        sub_name: rank.to_string(),
+        texture,
+        passive: false,
+        autocast_allowed: false,
+        autocast: false,
+    };
+    match spells
+        .iter_mut()
+        .find(|s| s.name == name && !name.is_empty())
+    {
+        Some(old) => {
+            let (allowed, on) = (old.autocast_allowed, old.autocast);
+            *old = BookSpell {
+                autocast_allowed: allowed,
+                autocast: on,
+                ..new
+            };
+        }
+        None => spells.push(new),
+    }
+    pets.spells = Some(spells);
+    pets.training_points.1 += cost;
+    let pet_token = vm.str("pet");
+    fire(vm, "UNIT_PET_TRAINING_POINTS", &[pet_token]);
+    fire(vm, "SPELLS_CHANGED", &[]);
 }
 
 /// `C_SpellBook.ToggleSpellBookItemAutoCast(slot, bank)`: the pet's spell
@@ -793,6 +884,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("IsPetAttackActive", is_pet_attack_active),
         ("C_PetInfo.GetPetHappiness", get_pet_happiness),
         ("C_PetInfo.GetPetLoyalty", get_pet_loyalty),
+        ("C_PetInfo.GetPetTrainingPoints", get_pet_training_points),
         ("GetPetExperience", get_pet_experience),
         ("CastPetAction", cast_pet_action),
         ("PetAttack", pet_attack),

@@ -46,6 +46,9 @@ pub struct Input {
     /// The mouse button of the user's click running (`"LeftButton"`, …):
     /// a modified click's `BUTTONn` part (`IsModifiedClick`).
     pub clicking: Option<String>,
+    /// The buttons whose `Click()` is running: another `Click()` of one of
+    /// them does nothing (decision T616).
+    pub clicked: Vec<WidgetId>,
     /// Keys held down (`key_down`): each with the binding it ran.
     pub held: Vec<(String, String)>,
     /// The mouse held down while playing (decision T535).

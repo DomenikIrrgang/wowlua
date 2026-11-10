@@ -433,6 +433,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("setSortResult", crate::cursor::control_set_sort_result),
         ("defineGossip", crate::gossip::control_define),
         ("defineTrainer", crate::trainer::control_define),
+        ("defineBeastTraining", crate::trainer::control_define_beast),
         ("defineTaxi", crate::taxi::control_define),
         ("defineMailbox", crate::mail::control_define),
         ("setNewMail", crate::mail::control_set_new_mail),
