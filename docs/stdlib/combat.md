@@ -151,6 +151,11 @@ overlay.show()                               -- false in combat
 of a list. `overlay.button` is the secure button, for `PreClick` and
 `PostClick` hooks.
 
+The game won't anchor a secure button to a frame that is anchored to a
+font string or a texture, even through other frames. Over such a target,
+`show` places the overlay where the target is on screen instead; it then
+doesn't follow the target if that moves while the overlay is shown.
+
 | Function | What it does |
 |----------|--------------|
 | `secure.visibility(frame, conditional)` | Shows and hides a frame by macro conditions |

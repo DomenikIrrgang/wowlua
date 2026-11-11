@@ -2497,6 +2497,131 @@ picked up (`Pickup` of a not collected one's index), a toy the player
 lacks, `Pickup(0)` (the random favourite), and the `CURSOR_CHANGED`
 types.
 
+## Protected frames anchored through frames to regions (decision T628, 2026-11-11)
+
+Found in game (WoW Forever 1.60.1.70888) with SuuUI's world map: its
+title's `secure.overlay` (a `SecureActionButtonTemplate` button on
+UIParent) was anchored with `SetAllPoints` to a plain button whose two
+points were on a font string, and the game refused it:
+`Action[SetPoint] failed because[Cannot anchor protected frames to
+regions]: attempted from: Button:SetAllPoints.` So the check reaches at
+least one frame past the relative, and `SetAllPoints` reports the action
+as `SetPoint`. wowlua let it through (it only refused a region as the
+direct relative, decision T252).
+
+wowlua now refuses a protected frame's `SetPoint` or `SetAllPoints` when
+the relative (or, without one, the parent) is a region or a frame whose
+anchors lead to one, through any number of frames, an anchor without a
+relative going to the frame's parent. Only the frame's own protection
+counts (a secure template, not a secure child), and only at the moment it
+anchors. Unverified: two frames deep, the parent's place, a frame
+protected through its children, a chain made after the anchor.
+
+Each line in the chat, one at a time, out of combat. Each step makes a
+fresh secure button. If a step's line shows the game's error window
+instead of a printed line, note that (`pcall` didn't catch it).
+
+1. Make a holder frame with a font string and a texture, and the printing
+   helper:
+
+   ```
+   /run AH=CreateFrame("Frame",nil,UIParent) AH:SetSize(100,100) AH:SetPoint("CENTER") AT=AH:CreateFontString(nil,"ARTWORK","GameFontNormal") AT:SetPoint("TOP") AT:SetText("x") AX=AH:CreateTexture() AX:SetSize(10,10) AX:SetPoint("BOTTOM") function AP(n,...) local ok,e=pcall(...) print(n,ok and "ok" or tostring(e):match("Action.*") or tostring(e)) end print("ready")
+   ```
+
+2. Make `A1` on the font string, `A2` on `A1` (two steps away) and `A3`,
+   a child of `A1` placed without a relative:
+
+   ```
+   /run A1=CreateFrame("Button",nil,AH) A1:SetPoint("TOPLEFT",AT,"TOPLEFT") A1:SetPoint("BOTTOMRIGHT",AT,"BOTTOMRIGHT") A2=CreateFrame("Frame",nil,AH) A2:SetAllPoints(A1) A3=CreateFrame("Frame",nil,A1) A3:SetSize(5,5) A3:SetPoint("CENTER") print("ready")
+   ```
+
+3. A font string as the relative, `SetPoint`:
+
+   ```
+   /run local b=CreateFrame("Button",nil,UIParent,"SecureActionButtonTemplate") AP("fs point",b.SetPoint,b,"CENTER",AT)
+   ```
+
+   Seen: (to do). wowlua: `fs point Action[SetPoint] failed because[Cannot anchor protected frames to regions]: attempted from: Button:SetPoint.`
+4. A font string as the relative, `SetAllPoints`:
+
+   ```
+   /run local b=CreateFrame("Button",nil,UIParent,"SecureActionButtonTemplate") AP("fs all",b.SetAllPoints,b,AT)
+   ```
+
+   Seen: (to do). wowlua: `fs all Action[SetPoint] failed because[Cannot anchor protected frames to regions]: attempted from: Button:SetAllPoints.`
+5. A texture as the relative, `SetPoint`:
+
+   ```
+   /run local b=CreateFrame("Button",nil,UIParent,"SecureActionButtonTemplate") AP("tex point",b.SetPoint,b,"CENTER",AX)
+   ```
+
+   Seen: (to do). wowlua: `tex point Action[SetPoint] failed because[…]: attempted from: Button:SetPoint.`
+6. A texture as the relative, `SetAllPoints`:
+
+   ```
+   /run local b=CreateFrame("Button",nil,UIParent,"SecureActionButtonTemplate") AP("tex all",b.SetAllPoints,b,AX)
+   ```
+
+   Seen: (to do). wowlua: `tex all Action[SetPoint] failed because[…]: attempted from: Button:SetAllPoints.`
+7. A frame on the font string, `SetPoint`:
+
+   ```
+   /run local b=CreateFrame("Button",nil,UIParent,"SecureActionButtonTemplate") AP("A1 point",b.SetPoint,b,"CENTER",A1)
+   ```
+
+   Seen: (to do). wowlua: `A1 point Action[SetPoint] failed because[…]: attempted from: Button:SetPoint.`
+8. A frame on the font string, `SetAllPoints` (the case seen with SuuUI):
+
+   ```
+   /run local b=CreateFrame("Button",nil,UIParent,"SecureActionButtonTemplate") AP("A1 all",b.SetAllPoints,b,A1)
+   ```
+
+   Seen: (to do). wowlua: `A1 all Action[SetPoint] failed because[…]: attempted from: Button:SetAllPoints.`
+9. A frame two steps away from the font string:
+
+   ```
+   /run local b=CreateFrame("Button",nil,UIParent,"SecureActionButtonTemplate") AP("A2 point",b.SetPoint,b,"CENTER",A2)
+   ```
+
+   Seen: (to do). wowlua: `A2 point Action[SetPoint] failed because[…]: attempted from: Button:SetPoint.`
+10. A frame placed on its parent, which is on the font string:
+
+    ```
+    /run local b=CreateFrame("Button",nil,UIParent,"SecureActionButtonTemplate") AP("A3 point",b.SetPoint,b,"CENTER",A3)
+    ```
+
+    Seen: (to do). wowlua: `A3 point Action[SetPoint] failed because[…]: attempted from: Button:SetPoint.`
+11. A secure child of `A1`, placed without a relative (on its parent),
+    and whether `A1` is now protected:
+
+    ```
+    /run local b=CreateFrame("Button",nil,A1,"SecureActionButtonTemplate") AP("in A1",b.SetPoint,b,"CENTER") print(A1:IsProtected())
+    ```
+
+    Seen: (to do). wowlua: `in A1 Action[SetPoint] failed because[…]: attempted from: Button:SetPoint.`, then `true false`.
+12. `A1`, now protected through its secure child, anchored to the font
+    string again:
+
+    ```
+    /run AP("A1 again",A1.SetPoint,A1,"TOPLEFT",AT,"TOPLEFT")
+    ```
+
+    Seen: (to do). wowlua: `A1 again ok`.
+13. A secure button anchored to a plain frame first, the frame then
+    anchored to the font string, and where the button is:
+
+    ```
+    /run local f=CreateFrame("Frame",nil,AH) f:SetSize(10,10) f:SetPoint("CENTER") local b=CreateFrame("Button",nil,UIParent,"SecureActionButtonTemplate") b:SetSize(10,10) b:SetPoint("CENTER",f) AP("later",f.SetPoint,f,"TOP",AT,"BOTTOM") print(b:GetCenter())
+    ```
+
+    Seen: (to do). wowlua: `later ok`, then the button's center (under
+    the font string).
+14. Hide what the steps made:
+
+    ```
+    /run AH:Hide() print("done")
+    ```
+
 ## Group loot rolls (decision T629, 2026-11-11)
 
 Found with SuuUI's loot roll tray (its draft `loot-roll-tray`): wowlua had

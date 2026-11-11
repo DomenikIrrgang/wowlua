@@ -2787,33 +2787,67 @@ fn set_all_points(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// A protected frame anchored to a region (a texture, a font string) is
-/// refused, out of combat too, with the client's error (found in game,
-/// SuuUI's spellbook: "Action[SetPoint] failed because[Cannot anchor
-/// protected frames to regions]: attempted from: Button:SetPoint.";
-/// decision T252). Unverified: `SetAllPoints`'s wording (taken to be the
-/// same, named after it).
+/// A protected frame anchored to a region (a texture, a font string), or to
+/// a frame whose anchors lead to one, is refused, out of combat too, with
+/// the client's error (found in game: SuuUI's spellbook, "Action[SetPoint]
+/// failed because[Cannot anchor protected frames to regions]: attempted
+/// from: Button:SetPoint.", decision T252; and `secure.overlay` over a
+/// button anchored to a font string, "Action[SetPoint] …: attempted from:
+/// Button:SetAllPoints.", decision T628). The action is `SetPoint` for
+/// `SetAllPoints` too. Unverified: a chain longer than one frame, and a
+/// frame's anchor without a relative (its parent) on the way.
 fn refuse_region_anchor(
     vm: &mut Vm,
     id: WidgetId,
     relative: Option<Value>,
     method: &str,
 ) -> Result<(), LuaError> {
-    let Some(rel) = relative.and_then(|v| widget_of(vm, v)) else {
-        return Ok(());
-    };
-    let e = engine(vm);
-    let region = matches!(
-        e.world.widgets[rel.0].class.as_str(),
-        "Texture" | "FontString" | "Line" | "MaskTexture"
-    );
-    if !e.world.widgets[id.0].protected || !region {
+    if !engine(vm).world.widgets[id.0].protected {
         return Ok(());
     }
-    let class = e.world.widgets[id.0].class.clone();
+    let rel = match relative {
+        Some(v) => widget_of(vm, v),
+        None => engine(vm).world.widgets[id.0].parent,
+    };
+    let Some(rel) = rel else {
+        return Ok(());
+    };
+    if !reaches_region(vm, id, rel) {
+        return Ok(());
+    }
+    let class = engine(vm).world.widgets[id.0].class.clone();
     Err(vm.error(&format!(
-        "Action[{method}] failed because[Cannot anchor protected frames to regions]: attempted from: {class}:{method}."
+        "Action[SetPoint] failed because[Cannot anchor protected frames to regions]: attempted from: {class}:{method}."
     )))
+}
+
+/// Whether `from` is a region or its anchors lead to one, through frames
+/// (an anchor without a relative is to the parent), not through `id`.
+fn reaches_region(vm: &Vm, id: WidgetId, from: WidgetId) -> bool {
+    let e = engine(vm);
+    let mut seen = vec![id];
+    let mut stack = vec![from];
+    while let Some(w) = stack.pop() {
+        if seen.contains(&w) {
+            continue;
+        }
+        seen.push(w);
+        let widget = &e.world.widgets[w.0];
+        if matches!(
+            widget.class.as_str(),
+            "Texture" | "FontString" | "Line" | "MaskTexture"
+        ) {
+            return true;
+        }
+        for p in &widget.points {
+            let next = match p.relative {
+                Some(v) => widget_of(vm, v),
+                None => widget.parent,
+            };
+            stack.extend(next);
+        }
+    }
+    false
 }
 
 /// A line has start and end points, not anchors (`/stdtest engine`).
