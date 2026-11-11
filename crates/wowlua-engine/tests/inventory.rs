@@ -102,8 +102,12 @@ const NEWER_SCALARS: &[(&str, &str)] = &[
 /// What the installed build's UI code no longer defines since the
 /// inventory was taken (Forever 70425), until it is taken again
 /// (tests/ingame/PROBES.md, "The Camelot update"): 70707's smart
-/// navigation dropped a function.
-const NEWER_BUILD: &[&str] = &["SmartNavigation_SetReturnFrameFocusButton"];
+/// navigation dropped a function, 70888's target frame another (its
+/// `TargetFrameMixin:CheckBattlePet` decides without it).
+const NEWER_BUILD: &[&str] = &[
+    "SmartNavigation_SetReturnFrameFocusButton",
+    "ShouldShowBattlePetIcon",
+];
 
 #[test]
 fn every_function_of_the_client_exists_with_its_kind() {

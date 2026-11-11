@@ -230,9 +230,11 @@ check("listed a fourth time, without a description", C_LFGList.HasActiveEntryInf
 at(46.551) updated(100, 82, 92, 93, 101, 106)
 at(52.439) updated(103, 95, 93)
 at(57.726) updated(93, 93, 93)
--- Another player's invitation (the server's), declined.
+-- Another player's invitation (the server's), declined. Since 70888 the
+-- event names whether the inviter is on another shard (`isCrossShard`,
+-- after `isNativeRealm`); the recording (70425) has the payload without it.
 at(58.885)
-e.fireEvent("PARTY_INVITE_REQUEST", "Otherplayer", true, true, true, false, false, "Player-0000-00000000", false)
+e.fireEvent("PARTY_INVITE_REQUEST", "Otherplayer", true, true, true, false, false, false, "Player-0000-00000000", false)
 e.systemMessage("|Hplayer:Otherplayer|h[Otherplayer]|h has invited you to join a group.")
 at(59.438) updated(107, 87)
 at(64.736) press(shown(function(f)

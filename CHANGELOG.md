@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Changed
+
+- WoW Forever 1.60.1.70888: its API and data. `PARTY_INVITE_REQUEST` has a new value, `isCrossShard`, after `isNativeRealm`, so a test that fires the event gives it nine values now: `mock.fireEvent("PARTY_INVITE_REQUEST", name, isTank, isHealer, isDamage, isNativeRealm, isCrossShard, allowMultipleRoles, inviterGUID, questSessionActive)`. With the eight of before, wowlua stops the test with "`allowMultipleRoles` is bool, got string".
+
 ## 0.13.10 (2026-11-11)
 
 ### New
