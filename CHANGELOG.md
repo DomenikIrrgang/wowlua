@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- A secure button (any protected frame) can't be anchored to a frame that is itself anchored to a font string or a texture, as in the game: `SetPoint` and `SetAllPoints` raise the game's "Action[SetPoint] failed because[Cannot anchor protected frames to regions]" error, however many frames lie between. Before, wowlua only refused a font string or texture as the direct anchor, so such code passed its tests and failed in game. `secure.overlay`'s `show()` now works over such a target: it places the secure button at the target's place on screen instead of anchoring it.
+
 ## 0.13.10 (2026-11-11)
 
 ### New

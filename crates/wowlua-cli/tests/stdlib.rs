@@ -6898,6 +6898,52 @@ print(o.hide(), o.button:IsShown(), o.button:GetNumPoints())
     );
 }
 
+/// `secure.overlay` over a target the game won't anchor a protected frame
+/// to (a button anchored to a font string): placed at the target's
+/// rectangle on screen instead, scaled, no error; let go when hidden
+/// (decision T628).
+#[test]
+fn secure_overlays_over_a_target_on_a_region() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as secure from \"wowlua:secure\"\n_G.StdSecure = secure\n",
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local holder = CreateFrame("Frame", nil, UIParent)
+holder:SetSize(200, 100)
+holder:SetPoint("BOTTOMLEFT", 100, 50)
+holder:SetScale(2)
+local title = holder:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+title:SetSize(80, 10)
+title:SetPoint("TOPLEFT", 10, -5)
+local up = CreateFrame("Button", nil, holder)
+up:SetPoint("TOPLEFT", title, "TOPLEFT")
+up:SetPoint("BOTTOMRIGHT", title, "BOTTOMRIGHT")
+local hovered = 0
+up:SetScript("OnEnter", function() hovered = hovered + 1 end)
+local o = StdSecure.overlay(up)
+local ok, shown = pcall(o.show)
+local point, rel, relPoint = o.button:GetPoint(1)
+print(ok, shown, o.button:IsShown(), o.button:GetNumPoints(), point, rel == UIParent, relPoint)
+print(o.button:GetLeft(), o.button:GetBottom(), o.button:GetWidth(), o.button:GetHeight())
+o.button:GetScript("OnEnter")(o.button, true)
+print(hovered, holder:IsProtected())
+print(o.hide(), o.button:IsShown(), o.button:GetNumPoints())
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "true true true 1 BOTTOMLEFT true BOTTOMLEFT",
+            "220 270 160 20",
+            "1 false false",
+            "true false 0",
+        ]
+    );
+}
+
 /// Walking the game's frames (`frames.textures`, `fontStrings`, `children`,
 /// `stateTextures`, `rows`, `keyed`) and `events.onRegistry` (decisions
 /// S45, S49).

@@ -303,6 +303,13 @@ A protected frame anchored to a region (a texture, a font string, a line,
 a mask texture) is refused with the client's error, out of combat too:
 "Action[SetPoint] failed because[Cannot anchor protected frames to
 regions]: attempted from: Button:SetPoint." (decision T252; found in game).
+So is one anchored to a frame whose anchors lead to a region, through any
+number of frames (an anchor without a relative is to the frame's parent):
+"Action[SetPoint] … attempted from: Button:SetAllPoints.", the action
+named `SetPoint` for `SetAllPoints` too (decision T628; found in game one
+frame deep). The check is made when the frame anchors, for its own
+protection (a secure template), not a secure child's; unverified: deeper
+chains, the parent's place, a frame protected through its children.
 
 Some global functions are blocked for tainted code in combat lockdown
 only, with `ADDON_ACTION_BLOCKED`: `C_SpellBook.PickupSpellBookItem`

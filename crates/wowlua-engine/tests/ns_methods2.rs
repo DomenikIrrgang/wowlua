@@ -233,9 +233,56 @@ return tostring(ok1), tostring(err1):match('Action.*'), tostring(ok2), tostring(
             "false",
             "Action[SetPoint] failed because[Cannot anchor protected frames to regions]: attempted from: Button:SetPoint.",
             "false",
-            "Action[SetAllPoints] failed because[Cannot anchor protected frames to regions]: attempted from: Button:SetAllPoints.",
+            "Action[SetPoint] failed because[Cannot anchor protected frames to regions]: attempted from: Button:SetAllPoints.",
             "true",
             "true"
+        ]
+    );
+}
+
+/// A protected frame anchored to a frame whose anchors lead to a region
+/// is refused as well, through any number of frames and a parent's place
+/// (an anchor without a relative); a frame anchored to a region before it
+/// turns protected keeps its anchor (T628).
+#[test]
+fn a_protected_frame_cannot_anchor_to_a_frame_on_a_region() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local holder = CreateFrame('Frame', nil, UIParent)
+holder:SetSize(100, 100)
+holder:SetPoint('CENTER')
+local title = holder:CreateFontString(nil, 'ARTWORK', 'GameFontNormal')
+title:SetPoint('TOP')
+local up = CreateFrame('Button', nil, holder)
+up:SetPoint('TOPLEFT', title, 'TOPLEFT')
+up:SetPoint('BOTTOMRIGHT', title, 'BOTTOMRIGHT')
+local far = CreateFrame('Frame', nil, holder)
+far:SetAllPoints(up)
+local child = CreateFrame('Frame', nil, up)
+child:SetPoint('CENTER')
+local secure = CreateFrame('Button', nil, UIParent, 'SecureActionButtonTemplate')
+local function try(...)
+  local ok, err = pcall(...)
+  return ok and 'ok' or tostring(err):match('Action.*')
+end
+local inner = CreateFrame('Button', nil, up, 'SecureActionButtonTemplate')
+return try(secure.SetAllPoints, secure, up), try(secure.SetPoint, secure, 'TOP', up, 'BOTTOM'),
+  try(secure.SetPoint, secure, 'TOP', far), try(secure.SetPoint, secure, 'TOP', child),
+  try(inner.SetPoint, inner, 'CENTER'), try(secure.SetAllPoints, secure, holder),
+  try(up.SetPoint, up, 'TOPLEFT', title, 'TOPLEFT', 1, 0)",
+    );
+    let refused = "Action[SetPoint] failed because[Cannot anchor protected frames to regions]: attempted from: Button:";
+    assert_eq!(
+        r,
+        [
+            format!("{refused}SetAllPoints."),
+            format!("{refused}SetPoint."),
+            format!("{refused}SetPoint."),
+            format!("{refused}SetPoint."),
+            format!("{refused}SetPoint."),
+            "ok".to_string(),
+            "ok".to_string(),
         ]
     );
 }

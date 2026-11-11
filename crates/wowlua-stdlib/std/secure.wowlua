@@ -7,6 +7,7 @@
 import * as combat from "wowlua:combat"
 import type Subscription from "wowlua:events"
 import callIn from "wowlua:errors"
+import * as secret from "wowlua:secret"
 
 --- Shows and hides `frame` by a macro conditional whose values are `show`
 --- and `hide`; nil removes the driver (the frame stays as it is).
@@ -83,19 +84,51 @@ export type Overlay = {
     --- Sets an attribute (`type1`, `macrotext1`, `clickbutton1`, …); false
     --- in combat, where it can't.
     set: (name: string, value: string | Frame | nil) -> boolean,
-    --- Anchors it over the target, or over `other` (a row it moves between),
-    --- and shows it; false in combat. Hovering it is hovering what it is over.
+    --- Lays it over the target, or over `other` (a row it moves between),
+    --- and shows it; false in combat, or when what it goes over has no
+    --- place on screen. Hovering it is hovering what it is over.
     show: (other: Frame?) -> boolean,
     --- Hides it and lets go of the target; false in combat.
     hide: () -> boolean,
 }
+
+-- `v` when it is a number that can be read.
+local function number(v: unknown): number?
+    if secret.isSecret(v) or type(v) ~= "number" then
+        return nil
+    end
+    return v :: number
+end
+
+-- Places `button` (on UIParent) at `target`'s rectangle on screen; false
+-- when it has none, or it reads as secret.
+local function place(button: Button, target: Frame): boolean
+    button:ClearAllPoints()
+    const left = number(target:GetLeft())
+    const bottom = number(target:GetBottom())
+    const width = number(target:GetWidth())
+    const height = number(target:GetHeight())
+    const scale = number(target:GetEffectiveScale())
+    const uiScale = number(UIParent:GetEffectiveScale())
+    if left == nil or bottom == nil or width == nil or height == nil or scale == nil or uiScale == nil then
+        return false
+    end
+    const s = scale / uiScale
+    button:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * s, bottom * s)
+    button:SetSize(width * s, height * s)
+    return true
+end
 
 --- A secure action button over `target`, a button of the addon's own that
 --- looks the part, for what only a click on a secure button may do (a
 --- slash command through `macro`, a click on one of the game's protected
 --- buttons through `click`). It hangs off `UIParent` and is anchored to the
 --- target only while shown, so the target's window never turns protected
---- (it would no longer open or close in combat). A press and a release both
+--- (it would no longer open or close in combat). Where the game refuses
+--- the anchor (a target anchored, through frames, to a font string or a
+--- texture: a protected frame can't hang off a region), it is placed at
+--- the target's rectangle on screen when shown instead, and doesn't follow
+--- the target if that moves while shown. A press and a release both
 --- reach it (`LeftButtonDown`, `LeftButtonUp`: the action runs on the one
 --- the client's ActionButtonUseKeyDown picks); hovering it is hovering the
 --- target. Made out of combat.
@@ -133,7 +166,10 @@ export function overlay(target: Frame, opts: OverlayOptions?): Overlay
             over = other ?? target
             button:SetFrameStrata(strata)
             button:ClearAllPoints()
-            button:SetAllPoints(over)
+            if not pcall(button.SetAllPoints, button, over) and not place(button, over) then
+                button:Hide()
+                return false
+            end
             button:Show()
             return true
         end,
