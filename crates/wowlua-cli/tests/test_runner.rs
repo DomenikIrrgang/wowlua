@@ -6284,6 +6284,92 @@ end
     );
 }
 
+/// A profile names each method of a class at its own `function` line, with
+/// fields and comments between the methods and a field declared below them
+/// (decision T630).
+#[test]
+fn profile_out_names_each_method_at_its_line() {
+    let book = r#"export class Book
+    pages: number = 1
+
+    constructor()
+        self.pages = self.pages + 1
+    end
+
+    -- The first method.
+    function Render(): number
+        local t = { 3, 1, 2 }
+        table.sort(t, function(a, b) return a < b end)
+        return t[1]
+    end
+
+    -- A field between the methods.
+    stale: boolean = false
+
+    function Unlearned(): number
+        return self.pages
+    end
+
+    -- A field past every method above.
+    clickHooked: boolean = false
+
+    function CountToTrain(): number
+        return 2
+    end
+end
+"#;
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            ("src/book.wowlua", book),
+            (
+                "tests/book.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import Book from "/book"
+
+@test("reads the book")
+local function reads()
+    local b = Book.new()
+    expect(b:Render() + b:Unlearned() + b:CountToTrain()).toBe(5)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &["--profile-out", "prof"]);
+    assert!(ok, "{out}");
+    let profile: serde_json::Value = serde_json::from_slice(
+        &fs::read(
+            dir.path()
+                .join("prof/tests_book.test.wowlua.standard.speedscope.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let lines: Vec<u64> = profile["shared"]["frames"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["file"] == "src/book.wowlua")
+        .map(|f| f["line"].as_u64().unwrap())
+        .collect();
+    let line_of = |needle: &str| book.lines().position(|l| l.contains(needle)).unwrap() as u64 + 1;
+    for needle in [
+        "constructor()",
+        "function Render",
+        "table.sort",
+        "function Unlearned",
+        "function CountToTrain",
+    ] {
+        assert!(
+            lines.contains(&line_of(needle)),
+            "{needle} at line {}: {lines:?}",
+            line_of(needle)
+        );
+    }
+    assert!(!lines.contains(&line_of("clickHooked")), "{lines:?}");
+}
+
 /// Runs `wowlua perf <args>`: success and stdout + stderr.
 fn perf(dir: &Path, args: &[&str]) -> (bool, String) {
     let out = wowlua(dir).arg("perf").args(args).output().unwrap();

@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- Profiles (`wowlua test --profile-out`), dev builds' error messages and the debugger name each class method at its own line. In a class whose constructor came before fields with a default value further down (`clickHooked: boolean = false` among the methods), every method above that field was reported at the field's line.
+
 ## 0.13.11 (2026-11-11)
 
 ### New

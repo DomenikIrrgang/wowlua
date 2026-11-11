@@ -785,6 +785,12 @@ impl<'a> Lowerer<'a> {
 
     /// `self.x = <initializer>` for instance fields, in the current scope
     /// (where `self` is bound).
+    ///
+    /// They are emitted at `pos` (the constructor's line, its `super(…)`
+    /// call's, or the class's `end`): an initializer declared further down
+    /// keeps no line of its own there, or the output would jump ahead to it
+    /// and every method in between would follow on that line (codegen
+    /// §14.5, decision T630).
     fn field_init_stmts(&mut self, inits: &[ClassMember<'a>], pos: Pos) -> Vec<ir::Stmt> {
         let mut out = Vec::new();
         for m in inits {
@@ -801,7 +807,14 @@ impl<'a> Lowerer<'a> {
                 }));
             }
         }
-        out
+        let mut block = ir::Block {
+            stmts: out,
+            end: Pos::NONE,
+        };
+        wowlua_luair::optimize::map_block_positions(&mut block, |p| {
+            if p.line > pos.line { pos } else { p }
+        });
+        block.stmts
     }
 
     /// A constructor's parameter properties (`private sink: Sink`): each set

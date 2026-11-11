@@ -82,14 +82,19 @@ pub fn shape(chunk: &mut Chunk, opts: &Shaping, preserve: bool) {
 /// The positions of the names that are not variables: fields, methods and
 /// table keys.
 fn clear_names(e: &mut Expr) {
+    map_names(e, &mut |_| Pos::NONE);
+}
+
+/// The positions of the names that are not variables, passed through `f`.
+fn map_names(e: &mut Expr, f: &mut impl FnMut(Pos) -> Pos) {
     match &mut e.kind {
-        ExprKind::Field { name, .. } => name.pos = Pos::NONE,
-        ExprKind::Method { name, .. } => name.pos = Pos::NONE,
+        ExprKind::Field { name, .. } => name.pos = f(name.pos),
+        ExprKind::Method { name, .. } => name.pos = f(name.pos),
         ExprKind::Table { fields, .. } => {
-            for f in fields {
-                match f {
-                    Field::Named { name, .. } => name.pos = Pos::NONE,
-                    Field::Keyed { open, .. } => *open = Pos::NONE,
+            for field in fields {
+                match field {
+                    Field::Named { name, .. } => name.pos = f(name.pos),
+                    Field::Keyed { open, .. } => *open = f(*open),
                     Field::Positional(_) => {}
                 }
             }
@@ -127,45 +132,53 @@ fn fill_inlined(b: &mut Block, stmts: &mut [Option<Stmt>]) {
 
 /// A block without positions (inlined statements, generated helpers).
 pub fn clear_block_positions(b: &mut Block) {
-    struct Clear;
-    impl Visitor for Clear {
+    map_block_positions(b, |_| Pos::NONE);
+}
+
+/// Every position in `b` (its statements, expressions, names and block
+/// ends) passed through `f`.
+pub fn map_block_positions(b: &mut Block, f: impl FnMut(Pos) -> Pos) {
+    struct Map<F>(F);
+    impl<F: FnMut(Pos) -> Pos> Visitor for Map<F> {
         fn stmt(&mut self, s: &mut Stmt) {
-            s.pos = Pos::NONE;
+            let f = &mut self.0;
+            s.pos = f(s.pos);
             match &mut s.kind {
                 StmtKind::While { do_pos, .. }
                 | StmtKind::NumericFor { do_pos, .. }
-                | StmtKind::GenericFor { do_pos, .. } => *do_pos = Pos::NONE,
+                | StmtKind::GenericFor { do_pos, .. } => *do_pos = f(*do_pos),
                 StmtKind::If { clauses, .. } => {
                     for c in clauses {
-                        c.then_pos = Pos::NONE;
+                        c.then_pos = f(c.then_pos);
                     }
                 }
                 StmtKind::Function { path, method, func } => {
                     for p in path {
-                        p.pos = Pos::NONE;
+                        p.pos = f(p.pos);
                     }
                     if let Some(m) = method {
-                        m.pos = Pos::NONE;
+                        m.pos = f(m.pos);
                     }
-                    func.pos = Pos::NONE;
+                    func.pos = f(func.pos);
                 }
-                StmtKind::LocalFunction { func, .. } => func.pos = Pos::NONE,
+                StmtKind::LocalFunction { func, .. } => func.pos = f(func.pos),
                 _ => {}
             }
             for inner in optimize_walk::inner_blocks(s) {
-                inner.end = Pos::NONE;
+                inner.end = f(inner.end);
             }
-            if let Some(f) = optimize_walk::declared_function(s) {
-                f.body.end = Pos::NONE;
+            if let Some(func) = optimize_walk::declared_function(s) {
+                func.body.end = f(func.body.end);
             }
         }
         fn expr(&mut self, e: &mut Expr) {
-            e.pos = Pos::NONE;
-            e.sep = Pos::NONE;
-            clear_names(e);
+            let f = &mut self.0;
+            e.pos = f(e.pos);
+            e.sep = f(e.sep);
+            map_names(e, f);
             match &mut e.kind {
-                ExprKind::Binary { op_pos, .. } => *op_pos = Pos::NONE,
-                ExprKind::Paren { close, .. } | ExprKind::Table { close, .. } => *close = Pos::NONE,
+                ExprKind::Binary { op_pos, .. } => *op_pos = f(*op_pos),
+                ExprKind::Paren { close, .. } | ExprKind::Table { close, .. } => *close = f(*close),
                 ExprKind::Call {
                     args: Args::Parens { close, .. },
                     ..
@@ -173,24 +186,25 @@ pub fn clear_block_positions(b: &mut Block) {
                 | ExprKind::Method {
                     args: Args::Parens { close, .. },
                     ..
-                } => *close = Pos::NONE,
-                ExprKind::Function(f) => {
-                    f.pos = Pos::NONE;
-                    f.body.end = Pos::NONE;
+                } => *close = f(*close),
+                ExprKind::Function(func) => {
+                    func.pos = f(func.pos);
+                    func.body.end = f(func.body.end);
                 }
                 _ => {}
             }
         }
         fn ident(&mut self, id: &mut Ident, _use: Use) {
-            id.pos = Pos::NONE;
+            id.pos = (self.0)(id.pos);
         }
     }
-    b.end = Pos::NONE;
+    let mut map = Map(f);
+    b.end = (map.0)(b.end);
     let mut c = Chunk {
         block: std::mem::take(b),
         comments: Vec::new(),
     };
-    walk(&mut c, &mut Clear);
+    walk(&mut c, &mut map);
     *b = c.block;
 }
 
