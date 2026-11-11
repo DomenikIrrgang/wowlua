@@ -178,6 +178,19 @@ pub fn refuses_in_combat(vm: &mut Vm) -> bool {
     true
 }
 
+/// Refuses a function forbidden to tainted code in combat lockdown only
+/// (`ADDON_ACTION_FORBIDDEN`); true if refused. Found in game: a secure
+/// CVar set from `/run` in combat (`SoftTargetEnemy`), and camelot's
+/// `SetRaidTarget` from the unit menu tainted by an addon (decision T631).
+pub fn forbids_in_combat(vm: &mut Vm) -> bool {
+    if !(engine(vm).units.lockdown && tainted(vm)) {
+        return false;
+    }
+    let action = action_name(vm);
+    refuse(vm, "ADDON_ACTION_FORBIDDEN", action);
+    true
+}
+
 /// A [`HARDWARE`] function the documentation lacks: refused without the
 /// user's action; otherwise its behaviour.
 pub fn hardware_global(vm: &mut Vm, c: NativeCall) -> Ret {

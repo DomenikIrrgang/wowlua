@@ -5636,6 +5636,90 @@ end
     assert!(text.contains("3 passed, 0 failed"), "{text}");
 }
 
+/// In-game regression (decision T631): the target frame's unit menu puts a
+/// raid target marker on the target in combat, as Blizzard's untainted
+/// code; tainted by an addon (SuuUI restyled it), its `SetRaidTarget` is
+/// forbidden in combat (`ADDON_ACTION_FORBIDDEN`, "SetRaidTarget()",
+/// through `SetRaidTargetIcon` in TargetFrame.lua) and nothing is marked.
+#[test]
+fn raid_target_from_the_unit_menu_in_combat() {
+    let Some((ok, text)) = blizzard_ui_files(&[(
+        "tests/marks.test.wowlua",
+        r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+const G = _G :: any
+
+local function rowWithText(text: string): any
+    for _, f in ipairs(mock.frames()) do
+        local fr: any = f
+        if not fr:IsForbidden() and fr:IsVisible() then
+            for _, r in ipairs({ fr:GetRegions() }) do
+                local reg: any = r
+                if reg:GetObjectType() == "FontString" and reg:GetText() == text then return fr end
+            end
+        end
+    end
+    return nil
+end
+
+--- Picks the skull from the target frame's menu (Raid Target Icon).
+local function markFromMenu()
+    mock.click(G.TargetFrame, "RightButton")
+    mock.nextFrame(2)
+    const sub = rowWithText(G.RAID_TARGET_ICON)
+    expect(sub ~= nil).toBe(true)
+    mock.hover(sub)
+    mock.advanceFrames(30)
+    const skull = rowWithText(G.RAID_TARGET_8)
+    expect(skull ~= nil).toBe(true)
+    mock.click(skull)
+    mock.advanceTime(1)
+    mock.nextFrame(2)
+end
+
+local function icon(): any
+    return G.TargetFrame.TargetFrameContent.TargetFrameContentContextual.RaidTargetIcon
+end
+
+@test("the unit menu marks the target in combat")
+local function untainted()
+    mock.nextFrame(60)
+    mock.player:target(mock.spawnUnit({ name = "Mob" }))
+    mock.nextFrame(2)
+    mock.player:enterCombat()
+    markFromMenu()
+    -- Secret on camelot (the documentation's `SecretReturns`).
+    expect((GetRaidTargetIndex("target") :: any) ~= nil).toBe(true)
+    expect(icon():IsShown()).toBe(true)
+    expect(#mock.refusals()).toBe(0)
+end
+
+@test("the unit menu tainted by an addon is forbidden to mark in combat")
+local function tainted()
+    mock.nextFrame(60)
+    mock.player:target(mock.spawnUnit({ name = "Mob" }))
+    mock.nextFrame(2)
+    -- The addon writes the global the menu's click reads.
+    G.SetRaidTargetIcon = G.SetRaidTargetIcon
+    mock.player:enterCombat()
+    markFromMenu()
+    expect(GetRaidTargetIndex("target")).toBe(nil)
+    expect(icon():IsShown()).toBe(false)
+    const refused = mock.refusals()
+    expect(#refused).toBe(1)
+    expect(refused[1].event).toBe("ADDON_ACTION_FORBIDDEN")
+    expect(refused[1].action).toBe("SetRaidTarget()")
+end
+"#,
+    )]) else {
+        return;
+    };
+    assert!(ok, "{text}");
+    assert!(text.contains("2 passed, 0 failed"), "{text}");
+    assert!(!text.contains("warning"), "{text}");
+}
+
 /// A world profile's collections (decision T235): the mount journal, the
 /// toy box and the wardrobe answer from its `mounts`, `toys` and
 /// `appearances`, typed for strict tests, and stay drivable.

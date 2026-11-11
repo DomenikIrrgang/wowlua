@@ -318,6 +318,29 @@ Blizzard's deprecated guild script also names `GetGuildRosterMOTD`
 (decision T265; found in game). Blizzard's own code, the secure drag
 handlers among it, may call them.
 
+Others are forbidden to tainted code in combat lockdown only, with
+`ADDON_ACTION_FORBIDDEN` and nothing done: `SetCVar` of a secure CVar
+(recorded for `SoftTargetEnemy` from `/run`), and on camelot
+`SetRaidTarget` (decision T631; found in game: the unit menu's raid
+target icons, tainted by an addon's restyle, were refused in combat with
+"SetRaidTarget()" through Blizzard's `SetRaidTargetIcon`; untainted they
+marked in combat). Out of combat an addon may call them, and so may
+Blizzard's untainted code in combat. On the other flavors `SetRaidTarget`
+is not restricted (every flavor's documentation marks it
+`HasRestrictions` without saying what; unverified).
+
+Raid target markers are kept (decision T631): `SetRaidTarget(unit,
+index)` puts marker 1 to 8 on a unit that exists, taking it off the unit
+that had it and the unit's old marker off, and 0 takes the unit's marker
+off; the server's answer comes a round trip later, when the marker
+changes and `RAID_TARGET_UPDATE` fires (no payload; none for no change).
+`GetRaidTargetIndex(unit)` answers the unit's marker, else nil (secret on
+camelot, by the documentation's `SecretReturns`), so Blizzard's target
+frame, nameplates and unit menu show it. Unverified: the round trip (the
+client may set a solo player's marker at once), whether the index is
+secret out of combat, a group's rules for who may mark, and a dead unit
+keeping its marker.
+
 The encounter timeline keeps addons' timers (`C_EncounterTimeline.
 AddScriptEvent`, decision T255; found in game though the timeline is off
 on Forever): listed, read, paused, resumed, finished, cancelled and ended

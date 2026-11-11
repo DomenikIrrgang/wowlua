@@ -294,7 +294,7 @@ const BLANKS: &[(&str, &str)] = &[
     ("C_DeathRecap.GetRecapEvents", "0: "),
     // Every client has these (Ketho's client dumps): no bonus, override or
     // vehicle bar, pet battle, soft target, minion, widgets-only nameplate,
-    // tapped unit, raid target (`SetRaidTarget` sets none), arena
+    // tapped unit, raid target (none placed: `raidtargets.rs`), arena
     // opponent or ready check; text to speech at its defaults. Recorded on
     // camelot, Retail 12.1.5, Mists 5.5.4, TBC 2.5.6 and Classic Era 1.15.9
     // (alone, no target, out of combat).

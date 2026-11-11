@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,110 of the 5,115 documented camelot functions have
-  behaviour (99.9%): 1,076 modelled, 351 answered from recordings, 3,683 by a
+  behaviour (99.9%): 1,078 modelled, 350 answered from recordings, 3,682 by a
   documentation-based fill-in. Of all 7,180 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
@@ -32,7 +32,7 @@ their clients answer differently is unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| camelot | 5,115 | 5,110 (99.9%) | 351 | 1,477 | 1,477 (100.0%) | all |
+| camelot | 5,115 | 5,110 (99.9%) | 350 | 1,477 | 1,477 (100.0%) | all |
 | standard | 4,871 | 4,524 (92.9%) | 0 | 1,438 | 1,431 (99.5%) | none |
 | vanilla | 3,221 | 2,909 (90.3%) | 0 | 1,360 | 1,349 (99.2%) | none |
 | tbc | 3,221 | 2,909 (90.3%) | 0 | 1,360 | 1,349 (99.2%) | none |
@@ -60,7 +60,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 780 | 97 | 1,225 | 0 |
+| `(globals)` | 2,102 | 782 | 96 | 1,224 | 0 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -346,13 +346,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,180 | 1,699 | 432 | 5,044 | 5 |
+| **All** | 7,180 | 1,701 | 431 | 5,043 | 5 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,115 | 1,076 | 351 | 3,683 | 5 |
+| Blizzard's API documentation | 5,115 | 1,078 | 350 | 3,682 | 5 |
 | the client's other C functions (`/stdtest inventory`) | 2,065 | 623 | 81 | 1,361 | 0 |
 | the engine's own, in neither list | 16 | 15 | 0 | 1 | 0 |
 
@@ -381,8 +381,8 @@ The modules that answer, by how many functions and methods:
 | `collections` | fill-in | 374 |
 | `social` | fill-in | 373 |
 | `questinfo` | fill-in | 316 |
-| `recorded` | recorded | 316 |
-| `systeminfo` | fill-in | 308 |
+| `recorded` | recorded | 315 |
+| `systeminfo` | fill-in | 307 |
 | `iteminfo` | fill-in | 228 |
 | `methods3` | fill-in | 214 |
 | `vm` | model | 198 |
@@ -463,6 +463,7 @@ The modules that answer, by how many functions and methods:
 | `conditionals` | model | 3 |
 | `editmode` | model | 3 |
 | `casting` | model | 2 |
+| `raidtargets` | model | 2 |
 | `ui` | model | 2 |
 | `inventory` | model | 1 |
 
@@ -1963,6 +1964,10 @@ page changes only when a rule is added, removed or reworded.
 - [quests.rs](../crates/wowlua-engine/src/quests.rs): `C_QuestLog.CanAbandonQuest(questID)`: a quest's ID yes, in the log or not; 0, a negative or a fraction no (the full...
 - [quests.rs](../crates/wowlua-engine/src/quests.rs): What a quest without them shows (unverified: not recorded): no currencies, no hidden item (`0`), the parchment, not f...
 
+### raidtargets (1)
+
+- [raidtargets.rs](../crates/wowlua-engine/src/raidtargets.rs): Unverified: the round trip (the client may set a solo player's marker at once), the other flavors' combat rule (every...
+
 ### replies (6)
 
 - [replies.rs](../crates/wowlua-engine/src/replies.rs): The server's answers to what the player types (decision T362): a roll, the time played, away and busy, the ignore lis...
@@ -2045,7 +2050,7 @@ page changes only when a rule is added, removed or reworded.
 - [stats.rs](../crates/wowlua-engine/src/stats.rs): `C_SpellBook.IsSpellInSpellBook(spellID [, bank])`: in the player's book, or the pet's (`pets.rs`; unverified: overri...
 - [stats.rs](../crates/wowlua-engine/src/stats.rs): `C_SkillInfo.SetSelectedSkill(index)`: the skill line `GetSelectedSkill` answers from then (Blizzard's skills window...
 
-### systeminfo (66)
+### systeminfo (65)
 
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): Unverified unless a comment says recorded: most answers follow the documentation's shapes and the systems' empty stat...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `Round(value)`: halves away from zero (Blizzard's `MathUtil.lua` in the other flavors; a C function on camelot, unver...
@@ -2111,7 +2116,6 @@ page changes only when a rule is added, removed or reworded.
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `Logout()` (Blizzard's `/camp`; protected): the client starts camping, `PLAYER_CAMPING` told in the same second (SuuU...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): How long the account server takes to answer a request for the preferred play settings (unverified: SuuUI probe lfg ha...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `C_AccountServices.RequestPreferredPlaySettings()`: started (SuuUI probe lfg: `true`), the settings arrive as `PREFER...
-- [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): Raid marks (unverified: no mark kept).
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): Headers: the engine's list is the recorded one, flat (unverified: collapsing hides the children).
 
 ### targeting (1)
@@ -2545,6 +2549,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
   2026-11-11)
 - Group loot rolls (decision T629, 2026-11-11)
 - A second click on the same item link (2026-11-11)
+- SetRaidTarget in combat (decision T631, 2026-11-11)
 
 ## In-game regressions
 
