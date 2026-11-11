@@ -2544,6 +2544,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Protected frames anchored through frames to regions (decision T628,
   2026-11-11)
 - Group loot rolls (decision T629, 2026-11-11)
+- A second click on the same item link (2026-11-11)
 
 ## In-game regressions
 
