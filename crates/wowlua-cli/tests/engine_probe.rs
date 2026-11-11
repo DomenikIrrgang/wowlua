@@ -910,6 +910,17 @@ fn session_start(recording: &str) -> Option<f64> {
         .or_else(applied)
 }
 
+/// The server's events whose payload the build changed since the
+/// recordings (1.60.1.70425), each recorded start as the newer client gets
+/// it: 70888's `PARTY_INVITE_REQUEST` names whether the inviter is on
+/// another shard (`isCrossShard`) after `isNativeRealm` (until the
+/// scenarios are recorded again: tests/ingame/PROBES.md, "The Camelot
+/// update").
+const NEWER_PAYLOADS: &[(&str, &str)] = &[(
+    "PARTY_INVITE_REQUEST(string Otherplayer; boolean true; boolean true; boolean true; boolean false; ",
+    "PARTY_INVITE_REQUEST(string Otherplayer; boolean true; boolean true; boolean true; boolean false; boolean false; ",
+)];
+
 /// A scenario (`/stdtest engine scenario <name>`) played in the engine:
 /// Blizzard's UI loaded, the character's world as the recording began, the
 /// scenario's play script (`tests/scenarios/<name>.lua`) run with the
@@ -1014,7 +1025,15 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
         .map(|i| text(&vm, vm.heap.table(t).get(Value::Num(i as f64))))
         .collect();
     let src = fs::read(fixtures.join(format!("{name}.lua"))).expect("the recording");
-    let theirs = wowlua_test::scenario::recording(&src).expect("the recording");
+    let theirs: Vec<String> = wowlua_test::scenario::recording(&src)
+        .expect("the recording")
+        .into_iter()
+        .map(|line| {
+            NEWER_PAYLOADS
+                .iter()
+                .fold(line, |line, (old, new)| line.replacen(old, new, 1))
+        })
+        .collect();
     let mut errors: Vec<String> =
         wowlua_engine::engine(&vm).world.ui.errors[errors_before..].to_vec();
     // The stacks of errors from tainted code (`WOWLUA_SCENARIO_TAINT`;

@@ -4,6 +4,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### Changed
+
+- WoW Forever 1.60.1.70888: its API and data. `PARTY_INVITE_REQUEST` has a new value, `isCrossShard`, after `isNativeRealm`, so a test that fires the event gives it nine values now: `mock.fireEvent("PARTY_INVITE_REQUEST", name, isTank, isHealer, isDamage, isNativeRealm, isCrossShard, allowMultipleRoles, inviterGUID, questSessionActive)`. With the eight of before, wowlua stops the test with "`allowMultipleRoles` is bool, got string".
+
 ### Fixed
 
 - A secure button (any protected frame) can't be anchored to a frame that is itself anchored to a font string or a texture, as in the game: `SetPoint` and `SetAllPoints` raise the game's "Action[SetPoint] failed because[Cannot anchor protected frames to regions]" error, however many frames lie between. Before, wowlua only refused a font string or texture as the direct anchor, so such code passed its tests and failed in game. `secure.overlay`'s `show()` now works over such a target: it places the secure button at the target's place on screen instead of anchoring it.
