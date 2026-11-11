@@ -1,4 +1,4 @@
-# Global strings of the installed camelot client (1.60.1.70862, its
+# Global strings of the installed camelot client (1.60.1.70888, its
 # GlobalStrings.lua) that Ketho's BlizzardInterfaceResources dump the
 # declarations name lacks (decision T590): set after that dump, where the
 # global is still nil. Delete a line once the dump has it.
