@@ -3070,7 +3070,6 @@ const NOTHING: &[&str] = &[
     "C_TooltipInfo.GetLFGDungeonReward",
     "C_TooltipInfo.GetLFGDungeonShortageReward",
     "C_TooltipInfo.GetLootCurrency",
-    "C_TooltipInfo.GetLootRollItem",
     "C_TooltipInfo.GetMerchantCostItem",
     "C_TooltipInfo.GetMinimapMouseover",
     "C_TooltipInfo.GetOutfit",

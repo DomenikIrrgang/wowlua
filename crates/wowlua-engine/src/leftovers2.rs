@@ -151,11 +151,9 @@ fn player_level(vm: &mut Vm) -> f64 {
 /// answers by kind: `f` false, `t` true, `0` zero, `{` an empty table, `n`
 /// nil, empty nothing (unverified: named as their kind).
 const UNDOCUMENTED: &[(&str, &str)] = &[
-    // A shared quest's acceptance, a loot roll's confirmation (a bind on
-    // pickup's popup; `RollOnLoot` does nothing either), a tabard's
-    // window, the help frame's web ticket, a GM survey.
+    // A shared quest's acceptance, a tabard's window, the help frame's
+    // web ticket, a GM survey.
     ("ConfirmAcceptQuest", ""),
-    ("ConfirmLootRoll", ""),
     ("CloseTabardCreation", ""),
     ("GetTabardInfo", ""),
     ("GetWebTicket", ""),

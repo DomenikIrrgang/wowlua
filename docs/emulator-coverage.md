@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,110 of the 5,115 documented camelot functions have
-  behaviour (99.9%): 1,069 modelled, 351 answered from recordings, 3,690 by a
+  behaviour (99.9%): 1,076 modelled, 351 answered from recordings, 3,683 by a
   documentation-based fill-in. Of all 7,180 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,211 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,213 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -60,7 +60,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 775 | 97 | 1,230 | 0 |
+| `(globals)` | 2,102 | 780 | 97 | 1,225 | 0 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -209,9 +209,9 @@ ones together):
 | `C_LiveEvent` | 2 | 0 | 0 | 2 | 0 |
 | `C_LobbyMatchmakerInfo` | 8 | 0 | 1 | 7 | 0 |
 | `C_Log` | 4 | 1 | 0 | 3 | 0 |
-| `C_Loot` | 2 | 0 | 0 | 2 | 0 |
+| `C_Loot` | 2 | 1 | 0 | 1 | 0 |
 | `C_LootFrame` | 1 | 0 | 0 | 1 | 0 |
-| `C_LootHistory` | 5 | 0 | 0 | 5 | 0 |
+| `C_LootHistory` | 5 | 5 | 0 | 0 | 0 |
 | `C_LootJournal` | 2 | 0 | 0 | 2 | 0 |
 | `C_LoreText` | 1 | 0 | 0 | 1 | 0 |
 | `C_LossOfControl` | 5 | 0 | 1 | 4 | 0 |
@@ -305,7 +305,7 @@ ones together):
 | `C_Timer` | 4 | 4 | 0 | 0 | 0 |
 | `C_TimerunningUI` | 1 | 0 | 0 | 1 | 0 |
 | `C_TooltipComparison` | 3 | 0 | 0 | 3 | 0 |
-| `C_TooltipInfo` | 82 | 13 | 0 | 69 | 0 |
+| `C_TooltipInfo` | 82 | 14 | 0 | 68 | 0 |
 | `C_ToyBox` | 26 | 15 | 0 | 11 | 0 |
 | `C_ToyBoxInfo` | 6 | 3 | 0 | 3 | 0 |
 | `C_TradeInfo` | 4 | 0 | 0 | 4 | 0 |
@@ -346,14 +346,14 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,180 | 1,687 | 432 | 5,056 | 5 |
+| **All** | 7,180 | 1,699 | 432 | 5,044 | 5 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,115 | 1,069 | 351 | 3,690 | 5 |
-| the client's other C functions (`/stdtest inventory`) | 2,065 | 618 | 81 | 1,366 | 0 |
+| Blizzard's API documentation | 5,115 | 1,076 | 351 | 3,683 | 5 |
+| the client's other C functions (`/stdtest inventory`) | 2,065 | 623 | 81 | 1,361 | 0 |
 | the engine's own, in neither list | 16 | 15 | 0 | 1 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
@@ -373,11 +373,11 @@ The modules that answer, by how many functions and methods:
 
 | Module | Kind | Functions and methods |
 |--------|------|----------------------:|
-| `extras` | fill-in | 1,483 |
+| `extras` | fill-in | 1,482 |
 | `widgets` | model | 638 |
 | `globalsinfo` | fill-in | 523 |
-| `content` | fill-in | 519 |
-| `leftovers2` | fill-in | 387 |
+| `content` | fill-in | 510 |
+| `leftovers2` | fill-in | 386 |
 | `collections` | fill-in | 374 |
 | `social` | fill-in | 373 |
 | `questinfo` | fill-in | 316 |
@@ -388,7 +388,7 @@ The modules that answer, by how many functions and methods:
 | `vm` | model | 198 |
 | `spellinfo` | fill-in | 197 |
 | `unitinfo` | fill-in | 172 |
-| `blanks` | fill-in | 153 |
+| `blanks` | fill-in | 152 |
 | `stats` | model | 136 |
 | `methods2` | fill-in | 131 |
 | `objects2` | model | 111 |
@@ -401,7 +401,7 @@ The modules that answer, by how many functions and methods:
 | `facts` | recorded | 69 |
 | `formatters` | model | 62 |
 | `queries` | model | 62 |
-| `facts` | model | 60 |
+| `facts` | model | 59 |
 | `auction` | model | 52 |
 | `traits` | recorded | 47 |
 | `quests` | model | 41 |
@@ -438,6 +438,7 @@ The modules that answer, by how many functions and methods:
 | `animations` | model | 14 |
 | `bank` | model | 14 |
 | `chatwindows` | model | 13 |
+| `lootroll` | model | 13 |
 | `leftovers3` | model | 12 |
 | `targeting` | model | 12 |
 | `tooltip` | model | 12 |
@@ -850,7 +851,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,211 rules unverified: each rests on Blizzard's
+The engine's code marks 1,213 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1710,9 +1711,14 @@ page changes only when a rule is added, removed or reworded.
 - [login.rs](../crates/wowlua-engine/src/login.rs): The guild's: its bank's withdrawal and its Discord lobby told again, in a guild only (recorded once, `hearth`, the pl...
 - [login.rs](../crates/wowlua-engine/src/login.rs): The auras sent again (recorded once, `hearth`: the player's after its flags with the inventory's reload, 21.750; a pa...
 
-### loot (1)
+### loot (2)
 
 - [loot.rs](../crates/wowlua-engine/src/loot.rs): Unverified: the packets' spacing (recorded: the slots 0.39 to 1.07 s after the window opened, `slotsAfter` replays a...
+- [loot.rs](../crates/wowlua-engine/src/loot.rs): An item won on a group's roll (`lootroll.rs`): into the bags as a looted item that comes late (unverified: the events...
+
+### lootroll (1)
+
+- [lootroll.rs](../crates/wowlua-engine/src/lootroll.rs): Unverified (no recording of a roll yet: `tests/ingame/PROBES.md`, "Group loot rolls"): roll IDs and loot handles (num...
 
 ### macros (4)
 
@@ -2535,6 +2541,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Cmd as a modifier (decision T624, 2026-11-10)
 - Click bindings (decision T625, 2026-11-10)
 - Mounts, pets and toys dragged (decision T626, 2026-11-10)
+- Group loot rolls (decision T629, 2026-11-11)
 
 ## In-game regressions
 

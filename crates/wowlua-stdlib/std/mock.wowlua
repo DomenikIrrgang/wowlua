@@ -812,6 +812,63 @@ export function delistLFG(): boolean
     return engine().delistLFG()
 end
 
+--- A group member on a loot roll: a name (a warrior), a unit
+--- (`mock.spawnUnit`'s, its name and class), or a name and a class file
+--- (`"MAGE"`).
+export type LootRollMember = string | MockUnit | { name: string, class?: string }
+
+--- A group loot roll (`startLootRoll`): the item (`mock.defineItem`'s),
+--- the count, its time in seconds (60 by default), Bind on Pickup (the
+--- item's own bind by default), whether the player may Need or Greed (yes
+--- by default) and why not (`reasonNeed`, `reasonGreed`: the number of
+--- `LOOT_ROLL_INELIGIBLE_REASON1`..7), the others rolling (by default the
+--- player's group), the numbers they roll by name (the player's too;
+--- else the engine's own 1 to 100), the loot it is from (rolls of one
+--- loot share it: `LOOT_ROLLS_COMPLETE` once they all ended; else a loot of
+--- its own) and the loot history's encounter (else the one under way, else
+--- 0).
+export type LootRollData = {
+    item: number,
+    count?: number,
+    rollTime?: number,
+    bop?: boolean,
+    canNeed?: boolean,
+    canGreed?: boolean,
+    reasonNeed?: number,
+    reasonGreed?: number,
+    group?: LootRollMember[],
+    rolls?: { [string]: number },
+    loot?: number,
+    encounterID?: number,
+    encounterName?: string,
+}
+
+--- The group rolls for an item: `START_LOOT_ROLL(rollID, rollTime,
+--- lootHandle)` (the time in milliseconds), and `GetLootRollItemInfo`,
+--- `GetLootRollItemLink`, `GetLootRollTimeLeft` answer for it. The player
+--- chooses with `RollOnLoot` (a Bind on Pickup item asks first:
+--- `CONFIRM_LOOT_ROLL`, then `ConfirmLootRoll`), the others with
+--- `lootRollChoice`; everyone chosen or the time out, the roll ends (the
+--- roll and won lines in chat, the item to the bags if the player won).
+--- Its roll ID.
+export function startLootRoll(roll: LootRollData): number
+    return engine().startLootRoll(roll)
+end
+
+--- A group member's choice on a roll under way (`"need"`, `"greed"` or
+--- `"pass"`), told in chat at once ("Thrall has selected Greed for:
+--- [item]"); `roll`: the number they roll if it comes to that. The last
+--- choice ends the roll.
+export function lootRollChoice(rollID: number, name: string, choice: "need" | "greed" | "pass", roll: number?)
+    engine().lootRollChoice(rollID, name, choice, roll)
+end
+
+--- A roll taken back without a result (`CANCEL_LOOT_ROLL(rollID)`); without
+--- an ID every roll under way (`CANCEL_ALL_LOOT_ROLLS()`).
+export function cancelLootRoll(rollID: number?)
+    engine().cancelLootRoll(rollID)
+end
+
 --- The API calls Blizzard's code made that the engine had no answer for
 --- (they returned empty values), as `name(args)`, sorted: what the engine
 --- does not know of the client yet.

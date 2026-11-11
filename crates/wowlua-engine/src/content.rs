@@ -823,15 +823,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_PartyInfo.IsCrossFactionParty", no),
         ("C_PartyInfo.IsPartyWalkIn", no),
         ("C_PartyInfo.DoCountdown", do_countdown),
-        // Loot: no roll under way (`GetActiveLootRollIDs` none), so a roll
-        // ID names none.
+        // Loot (the group's rolls: `lootroll.rs`).
         ("GetLootThreshold", get_loot_threshold),
         ("SetLootThreshold", set_loot_threshold),
         ("GetLootInfo", get_loot_info),
-        ("GetLootRollItemInfo", nothing),
-        ("GetLootRollItemLink", nil),
-        ("GetLootRollTimeLeft", zero),
-        ("RollOnLoot", nothing),
         ("ConfirmLootSlot", nothing),
         ("GetMasterLootCandidate", nil),
         // The dungeon finder: no queue, proposal, reward or lock.
@@ -1311,7 +1306,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_ChallengeMode.GetGuildLeaders", empty_list),
     ("C_MythicPlus.GetRunHistory", empty_list),
     ("C_Calendar.GetClubCalendarEvents", empty_list),
-    ("C_LootHistory.GetAllEncounterInfos", empty_list),
     ("C_Calendar.EventGetStatusOptions", empty_list),
     ("C_DeathRecap.GetRecapEvents", empty_list),
     ("C_DelvesUI.GetUnseenCuriosBySlotType", empty_list),
@@ -1353,7 +1347,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_DeathRecap.GetRecapMaxHealth", zero),
     ("C_DelvesUI.GetCurrentDelvesSeasonNumber", zero),
     ("C_DelvesUI.GetDelveEntranceBackgroundWidgetSetID", zero),
-    ("C_LootHistory.GetLootHistoryTime", zero),
     ("C_PartyInfo.GetNumInstanceAbandonGroupVoteResponses", zero),
     ("C_PvP.GetActiveMatchWinner", zero),
     ("C_PvP.GetRatedSoloRBGMinItemLevel", zero),
@@ -1385,9 +1378,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_DelvesUI.GetDelvesMinRequiredLevel", nil),
     ("C_EncounterJournal.GetInstanceForGameMap", nil),
     ("C_EncounterJournal.GetSectionIconFlags", nil),
-    ("C_Loot.GetLootRollDuration", nil),
-    ("C_LootHistory.GetSortedDropsForEncounter", nil),
-    ("C_LootHistory.GetSortedInfoForDrop", nil),
     ("C_Calendar.ContextMenuEventGetCalendarType", nil),
     ("C_Calendar.EventGetSelectedInvite", nil),
     ("C_Calendar.GetEventIndexInfo", nil),
@@ -1399,7 +1389,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_DelvesUI.GetTieredEntranceOptionalAffixTraitTreeID", nil),
     // The full probe: nil whatever the companion.
     ("C_DelvesUI.GetFlavorNodeNameForCompanion", nil),
-    ("C_LootHistory.GetInfoForEncounter", nil),
     ("C_MythicPlus.GetCurrentUIDisplaySeason", nil),
     ("C_MythicPlus.GetRewardLevelFromKeystoneLevel", nil),
     ("C_PartyInfo.GetInstanceAbandonVoteResponse", nil),
