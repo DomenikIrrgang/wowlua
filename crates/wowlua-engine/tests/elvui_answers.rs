@@ -137,3 +137,46 @@ return ShopFrame:IsForbidden(), ShopFrame.Inner:IsForbidden(), StoreLikeFrame:Is
     );
     assert_eq!(r, ["false", "false", "true", "true"]);
 }
+
+/// `GetParent` from addon code on its own frame whose parent is forbidden
+/// raises the error the parent's own call gives (decision T632; seen in
+/// game for an aura button's child, taken for a frame made forbidden too).
+#[test]
+fn get_parent_refuses_a_forbidden_parent() {
+    let interface = tree(
+        "forbidden-parent",
+        &[
+            (
+                "AddOns/Blizzard_Shop/Blizzard_Shop.toc",
+                "## UseSecureEnvironment: 1\nShop.xml\n",
+            ),
+            (
+                "AddOns/Blizzard_Shop/Shop.xml",
+                r#"<Ui>
+  <ScopedModifier forbidden="true">
+    <Frame name="StoreLikeFrame"/>
+  </ScopedModifier>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm();
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let r = run(
+        &mut vm,
+        "local kid = CreateFrame('Frame', nil, StoreLikeFrame)
+local plain = CreateFrame('Frame', nil, kid)
+local ok, err = pcall(kid.GetParent, kid)
+return kid:IsForbidden(), ok, err, plain:GetParent() == kid",
+    );
+    assert_eq!(
+        r,
+        [
+            "false",
+            "false",
+            "calling 'GetParent' on bad self (Attempt to access forbidden object from code tainted by an AddOn - Usage: local parent = self:GetParent())",
+            "true",
+        ]
+    );
+}

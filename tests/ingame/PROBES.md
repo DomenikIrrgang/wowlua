@@ -2851,3 +2851,101 @@ SuuUI's menu restyle off for step 7. Each line in the chat, one at a time.
 Open: the other flavors (Retail, Mists, TBC, Classic Era) document
 `SetRaidTarget` as restricted too, and wowlua leaves it unrestricted there;
 steps 1, 5 and 6 on each of those clients would settle it.
+
+## Aura buttons forbidden after their build (decision T632, 2026-11-11)
+
+Found in game: in the open world, with SuuUI loaded, a walk of every frame
+stopped at a frame SuuUI's `initializeFrame` had put on an engine aura
+button: its `IsForbidden()` answered false, but its `GetParent()` raised
+"calling 'GetParent' on bad self (Attempt to access forbidden object from
+code tainted by an AddOn - Usage: local parent = self:GetParent())".
+Blizzard's aura container code restricts each button after the addon's
+`initializeFrame` (`DenyTaintedAccessWhenAurasAreSecret`), and wowlua now
+applies that restriction at all times. These steps check what is still
+guessed:
+
+- what the button answers inside `initializeFrame` and after;
+- whether the restriction lifts out of combat, where
+  `C_Secrets.ShouldAurasBeSecret()` was false;
+- which other calls hand the button out.
+
+Steps 1 to 8 are out of combat; steps 9 and 10 need a hostile creature a
+few levels below you to fight. Each line in the chat, one at a time.
+
+1. Make an aura container of your own:
+
+   ```
+   /run AP={} AC=CreateFrame("AuraContainer",nil,UIParent,"CustomAuraContainerTemplate") AC:SetSize(1,1) AC:SetPoint("CENTER")
+   ```
+
+2. Give it a group of your buffs; its `initializeFrame` keeps the button,
+   its answers there, and a frame put on it (the last of the batch of
+   buttons the container makes at once):
+
+   ```
+   /run AC:AddAuraGroup("b","HELPFUL",{maxFrameCount=1,initializeFrame=function(b) AP.b=b AP.f=b:IsForbidden() AP.k=CreateFrame("Frame",nil,b) AP.p=AP.k:GetParent()==b AP.s=pcall(b.SetSize,b,20,20) end}) AC:SetUnit("player")
+   ```
+
+3. Print what `initializeFrame` saw:
+
+   ```
+   /run print("inside",AP.b~=nil,AP.f,AP.p,AP.s)
+   ```
+
+   Seen: (to do). wowlua: `inside true false true true` (the button not
+   forbidden yet; the frame's parent is the button; `SetSize` works).
+4. Out of combat, ask the button itself:
+
+   ```
+   /run local b=AP.b print("after",InCombatLockdown(),C_Secrets.ShouldAurasBeSecret(),pcall(b.IsForbidden,b)) print(pcall(b.GetWidth,b))
+   ```
+
+   Seen: (to do). wowlua: `after false false true true`, then `false
+   calling 'GetWidth' on bad self (Attempt to access forbidden object from
+   code tainted by an AddOn - Usage: local width =
+   self:GetWidth([ignoreRect]))`. If the game answers `true 20` on the
+   second line, the restriction lifts while auras are not secret.
+5. Ask the frame on the button for its parent:
+
+   ```
+   /run local k=AP.k print("kid",k:IsForbidden(),pcall(k.GetParent,k))
+   ```
+
+   Seen: (to do). wowlua: `kid false false calling 'GetParent' on bad self
+   (Attempt to access forbidden object from code tainted by an AddOn -
+   Usage: local parent = self:GetParent())`.
+6. Does the container's `GetChildren` hand the button out:
+
+   ```
+   /run for i,f in ipairs({AC:GetChildren()}) do print("child",i,f==AP.b,pcall(f.IsForbidden,f)) end
+   ```
+
+   Seen: (to do). wowlua: ten lines, `child 1 false true true` to
+   `child 10 true true true`: the batch of ten buttons the container makes
+   at once, all handed out and forbidden, the last one the button step 2
+   kept.
+7. Does `EnumerateFrames` hand it out:
+
+   ```
+   /run local f,n=EnumerateFrames(),0 while f do if f==AP.b then n=n+1 end f=EnumerateFrames(f) end print("listed",n)
+   ```
+
+   Seen: (to do). wowlua: `listed 0`.
+8. Anchor the frame to the button, then ask for its anchor:
+
+   ```
+   /run local k=AP.k print("anchor",pcall(k.SetPoint,k,"CENTER",AP.b)) print(pcall(k.GetPoint,k,1))
+   ```
+
+   Seen: (to do). wowlua: `anchor true`, then `true CENTER table: …
+   CENTER 0 0` (`GetPoint` hands the button out).
+9. Attack the creature so you are in combat, then repeat step 4's line and
+   step 5's line.
+
+   Seen: (to do). wowlua: as out of combat, but `after true true …` on
+   step 4's first line.
+10. After the fight, put the container away:
+
+    ```
+    /run AC:SetUnit("none") AC:Hide()
+    ```

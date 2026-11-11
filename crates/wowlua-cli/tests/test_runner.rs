@@ -631,7 +631,9 @@ end
 /// counted as true. SuuUI's own shape too: a container per type, every
 /// type's or only the removable ones (`HARMFUL|RAID_PLAYER_DISPELLABLE`),
 /// the badge a frame its `initializeFrame` hangs on the button: no badge
-/// shows without a debuff, Magic's alone with one.
+/// shows without a debuff, Magic's alone with one. The buttons themselves
+/// refuse addon code once built (decision T632): the test counts the
+/// markers each group's `initialize` hangs on its buttons.
 #[test]
 fn aura_buttons_show_only_their_auras() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
@@ -649,13 +651,16 @@ import * as mock from "wowlua:mock"
 
 const TYPES = { "Magic", "Curse", "Poison", "Disease" }
 
+-- The markers on each type's buttons.
+const markers: { [string]: Frame[] } = {}
+
 -- The buttons of each type's group the container shows.
-local function shown(made: any): { [string]: number }
+local function shown(): { [string]: number }
     local counts: { [string]: number } = {}
     for _, kind in ipairs(TYPES) do
         local n = 0
-        for i = 1, made:GetAuraGroupFrameCount(kind) do
-            if made:GetAuraGroupFrame(kind, i):IsShown() then
+        for _, marker in ipairs(markers[kind]) do
+            if marker:IsVisible() then
                 n = n + 1
             end
         end
@@ -668,18 +673,26 @@ end
 local function onlyTheirs()
     const groups: any[] = {}
     for _, kind in ipairs(TYPES) do
-        groups[#groups + 1] = { key = kind, filter = "HARMFUL", max = 1, dispelTypes = { kind } }
+        markers[kind] = {}
+        groups[#groups + 1] = {
+            key = kind, filter = "HARMFUL", max = 1, dispelTypes = { kind },
+            initialize = function(button: any)
+                const list = markers[kind]
+                list[#list + 1] = CreateFrame("Frame", nil, button)
+            end,
+        }
     end
     const made = aura.container(UIParent, { unit = "player", groups = groups }).frame :: any
     mock.nextFrame(2)
     expect(made:GetAuraGroupFrameCount("Magic") > 0).toBe(true)
-    expect(shown(made)).toEqual({ Magic = 0, Curse = 0, Poison = 0, Disease = 0 })
+    expect(#markers.Magic > 0).toBe(true)
+    expect(shown()).toEqual({ Magic = 0, Curse = 0, Poison = 0, Disease = 0 })
     const id = mock.player:applyAura({ spellId = 116, name = "Frostbolt", duration = 9, harmful = true, dispelName = "Magic" })
     mock.nextFrame(2)
-    expect(shown(made)).toEqual({ Magic = 1, Curse = 0, Poison = 0, Disease = 0 })
+    expect(shown()).toEqual({ Magic = 1, Curse = 0, Poison = 0, Disease = 0 })
     mock.player:removeAura(id)
     mock.nextFrame(2)
-    expect(shown(made)).toEqual({ Magic = 0, Curse = 0, Poison = 0, Disease = 0 })
+    expect(shown()).toEqual({ Magic = 0, Curse = 0, Poison = 0, Disease = 0 })
 end
 
 -- One engine container per type, its button carrying a badge over `holder`.
@@ -752,6 +765,90 @@ end
     );
     assert!(out.status.success(), "{text}");
     assert!(text.contains("2 passed, 0 failed"), "{text}");
+}
+
+/// An addon's own aura container on camelot (decision T632): its
+/// `initializeFrame` builds each button with full access (textures,
+/// frames, `SetSize`), then Blizzard's code restricts the button
+/// (`DenyTaintedAccessWhenAurasAreSecret`): to the addon it is forbidden,
+/// its methods raise "on bad self", and `GetParent` of a frame the addon
+/// hung on it raises the same error, as SuuUI's met in game. The container
+/// stays the addon's.
+#[test]
+fn aura_buttons_refuse_addon_code_after_their_build() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let dir = project(
+        r#""camelot": {}"#,
+        &[(
+            "tests/aura.test.wowlua",
+            r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("built by the addon, forbidden to it after")
+local function restricted()
+    const seen: any = {}
+    const c = CreateFrame("AuraContainer", nil, UIParent, "CustomAuraContainerTemplate") :: any
+    c:SetSize(1, 1)
+    c:AddAuraGroup("buffs", "HELPFUL", {
+        maxFrameCount = 1,
+        initializeFrame = function(button: any)
+            seen.button = button
+            seen.inside = button:IsForbidden()
+            seen.sized = pcall(button.SetSize, button, 20, 20)
+            seen.texture = button:CreateTexture(nil, "ARTWORK") ~= nil
+            seen.bar = CreateFrame("StatusBar", nil, button) ~= nil
+            seen.deco = CreateFrame("Frame", nil, button)
+            seen.parent = seen.deco:GetParent() == button
+        end,
+    })
+    c:SetPoint("CENTER")
+    c:SetUnit("player")
+    mock.nextFrame(2)
+    expect(seen.inside).toBe(false)
+    expect(seen.sized).toBe(true)
+    expect(seen.texture).toBe(true)
+    expect(seen.bar).toBe(true)
+    expect(seen.parent).toBe(true)
+    const button = seen.button
+    expect(button:IsForbidden()).toBe(true)
+    expect(button:CanBeAccessedInContext()).toBe(false)
+    expect(function() button:GetWidth() end).toThrow(
+        "calling 'GetWidth' on bad self (Attempt to access forbidden object from code tainted by an AddOn")
+    expect(function() button:SetSize(30, 30) end).toThrow("calling 'SetSize' on bad self")
+    expect(seen.deco:IsForbidden()).toBe(false)
+    expect(type(seen.deco:IsVisible())).toBe("boolean")
+    expect(function() seen.deco:GetParent() end).toThrow(
+        "calling 'GetParent' on bad self (Attempt to access forbidden object from code tainted by an AddOn - Usage: local parent = self:GetParent())")
+    expect(c:GetAuraGroupFrameCount("buffs") > 0).toBe(true)
+    expect(c:IsForbidden()).toBe(false)
+    expect(type(c:GetWidth())).toBe("number")
+end
+"#,
+        )],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("1 passed, 0 failed"), "{text}");
 }
 
 /// The world map's quest details on camelot (Blizzard's

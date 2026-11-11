@@ -149,3 +149,90 @@ return tostring(p1), tostring(e1), tostring(p2), tostring(e2), table.concat(seen
         ]
     );
 }
+
+/// Runs `src` as Blizzard's code (loaded without an addon), starting
+/// untainted as the client runs each event.
+fn secure(vm: &mut Vm, src: &str) -> Vec<String> {
+    let r = vm.with_execution_taint(wowlua_vm::Taint::SECURE, |vm| {
+        let f = vm
+            .load(src.as_bytes(), "@Interface/AddOns/Blizzard_Test/test.lua")
+            .expect("compiles");
+        vm.call(f, &[])
+    });
+    match r {
+        Ok(r) => r
+            .into_iter()
+            .map(|v| match v {
+                Value::Num(n) => format!("{n}"),
+                Value::Bool(b) => format!("{b}"),
+                Value::Nil => "nil".into(),
+                other => format!("{other:?}"),
+            })
+            .collect(),
+        Err(e) => panic!("{:?}", e.value),
+    }
+}
+
+/// A frame Blizzard's code puts under access restrictions (as its aura
+/// containers do with each button, decision T632) is the addon's until
+/// then: its build works. After, it is forbidden to addon code: methods
+/// raise "on bad self", `IsForbidden` answers true, `EnumerateFrames`
+/// leaves it out, and `GetParent` of the addon's frame on it raises the
+/// same error; Blizzard's code still uses both. An addon's own
+/// `AddAccessRestrictions` does nothing.
+#[test]
+fn restricted_frames_refuse_addon_code() {
+    let mut vm = vm();
+    secure(
+        &mut vm,
+        "RestrictedButton = CreateFrame('Button', nil, UIParent)",
+    );
+    let built = run(
+        &mut vm,
+        "local b = RestrictedButton
+Kid = CreateFrame('Frame', nil, b)
+b:SetSize(20, 20)
+b:CreateTexture()
+local own = CreateFrame('Frame')
+own:AddAccessRestrictions(1)
+return tostring(b:IsForbidden()), tostring(Kid:GetParent() == b), own:GetAccessRestrictions(), tostring(own:IsForbidden())",
+    );
+    assert_eq!(built, ["false", "true", "0", "false"]);
+    let inside = secure(
+        &mut vm,
+        "local b = RestrictedButton
+b:AddAccessRestrictions(1) -- DenyTaintedAccessWhenAurasAreSecret
+local kid = b:GetChildren()
+return b:IsForbidden(), b:GetWidth(), kid:GetParent() == b, b:GetAccessRestrictions(),
+    b:HasAnyAccessRestrictions(), b:CanBeAccessedInContext()",
+    );
+    assert_eq!(inside, ["false", "20", "true", "1", "true", "true"]);
+    let after = run(
+        &mut vm,
+        "local b = RestrictedButton
+local ok, err = pcall(b.GetWidth, b)
+local ok2, err2 = pcall(Kid.GetParent, Kid)
+local listed = false
+local f = EnumerateFrames()
+while f do
+    if f == b then listed = true end
+    f = EnumerateFrames(f)
+end
+return tostring(b:IsForbidden()), tostring(b:CanBeAccessedInContext()), tostring(b:HasAccessConstraints()),
+    tostring(ok), err, tostring(Kid:IsForbidden()), tostring(ok2), err2, tostring(listed)",
+    );
+    assert_eq!(
+        after,
+        [
+            "true",
+            "false",
+            "true",
+            "false",
+            "calling 'GetWidth' on bad self (Attempt to access forbidden object from code tainted by an AddOn - Usage: local width = self:GetWidth([ignoreRect]))",
+            "false",
+            "false",
+            "calling 'GetParent' on bad self (Attempt to access forbidden object from code tainted by an AddOn - Usage: local parent = self:GetParent())",
+            "false",
+        ]
+    );
+}

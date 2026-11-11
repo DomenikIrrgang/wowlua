@@ -87,6 +87,10 @@ pub struct Widget {
     /// templates' `<ForbiddenAspects>` and secure `AddForbiddenAspects`
     /// calls (`crate::protection::forbidden_aspects`).
     pub forbidden_aspects: u32,
+    /// Its access restrictions (`Enum.ScriptObjectAccessRestriction`
+    /// flags) from secure `AddAccessRestrictions` calls: with one, addon
+    /// code may not use it (`crate::protection::denied`).
+    pub access_restrictions: u32,
     /// Has an intrinsic type's handlers (`intrinsic_key`).
     pub intrinsic_scripts: bool,
     pub points: Vec<Point>,
@@ -741,6 +745,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         explicitly_protected: false,
         forbidden: false,
         forbidden_aspects: 0,
+        access_restrictions: 0,
         intrinsic_scripts: false,
         moving: false,
         sizing: false,
@@ -863,9 +868,10 @@ fn duration_tostring(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.str(&text)])
 }
 
-/// Addon code may not use a forbidden widget (unverified wording). The
-/// error names the documented method's usage (made only for the error:
-/// every method call comes here).
+/// Addon code may not use a forbidden widget (unverified wording), nor one
+/// under access restrictions (`crate::protection::denied`). The error
+/// names the documented method's usage (made only for the error: every
+/// method call comes here).
 fn refuse_forbidden(
     vm: &mut Vm,
     id: WidgetId,
@@ -876,10 +882,29 @@ fn refuse_forbidden(
     // frame through them from any code (`StoreFrame:SetAttribute("action",
     // ...)`, `StoreFrame_IsShown`'s `GetAttribute("isshown")`; the user's
     // probe: StoreFrame forbidden, the shop's old path taken, SuuUI
-    // error-free; unverified for other methods).
-    if engine(vm).world.widgets[id.0].forbidden
-        && !matches!(short, "IsForbidden" | "GetAttribute" | "SetAttribute")
-        && crate::protection::tainted(vm)
+    // error-free; unverified for other methods). Whether the code may use
+    // it is asked of it too (the documentation of `CanBeAccessedInContext`:
+    // false "when execution is tainted and the object is forbidden";
+    // `HasAccessConstraints` taken to be alike, unverified).
+    let open = matches!(
+        short,
+        "IsForbidden"
+            | "GetAttribute"
+            | "SetAttribute"
+            | "CanBeAccessedInContext"
+            | "HasAccessConstraints"
+    );
+    // A frame whose parent addon code may not use: `GetParent` does not
+    // hand the parent out but raises the error the parent's own call
+    // would (decision T632: in game, a SuuUI frame on an aura button;
+    // unverified for an explicitly forbidden parent and for the other
+    // methods that return widgets).
+    let parent = match short {
+        "GetParent" => engine(vm).world.widgets[id.0].parent,
+        _ => None,
+    };
+    if (!open && crate::protection::denied(vm, id))
+        || parent.is_some_and(|p| crate::protection::denied(vm, p))
     {
         // `/stdtest engine`: "calling 'GetObjectType' on bad self (Attempt
         // to access forbidden object from code tainted by an AddOn - Usage:
@@ -4664,8 +4689,14 @@ fn get_line_height(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 }
 
 /// Whether Blizzard's secure code made the widget.
+/// `IsForbidden()`: made forbidden, or under access restrictions to addon
+/// code (decision T632: the user's walk of every frame in game skipped
+/// SuuUI's aura buttons, by this answer or by `EnumerateFrames` leaving
+/// them out; unverified which, and what it answers inside the button's
+/// `initializeFrame`, before the restrictions).
 fn is_forbidden(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(engine(vm).world.widgets[id.0].forbidden)])
+    let made = engine(vm).world.widgets[id.0].forbidden;
+    Ok(vec![Value::Bool(made || crate::protection::denied(vm, id))])
 }
 
 /// `Click([button [, isDown]])`: the button's `PreClick`, `OnClick` and
@@ -5440,13 +5471,15 @@ fn enumerate_frames(vm: &mut Vm, c: NativeCall) -> Ret {
     // Addon code is not handed forbidden frames (unverified: ElvUI's
     // toolkit asks every enumerated frame's `GetObjectType` before
     // `IsForbidden`, error-free in the client, where that call on a
-    // forbidden frame errors, `/stdtest engine`).
-    let addon = crate::protection::tainted(vm);
+    // forbidden frame errors, `/stdtest engine`), nor ones under access
+    // restrictions (decision T632, unverified).
     let e = engine(vm);
-    let next = e.world.widgets[start.min(e.world.widgets.len())..]
-        .iter()
-        .find(|w| is_a(e, &w.class, "Frame") && !(addon && w.forbidden))
-        .map(|w| Value::Table(w.table));
+    let next = (start.min(e.world.widgets.len())..e.world.widgets.len())
+        .find(|&i| {
+            is_a(e, &e.world.widgets[i].class, "Frame")
+                && !crate::protection::denied(vm, WidgetId(i))
+        })
+        .map(|i| Value::Table(e.world.widgets[i].table));
     Ok(vec![next.unwrap_or(Value::Nil)])
 }
 
