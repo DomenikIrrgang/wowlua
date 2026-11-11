@@ -707,6 +707,18 @@ fn item_link(vm: &mut Vm, id: i64) -> Option<String> {
     text_of(vm, v)
 }
 
+/// An item's tooltip by its ID (a loot roll's item, `lootroll.rs`): as
+/// `GetItemByID(itemID)`'s.
+pub(crate) fn item_by_id(vm: &mut Vm, id: i64) -> Ret {
+    match item_link(vm, id) {
+        Some(link) => {
+            let link = vm.str(&link);
+            item_tooltip(vm, id, Asked::ById, Some(link))
+        }
+        None => data(vm, None, &[], vec![]),
+    }
+}
+
 fn int_arg(vm: &Vm, c: &NativeCall, n: usize) -> Option<i64> {
     match vm.hidden(c.arg(n)) {
         Value::Num(x) => Some(x.trunc() as i64),

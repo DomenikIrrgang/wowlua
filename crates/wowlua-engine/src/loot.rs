@@ -711,7 +711,25 @@ fn pushed_late(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Value::Num(id), Value::Num(count)) = (c.upvals[0], c.upvals[1]) else {
         return Ok(vec![]);
     };
-    let id = id as i64;
+    crate::quests::tell_log(vm);
+    let corpse = match c.upvals[2] {
+        Value::Num(corpse) => Some(UnitId(corpse as usize)),
+        _ => None,
+    };
+    arrive(vm, id as i64, count, corpse);
+    Ok(vec![])
+}
+
+/// An item won on a group's roll (`lootroll.rs`): into the bags as a
+/// looted item that comes late (unverified: the events' order, as a
+/// corpse's item's).
+pub fn receive(vm: &mut Vm, id: i64, count: f64) {
+    arrive(vm, id, count, None);
+}
+
+/// An item into the bags in one packet: its bag update, the push, the
+/// corpse emptied (if given), the bags' end; a new slot's item data later.
+fn arrive(vm: &mut Vm, id: i64, count: f64, corpse: Option<UnitId>) {
     let placed = crate::character::push_to_bags(vm, id, count);
     let (bag, new_slot) = placed.unwrap_or((0, None));
     let p = [Placed {
@@ -719,11 +737,10 @@ fn pushed_late(vm: &mut Vm, c: NativeCall) -> Ret {
         bag,
         stacked: new_slot.is_none(),
     }];
-    crate::quests::tell_log(vm);
     bag_updates(vm, &p);
     push(vm, id, count, bag, new_slot.is_some());
-    if let Value::Num(corpse) = c.upvals[2] {
-        tell_emptied(vm, UnitId(corpse as usize));
+    if let Some(corpse) = corpse {
+        tell_emptied(vm, corpse);
     }
     bags_end(vm, &p);
     if let Some(slot) = new_slot {
@@ -739,7 +756,6 @@ fn pushed_late(vm: &mut Vm, c: NativeCall) -> Ret {
             later(vm, after, "lootItemData", item_data_arrived, vec![]);
         }
     }
-    Ok(vec![])
 }
 
 /// The quest log's word, apart from the bags' packet (`logAfter`).

@@ -1026,7 +1026,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_PlayerInteractionManager.IsInteractingWithNpcOfType",
             interacting_with,
         ),
-        ("GetActiveLootRollIDs", empty_list),
         ("C_LFGList.GetApplications", empty_list),
         // No pet battle, no nameplates.
         ("C_PetBattles.GetNumPets", zero),

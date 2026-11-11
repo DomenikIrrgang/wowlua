@@ -569,6 +569,54 @@ The WoW API the VM's code calls, per flavor.
   favourite (`Pickup(0)`, nothing here), `CURSOR_CHANGED`'s types (16
   and 17, `Enum.UICursorType`; a toy's 1, an item's), the grid shown for
   them, `CursorHasItem` for a toy (true here).
+- **Group loot rolls.** The server's rolls for the group (decision T629;
+  Blizzard's GroupLootFrame and the `CONFIRM_LOOT_ROLL` popup run on them):
+  `mock.startLootRoll` starts one, `START_LOOT_ROLL(rollID, rollTime,
+  lootHandle)` with the time in milliseconds. Till it ends
+  `GetLootRollItemInfo(rollID)` answers the item's texture, name, count
+  and quality, Bind on Pickup, `canNeed`, `canGreed`, `canDisenchant`
+  (false: WoW Forever has no Disenchant roll), the reasons (a number of
+  `LOOT_ROLL_INELIGIBLE_REASON1`..7, 0 when allowed), the Disenchant
+  reason and skill (0) and `canTransmog` (false); `GetLootRollItemLink`
+  the link, `GetLootRollTimeLeft` the milliseconds left on the clock,
+  `C_Loot.GetLootRollDuration` its time, `GetActiveLootRollIDs` the rolls
+  the player has not chosen on, `C_TooltipInfo.GetLootRollItem` the item's
+  tooltip; a roll not under way answers as the full probe recorded
+  (nothing, 0, `{}`, nil). `RollOnLoot(rollID, rollType)` (0 Pass, 1 Need,
+  2 Greed; another type, a choice the item does not allow, a roll chosen
+  on or ended: nothing) chooses; a Bind on Pickup item's Need or Greed
+  first asks, from inside the call: `CONFIRM_LOOT_ROLL(rollID, rollType,
+  confirmReason)`, whose popup's OK is `ConfirmLootRoll(rollID,
+  rollType)`, the choice. A choice made, the client is done with the roll
+  (`CANCEL_LOOT_ROLL(rollID)`, from inside the call, as SuuUI found in
+  game) and the server tells it a round trip later (`CHAT_MSG_LOOT`,
+  `LOOT_ROLL_NEED_SELF`, `_GREED_SELF`, `_PASSED_SELF`); the other
+  members' choices (`mock.lootRollChoice`) are told at once
+  (`LOOT_ROLL_NEED`, `_GREED`, `_PASSED`). Everyone chosen, or the time
+  out (the player not chosen: `CANCEL_LOOT_ROLL`), the roll ends: Need
+  over Greed, each of the best choice's rollers rolls 1 to 100 (the test's
+  number, else the engine's own generator; `LOOT_ROLL_ROLLED_NEED` or
+  `_GREED` by name, the player's too) and the highest wins, the first to
+  choose on a tie (`LOOT_ROLL_WON`, the player's `LOOT_ROLL_YOU_WON` and
+  the item into the bags with "You receive loot"); nobody but passes:
+  `LOOT_ROLL_ALL_PASSED`. The loot's rolls all ended:
+  `LOOT_ROLLS_COMPLETE(lootHandle)`. The lines are the client's global
+  strings, their loot history link naming the encounter. The loot history
+  (`C_LootHistory`) keeps each roll as a drop of its encounter (the
+  test's, the one under way, else 0), numbered from 1: who chose what
+  (`Enum.EncounterLootDropRollState`), the numbers, the winner or
+  everyone passed, the rollers first by number, then by choice and order;
+  `LOOT_HISTORY_UPDATE_ENCOUNTER` when a drop comes,
+  `LOOT_HISTORY_UPDATE_DROP` at each choice and the end. Unverified (no
+  roll recorded yet; the probes in `tests/ingame/PROBES.md`, "Group loot
+  rolls"): the IDs and handles (from 1 here), `confirmReason` (empty
+  here), the lines' sender (none), the result's lines' and events' order,
+  the player's own roll line (by name), the time out's lines (none for who
+  did not choose), what a choice the item does not allow does, the
+  Disenchant values, `GetLootRollItemInfo` after the player chose (the
+  item's still), the loot history's encounter outside one and its times
+  (`GetTime`'s seconds), `LOOT_ROLL_STARTED`'s line and
+  `MAIN_SPEC_NEED_ROLL` (neither sent here).
 - **Layout.** A region's rectangle comes from its points as the client
   lays it out: each edge from the points that set it (a `LEFT` and a
   `RIGHT` point give the width, a `TOP` and a `BOTTOM` the height),

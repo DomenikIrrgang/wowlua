@@ -2621,3 +2621,94 @@ instead of a printed line, note that (`pcall` didn't catch it).
     ```
     /run AH:Hide() print("done")
     ```
+
+## Group loot rolls (decision T629, 2026-11-11)
+
+Found with SuuUI's loot roll tray (its draft `loot-roll-tray`): wowlua had
+no group loot at all, so the tray could only be tested with stubs. wowlua
+now starts rolls from tests (`mock.startLootRoll`) and plays them as
+Blizzard's GroupLootFrame and SuuUI's comments ("found in game") describe,
+but no roll is recorded yet. These need a group with group loot and an
+item rolled for (a dungeon's Uncommon or better drop); one Bind on Pickup
+item for steps 3 to 5. Each line in the chat, one at a time.
+
+1. Make a frame that prints the roll events and the loot lines (the raw
+   text, its links shown as `||H…`, and the line's sender), and keeps the
+   newest roll's ID in `LRID`:
+
+   ```
+   /run LRF=CreateFrame("Frame") for _,e in ipairs({"START_LOOT_ROLL","CONFIRM_LOOT_ROLL","CANCEL_LOOT_ROLL","CANCEL_ALL_LOOT_ROLLS","LOOT_ROLLS_COMPLETE","MAIN_SPEC_NEED_ROLL","LOOT_HISTORY_UPDATE_DROP","LOOT_HISTORY_UPDATE_ENCOUNTER","LOOT_HISTORY_GO_TO_ENCOUNTER","CHAT_MSG_LOOT"}) do LRF:RegisterEvent(e) end LRF:SetScript("OnEvent",function(_,e,...) if e=="START_LOOT_ROLL" then LRID=... end if e=="CHAT_MSG_LOOT" then local t,s=... print(format("%.3f",GetTime()),e,(t:gsub("|","||")),"sender:",s) else print(format("%.3f",GetTime()),e,...) end end)
+   ```
+
+   Seen: (to do) for each roll that starts, `START_LOOT_ROLL` with the
+   roll's ID, its time and the loot's handle, and any loot line with it
+   (`LOOT_ROLL_STARTED`'s "[Loot]: [item]"?). wowlua: `START_LOOT_ROLL(1,
+   60000, 1)`, `LOOT_HISTORY_UPDATE_ENCOUNTER(0)`, no line.
+2. While the roll is open, before choosing, ask for it:
+
+   ```
+   /run print(LRID,GetLootRollTimeLeft(LRID),C_Loot.GetLootRollDuration(LRID),#GetActiveLootRollIDs(),select("#",GetLootRollItemInfo(LRID)),GetLootRollItemInfo(LRID))
+   ```
+
+   Seen: (to do). wowlua: the ID, the milliseconds left, `60000`, `1`,
+   `13`, then the texture, name, count, quality, Bind on Pickup, `true
+   true false 0 0 0 0 false` for an item you may Need and Greed.
+3. On the Bind on Pickup item, click Need in the game's roll frame, but
+   do not answer the popup yet.
+
+   Seen: (to do) whether `CONFIRM_LOOT_ROLL` prints, its third value
+   (`confirmReason`), and whether `CANCEL_LOOT_ROLL` comes before the
+   popup's answer. wowlua: `CONFIRM_LOOT_ROLL 1 1` and an empty reason,
+   nothing else.
+4. Click OK on the popup.
+
+   Seen: (to do) the events and lines, and how long after the click each
+   comes. wowlua: `CANCEL_LOOT_ROLL` at once, a round trip later the line
+   "[Loot]: You have selected Need for: [item]" with no sender, and
+   `LOOT_HISTORY_UPDATE_DROP`.
+5. Right after, ask for the roll again:
+
+   ```
+   /run print(LRID,GetLootRollTimeLeft(LRID),#GetActiveLootRollIDs(),select("#",GetLootRollItemInfo(LRID)),(select(2,GetLootRollItemInfo(LRID))),GetLootRollItemLink(LRID))
+   ```
+
+   Seen: (to do). wowlua: the time still counting, `0`, `13`, the item's
+   name and link.
+6. Let the group finish choosing, and watch the end.
+
+   Seen: (to do) every line and event of the result in order: each
+   roller's "Need Roll - 91 for [item] by …" (yours by your name or
+   otherwise?), the "won" line, "You receive loot" if you won,
+   `LOOT_HISTORY_UPDATE_DROP`, `LOOT_ROLLS_COMPLETE` (with which handle),
+   `MAIN_SPEC_NEED_ROLL`. wowlua: the roll lines in choice order, the won
+   line, the drop's update, `LOOT_ROLLS_COMPLETE` with the handle, the
+   item pushed (`You receive loot`) after it if yours; no
+   `MAIN_SPEC_NEED_ROLL`.
+7. On another roll, choose nothing and let its time run out.
+
+   Seen: (to do) `CANCEL_LOOT_ROLL` at the time out or not, a "passed"
+   line for you or the others who did not choose, then the result.
+   wowlua: `CANCEL_LOOT_ROLL`, no line for who did not choose, the result.
+8. After the rolls, read the loot history's encounters:
+
+   ```
+   /run for _,e in ipairs(C_LootHistory.GetAllEncounterInfos()) do print(e.encounterID,e.encounterName,e.startTime,e.duration,C_LootHistory.GetLootHistoryTime(),GetTime()) end
+   ```
+
+   Seen: (to do), outside a boss fight especially (which encounter a
+   trash drop is under). wowlua: the encounter under way's ID or `0`, the
+   newest first, times in `GetTime`'s seconds.
+9. Read the newest encounter's drops:
+
+   ```
+   /run local e=C_LootHistory.GetAllEncounterInfos()[1] for _,d in ipairs(C_LootHistory.GetSortedDropsForEncounter(e.encounterID)) do print(d.lootListKey,d.playerRollState,d.allPassed,d.winner and d.winner.playerName,d.startTime,d.duration) for _,r in ipairs(d.rollInfos) do print(" ",r.playerName,r.playerClass,r.isSelf,r.state,r.roll,r.isWinner) end end
+   ```
+
+   Seen: (to do) the keys (from 1?), the states, the rollers' order.
+   wowlua: keys from 1 in the drops' order; the rollers first by number,
+   then Need, Greed, Pass, none, then in the order chosen.
+10. Stop the frame:
+
+    ```
+    /run LRF:UnregisterAllEvents()
+    ```

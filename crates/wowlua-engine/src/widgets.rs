@@ -276,6 +276,8 @@ pub struct World {
     pub bars: HashMap<usize, crate::bars::Bar>,
     /// The loot window.
     pub loot: crate::loot::Loot,
+    /// The group's loot rolls and the loot history.
+    pub loot_rolls: crate::lootroll::LootRolls,
     pub quests: crate::quests::Quests,
     pub gossip: crate::gossip::Gossip,
     pub trainers: crate::trainer::Trainers,

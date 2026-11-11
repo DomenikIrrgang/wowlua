@@ -67,6 +67,7 @@ pub mod levels;
 pub mod lfg;
 pub mod login;
 pub mod loot;
+pub mod lootroll;
 pub mod macros;
 pub mod mail;
 pub mod maps;
@@ -1388,6 +1389,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("casting", casting::behaviours()),
         Behaviours::new("merchant", merchant::behaviours()),
         Behaviours::new("loot", loot::behaviours()),
+        Behaviours::new("lootroll", lootroll::behaviours()),
         Behaviours::new("quests", quests::behaviours()),
         Behaviours::new("gossip", gossip::behaviours()),
         Behaviours::new("trainer", trainer::behaviours()),

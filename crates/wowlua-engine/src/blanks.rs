@@ -31,7 +31,6 @@ const BLANKS: &[(&str, &str)] = &[
     ("GetLFGDeserterExpiration", "0: "),
     ("GetLFGRandomCooldownExpiration", "0: "),
     ("GetLFGDungeonRewardLink", "0: "),
-    ("GetLootRollItemLink", "0: "),
     ("GetRandomDungeonBestChoice", "0: "),
     (
         "GetLFGDungeonEncounterInfo",

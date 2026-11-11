@@ -4,6 +4,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### New
+
+- **Group loot rolls**: start a roll for the group in a test with `mock.startLootRoll({ item = 19019, group = { "Thrall", "Jaina" } })`. `START_LOOT_ROLL` fires and `GetLootRollItemInfo`, `GetLootRollItemLink` and `GetLootRollTimeLeft` answer for the roll, counting down with the clock. `RollOnLoot` chooses as in the game: Need or Greed on a Bind on Pickup item asks first (`CONFIRM_LOOT_ROLL`, the game's popup, `ConfirmLootRoll`), and your choice shows in chat ("You have selected Need for: [item]"). `mock.lootRollChoice(rollID, "Thrall", "greed", 87)` makes another member's choice. When everyone has chosen or the time runs out, the roll ends: the rolls, the winner or "Everyone passed" in chat, `LOOT_ROLLS_COMPLETE`, the loot history (`C_LootHistory`), and the item in your bags if you won. `mock.cancelLootRoll` takes rolls back. The game's own roll frames work with it. WoW Forever has no Disenchant roll. Some details aren't checked against the game yet, such as the exact order of the result's lines.
+
 ### Changed
 
 - WoW Forever 1.60.1.70888: its API and data. `PARTY_INVITE_REQUEST` has a new value, `isCrossShard`, after `isNativeRealm`, so a test that fires the event gives it nine values now: `mock.fireEvent("PARTY_INVITE_REQUEST", name, isTank, isHealer, isDamage, isNativeRealm, isCrossShard, allowMultipleRoles, inviterGUID, questSessionActive)`. With the eight of before, wowlua stops the test with "`allowMultipleRoles` is bool, got string".

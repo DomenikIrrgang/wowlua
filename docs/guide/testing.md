@@ -180,6 +180,9 @@ The controls you reach for most:
 - Combat: `mock.player:enterCombat`, `mock.player:leaveCombat`,
   `mock.enterInstance`
 - Game data: `mock.defineItem` and `mock.defineSpell`
+- Group loot: `mock.startLootRoll` starts a roll for the group,
+  `mock.lootRollChoice` makes another member's choice; the player's is
+  `RollOnLoot`, as in your addon
 - Events: `mock.fireEvent` and `mock.fireUnitEvent`, with the payload checked
   against the event's documentation
 - Output: `mock.printed()` for what the chat frame shows, `mock.errors()` for
