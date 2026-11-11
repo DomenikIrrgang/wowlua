@@ -2712,3 +2712,63 @@ item for steps 3 to 5. Each line in the chat, one at a time.
     ```
     /run LRF:UnregisterAllEvents()
     ```
+
+## A second click on the same item link (2026-11-11)
+
+Found with SuuUI's chat tests: a second `SetItemRef` with the same item
+link leaves `ItemRefTooltip` shown in wowlua. The game's
+`ItemRefTooltipMixin:SetHyperlink` means to hide it ("it's the same
+hyperlink as current data, close instead"), but its check can't match as
+the code reads: the tooltip keeps the arguments packed by `SafePack`, so
+`getterArgs` is `{ "item:6948", n = 1 }`, and `tCompare` against the new
+`{ "item:6948" }` fails on the `n`. wowlua runs that code unchanged, so it
+answers as the code does. Whether the game closes it all the same is open;
+wowlua is not changed until these steps answer. Each line in the chat,
+one at a time.
+
+1. Hide the tooltip:
+
+   ```
+   /run ItemRefTooltip:Hide()
+   ```
+
+2. Open the Hearthstone's link the way a chat click does, and ask whether
+   it shows:
+
+   ```
+   /run SetItemRef("item:6948","[Hearthstone]","LeftButton",ChatFrame1) print(ItemRefTooltip:IsShown())
+   ```
+
+   Seen: (to do). wowlua: `true`.
+3. Print what the tooltip kept, and the game's compare of it:
+
+   ```
+   /run local a=ItemRefTooltip:GetPrimaryTooltipInfo().getterArgs for k,v in pairs(a) do print(k,v) end print(tCompare(a,{"item:6948"}))
+   ```
+
+   Seen: (to do). wowlua: `1 item:6948`, `n 1`, `false`.
+4. Open the same link again:
+
+   ```
+   /run SetItemRef("item:6948","[Hearthstone]","LeftButton",ChatFrame1) print(ItemRefTooltip:IsShown())
+   ```
+
+   Seen: (to do) `false` if the game closes it. wowlua: `true`.
+5. Hide the tooltip and print the Hearthstone's link into the chat (if it
+   prints `nil`, run the same line again a second later):
+
+   ```
+   /run ItemRefTooltip:Hide() print(select(2,C_Item.GetItemInfo(6948)))
+   ```
+
+6. Click the printed link in the chat with the left mouse button, once.
+
+   Seen: (to do) the item's tooltip opens. wowlua: it opens.
+7. Click the same link again, with the left mouse button.
+
+   Seen: (to do) whether the tooltip closes or stays. wowlua: it stays.
+8. Hide the tooltip:
+
+   ```
+   /run ItemRefTooltip:Hide()
+   ```
