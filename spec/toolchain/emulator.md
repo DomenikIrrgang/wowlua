@@ -163,6 +163,35 @@ The client's security model, in the VM:
     same rule for its object: false for tainted code in combat lockdown on a
     protected frame (UIParent among them), true on an unprotected one, so an
     addon's `GameTooltip:SetUnit` & co. show in a fight (decision T245).
+- **Forbidden objects.** Tainted code may not use a widget that Blizzard's
+  secure code made (`StoreFrame`), or one that secure code put under
+  access restrictions (`AddAccessRestrictions`; an addon's call does
+  nothing). Every method then raises "calling 'GetWidth' on bad self
+  (Attempt to access forbidden object from code tainted by an AddOn -
+  Usage: local width = self:GetWidth([ignoreRect]))". `IsForbidden`,
+  `CanBeAccessedInContext`, `HasAccessConstraints` and the attributes stay
+  open: `IsForbidden` answers true, `CanBeAccessedInContext` false.
+  `EnumerateFrames` leaves such frames out, and `GetParent` of a frame
+  whose parent is one raises that error for `GetParent` instead of
+  handing the parent out. Secure code still uses them. Decision T632:
+  - Blizzard's aura containers restrict each button they make
+    (`DenyTaintedAccessWhenAurasAreSecret`), right after the addon's
+    `initializeFrame` has built it, or at `PLAYER_ENTERING_WORLD` for
+    buttons made before login. The addon's build works: textures, frames,
+    `SetSize` on the button.
+  - From then on, the button is forbidden to the addon. In game, a frame
+    SuuUI hung on an aura button raised that error from `GetParent` in
+    the open world, while its own `IsForbidden` answered false.
+  - The restriction applies always. The documentation says it applies
+    "while aura information is secret", and `C_Secrets.ShouldAurasBeSecret()`
+    answered false out of combat, so it is unverified whether the game lets
+    addon code in then. Also unverified: what `IsForbidden` answers inside
+    `initializeFrame` (false here), whether the button's own `IsForbidden`
+    answers true or `EnumerateFrames` leaves it out, the rule for a frame
+    made forbidden, and whether other methods that return widgets
+    (`GetPoint`'s relative frame, `GetChildren`, `GetRegions`) refuse
+    alike: they hand them out (probe "Aura buttons forbidden after their
+    build").
 - **Taint reports.** A refusal reports the taint chain: the protected call,
   the secure code that became tainted, the value it read, and the addon code
   (file and line) that wrote that value, through any number of hops through

@@ -592,13 +592,7 @@ fn get_parent_key(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     }])
 }
 
-/// `CanBeAccessedInContext()`: addon code may use what it can see.
-fn yes(_vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(true)])
-}
-
-/// `HasAccessConstraints()`, `HasAnyForbiddenAspects()`: none on the
-/// engine's widgets.
+/// `HasAnyForbiddenAspects()`: none on the engine's widgets.
 fn no(_vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false)])
 }
@@ -1308,8 +1302,14 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("Intersects", intersects),
         ("ClearAttribute", clear_attribute),
         ("GetParentKey", get_parent_key),
-        ("CanBeAccessedInContext", yes),
-        ("HasAccessConstraints", no),
+        (
+            "CanBeAccessedInContext",
+            crate::protection::can_be_accessed_in_context,
+        ),
+        (
+            "HasAccessConstraints",
+            crate::protection::has_access_constraints,
+        ),
         ("HasAnyForbiddenAspects", no),
         ("GetInheritableForbiddenAspects", zero),
         ("ScrollFrame:GetScrollChild", get_scroll_child),

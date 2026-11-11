@@ -1594,13 +1594,23 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
             "ScriptRegion:ShouldButtonPassThrough",
             should_button_pass_through,
         ),
-        ("FrameScriptObject:GetAccessRestrictions", zero),
+        (
+            "FrameScriptObject:AddAccessRestrictions",
+            crate::protection::add_access_restrictions,
+        ),
+        (
+            "FrameScriptObject:GetAccessRestrictions",
+            crate::protection::get_access_restrictions,
+        ),
         ("FrameScriptObject:GetForbiddenAspects", zero),
         (
             "FrameScriptObject:AddForbiddenAspects",
             crate::protection::add_forbidden_aspects,
         ),
-        ("FrameScriptObject:HasAnyAccessRestrictions", no),
+        (
+            "FrameScriptObject:HasAnyAccessRestrictions",
+            crate::protection::has_any_access_restrictions,
+        ),
         (
             "FrameScriptObject:HasAnySecretAspect",
             has_any_secret_aspect,

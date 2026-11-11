@@ -474,7 +474,7 @@ fn stop_animating(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// lights and animation kits, the browser and the shop's
 /// checkout, housing's pins, the minimap's blips and pings, movies, unit
 /// position frames, vector graphics and blobs, the input language, focus
-/// and mouse simulation, roles and access restrictions, and a single
+/// and mouse simulation, roles, and a single
 /// animation played on its own (unverified: whether its group plays).
 /// They change nothing a getter reads; a getter among them answers its
 /// documented empty values (`widgets::stored`).
@@ -526,7 +526,6 @@ pub const EMPTY_METHODS: &[&str] = &[
     "Frame:RemoveRoleset",
     "Frame:ResizeToBoundsRect",
     "Frame:RotateTextures",
-    "FrameScriptObject:AddAccessRestrictions",
     "FrameScriptObject:AddSecretAspect",
     "FrameScriptObject:HasSecretValues",
     "HousingFixturePointFrame:HasAttachedFixture",
