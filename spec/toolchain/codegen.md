@@ -138,7 +138,12 @@ In `"preserve"` mode the emitter works as follows:
   decorator application, `continue` flags, class finalization, profiling
   wrappers, export assignments, hoisted declarations) is placed **on the same
   line** as its anchor: the line of the construct's start, or of its `end`.
-  Statements are separated with `; `.
+  Statements are separated with `; `. Instance field initializers run in the
+  constructor, so their anchor is the constructor's line (in a derived class
+  the line of its `super(…)` call, without a constructor the class's `end`):
+  an initializer declared further down than its anchor is emitted wholly on
+  the anchor's line and maps to it, and the methods between keep their own
+  lines (decision T630).
 - If the output is already past the target line (only possible when a
   multi-line construct lowered to more lines than the source had, which no
   construct in this spec does), the emitter continues on the current line and

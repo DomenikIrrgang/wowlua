@@ -329,6 +329,71 @@ print((pcall(function() Temperature.unit = 1 end)))"#,
     );
 }
 
+/// A field initializer declared below the constructor runs in it, on the
+/// constructor's line: the output does not jump ahead to the field, so
+/// every method keeps its own line (decision T630).
+#[test]
+fn fields_after_methods_keep_every_method_on_its_line() {
+    let src = r#"class Book
+    pages: number = 1
+
+    constructor()
+        self.pages = self.pages + 1
+    end
+
+    -- The first method.
+    function Render(): number
+        local t = { 3, 1, 2 }
+        table.sort(t, function(a, b) return a < b end)
+        return t[1]
+    end
+
+    -- A field between the methods.
+    stale: boolean = false
+
+    function Learned(): number
+        return self.pages
+    end
+
+    -- A field with a closure, past every method above.
+    clickHooked: boolean = true
+    onClick: () -> number = function() return 7 end
+
+    function CountToTrain(): number
+        return 2
+    end
+end
+local b = Book.new()
+print(b:Render(), b:Learned(), b.stale, b.clickHooked, b.onClick(), b:CountToTrain())
+"#;
+    let compiled = compile(src);
+    let line_of = |needle: &str| {
+        src.lines()
+            .position(|l| l.contains(needle))
+            .unwrap_or_else(|| panic!("{needle} not in the source"))
+    };
+    for (method, emitted) in [
+        ("function Render", "function Book:Render("),
+        ("function Learned", "function Book:Learned("),
+        ("function CountToTrain", "function Book:CountToTrain("),
+        ("table.sort", "function(a, b)"),
+    ] {
+        let at = compiled
+            .lines()
+            .position(|l| l.contains(emitted))
+            .unwrap_or_else(|| panic!("{emitted} not in the output\n{compiled}"));
+        assert_eq!(
+            at,
+            line_of(method),
+            "{emitted}\n--- compiled ---\n{compiled}"
+        );
+    }
+    assert_eq!(
+        run(compiled.as_bytes()),
+        run(b"print(1, 2, false, true, 7, 2)")
+    );
+}
+
 #[test]
 fn enums_are_inlined_unless_used_as_values() {
     let src = "enum Direction { Up, Down, Left = 10, Right }\nenum Anchor { TopLeft = \"TOPLEFT\", Center = \"CENTER\" }\nprint(Direction.Up, Direction.Right, Anchor.Center, Anchor[\"TopLeft\"])\n";
