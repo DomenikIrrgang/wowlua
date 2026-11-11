@@ -2925,8 +2925,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             combat_rating_bonus_for_value,
         ),
         ("GetPowerRegenForPowerType", get_power_regen_for_power_type),
-        // Raid marks (unverified: no mark kept).
-        ("SetRaidTarget", nothing),
+        // Raid marks (`raidtargets.rs` keeps them).
         ("CanBeRaidTarget", can_be_raid_target),
         // Currencies.
         ("C_CurrencyInfo.GetCurrencyInfo", get_currency_info),

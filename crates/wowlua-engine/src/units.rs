@@ -309,6 +309,8 @@ pub struct Units {
     /// The raid's main tanks and assists (`SetPartyAssignment`).
     pub assignments: Vec<(String, UnitId)>,
     pub focus: Option<UnitId>,
+    /// The raid target markers' units, by marker (`raidtargets.rs`).
+    pub raid_targets: [Option<UnitId>; crate::raidtargets::MARKERS],
     pub mouseover: Option<UnitId>,
     /// The soft targets: the enemy, the friend, the interact unit.
     pub soft: [Option<UnitId>; 3],

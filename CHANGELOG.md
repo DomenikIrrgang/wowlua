@@ -7,6 +7,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### Fixed
 
 - Profiles (`wowlua test --profile-out`), dev builds' error messages and the debugger name each class method at its own line. In a class whose constructor came before fields with a default value further down (`clickHooked: boolean = false` among the methods), every method above that field was reported at the field's line.
+- Raid target markers work in tests: `SetRaidTarget` puts the marker on the unit (moving it off any other unit, 0 takes it off), `GetRaidTargetIndex` answers it and `RAID_TARGET_UPDATE` fires, so the game's target frame shows the icon. On WoW Forever an addon can no longer mark in combat: as in the game, its `SetRaidTarget` is refused with `ADDON_ACTION_FORBIDDEN` ("SetRaidTarget()") and the test fails, also when the addon's changes taint the game's unit menu. The game's own menu, untouched by addons, still marks in combat.
 
 ## 0.13.11 (2026-11-11)
 

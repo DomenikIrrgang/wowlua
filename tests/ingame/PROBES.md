@@ -2772,3 +2772,82 @@ one at a time.
    ```
    /run ItemRefTooltip:Hide()
    ```
+
+## SetRaidTarget in combat (decision T631, 2026-11-11)
+
+Found in game: in combat, a raid target icon picked from the unit menu
+that SuuUI's restyle had tainted was refused ("Interface action failed
+because of an AddOn", `ADDON_ACTION_FORBIDDEN` with "SetRaidTarget()");
+with the restyle off the same pick marked the target in combat. wowlua now
+forbids an addon's `SetRaidTarget` in combat on camelot and keeps the
+markers. These steps check it from `/run` (an addon's code, tainted) and
+what is still guessed: whether the marker is there at once or a round trip
+later, and whether `GetRaidTargetIndex` answers a secret out of combat.
+They need a hostile creature a few levels below you to fight. Turn
+SuuUI's menu restyle off for step 7. Each line in the chat, one at a time.
+
+1. Make a frame that prints the raid target and forbidden events:
+
+   ```
+   /run RTP=CreateFrame("Frame") RTP:RegisterEvent("RAID_TARGET_UPDATE") RTP:RegisterEvent("ADDON_ACTION_FORBIDDEN") RTP:SetScript("OnEvent",function(_,e,...) print(format("%.3f",GetTime()),e,...) end)
+   ```
+
+2. Target the creature, without attacking it. Out of combat, put the skull
+   on it and read its marker at once:
+
+   ```
+   /run SetRaidTarget("target",8) print(format("%.3f",GetTime()),"asked",GetRaidTargetIndex("target")~=nil)
+   ```
+
+   Seen: (to do) the skull over the creature, and the order of the lines:
+   `RAID_TARGET_UPDATE` before `asked true` if the client marks at once,
+   after `asked false` if the server answers later. wowlua: `asked false`,
+   then `RAID_TARGET_UPDATE` about 0.4 s later.
+3. Read the marker a moment later:
+
+   ```
+   /run local i=GetRaidTargetIndex("target") print(issecretvalue(i),canaccessvalue(i) and i or "hidden")
+   ```
+
+   Seen: (to do). wowlua: `true hidden` (secret on camelot by the
+   documentation's `SecretReturns`).
+4. Take it off:
+
+   ```
+   /run SetRaidTarget("target",0)
+   ```
+
+   Seen: (to do) the skull goes, one `RAID_TARGET_UPDATE`. wowlua: the
+   same.
+5. Attack the creature so you are in combat, then try the skull again:
+
+   ```
+   /run print("combat",InCombatLockdown()) SetRaidTarget("target",8)
+   ```
+
+   Seen: (to do) "Interface action failed because of an AddOn" (or a
+   popup that an AddOn was blocked), `ADDON_ACTION_FORBIDDEN` with the
+   addon's name and `SetRaidTarget()`, no skull and no
+   `RAID_TARGET_UPDATE`. wowlua: `combat true`, `ADDON_ACTION_FORBIDDEN`
+   with `SetRaidTarget()`, no skull.
+6. Still in combat, read the marker:
+
+   ```
+   /run print(GetRaidTargetIndex("target")~=nil)
+   ```
+
+   Seen: (to do). wowlua: `false`.
+7. Still in combat, right-click the creature's target frame and pick
+   Raid Target Icon, then Skull.
+
+   Seen: (to do) the skull over the creature, `RAID_TARGET_UPDATE`, no
+   forbidden event. wowlua: the same.
+8. After the fight, stop the printing frame:
+
+   ```
+   /run RTP:UnregisterAllEvents()
+   ```
+
+Open: the other flavors (Retail, Mists, TBC, Classic Era) document
+`SetRaidTarget` as restricted too, and wowlua leaves it unrestricted there;
+steps 1, 5 and 6 on each of those clients would settle it.

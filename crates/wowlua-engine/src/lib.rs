@@ -86,6 +86,7 @@ pub mod protection;
 pub mod queries;
 pub mod questinfo;
 pub mod quests;
+pub mod raidtargets;
 pub mod recorded;
 pub mod replies;
 pub mod scene;
@@ -1370,6 +1371,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("units", units::more_behaviours()),
         Behaviours::new("clickbindings", clickbindings::behaviours()),
         Behaviours::new("targeting", targeting::behaviours()),
+        Behaviours::new("raidtargets", raidtargets::behaviours()),
         Behaviours::new("leftovers3", leftovers3::behaviours()),
         Behaviours::new("curves", curves::behaviours()),
         Behaviours::new("healcalc", healcalc::behaviours()),

@@ -388,9 +388,7 @@ pub(crate) fn set_cvar_text(vm: &mut Vm, name: &str, text: String, tell: bool) -
         return Ok(vec![]);
     }
     let (_, secure, read_only) = cvar_flags(vm, &name);
-    if secure && engine(vm).units.lockdown && crate::protection::tainted(vm) {
-        let action = crate::protection::action_name(vm);
-        crate::protection::refuse(vm, "ADDON_ACTION_FORBIDDEN", action);
+    if secure && crate::protection::forbids_in_combat(vm) {
         return Ok(vec![]);
     }
     if read_only {
