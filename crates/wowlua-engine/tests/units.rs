@@ -272,8 +272,11 @@ return point, rel == WorldFrame, pa:GetParent() == WorldFrame, w, h, tostring(xa
 
 /// A nameplate's frame draws at UIParent's scale: its scale UIParent's
 /// effective scale over WorldFrame's (decision T634; recorded on camelot
-/// 1.60.1, `0.63999998569489` for both at UIParent's 0.64), and it follows
-/// the UI scale, its plate staying where it was on the screen.
+/// 1.60.1, `0.63999998569489` for both at UIParent's 0.64), from the frame
+/// after its `NAME_PLATE_UNIT_ADDED`, at scale 1 until then (decision
+/// T637; recorded: an effective scale of 1 at the event, 0.512 a second
+/// later), and it follows the UI scale, its plate staying where it was on
+/// the screen.
 #[test]
 fn nameplates_draw_at_ui_parents_scale() {
     let mut vm = vm();
@@ -282,29 +285,117 @@ fn nameplates_draw_at_ui_parents_scale() {
         "local scales = {}
 local f = CreateFrame('Frame')
 f:RegisterEvent('NAME_PLATE_CREATED')
-f:SetScript('OnEvent', function(_, _, plate) scales[#scales + 1] = plate:GetScale() end)
+f:RegisterEvent('NAME_PLATE_UNIT_ADDED')
+f:SetScript('OnEvent', function(_, e, arg)
+    local plate = e == 'NAME_PLATE_CREATED' and arg or C_NamePlate.GetNamePlateForUnit(arg)
+    scales[#scales + 1] = plate:GetEffectiveScale()
+end)
 local a = mock.spawnUnit({ name = 'A' })
 a:showNameplate()
 local p = C_NamePlate.GetNamePlateForUnit('nameplate1')
+local x, y = p:GetCenter()
+local before = p:GetScale()
+mock.nextFrame()
 local x0, y0 = p:GetCenter()
 local s0 = p:GetEffectiveScale()
 C_CVar.SetCVar('uiScale', '0.64')
 C_CVar.SetCVar('useUiScale', '1')
 local x1, y1 = p:GetCenter()
 local s1 = p:GetEffectiveScale()
-return scales[1], p:GetScale(), s0, UIParent:GetEffectiveScale(), WorldFrame:GetEffectiveScale(), s1,
-    tostring(math.abs(x0 * s0 - x1 * s1) < 1e-3 and math.abs(y0 * s0 - y1 * s1) < 1e-3)",
+-- (again at 1 when it comes again)
+a:hideNameplate()
+a:showNameplate()
+local again = p:GetScale()
+mock.nextFrame()
+return scales[1], scales[2], before, p:GetScale(), s0, UIParent:GetEffectiveScale(), WorldFrame:GetEffectiveScale(), s1,
+    tostring(math.abs(x - x0 * s0) < 1e-3 and math.abs(y - y0 * s0) < 1e-3),
+    tostring(math.abs(x0 * s0 - x1 * s1) < 1e-3 and math.abs(y0 * s0 - y1 * s1) < 1e-3),
+    scales[3], again, p:GetEffectiveScale()",
     );
     assert_eq!(
         r,
         [
-            "0.7111111283302307",
+            "1",
+            "1",
+            "1",
             "0.6399999856948853",
             "0.7111111283302307",
             "0.6399999856948853",
             "1",
             "0.6399999856948853",
-            "true"
+            "true",
+            "true",
+            "1",
+            "1",
+            "0.6399999856948853"
+        ]
+    );
+}
+
+/// A nameplate's scale is UIParent's times a factor (decision T637;
+/// recorded on camelot 1.60.1 at UIParent's 0.64 with the game's
+/// defaults: `0.5120000243187` far, `0.76799964904785` targeted far):
+/// `nameplateMinScale` beyond `nameplateMinScaleDistance`,
+/// `nameplateMaxScale` within `nameplateMaxScaleDistance` (straight
+/// between them), `nameplateSelectedScale` for the target, following the
+/// target, the distance and the settings.
+#[test]
+fn nameplates_scale_by_distance_and_target() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "C_CVar.SetCVar('uiScale', '0.64')
+C_CVar.SetCVar('useUiScale', '1')
+local far = mock.spawnUnit({ name = 'Far', reaction = 'hostile', distance = 30 })
+local near = mock.spawnUnit({ name = 'Near', reaction = 'hostile', distance = 5 })
+far:showNameplate()
+near:showNameplate()
+local pf, pn = C_NamePlate.GetNamePlateForUnit('nameplate1'), C_NamePlate.GetNamePlateForUnit('nameplate2')
+mock.nextFrame()
+local out = { C_CVar.GetCVar('nameplateMinScale'), C_CVar.GetCVar('nameplateMaxScale'), C_CVar.GetCVar('nameplateSelectedScale'),
+    pf:GetEffectiveScale(), pn:GetEffectiveScale() }
+local at
+local f = CreateFrame('Frame')
+f:RegisterEvent('PLAYER_TARGET_CHANGED')
+f:SetScript('OnEvent', function() at = pf:GetEffectiveScale() end)
+local x, y = pf:GetCenter()
+local s = pf:GetEffectiveScale()
+mock.player:target(far)
+local x1, y1 = pf:GetCenter()
+out[#out + 1] = at
+out[#out + 1] = pf:GetEffectiveScale()
+out[#out + 1] = tostring(math.abs(x * s - x1 * at) < 1e-3 and math.abs(y * s - y1 * at) < 1e-3)
+mock.player:target(near)
+out[#out + 1] = pf:GetEffectiveScale()
+out[#out + 1] = pn:GetEffectiveScale()
+mock.player:target(nil)
+out[#out + 1] = pn:GetEffectiveScale()
+near:setDistance(25)
+out[#out + 1] = pn:GetEffectiveScale()
+C_CVar.SetCVar('nameplateMinScale', '1')
+out[#out + 1] = pf:GetEffectiveScale()
+C_CVar.SetCVar('nameplateMinScale', '0.8')
+C_CVar.SetCVar('nameplateMinScaleDistance', '40')
+out[#out + 1] = pn:GetEffectiveScale()
+return unpack(out)",
+    );
+    assert_eq!(
+        r,
+        [
+            "0.800000",
+            "1.000000",
+            "1.200000",
+            "0.5120000243186951",
+            "0.6399999856948853",
+            "0.7680000066757202",
+            "0.7680000066757202",
+            "true",
+            "0.5120000243186951",
+            "0.7680000066757202",
+            "0.6399999856948853",
+            "0.5120000243186951",
+            "0.6399999856948853",
+            "0.5759999752044678"
         ]
     );
 }

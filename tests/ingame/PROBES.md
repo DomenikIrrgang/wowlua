@@ -3074,7 +3074,7 @@ the line, and zoom in if it is hard to see.
    /run SPF:Hide()
    ```
 
-## The nameplates' scale (decisions T633, T634, 2026-11-12)
+## The nameplates' scale (decisions T633, T634, T637, 2026-11-12)
 
 SuuUI lays its nameplate lines out for the scale the game draws plates at,
 and can't lay a debuff icon's lines again once the game has made the icon
@@ -3087,11 +3087,19 @@ yards, without moving. Each line in the chat, one at a time.
 
 Step 1 was answered on 2026-11-12 (WoW Forever 1.60.1, two hostile
 plates): the plates draw at UIParent's scale, and wowlua now does too
-(decision T634). SuuUI sets `nameplateMinScale`, `nameplateMaxScale` and
-`nameplateSelectedScale` to 1, so steps 2 to 4 stay open: whether the
-scale changes with distance or the target at the settings' defaults
-(wowlua models neither). Run them with SuuUI's nameplates off, or with
-those settings back at their defaults.
+(decision T634). Steps 2 to 4 were answered the same day with the game's
+defaults set (SuuUI sets `nameplateMinScale`, `nameplateMaxScale` and
+`nameplateSelectedScale` to 1): a plate is at scale 1 when
+`NAME_PLATE_UNIT_ADDED` fires, and a moment later at UIParent's scale
+times `nameplateMinScale` far away or `nameplateSelectedScale` for the
+target. wowlua now does that from the next frame (decision T637). Steps 6
+to 9 read what is still open: a near plate, the distance where the scale
+changes, and the moment it does. Run them with the game's defaults set
+first:
+
+```
+/run SetCVar("nameplateMinScale","0.8") SetCVar("nameplateMaxScale","1") SetCVar("nameplateSelectedScale","1.2")
+```
 
 1. Every plate's scale and effective scale, then UIParent's and
    WorldFrame's:
@@ -3113,7 +3121,12 @@ those settings back at their defaults.
    /run for _,c in ipairs({"nameplateGlobalScale","nameplateMinScale","nameplateMaxScale","nameplateSelectedScale","nameplateLargerScale"}) do print(c,GetCVar(c)) end
    ```
 
-   Seen: (to do). wowlua: the client's defaults as recorded.
+   Seen: WoW Forever (2026-11-12, the game's defaults set):
+   `nameplateGlobalScale nil`, `nameplateMinScale 0.8`,
+   `nameplateMaxScale 1`, `nameplateSelectedScale 1.2`,
+   `nameplateLargerScale nil` (the first and the last don't exist on
+   camelot). wowlua: the same, its defaults as `GetCVarDefault` recorded
+   them (`0.800000`, `1.000000`, `1.200000`), nil for the two.
 3. Target a near enemy, then a far one, and after each read the target's
    plate:
 
@@ -3121,9 +3134,13 @@ those settings back at their defaults.
    /run local t=C_NamePlate.GetNamePlateForUnit("target") print("target",t and t:GetName(),t and t:GetEffectiveScale())
    ```
 
-   Seen: (to do, at the settings' defaults). wowlua: `target NamePlate1`
-   and UIParent's effective scale (the plate's name varies), the same near
-   and far.
+   Seen: WoW Forever (2026-11-12): no near enemy could be targeted; two
+   far ones, `target NamePlate23 0.76799964904785` and
+   `target NamePlate18 0.76799988746643` (0.64 x 1.2: the target's plate
+   takes `nameplateSelectedScale`, without the far 0.8), then `target nil
+   nil`. wowlua (decision T637): `target NamePlate1 0.76800000667572`
+   (the plate's name varies), near and far alike; its last digits are the
+   product's, the game's differ a little between plates.
 4. Print each plate's effective scale when it comes and a second later:
 
    ```
@@ -3133,13 +3150,68 @@ those settings back at their defaults.
    Then turn the camera away from the enemies and back, so their plates
    go and come again.
 
-   Seen: (to do, at the settings' defaults). wowlua: `nameplate1` and
-   UIParent's effective scale twice for each plate, a second apart. Different numbers in a plate's two lines mean the game changes a
-   plate's scale after `NAME_PLATE_UNIT_ADDED`.
+   Seen: WoW Forever (2026-11-12), far enemies' plates coming back:
+   `nameplate1 1`, `nameplate2 1`, `nameplate3 1` at the event, then
+   `0.51200020313263`, `0.5120000243187`, `0.5120000243187` a second later
+   (0.64 x 0.8); a second round the same. The game sets a plate's scale
+   after `NAME_PLATE_UNIT_ADDED`. wowlua (decision T637): `1` at the
+   event, and from the next frame UIParent's effective scale times the
+   factor, `0.5120000243187` for a unit farther than 10 yards.
 5. Stop the printing frame:
 
    ```
    /run NPP:UnregisterAllEvents()
+   ```
+
+6. Stand within 10 yards of an enemy that has a plate (melee range),
+   others farther away, none targeted, and read every plate with whether
+   its unit is within 10 yards:
+
+   ```
+   /run for i=1,40 do local u="nameplate"..i local p=C_NamePlate.GetNamePlateForUnit(u) if p then print(u,CheckInteractDistance(u,3),p:GetEffectiveScale()) end end
+   ```
+
+   Seen: (to do). wowlua: `true 0.63999998569489` within 10 yards
+   (`nameplateMaxScale`, guessed), `false 0.5120000243187` farther.
+7. Make a frame that prints a plate's scale whenever it changes, with the
+   time:
+
+   ```
+   /run NPS=CreateFrame("Frame") NPL={} NPS:SetScript("OnUpdate",function() for i=1,40 do local u="nameplate"..i local p=C_NamePlate.GetNamePlateForUnit(u) local s=p and p:GetEffectiveScale() if s~=NPL[u] then NPL[u]=s print(format("%.3f",GetTime()),u,CheckInteractDistance(u,3),s) end end end)
+   ```
+
+   Then walk slowly toward an enemy that stands still, without targeting
+   it, until you are next to it.
+
+   Seen: (to do) where its plate's scale changes (`CheckInteractDistance`
+   turning true about then: at 10 yards), and whether lines with values
+   between 0.512 and 0.64 come (the scale eased or graded, not one step).
+   wowlua: one step from `0.5120000243187` to `0.63999998569489` at 10
+   yards (`nameplateMinScaleDistance` and `nameplateMaxScaleDistance`
+   both 10), no values between.
+8. Keep that frame, and make one that prints the plate events and target
+   changes with the time:
+
+   ```
+   /run NPM=CreateFrame("Frame") NPM:RegisterEvent("NAME_PLATE_UNIT_ADDED") NPM:RegisterEvent("PLAYER_TARGET_CHANGED") NPM:SetScript("OnEvent",function(_,e,u) local p=C_NamePlate.GetNamePlateForUnit(u or "target") print(format("%.3f",GetTime()),e,u,p and p:GetEffectiveScale()) end)
+   ```
+
+   Then turn the camera away from the enemies and back, and after that
+   target an enemy, then another.
+
+   Seen: (to do) for a plate coming back, the time of step 7's line with
+   its new scale against its `NAME_PLATE_UNIT_ADDED` line's (the same
+   time: in the same frame; a few milliseconds later: the next frame or
+   after it); for a target, whether `PLAYER_TARGET_CHANGED`'s line already
+   shows the target's scale (0.768) or the one before, and when step 7's
+   line comes. wowlua: `NAME_PLATE_UNIT_ADDED nameplate1 1`, step 7's
+   line a frame or two later (the scale set after the next frame's
+   `OnUpdate` scripts); `PLAYER_TARGET_CHANGED nil 0.76800000667572` (set
+   as the target changes).
+9. Stop both frames:
+
+   ```
+   /run NPS:SetScript("OnUpdate",nil) NPM:UnregisterAllEvents()
    ```
 
 ## UnitIsTapDenied of a mob tagged by another (decision T635, 2026-11-12)

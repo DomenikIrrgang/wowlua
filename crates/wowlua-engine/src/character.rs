@@ -1788,6 +1788,10 @@ fn store_distance(vm: &mut Vm, me: units::UnitId, d: Option<f64>) {
     engine_mut(vm).units.list[me.0].distance = d;
     crate::gossip::moved_away(vm, me, d);
     crate::mail::moved_away(vm, me, d);
+    // (its nameplate's scale follows its distance: T637)
+    if engine(vm).units.nameplates.contains(&Some(me)) {
+        crate::units::rescale_nameplates(vm);
+    }
     if was != in_range(d) && me != units::PLAYER && engine(vm).units.group.contains(&me) {
         unit_in_range_update(vm, me, in_range(d));
     }

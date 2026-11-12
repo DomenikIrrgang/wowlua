@@ -421,6 +421,11 @@ pub(crate) fn set_cvar_text(vm: &mut Vm, name: &str, text: String, tell: bool) -
         let screen = crate::screen_from_cvars(vm);
         crate::change_screen(vm, screen);
     }
+    // The nameplates' scale settings scale the plates shown (decision
+    // T637; unverified: when, here as `CVAR_UPDATE` is told).
+    if crate::units::is_plate_scale_cvar(&name) {
+        crate::units::rescale_nameplates(vm);
+    }
     Ok(vec![Value::Bool(true)])
 }
 
