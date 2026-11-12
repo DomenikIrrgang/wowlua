@@ -2527,8 +2527,8 @@ impl Vm {
                 let c = &self.cstack[ci];
                 let base = c.slot + 1;
                 let limit = limit_after(c.slot, true);
-                for slot in base..limit {
-                    locals.push(("(*temporary)".to_string(), self.cur.stack[slot].v));
+                for slot in &self.cur.stack[base..limit] {
+                    locals.push(("(*temporary)".to_string(), slot.v));
                 }
                 if let Function::Native(n) = self.heap.func(c.func) {
                     upvalues.extend(n.upvals.iter().map(|&v| (String::new(), v)));
