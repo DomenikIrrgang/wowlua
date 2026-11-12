@@ -333,6 +333,9 @@ pub struct Units {
     /// Where each nameplate frame sits (its widget's index): the spot
     /// from the screen's center.
     pub plate_spots: std::collections::HashMap<usize, (f64, f64)>,
+    /// The nameplate frames added since the last frame's plates: at scale
+    /// 1 until then (decision T637).
+    pub plates_unscaled: Vec<widgets::WidgetId>,
     /// The group without the player, in order; a raid when `raid`.
     pub group: Vec<UnitId>,
     pub raid: bool,
@@ -2889,6 +2892,9 @@ pub fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
     }
     engine_mut(vm).units.target = new;
     engine_mut(vm).units.list[PLAYER.0].target = new;
+    // The plates take their scale as the target changes, before its event
+    // (decision T637; unverified: when the game does).
+    rescale_nameplates(vm);
     fire(vm, "PLAYER_TARGET_CHANGED", &[]);
     if same {
         engine_mut(vm).units.echo = None;
@@ -4635,7 +4641,16 @@ fn plate_spot(vm: &mut Vm, me: UnitId) -> Option<(f64, f64)> {
 /// Each frame, the nameplates of units at a place follow them: added as
 /// the camera comes to see them, moved with them, removed as it no longer
 /// does (decision T521).
+///
+/// Then each plate shown takes its scale (decision T637), those added
+/// before this frame too.
 pub fn plates_tick(vm: &mut Vm) {
+    engine_mut(vm).units.plates_unscaled.clear();
+    follow_plates(vm);
+    rescale_nameplates(vm);
+}
+
+fn follow_plates(vm: &mut Vm) {
     // (and those the game's settings give, while the world is on, T534)
     let mut by_settings = Vec::new();
     if engine(vm).world_on {
@@ -4786,24 +4801,39 @@ fn show_nameplate(vm: &mut Vm, me: UnitId) -> Result<usize, wowlua_vm::LuaError>
         );
         let id = widgets::widget_of(vm, frame).expect("a widget");
         engine_mut(vm).world.widgets[id.0].frame = true;
-        engine_mut(vm).world.widgets[id.0].scale = plate_scale(engine(vm), id);
         crate::widgets::reorder(crate::engine_mut(vm));
         crate::widgets::mark(crate::engine_mut(vm), id);
         engine_mut(vm).units.nameplate_frames.push(id);
         fire(vm, "NAME_PLATE_CREATED", &[frame]);
     }
+    // At its `NAME_PLATE_UNIT_ADDED` the frame is at scale 1, a frame
+    // later at its own (decision T637; recorded on camelot 1.60.1: an
+    // effective scale of 1 at the event, 0.512 a second later; unverified:
+    // the moment).
     let frame = engine(vm).units.nameplate_frames[slot];
+    if engine(vm).world.widgets[frame.0].scale != 1.0 {
+        engine_mut(vm).world.widgets[frame.0].scale = 1.0;
+        widgets::mark(engine_mut(vm), frame);
+        widgets::layout_changed(vm);
+        engine_mut(vm).units.plate_spots.remove(&frame.0);
+    }
+    if !engine(vm).units.plates_unscaled.contains(&frame) {
+        engine_mut(vm).units.plates_unscaled.push(frame);
+    }
     place_nameplate(vm, frame, me)?;
     let token = vm.str(&format!("nameplate{}", slot + 1));
     fire(vm, "NAME_PLATE_UNIT_ADDED", &[token]);
     Ok(slot)
 }
 
-/// A nameplate's scale: UIParent's effective scale over its parent's
-/// (WorldFrame's), so that it draws at UIParent's scale, a single float
-/// (decision T634; recorded on camelot 1.60.1: `0.63999998569489` at
-/// UIParent's 0.64, WorldFrame's 1).
-fn plate_scale(e: &crate::Engine, plate: widgets::WidgetId) -> f64 {
+/// A nameplate's scale (decision T637): UIParent's effective scale over
+/// its parent's (WorldFrame's), so that it draws at UIParent's scale
+/// (decision T634), times the unit's factor, a single float (recorded on
+/// camelot 1.60.1: `0.63999998569489` at UIParent's 0.64 and WorldFrame's
+/// 1 with the factor 1, `0.5120000243187` far with 0.8).
+fn plate_scale(vm: &mut Vm, plate: widgets::WidgetId, unit: UnitId) -> f64 {
+    let factor = plate_factor(vm, unit);
+    let e = engine(vm);
     let ui = e
         .world
         .ui_parent
@@ -4814,16 +4844,67 @@ fn plate_scale(e: &crate::Engine, plate: widgets::WidgetId) -> f64 {
     if world <= 0.0 {
         return 1.0;
     }
-    f64::from((ui / world) as f32)
+    f64::from((ui / world) as f32 * factor as f32)
 }
 
-/// The UI scale changed (decision T634): each nameplate's frame takes
-/// UIParent's effective scale again, and a plate shown is placed again
-/// where it was on the screen.
+/// A unit's nameplate factor (decision T637): `nameplateSelectedScale` for
+/// the player's target (recorded: 1.2, far, without the far factor), else
+/// by its distance: `nameplateMaxScale` within `nameplateMaxScaleDistance`
+/// or at no known distance, `nameplateMinScale` beyond
+/// `nameplateMinScaleDistance` (recorded: 0.8, far), straight between them
+/// (unverified, as is the near factor). A flavor without the settings: 1.
+fn plate_factor(vm: &mut Vm, unit: UnitId) -> f64 {
+    let (target, distance) = {
+        let u = &engine(vm).units;
+        (u.target == Some(unit), u.list[unit.0].distance)
+    };
+    let mut num = |name: &str, default: f64| {
+        crate::framescript::cvar_get(vm, name)
+            .and_then(|v| v.trim().parse::<f64>().ok())
+            .unwrap_or(default)
+    };
+    if target {
+        return num("nameplateSelectedScale", 1.0);
+    }
+    let near_scale = num("nameplateMaxScale", 1.0);
+    let far_scale = num("nameplateMinScale", 1.0);
+    let near = num("nameplateMaxScaleDistance", 10.0);
+    let far = num("nameplateMinScaleDistance", 10.0);
+    match distance {
+        None => near_scale,
+        Some(d) if d <= near => near_scale,
+        Some(d) if d >= far => far_scale,
+        Some(d) => near_scale + (far_scale - near_scale) * (d - near) / (far - near),
+    }
+}
+
+/// Whether a CVar sets the nameplates' scale (decision T637).
+pub(crate) fn is_plate_scale_cvar(name: &str) -> bool {
+    [
+        "nameplateMinScale",
+        "nameplateMaxScale",
+        "nameplateSelectedScale",
+        "nameplateMinScaleDistance",
+        "nameplateMaxScaleDistance",
+    ]
+    .iter()
+    .any(|c| c.eq_ignore_ascii_case(name))
+}
+
+/// The nameplates take their scale again (decision T637): each frame, and
+/// as the UI scale (T634), the target, a unit's distance or the scale
+/// settings change. A plate shown is placed again where it was on the
+/// screen; one added since the last frame stays at 1 until the next.
 pub(crate) fn rescale_nameplates(vm: &mut Vm) {
     let frames = engine(vm).units.nameplate_frames.clone();
     for (slot, frame) in frames.into_iter().enumerate() {
-        let scale = plate_scale(engine(vm), frame);
+        let Some(Some(unit)) = engine(vm).units.nameplates.get(slot).copied() else {
+            continue;
+        };
+        if engine(vm).units.plates_unscaled.contains(&frame) {
+            continue;
+        }
+        let scale = plate_scale(vm, frame, unit);
         if engine(vm).world.widgets[frame.0].scale == scale {
             continue;
         }
@@ -4831,9 +4912,7 @@ pub(crate) fn rescale_nameplates(vm: &mut Vm) {
         widgets::mark(engine_mut(vm), frame);
         widgets::layout_changed(vm);
         engine_mut(vm).units.plate_spots.remove(&frame.0);
-        if let Some(Some(unit)) = engine(vm).units.nameplates.get(slot).copied() {
-            let _ = place_nameplate(vm, frame, unit);
-        }
+        let _ = place_nameplate(vm, frame, unit);
     }
 }
 
