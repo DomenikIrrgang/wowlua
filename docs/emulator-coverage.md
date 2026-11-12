@@ -2556,7 +2556,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - SetRaidTarget in combat (decision T631, 2026-11-11)
 - Aura buttons forbidden after their build (decision T632, 2026-11-11)
 - Lines under a pixel (decision T633, 2026-11-12)
-- The nameplates' scale (decision T633, 2026-11-12)
+- The nameplates' scale (decisions T633, T634, 2026-11-12)
 
 ## In-game regressions
 

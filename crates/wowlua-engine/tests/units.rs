@@ -256,14 +256,55 @@ a:showNameplate()
 local _, _, _, again = pa:GetPoint(1)
 local cx, cy = pa:GetCenter()
 local sx, sy = WorldFrame:GetCenter()
+-- (the offsets in the plate's units, at UIParent's scale: T634)
+local s = pa:GetEffectiveScale()
 return point, rel == WorldFrame, pa:GetParent() == WorldFrame, w, h, tostring(xa ~= xb or ya ~= yb), tostring(again == xa),
-    tostring(math.abs(xa) <= 350 and ya >= -50 and ya <= 200),
-    tostring(math.abs(cx - sx - again) < 1e-3)",
+    tostring(math.abs(xa * s) <= 350 and ya * s >= -50 and ya * s <= 200),
+    tostring(math.abs(cx * s - sx - again * s) < 1e-3)",
     );
     assert_eq!(
         r,
         [
             "CENTER", "true", "true", "237.5", "85", "true", "true", "true", "true"
+        ]
+    );
+}
+
+/// A nameplate's frame draws at UIParent's scale: its scale UIParent's
+/// effective scale over WorldFrame's (decision T634; recorded on camelot
+/// 1.60.1, `0.63999998569489` for both at UIParent's 0.64), and it follows
+/// the UI scale, its plate staying where it was on the screen.
+#[test]
+fn nameplates_draw_at_ui_parents_scale() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local scales = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('NAME_PLATE_CREATED')
+f:SetScript('OnEvent', function(_, _, plate) scales[#scales + 1] = plate:GetScale() end)
+local a = mock.spawnUnit({ name = 'A' })
+a:showNameplate()
+local p = C_NamePlate.GetNamePlateForUnit('nameplate1')
+local x0, y0 = p:GetCenter()
+local s0 = p:GetEffectiveScale()
+C_CVar.SetCVar('uiScale', '0.64')
+C_CVar.SetCVar('useUiScale', '1')
+local x1, y1 = p:GetCenter()
+local s1 = p:GetEffectiveScale()
+return scales[1], p:GetScale(), s0, UIParent:GetEffectiveScale(), WorldFrame:GetEffectiveScale(), s1,
+    tostring(math.abs(x0 * s0 - x1 * s1) < 1e-3 and math.abs(y0 * s0 - y1 * s1) < 1e-3)",
+    );
+    assert_eq!(
+        r,
+        [
+            "0.7111111283302307",
+            "0.6399999856948853",
+            "0.7111111283302307",
+            "0.6399999856948853",
+            "1",
+            "0.6399999856948853",
+            "true"
         ]
     );
 }

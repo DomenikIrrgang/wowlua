@@ -4761,6 +4761,7 @@ fn show_nameplate(vm: &mut Vm, me: UnitId) -> Result<usize, wowlua_vm::LuaError>
         );
         let id = widgets::widget_of(vm, frame).expect("a widget");
         engine_mut(vm).world.widgets[id.0].frame = true;
+        engine_mut(vm).world.widgets[id.0].scale = plate_scale(engine(vm), id);
         crate::widgets::reorder(crate::engine_mut(vm));
         crate::widgets::mark(crate::engine_mut(vm), id);
         engine_mut(vm).units.nameplate_frames.push(id);
@@ -4773,11 +4774,50 @@ fn show_nameplate(vm: &mut Vm, me: UnitId) -> Result<usize, wowlua_vm::LuaError>
     Ok(slot)
 }
 
+/// A nameplate's scale: UIParent's effective scale over its parent's
+/// (WorldFrame's), so that it draws at UIParent's scale, a single float
+/// (decision T634; recorded on camelot 1.60.1: `0.63999998569489` at
+/// UIParent's 0.64, WorldFrame's 1).
+fn plate_scale(e: &crate::Engine, plate: widgets::WidgetId) -> f64 {
+    let ui = e
+        .world
+        .ui_parent
+        .map_or(1.0, |u| widgets::effective_scale(e, u));
+    let world = e.world.widgets[plate.0]
+        .parent
+        .map_or(1.0, |w| widgets::effective_scale(e, w));
+    if world <= 0.0 {
+        return 1.0;
+    }
+    f64::from((ui / world) as f32)
+}
+
+/// The UI scale changed (decision T634): each nameplate's frame takes
+/// UIParent's effective scale again, and a plate shown is placed again
+/// where it was on the screen.
+pub(crate) fn rescale_nameplates(vm: &mut Vm) {
+    let frames = engine(vm).units.nameplate_frames.clone();
+    for (slot, frame) in frames.into_iter().enumerate() {
+        let scale = plate_scale(engine(vm), frame);
+        if engine(vm).world.widgets[frame.0].scale == scale {
+            continue;
+        }
+        engine_mut(vm).world.widgets[frame.0].scale = scale;
+        widgets::mark(engine_mut(vm), frame);
+        widgets::layout_changed(vm);
+        engine_mut(vm).units.plate_spots.remove(&frame.0);
+        if let Some(Some(unit)) = engine(vm).units.nameplates.get(slot).copied() {
+            let _ = place_nameplate(vm, frame, unit);
+        }
+    }
+}
+
 /// A nameplate shown sits where its unit is: the client's size
-/// (`C_NamePlate.GetNamePlateSize`), where the camera sees the unit
-/// (decision T521), or for a unit at no place at a spot of the screen's
-/// middle picked from the unit, the same each run (plates may overlap, as
-/// in the game).
+/// (`C_NamePlate.GetNamePlateSize`, in the plate's units), where the camera
+/// sees the unit (decision T521), or for a unit at no place at a spot of
+/// the screen's middle picked from the unit, the same each run (plates may
+/// overlap, as in the game). The spot is WorldFrame's: the plate's offsets
+/// are it over the plate's scale (decision T634).
 fn place_nameplate(
     vm: &mut Vm,
     frame: widgets::WidgetId,
@@ -4809,11 +4849,13 @@ fn place_nameplate(
             Value::Table(engine(vm).world.widgets[world.0].table)
         });
     let (p, rp) = (vm.str("CENTER"), vm.str("CENTER"));
+    let scale = engine(vm).world.widgets[frame.0].scale;
+    let scale = if scale > 0.0 { scale } else { 1.0 };
     widgets::call_method(
         vm,
         plate,
         "SetPoint",
-        &[p, screen, rp, Value::Num(x), Value::Num(y)],
+        &[p, screen, rp, Value::Num(x / scale), Value::Num(y / scale)],
     )?;
     widgets::call_method(vm, plate, "SetSize", &[Value::Num(237.5), Value::Num(85.0)])?;
     Ok(())

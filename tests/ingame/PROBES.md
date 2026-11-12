@@ -3030,16 +3030,24 @@ the line, and zoom in if it is hard to see.
    /run SPF:Hide()
    ```
 
-## The nameplates' scale (decision T633, 2026-11-12)
+## The nameplates' scale (decisions T633, T634, 2026-11-12)
 
 SuuUI lays its nameplate lines out for the scale the game draws plates at,
 and can't lay a debuff icon's lines again once the game has made the icon
 forbidden, so a plate drawn at another scale later thins them under a
-pixel. wowlua puts the plates on WorldFrame at a scale of 1; the game's
-scale is unknown (SuuUI found it isn't WorldFrame's and guesses UIParent's),
+pixel. wowlua put the plates on WorldFrame at a scale of 1; the game's
+scale was unknown (SuuUI found it isn't WorldFrame's and guessed UIParent's),
 and so is whether it changes with distance or the target. These steps read
 it. Stand where enemy nameplates show, some near and some farther than 20
 yards, without moving. Each line in the chat, one at a time.
+
+Step 1 was answered on 2026-11-12 (WoW Forever 1.60.1, two hostile
+plates): the plates draw at UIParent's scale, and wowlua now does too
+(decision T634). SuuUI sets `nameplateMinScale`, `nameplateMaxScale` and
+`nameplateSelectedScale` to 1, so steps 2 to 4 stay open: whether the
+scale changes with distance or the target at the settings' defaults
+(wowlua models neither). Run them with SuuUI's nameplates off, or with
+those settings back at their defaults.
 
 1. Every plate's scale and effective scale, then UIParent's and
    WorldFrame's:
@@ -3048,9 +3056,13 @@ yards, without moving. Each line in the chat, one at a time.
    /run for _,p in ipairs(C_NamePlate.GetNamePlates()) do print(p:GetName(),p:GetScale(),p:GetEffectiveScale()) end print(UIParent:GetEffectiveScale(),WorldFrame:GetEffectiveScale())
    ```
 
-   Seen: (to do). wowlua: `NamePlate1 1 1` for each plate, then
-   UIParent's scale (`0.71111112833023` on a 1920 by 1080 screen at the
-   default UI scale) and `1`.
+   Seen: WoW Forever (2026-11-12): `NamePlate10 0.63999998569489
+   0.63999998569489`, `NamePlate39 0.63999998569489 0.63999998569489`,
+   then `0.63999998569489 1` (UIParent's scale and effective scale the
+   same as the plates'). wowlua said `NamePlate1 1 1`; it now gives each
+   plate UIParent's effective scale over WorldFrame's
+   (`NamePlate1 0.71111112833023 0.71111112833023` on a 1920 by 1080
+   screen at the default UI scale), then that and `1`.
 2. The nameplate scale settings:
 
    ```
@@ -3065,8 +3077,9 @@ yards, without moving. Each line in the chat, one at a time.
    /run local t=C_NamePlate.GetNamePlateForUnit("target") print("target",t and t:GetName(),t and t:GetEffectiveScale())
    ```
 
-   Seen: (to do). wowlua: `target NamePlate1 1` (the plate's name varies),
-   the same near and far.
+   Seen: (to do, at the settings' defaults). wowlua: `target NamePlate1`
+   and UIParent's effective scale (the plate's name varies), the same near
+   and far.
 4. Print each plate's effective scale when it comes and a second later:
 
    ```
@@ -3076,8 +3089,8 @@ yards, without moving. Each line in the chat, one at a time.
    Then turn the camera away from the enemies and back, so their plates
    go and come again.
 
-   Seen: (to do). wowlua: `nameplate1 1` twice for each plate, a second
-   apart. Different numbers in a plate's two lines mean the game changes a
+   Seen: (to do, at the settings' defaults). wowlua: `nameplate1` and
+   UIParent's effective scale twice for each plate, a second apart. Different numbers in a plate's two lines mean the game changes a
    plate's scale after `NAME_PLATE_UNIT_ADDED`.
 5. Stop the printing frame:
 
