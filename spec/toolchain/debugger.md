@@ -298,7 +298,9 @@ a difference.
   `SetSnapToPixelGrid(false)` or `snapToPixelGrid="false"`: Blizzard's
   code only turns it off; probed in WoW Forever, as is a texel snapping
   bias of 0.3 at first): a snapping texture is drawn with its edges on
-  whole pixels, each rounded to the nearest (unverified). One that does
+  whole pixels, each rounded to the nearest (probed in WoW Forever,
+  2026-11-12: a half-pixel line one pixel thick at one height, gone at
+  another). One that does
   not snap is drawn where its edges are, as the GPU fills a triangle: a
   pixel is filled when its centre lies inside the rectangle (a centre on
   an edge by the top-left rule), with no partial coverage. So a line under

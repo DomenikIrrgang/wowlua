@@ -2986,44 +2986,48 @@ the line, and zoom in if it is hard to see.
    /run SPT:ClearAllPoints() SPT:SetPoint("TOPLEFT",SPF,"TOPLEFT",200*SPU,-300.25*SPU)
    ```
 
-   Seen: (to do). wowlua: a red line one pixel thick, full red.
+   Seen: WoW Forever (2026-11-12): a red line, full red. wowlua: a red
+   line one pixel thick, full red.
 4. Its top 300.6 pixels down (between the centres of rows 300 and 301):
 
    ```
    /run SPT:ClearAllPoints() SPT:SetPoint("TOPLEFT",SPF,"TOPLEFT",200*SPU,-300.6*SPU)
    ```
 
-   Seen: (to do). wowlua: no line at all. A faint line here means the game
-   blends by coverage instead.
+   Seen: WoW Forever (2026-11-12): no line at all, as wowlua: no line. (A
+   faint line would have meant the game blends by coverage.)
 5. Its top 301.1 pixels down (it covers the centre of row 301):
 
    ```
    /run SPT:ClearAllPoints() SPT:SetPoint("TOPLEFT",SPF,"TOPLEFT",200*SPU,-301.1*SPU)
    ```
 
-   Seen: (to do). wowlua: the line again, one pixel lower than in step 3.
+   Seen: WoW Forever (2026-11-12): the line again. wowlua: the line again,
+   one pixel lower than in step 3.
 6. A whole pixel thick, its top 300.6 pixels down:
 
    ```
    /run SPT:SetHeight(SPU) SPT:ClearAllPoints() SPT:SetPoint("TOPLEFT",SPF,"TOPLEFT",200*SPU,-300.6*SPU)
    ```
 
-   Seen: (to do). wowlua: a line one pixel thick (row 301).
+   Seen: WoW Forever (2026-11-12): a line. wowlua: a line one pixel thick
+   (row 301).
 7. Half a pixel thick again, now snapping, its top 300.25 pixels down:
 
    ```
    /run SPT:SetHeight(0.5*SPU) SPT:SetSnapToPixelGrid(true) SPT:ClearAllPoints() SPT:SetPoint("TOPLEFT",SPF,"TOPLEFT",200*SPU,-300.25*SPU)
    ```
 
-   Seen: (to do). wowlua: a line one pixel thick (its edges rounded to 300
-   and 301).
+   Seen: WoW Forever (2026-11-12): a line. wowlua: a line one pixel thick
+   (its edges rounded to 300 and 301).
 8. Snapping, its top 300.6 pixels down:
 
    ```
    /run SPT:ClearAllPoints() SPT:SetPoint("TOPLEFT",SPF,"TOPLEFT",200*SPU,-300.6*SPU)
    ```
 
-   Seen: (to do). wowlua: no line (both edges rounded to 301).
+   Seen: WoW Forever (2026-11-12): no line, as wowlua: no line (both edges
+   rounded to 301). The snapping rule holds.
 9. Put the line away:
 
    ```
