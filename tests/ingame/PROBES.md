@@ -3277,3 +3277,140 @@ below you, outside your group. Each line in the chat, one at a time.
 
 Open: a missed first blow tagging, and a tagger joining your group while
 the mob lives (wowlua: the mob is no longer tap-denied, without an event).
+
+## Secret sizes and anchors (decision T638, 2026-11-12)
+
+Found in game: at login SuuUI's Pink Cat theme raised six times "attempt
+to compare local 'a' (a secret number value, while execution tainted by
+'SuuUI')". It read `GetHeight()` of a unit frame's incoming heals bar, a
+status bar anchored by two points to the health bar's fill, whose value
+is another unit's `UnitHealth` (a secret), and compared it. wowlua now
+makes the fill's rectangle secret while the bar's value or range is, and
+every rectangle that comes from it, however many anchors lie between: all
+the size and place getters answer secrets, and `IsAnchoringSecret()` true.
+A size or offsets set from secrets (secure code only) leave the rectangle
+plain, as an aura container's buttons answered a plain width (T636's
+probe). These steps check what is guessed:
+
+- the fill's own size and place, and its height;
+- a frame anchored by one point to the fill (its size its own);
+- `GetPoint`, `IsMouseOver` and a font string's measures there;
+- the size `OnSizeChanged` gets;
+- a plain value and range making them plain again;
+- an aura container's own size and its buttons' place.
+
+All out of combat. Target a mob or another player (not yourself), then
+each line in the chat, one at a time. Each step prints `true` for a
+secret value, `false` for a plain one.
+
+1. Make a bar showing the target's health:
+
+   ```
+   /run SB=CreateFrame("StatusBar",nil,UIParent) SB:SetSize(200,20) SB:SetPoint("CENTER",0,-200) SB:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8") SB:SetMinMaxValues(0,UnitHealthMax("target")) SB:SetValue(UnitHealth("target"))
+   ```
+
+2. Make the helper that prints which values are secret:
+
+   ```
+   /run function SS(...) local o={} for i=1,select("#",...) do o[i]=tostring(issecretvalue((select(i,...)))) end return table.concat(o,",") end
+   ```
+
+3. Ask the bar and its fill:
+
+   ```
+   /run local t=SB:GetStatusBarTexture() print("bar",SS(SB:GetValue(),SB:GetWidth()),SB:IsAnchoringSecret(),"fill",SS(t:GetWidth(),t:GetHeight(),t:GetLeft()),t:IsAnchoringSecret(),t:GetNumPoints())
+   ```
+
+   Seen: (to do). wowlua: `bar true,false false fill true,true,true true 0`.
+4. Anchor a frame to the fill by two points (as SuuUI's incoming heals
+   bar), and one by a single point:
+
+   ```
+   /run local t=SB:GetStatusBarTexture() SI=CreateFrame("Frame",nil,SB) SI:SetPoint("TOPLEFT",t,"TOPRIGHT") SI:SetPoint("BOTTOMLEFT",t,"BOTTOMRIGHT") SI:SetWidth(10) SO=CreateFrame("Frame",nil,SB) SO:SetPoint("LEFT",t,"RIGHT") SO:SetSize(10,10)
+   ```
+
+5. Ask both (width, height, the four values of `GetRect`; then width,
+   height, left, top):
+
+   ```
+   /run print("two",SS(SI:GetWidth(),SI:GetHeight(),SI:GetRect()),SI:IsAnchoringSecret(),"one",SS(SO:GetWidth(),SO:GetHeight(),SO:GetLeft(),SO:GetTop()),SO:IsAnchoringSecret())
+   ```
+
+   Seen: (to do). wowlua: `two true,true,true,true,true,true true one
+   true,true,true,true true`. In game the two-point frame's height is
+   secret (SuuUI's error); open: its width, and the one-point frame's
+   size.
+6. Ask the two-point frame's anchor and whether the mouse is over it:
+
+   ```
+   /run print("point",SS(SI:GetPoint(1)),"mouse",SS(SI:IsMouseOver()))
+   ```
+
+   Seen: (to do). wowlua: `point true,true,true,true,true mouse false`.
+7. Put a texture and a font string in that frame:
+
+   ```
+   /run SX=SI:CreateTexture() SX:SetAllPoints() SF=SI:CreateFontString() SF:SetFont("Fonts\\FRIZQT__.TTF",12) SF:SetPoint("LEFT") SF:SetText("Hi")
+   ```
+
+8. Ask them:
+
+   ```
+   /run print("inside",SS(SX:GetWidth(),SX:GetHeight()),SX:IsAnchoringSecret(),"text",SS(SF:GetStringWidth(),SF:GetWidth()),SF:IsAnchoringSecret())
+   ```
+
+   Seen: (to do). wowlua: `inside true,true true text false,true true`.
+9. Print the size `OnSizeChanged` gets (a `size` line comes a moment
+   later):
+
+   ```
+   /run SI:SetScript("OnSizeChanged",function(_,w,h) print("size",SS(w,h)) end) SI:SetWidth(12)
+   ```
+
+   Seen: (to do). wowlua: `size false,false`.
+10. Compare the height:
+
+    ```
+    /run print(pcall(function() local a=SI:GetHeight() return a>0 end))
+    ```
+
+    Seen: (to do). wowlua: `false [string "print(pcall(function() local
+    a=SI:GetHeight..."]:1: attempt to compare local 'a' (a secret number
+    value, while execution tainted by '*** ForceTaint_Strong ***')`.
+11. Give the bar a plain range and value:
+
+    ```
+    /run SB:SetMinMaxValues(0,1) SB:SetValue(1) print("plain",SS(SI:GetHeight(),SO:GetLeft(),SB:GetStatusBarTexture():GetWidth()),SI:IsAnchoringSecret())
+    ```
+
+    Seen: (to do). wowlua: `plain false,false,false false`.
+12. A secret range alone:
+
+    ```
+    /run SB:SetMinMaxValues(0,UnitHealthMax("target")) print("range",SS(SB:GetMinMaxValues()),SS(SI:GetHeight()),SI:IsAnchoringSecret())
+    ```
+
+    Seen: (to do). wowlua: `range true,true true true`.
+13. With a buff on you, make an aura container of your own (Blizzard's
+    code sizes it with `SetSize(secretwrap(…))` and anchors its buttons
+    with `SetPoint(secretwrap(…))`):
+
+    ```
+    /run AC=CreateFrame("AuraContainer",nil,UIParent,"CustomAuraContainerTemplate") AC:SetSize(1,1) AC:SetPoint("CENTER") AP={} AC:AddAuraGroup("b","HELPFUL",{maxFrameCount=1,initializeFrame=function(b) AP.b=b end}) AC:SetUnit("player")
+    ```
+
+14. Ask the container and its button (width, left; then the button's
+    width, left and the five values of its `GetPoint`):
+
+    ```
+    /run local b=AP.b print("aura",SS(AC:GetWidth(),AC:GetLeft()),AC:IsAnchoringSecret(),SS(b:GetWidth(),b:GetLeft(),b:GetPoint(1)),b:IsAnchoringSecret())
+    ```
+
+    Seen: (to do). wowlua: `aura false,false false
+    false,false,false,false,false,false,false false`. T636's probe saw
+    the button's `GetWidth` plain.
+15. Hide what the steps made:
+
+    ```
+    /run SB:Hide() SB:SetValue(0) AC:Hide()
+    ```

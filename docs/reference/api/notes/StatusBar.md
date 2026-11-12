@@ -38,6 +38,23 @@ is typed `number | Secret<number>`; the getters are typed `number`, or
 plain numbers again after the next plain `SetValue` or `SetMinMaxValues`. In a camelot test, `UnitHealth("player")` returns a
 secret, so a health bar's `GetValue` returns one too.
 
+While the value or range is secret, so are the size and place of the bar's
+texture, which the value lays out, and of everything anchored to that
+texture, however many anchors lie between: an incoming heals bar at the
+health fill's right edge, a texture set over that bar. Their `GetWidth`,
+`GetHeight`, `GetSize`, `GetRect`, `GetLeft`, `GetRight`, `GetTop`,
+`GetBottom`, `GetCenter` and `GetPoint` return secrets, the height too, and
+`IsAnchoringSecret()` returns true. Comparing such a size fails, as in the
+game:
+
+```text
+attempt to compare local 'h' (a secret number value, while execution tainted by 'MyAddon')
+```
+
+The bar itself, and frames anchored to the bar rather than to its texture,
+keep plain sizes, so read the size you need from them, or check with
+`issecretvalue` first.
+
 ## Example
 
 A health bar for the player. The bar takes `UnitHealth` as it is, secret or

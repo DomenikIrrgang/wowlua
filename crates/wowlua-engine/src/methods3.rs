@@ -420,6 +420,12 @@ fn get_source_location(vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![vm.str("")])
 }
 
+/// `ScriptRegion:IsAnchoringSecret()`: whether its rectangle comes from a
+/// secret, so its size and position read back secret (decision T638).
+fn is_anchoring_secret(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(crate::widgets::anchoring_secret(vm, id))])
+}
+
 /// `FrameScriptObject:HasAnySecretAspect()`: the engine's secret aspects
 /// are an alpha set from a secret and a bar's value or range set from one.
 fn has_any_secret_aspect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
@@ -1590,6 +1596,7 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
             get_round_layout,
         ),
         ("ScriptRegion:GetSourceLocation", get_source_location),
+        ("ScriptRegion:IsAnchoringSecret", is_anchoring_secret),
         (
             "ScriptRegion:ShouldButtonPassThrough",
             should_button_pass_through,

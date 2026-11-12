@@ -327,9 +327,32 @@ A status bar's texture without points of its own is laid out over the
 part of the bar its value fills, from the right (or the top, vertical)
 when the bar fills in reverse, secret value or not, so a frame anchored to
 its edge follows the value (decision T490). `GetNumPoints` still gives 0
-(unverified: the points the client reports for it, and whether a
-frame anchored to it answers its position as secrets while the bar's value
-is secret; here it answers plain numbers).
+(unverified: the points the client reports for it).
+
+While the bar's value or range is secret, that texture's anchoring is
+secret (`IsAnchoringSecret()` true), and so is the anchoring of every
+region whose rectangle comes from it, through any number of anchors (a
+point without a relative is to the parent; a frame anchored to the bar
+itself stays plain). A region whose anchoring is secret answers its
+rectangle's getters, those the documentation marks
+`SecretWhenAnchoringSecret`, with secrets: `GetWidth`, `GetHeight`,
+`GetSize`, `GetRect`, `GetScaledRect`, `GetLeft`, `GetRight`, `GetTop`,
+`GetBottom`, `GetCenter`, `GetPoint` and `GetPointByName`, every value of
+the answer, the height of a horizontal bar's fill too. A plain value
+again makes them plain (decision T638). Found in game: SuuUI's incoming
+heals bar, anchored by two points to the health fill of another unit
+(`UnitHealth`, a secret), answered `GetHeight()` with a secret number, and
+comparing it raised "attempt to compare local 'a' (a secret number value,
+while execution tainted by 'SuuUI')". A size or offsets set from secrets
+(`SetSize(secretwrap(…))`, `SetPoint(secretwrap(…))`, which only secure
+code may pass: Blizzard's aura containers do) leave the rectangle plain:
+the buttons of such a container answered a plain `GetWidth` in game.
+Unverified (probe "Secret sizes and anchors"): the fill's own rectangle
+and its height, a frame anchored by one point, a single point's
+position, `GetPoint`'s answer, a size or offsets set from secrets, the
+size `OnSizeChanged` is given (plain here), and the documentation's other
+such functions (`IsMouseOver`, `Intersects`, a font string's measures),
+which answer plainly here.
 
 A protected frame anchored to a region (a texture, a font string, a line,
 a mask texture) is refused with the client's error, out of combat too:

@@ -2895,7 +2895,7 @@ fn not_for_lines(vm: &mut Vm, id: WidgetId, method: &str) -> Result<(), LuaError
 fn get_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     resolve(vm, id);
     let s = layout_scale(engine(vm), id);
-    Ok(match bounds(vm, id, 0) {
+    let rect = match bounds(vm, id, 0) {
         Some(b) if !reported_points(vm, id).is_empty() => vec![
             Value::Num(b.0 / s),
             Value::Num(b.1 / s),
@@ -2903,7 +2903,8 @@ fn get_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
             Value::Num(b.3 / s),
         ],
         _ => vec![],
-    })
+    };
+    Ok(rect_answer(vm, id, rect))
 }
 
 /// A widget's points as `GetPoint` reports them. A slider's thumb texture
@@ -2974,13 +2975,14 @@ fn get_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         .map(|p| Value::Table(engine(vm).world.widgets[p.0].table));
     let point = vm.str(&p.point);
     let rp = vm.str(&p.relative_point);
-    Ok(vec![
+    let answer = vec![
         point,
         p.relative.or(parent).unwrap_or(Value::Nil),
         rp,
         Value::Num(p.x),
         Value::Num(p.y),
-    ])
+    ];
+    Ok(rect_answer(vm, id, answer))
 }
 
 /// `GetPointByName(point)`: the anchor of that point as `GetPoint` gives
@@ -3001,13 +3003,14 @@ fn get_point_by_name(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         .map(|p| Value::Table(engine(vm).world.widgets[p.0].table));
     let point = vm.str(&p.point);
     let rp = vm.str(&p.relative_point);
-    Ok(vec![
+    let answer = vec![
         point,
         p.relative.or(parent).unwrap_or(Value::Nil),
         rp,
         Value::Num(p.x),
         Value::Num(p.y),
-    ])
+    ];
+    Ok(rect_answer(vm, id, answer))
 }
 
 fn set_size(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
@@ -3180,6 +3183,53 @@ fn anchor_targets(vm: &Vm, id: WidgetId) -> Vec<WidgetId> {
         }
     }
     out
+}
+
+/// Whether a region's anchoring is secret (`IsAnchoringSecret`, the
+/// documentation's `SecretWhenAnchoringSecret`): a status bar's texture
+/// without points while the bar's value or range is secret (the bar places
+/// it by its value), and whatever its rectangle comes from, through any
+/// number of anchors (decision T638; found in game: SuuUI's incoming heals
+/// bar, anchored to the health fill of another unit, answered `GetHeight`
+/// with a secret). Unverified: a size or offsets set from a secret (Blizzard's
+/// aura containers do, and their buttons answered a plain width).
+pub(crate) fn anchoring_secret(vm: &Vm, id: WidgetId) -> bool {
+    let e = engine(vm);
+    // (no bar holds a secret: nothing can be, the common case)
+    if !e
+        .world
+        .bars
+        .values()
+        .any(|b| b.secret_value || b.secret_range)
+    {
+        return false;
+    }
+    let mut seen = vec![id];
+    let mut todo = vec![id];
+    while let Some(w) = todo.pop() {
+        if e.world.widgets[w.0].points.is_empty()
+            && let Some((bar, ..)) = crate::bars::fill_place(vm, w)
+            && crate::bars::secret_value(vm, bar)
+        {
+            return true;
+        }
+        for t in anchor_targets(vm, w) {
+            if !seen.contains(&t) {
+                seen.push(t);
+                todo.push(t);
+            }
+        }
+    }
+    false
+}
+
+/// A region's rectangle as its getters answer it: secrets while its
+/// anchoring is ([`anchoring_secret`]).
+pub(crate) fn rect_answer(vm: &mut Vm, id: WidgetId, values: Vec<Value>) -> Vec<Value> {
+    if values.is_empty() || !anchoring_secret(vm, id) {
+        return values;
+    }
+    values.into_iter().map(|v| vm.secret_wrap(v)).collect()
 }
 
 /// Whether a widget has an `OnSizeChanged` script or hook.
@@ -3444,17 +3494,20 @@ fn asked_size(vm: &mut Vm, id: WidgetId) -> (f64, f64) {
     laid_out_size(vm, id)
 }
 
+// (secrets while the anchoring is: decision T638)
 fn get_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(asked_size(vm, id).0)])
+    let w = asked_size(vm, id).0;
+    Ok(rect_answer(vm, id, vec![Value::Num(w)]))
 }
 
 fn get_height(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(asked_size(vm, id).1)])
+    let h = asked_size(vm, id).1;
+    Ok(rect_answer(vm, id, vec![Value::Num(h)]))
 }
 
 fn get_size(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let (w, h) = asked_size(vm, id);
-    Ok(vec![Value::Num(w), Value::Num(h)])
+    Ok(rect_answer(vm, id, vec![Value::Num(w), Value::Num(h)]))
 }
 
 fn set_scale(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
@@ -3835,9 +3888,10 @@ fn point_rank(point: &str) -> usize {
 fn edge(vm: &mut Vm, id: WidgetId, f: fn((f64, f64, f64, f64)) -> f64) -> Ret {
     resolve(vm, id);
     let s = layout_scale(engine(vm), id);
-    Ok(vec![
-        bounds(vm, id, 0).map_or(Value::Nil, |b| Value::Num(f(b) / s)),
-    ])
+    match bounds(vm, id, 0) {
+        Some(b) => Ok(rect_answer(vm, id, vec![Value::Num(f(b) / s)])),
+        None => Ok(vec![Value::Nil]),
+    }
 }
 
 fn get_left(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
@@ -3859,13 +3913,14 @@ fn get_top(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 fn get_center(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     resolve(vm, id);
     let s = layout_scale(engine(vm), id);
-    Ok(match bounds(vm, id, 0) {
+    let center = match bounds(vm, id, 0) {
         Some(b) => vec![
             Value::Num((b.0 + b.2 / 2.0) / s),
             Value::Num((b.1 + b.3 / 2.0) / s),
         ],
         None => vec![],
-    })
+    };
+    Ok(rect_answer(vm, id, center))
 }
 
 // --------------------------------------------------------------- text

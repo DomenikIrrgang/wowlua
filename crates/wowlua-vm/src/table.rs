@@ -522,14 +522,13 @@ impl Table {
             None => 0,
             Some(i) => i + 1,
         };
-        for i in start..self.arr.len() {
-            if !self.arr[i].v.is_nil() {
-                return Ok(Some((Value::Num((i + 1) as f64), self.arr[i])));
+        for (i, slot) in self.arr.iter().enumerate().skip(start) {
+            if !slot.v.is_nil() {
+                return Ok(Some((Value::Num((i + 1) as f64), *slot)));
             }
         }
         let hstart = start.saturating_sub(self.arr.len());
-        for i in hstart..self.nodes.len() {
-            let n = &self.nodes[i];
+        for n in self.nodes.iter().skip(hstart) {
             if !n.val.v.is_nil() {
                 return Ok(Some((n.key, n.val)));
             }
