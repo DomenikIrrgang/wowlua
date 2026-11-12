@@ -519,7 +519,7 @@ fn get_bounds_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 fn get_scaled_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     widgets::resolve(vm, id);
     let ui = engine(vm).screen.ui_parent_scale();
-    Ok(match screen_rect(vm, id) {
+    let rect = match screen_rect(vm, id) {
         Some(r) => vec![
             Value::Num(r.0 * ui),
             Value::Num(r.1 * ui),
@@ -527,7 +527,8 @@ fn get_scaled_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
             Value::Num(r.3 * ui),
         ],
         None => vec![],
-    })
+    };
+    Ok(widgets::rect_answer(vm, id, rect))
 }
 
 /// `Intersects(region)`: whether the two placed rectangles overlap.

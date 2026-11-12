@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,223 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,224 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -374,7 +374,7 @@ The modules that answer, by how many functions and methods:
 | Module | Kind | Functions and methods |
 |--------|------|----------------------:|
 | `extras` | fill-in | 1,482 |
-| `widgets` | model | 638 |
+| `widgets` | model | 637 |
 | `globalsinfo` | fill-in | 523 |
 | `content` | fill-in | 510 |
 | `leftovers2` | fill-in | 386 |
@@ -384,7 +384,7 @@ The modules that answer, by how many functions and methods:
 | `recorded` | recorded | 314 |
 | `systeminfo` | fill-in | 307 |
 | `iteminfo` | fill-in | 228 |
-| `methods3` | fill-in | 215 |
+| `methods3` | fill-in | 216 |
 | `vm` | model | 198 |
 | `spellinfo` | fill-in | 197 |
 | `unitinfo` | fill-in | 172 |
@@ -530,7 +530,7 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `Rotation` | 6 | 1 | 0 | 5 | 0 |
 | `Scale` | 8 | 5 | 0 | 3 | 0 |
 | `ScenarioPOI` | 2 | 0 | 0 | 2 | 0 |
-| `ScriptRegion` | 55 | 38 | 5 | 12 | 0 |
+| `ScriptRegion` | 55 | 37 | 5 | 13 | 0 |
 | `ScriptRegionResizing` | 13 | 13 | 0 | 0 | 0 |
 | `ScrollFrame` | 9 | 7 | 0 | 2 | 0 |
 | `SecondsFormatter` | 35 | 35 | 0 | 0 | 0 |
@@ -550,7 +550,7 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `UnitPositionFrame` | 12 | 4 | 0 | 8 | 0 |
 | `VectorGraphics` | 4 | 1 | 0 | 3 | 0 |
 | `VertexColor` | 4 | 2 | 0 | 2 | 0 |
-| **All** | 1,477 | 1,002 | 19 | 456 | 0 |
+| **All** | 1,477 | 1,001 | 19 | 457 | 0 |
 
 ## Verification against the client
 
@@ -853,7 +853,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,223 rules unverified: each rests on Blizzard's
+The engine's code marks 1,224 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2332,7 +2332,7 @@ page changes only when a rule is added, removed or reworded.
 - [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): `Frame:Raise()`: nothing seen, its level and its place among the frames of its level kept (decision T586; TBC Anniver...
 - [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): Methods of what the engine draws or keeps nothing of: model cameras, lights and animation kits, the browser and the s...
 
-### widgets (51)
+### widgets (52)
 
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Edit boxes Lua set the text of this frame: `OnTextChanged(false)` runs once each after the frame's `OnUpdate`, not at...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): An aura container is a frame (Blizzard_AuraContainer's intrinsic of a `Frame`): the client names it one and gives it...
@@ -2361,6 +2361,7 @@ page changes only when a rule is added, removed or reworded.
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `IsRectValid()`: an anchored region laid out since it was last anchored (asked for, or its frames', or by the layout...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `GetPointByName(point)`: the anchor of that point as `GetPoint` gives it; nothing without one.
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): How deep `OnSizeChanged` handlers run inside layouts: deeper, a size waits for a later layout (a handler that resizes...
+- [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Whether a region's anchoring is secret (`IsAnchoringSecret`, the documentation's `SecretWhenAnchoringSecret`): a stat...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): An anchored widget with an `OnSizeChanged` handler laid out: told of its size when it changed since it was last told...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): An object whose untrusted layout scripts are forbidden runs only its secure ones (the documentation's `UntrustedLayou...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A region's size: as laid out when its points give it one (two opposite points, `SetAllPoints`), else as set (unverifi...
@@ -2568,6 +2569,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Lines under a pixel (decision T633, 2026-11-12)
 - The nameplates' scale (decisions T633, T634, T637, 2026-11-12)
 - UnitIsTapDenied of a mob tagged by another (decision T635, 2026-11-12)
+- Secret sizes and anchors (decision T638, 2026-11-12)
 
 ## In-game regressions
 

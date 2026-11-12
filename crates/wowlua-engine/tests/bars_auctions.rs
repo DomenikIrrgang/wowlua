@@ -32,12 +32,20 @@ fn run_secure(vm: &mut Vm, src: &str) -> Vec<String> {
 }
 
 fn call(vm: &mut Vm, f: Value) -> Vec<String> {
-    let text = |vm: &Vm, v: Value| match v {
-        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
-        Value::Num(n) => format!("{n}"),
-        Value::Bool(b) => format!("{b}"),
-        Value::Nil => "nil".into(),
-        other => format!("{other:?}"),
+    // (a secret shown as `secret` and the value it hides)
+    let text = |vm: &Vm, v: Value| {
+        let (secret, v) = match v {
+            Value::Secret(_) => ("secret ", vm.hidden(v)),
+            v => ("", v),
+        };
+        let shown = match v {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            Value::Num(n) => format!("{n}"),
+            Value::Bool(b) => format!("{b}"),
+            Value::Nil => "nil".into(),
+            other => format!("{other:?}"),
+        };
+        format!("{secret}{shown}")
     };
     match vm.call(f, &[]) {
         Ok(r) => r.into_iter().map(|v| text(vm, v)).collect(),
@@ -513,7 +521,97 @@ local at60 = next:GetLeft()
 bar:SetReverseFill(true)
 return at25, at60, next:GetLeft(), next:GetHeight()",
     );
-    assert_eq!(r, ["150", "220", "300", "20"]);
+    // (secret once the value is: decision T638)
+    assert_eq!(r, ["150", "secret 220", "secret 300", "secret 20"]);
+}
+
+/// A status bar's fill placed by a secret value has a secret rectangle,
+/// and so has whatever is anchored to it, through any number of anchors
+/// (a point without a relative to the parent): SuuUI's incoming heals bar,
+/// anchored to the health fill of another unit, answered `GetHeight` with
+/// a secret in game (decision T638). The bar itself and a frame anchored to
+/// it stay plain; a plain value makes them plain again.
+#[test]
+fn a_rectangle_placed_by_a_secret_bar_value_reads_back_secret() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local bar = CreateFrame('StatusBar', nil, UIParent)
+bar:SetPoint('BOTTOMLEFT', 100, 100)
+bar:SetSize(200, 20)
+bar:SetStatusBarTexture('Interface\\\\Buttons\\\\WHITE8X8')
+bar:SetMinMaxValues(0, 100)
+bar:SetValue(25)
+local fill = bar:GetStatusBarTexture()
+local incoming = CreateFrame('StatusBar', nil, bar)
+incoming:SetPoint('TOPLEFT', fill, 'TOPRIGHT')
+incoming:SetPoint('BOTTOMLEFT', fill, 'BOTTOMRIGHT')
+incoming:SetWidth(10)
+local inside = incoming:CreateTexture()
+inside:SetAllPoints()
+local beside = CreateFrame('Frame', nil, UIParent)
+beside:SetPoint('LEFT', bar, 'RIGHT')
+beside:SetSize(5, 5)
+local plain = incoming:GetHeight()
+bar:SetValue(secretwrap(60))
+local h = incoming:GetHeight()
+local w, fh = issecretvalue(fill:GetWidth()), issecretvalue(fill:GetHeight())
+local _, _, _, rh = incoming:GetRect()
+local _, _, _, x = incoming:GetPoint(1)
+local ok, err = pcall(function() local a = incoming:GetHeight() return a > 0 end)
+local out = { plain, type(h), h, w, fh, rh, x, inside:GetTop(), select(2, inside:GetCenter()),
+    fill:IsAnchoringSecret(), incoming:IsAnchoringSecret(), inside:IsAnchoringSecret(),
+    bar:GetWidth(), bar:IsAnchoringSecret(), beside:GetLeft(), ok, err }
+bar:SetValue(30)
+out[#out + 1] = incoming:GetHeight()
+out[#out + 1] = incoming:IsAnchoringSecret()
+return unpack(out)",
+    );
+    assert_eq!(
+        r,
+        [
+            "20",
+            "number",
+            "secret 20",
+            "true",
+            "true",
+            "secret 20",
+            "secret 0",
+            "secret 120",
+            "secret 110",
+            "true",
+            "true",
+            "true",
+            "200",
+            "false",
+            "300",
+            "false",
+            "MyAddon/main.lua:23: attempt to compare local 'a' (a secret number value, while \
+             execution tainted by 'MyAddon')",
+            "20",
+            "false",
+        ]
+    );
+}
+
+/// A size or anchor offsets set from secrets (secure code only: Blizzard's
+/// aura containers do) leave the rectangle plain: their buttons answered
+/// a plain width in game (decision T638; unverified, probe "Secret sizes
+/// and anchors").
+#[test]
+fn a_size_or_offsets_set_from_secrets_stay_plain() {
+    let mut vm = vm();
+    run_secure(
+        &mut vm,
+        "SecretBox = CreateFrame('Frame', nil, UIParent)
+SecretBox:SetSize(secretwrap(30, 40))
+SecretBox:SetPoint(secretwrap('CENTER', UIParent, 'CENTER', 5, 6))",
+    );
+    let r = run(
+        &mut vm,
+        "return SecretBox:GetWidth(), SecretBox:GetHeight(), SecretBox:IsAnchoringSecret()",
+    );
+    assert_eq!(r, ["30", "40", "false"]);
 }
 
 /// The strings dump a flavor's declarations name can be older than its UI
