@@ -2949,3 +2949,138 @@ few levels below you to fight. Each line in the chat, one at a time.
     ```
     /run AC:SetUnit("none") AC:Hide()
     ```
+
+## Lines under a pixel (decision T633, 2026-11-12)
+
+Found in game: SuuUI 0.8.0's nameplate debuff icons lost most of their
+borders (a player's screenshot: fragments of some edges left). The borders
+are textures that don't snap to the pixel grid, 0.71 of a pixel thick.
+wowlua draws such a texture as the GPU fills a triangle: a pixel is filled
+when its centre lies inside the texture, so a line under a pixel shows
+where it crosses a row's centre and vanishes where it lies between two.
+A texture that snaps has its edges rounded to whole pixels (a guess).
+These steps check both on screen: a red line 600 pixels wide, its top 300
+pixels below the screen's top, nudged by fractions of a pixel. Each line
+in the chat, one at a time; take a screenshot after each step that moves
+the line, and zoom in if it is hard to see.
+
+1. Make a frame over the whole screen and print one pixel in UIParent's
+   units:
+
+   ```
+   /run SPU=768/select(2,GetPhysicalScreenSize())/UIParent:GetEffectiveScale() SPF=CreateFrame("Frame",nil,UIParent) SPF:SetAllPoints() SPF:SetFrameStrata("TOOLTIP") print("pixel",SPU)
+   ```
+
+   Seen: (to do). wowlua: about `pixel 1` with "Use UI Scale" off (UIParent
+   then lays out in screen pixels), more at a smaller UI scale.
+2. Make the line, half a pixel thick, not snapping:
+
+   ```
+   /run SPT=SPF:CreateTexture(nil,"OVERLAY") SPT:SetSnapToPixelGrid(false) SPT:SetTexelSnappingBias(0) SPT:SetColorTexture(1,0,0) SPT:SetSize(600*SPU,0.5*SPU) print(SPT:IsSnappingToPixelGrid())
+   ```
+
+   Seen: (to do). wowlua: `false`.
+3. Its top 300.25 pixels down (it covers the centre of row 300):
+
+   ```
+   /run SPT:ClearAllPoints() SPT:SetPoint("TOPLEFT",SPF,"TOPLEFT",200*SPU,-300.25*SPU)
+   ```
+
+   Seen: (to do). wowlua: a red line one pixel thick, full red.
+4. Its top 300.6 pixels down (between the centres of rows 300 and 301):
+
+   ```
+   /run SPT:ClearAllPoints() SPT:SetPoint("TOPLEFT",SPF,"TOPLEFT",200*SPU,-300.6*SPU)
+   ```
+
+   Seen: (to do). wowlua: no line at all. A faint line here means the game
+   blends by coverage instead.
+5. Its top 301.1 pixels down (it covers the centre of row 301):
+
+   ```
+   /run SPT:ClearAllPoints() SPT:SetPoint("TOPLEFT",SPF,"TOPLEFT",200*SPU,-301.1*SPU)
+   ```
+
+   Seen: (to do). wowlua: the line again, one pixel lower than in step 3.
+6. A whole pixel thick, its top 300.6 pixels down:
+
+   ```
+   /run SPT:SetHeight(SPU) SPT:ClearAllPoints() SPT:SetPoint("TOPLEFT",SPF,"TOPLEFT",200*SPU,-300.6*SPU)
+   ```
+
+   Seen: (to do). wowlua: a line one pixel thick (row 301).
+7. Half a pixel thick again, now snapping, its top 300.25 pixels down:
+
+   ```
+   /run SPT:SetHeight(0.5*SPU) SPT:SetSnapToPixelGrid(true) SPT:ClearAllPoints() SPT:SetPoint("TOPLEFT",SPF,"TOPLEFT",200*SPU,-300.25*SPU)
+   ```
+
+   Seen: (to do). wowlua: a line one pixel thick (its edges rounded to 300
+   and 301).
+8. Snapping, its top 300.6 pixels down:
+
+   ```
+   /run SPT:ClearAllPoints() SPT:SetPoint("TOPLEFT",SPF,"TOPLEFT",200*SPU,-300.6*SPU)
+   ```
+
+   Seen: (to do). wowlua: no line (both edges rounded to 301).
+9. Put the line away:
+
+   ```
+   /run SPF:Hide()
+   ```
+
+## The nameplates' scale (decision T633, 2026-11-12)
+
+SuuUI lays its nameplate lines out for the scale the game draws plates at,
+and can't lay a debuff icon's lines again once the game has made the icon
+forbidden, so a plate drawn at another scale later thins them under a
+pixel. wowlua puts the plates on WorldFrame at a scale of 1; the game's
+scale is unknown (SuuUI found it isn't WorldFrame's and guesses UIParent's),
+and so is whether it changes with distance or the target. These steps read
+it. Stand where enemy nameplates show, some near and some farther than 20
+yards, without moving. Each line in the chat, one at a time.
+
+1. Every plate's scale and effective scale, then UIParent's and
+   WorldFrame's:
+
+   ```
+   /run for _,p in ipairs(C_NamePlate.GetNamePlates()) do print(p:GetName(),p:GetScale(),p:GetEffectiveScale()) end print(UIParent:GetEffectiveScale(),WorldFrame:GetEffectiveScale())
+   ```
+
+   Seen: (to do). wowlua: `NamePlate1 1 1` for each plate, then
+   UIParent's scale (`0.71111112833023` on a 1920 by 1080 screen at the
+   default UI scale) and `1`.
+2. The nameplate scale settings:
+
+   ```
+   /run for _,c in ipairs({"nameplateGlobalScale","nameplateMinScale","nameplateMaxScale","nameplateSelectedScale","nameplateLargerScale"}) do print(c,GetCVar(c)) end
+   ```
+
+   Seen: (to do). wowlua: the client's defaults as recorded.
+3. Target a near enemy, then a far one, and after each read the target's
+   plate:
+
+   ```
+   /run local t=C_NamePlate.GetNamePlateForUnit("target") print("target",t and t:GetName(),t and t:GetEffectiveScale())
+   ```
+
+   Seen: (to do). wowlua: `target NamePlate1 1` (the plate's name varies),
+   the same near and far.
+4. Print each plate's effective scale when it comes and a second later:
+
+   ```
+   /run NPP=CreateFrame("Frame") NPP:RegisterEvent("NAME_PLATE_UNIT_ADDED") NPP:SetScript("OnEvent",function(_,_,u) local p=C_NamePlate.GetNamePlateForUnit(u) local f=function() print(u,p:GetEffectiveScale()) end f() C_Timer.After(1,f) end)
+   ```
+
+   Then turn the camera away from the enemies and back, so their plates
+   go and come again.
+
+   Seen: (to do). wowlua: `nameplate1 1` twice for each plate, a second
+   apart. Different numbers in a plate's two lines mean the game changes a
+   plate's scale after `NAME_PLATE_UNIT_ADDED`.
+5. Stop the printing frame:
+
+   ```
+   /run NPP:UnregisterAllEvents()
+   ```

@@ -298,7 +298,14 @@ a difference.
   `SetSnapToPixelGrid(false)` or `snapToPixelGrid="false"`: Blizzard's
   code only turns it off; probed in WoW Forever, as is a texel snapping
   bias of 0.3 at first): a snapping texture is drawn with its edges on
-  whole pixels.
+  whole pixels, each rounded to the nearest (unverified). One that does
+  not snap is drawn where its edges are, as the GPU fills a triangle: a
+  pixel is filled when its centre lies inside the rectangle (a centre on
+  an edge by the top-left rule), with no partial coverage. So a line under
+  a pixel thick fills the row (or column) whose centre it crosses and
+  nothing where it lies between two centres: SuuUI's nameplate debuff
+  borders, 0.71 of a pixel, lose some of their edges, as in the game
+  (decision T633).
 - **Text**: the rectangle, the laid-out lines (wrapped and truncated as the
   engine measures them, §17.6), font file, height and flags (`OUTLINE`,
   `THICKOUTLINE`, `MONOCHROME`), color, shadow, justification and spacing.
