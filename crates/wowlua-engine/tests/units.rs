@@ -828,3 +828,100 @@ fn the_max_level_is_the_flavor_s() {
     );
     assert_eq!(r, ["60", "60", "60"]);
 }
+
+/// A mob tagged by someone outside the group is tap-denied (decision
+/// T635): `tappedByOther`, `unit:tap()` and `unit:untap()`, each change
+/// told by `UNIT_FACTION`; a player-controlled unit never is.
+#[test]
+fn a_mob_tagged_by_another_is_tap_denied() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('UNIT_FACTION')
+f:SetScript('OnEvent', function(_, e, unit) seen[#seen + 1] = unit end)
+local mob = mock.spawnUnit({ name = 'Mob', reaction = 'hostile', tappedByOther = true })
+local other = mock.spawnUnit({ name = 'Other', player = true, reaction = 'friendly', tappedByOther = true })
+mock.player:target(mob)
+mock.player:focus(other)
+local spawned = tostring(UnitIsTapDenied('target')) .. ' ' .. tostring(UnitIsTapDenied('focus'))
+    .. ' ' .. tostring(UnitIsTapDenied('player')) .. ' ' .. tostring(UnitIsTapDenied('none'))
+mob:untap()
+local untapped = tostring(UnitIsTapDenied('target'))
+mob:untap()
+mob:tap()
+local tapped = tostring(UnitIsTapDenied('target'))
+mob:tap(mock.player)
+local mine = tostring(UnitIsTapDenied('target'))
+mob:update({ tappedByOther = true })
+local updated = tostring(UnitIsTapDenied('target'))
+local ok, err = pcall(other.tap, other)
+return spawned, untapped, tapped, mine, updated, table.concat(seen, ' '), tostring(ok), tostring(err)",
+    );
+    assert_eq!(
+        r,
+        [
+            "true false false false",
+            "false",
+            "true",
+            "false",
+            "true",
+            "target target target target",
+            "false",
+            "tap: a player or the player's pet is never tagged"
+        ]
+    );
+}
+
+/// The first player-controlled unit to hit an untagged NPC tags it: another
+/// player outside the group denies the player its tap (`UNIT_FACTION`);
+/// the player, the player's pet or a group member does not, untold (the
+/// `combat` recording: no `UNIT_FACTION` for the player's own tag); an
+/// NPC's blows tag nothing; a later hit changes nothing (decision T635).
+#[test]
+fn the_first_player_to_hit_a_mob_tags_it() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local stranger = mock.spawnUnit({ name = 'Stranger', player = true, reaction = 'friendly' })
+local friend = mock.spawnUnit({ name = 'Friend', player = true, reaction = 'friendly' })
+mock.addToGroup(friend)
+local wolf = mock.spawnUnit({ name = 'Wolf', reaction = 'friendly' })
+mock.setPet(wolf)
+local guard = mock.spawnUnit({ name = 'Guard', reaction = 'friendly' })
+local told = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('UNIT_FACTION')
+f:SetScript('OnEvent', function(_, e, unit) told[#told + 1] = unit end)
+local function denied(by, second)
+    local mob = mock.spawnUnit({ name = 'Mob', reaction = 'hostile', health = 1000, healthMax = 1000 })
+    mock.player:target(mob)
+    by:hit(mob, 10)
+    if second then
+        second:hit(mob, 10)
+    end
+    return tostring(UnitIsTapDenied('target'))
+end
+local killed = mock.spawnUnit({ name = 'Mob', reaction = 'hostile' })
+killed:kill({ by = stranger })
+mock.player:target(killed)
+return denied(stranger), denied(stranger, mock.player), denied(mock.player, stranger), denied(wolf),
+    denied(friend), denied(guard), denied(guard, stranger), tostring(UnitIsTapDenied('target')),
+    table.concat(told, ' ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "true",
+            "true",
+            "false",
+            "false",
+            "false",
+            "false",
+            "true",
+            "true",
+            "target target target"
+        ]
+    );
+}

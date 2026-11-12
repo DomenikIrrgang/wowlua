@@ -126,11 +126,19 @@ export interface MockUnit
     --- A group member logging in or out (`UnitIsConnected`,
     --- `UNIT_CONNECTION(unit, isConnected)`, the roster).
     function setOnline(online: boolean)
+    --- An NPC tagged by `by` (a player unit, or the player's pet for the
+    --- player), else by a player outside the group: `UnitIsTapDenied` true
+    --- unless the player or a group member tagged it; `UNIT_FACTION` when
+    --- that answer changes. The first player to hit an untagged NPC tags
+    --- it.
+    function tap(by: MockUnit?)
+    --- No one's tag on it any more (`UNIT_FACTION` if its tap was denied).
+    function untap()
     --- The fields of its data that `data` names, changed in place (its
     --- GUID kept), each told as the client tells it: `UNIT_LEVEL`,
     --- `UNIT_NAME_UPDATE`, the health's and power's events,
-    --- `UNIT_DISPLAYPOWER`, `UNIT_FACTION` (reaction, faction, PvP),
-    --- `UNIT_CLASSIFICATION_CHANGED`, `UNIT_PORTRAIT_UPDATE` and
+    --- `UNIT_DISPLAYPOWER`, `UNIT_FACTION` (reaction, faction, PvP, tap
+    --- denied), `UNIT_CLASSIFICATION_CHANGED`, `UNIT_PORTRAIT_UPDATE` and
     --- `UNIT_MODEL_CHANGED` (class, race, sex); `distance`, `role` and
     --- `online` as `setDistance`, `setRole` and `setOnline` tell them;
     --- `dead` as a death without a killer, or alive again (the player dies
@@ -496,6 +504,9 @@ export type UnitData = {
     faction?: string,
     --- `UnitIsPVP`.
     pvp?: boolean,
+    --- An NPC tagged by a player outside the group: `UnitIsTapDenied`
+    --- true (as `unit:tap()`).
+    tappedByOther?: boolean,
     --- `UnitClassification`: "normal" by default, "elite", "rare",
     --- "rareelite", "worldboss", "trivial", "minus".
     classification?: string,

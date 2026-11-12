@@ -3097,3 +3097,67 @@ those settings back at their defaults.
    ```
    /run NPP:UnregisterAllEvents()
    ```
+
+## UnitIsTapDenied of a mob tagged by another (decision T635, 2026-11-12)
+
+wowlua answered `UnitIsTapDenied` false for every unit, so an addon's look
+for a mob someone else tagged (SuuUI greys its plate and target frame)
+could not be tested. It now keeps who tagged an NPC first: the first
+player to hit it, or a test's `tappedByOther` / `unit:tap()`. A mob tagged
+by someone outside your group answers true, and `UNIT_FACTION` fires for
+the mob when that answer changes (the recorded `combat` scenario has none
+for your own tag). These steps check what is guessed: the event and when
+it comes, the tag on the corpse, and the tag lost when the
+mob resets. They need an area where other players fight mobs a few levels
+below you, outside your group. Each line in the chat, one at a time.
+
+1. Make a frame that prints the target's faction, flags and combat events
+   with its tap state:
+
+   ```
+   /run TDP=CreateFrame("Frame") for _,e in ipairs({"UNIT_FACTION","UNIT_FLAGS","UNIT_COMBAT"}) do TDP:RegisterUnitEvent(e,"target") end TDP:SetScript("OnEvent",function(_,e,u) print(format("%.3f",GetTime()),e,u,UnitIsTapDenied("target")) end)
+   ```
+
+2. Target a hostile mob no one is fighting (its health bar is not grey),
+   without attacking it, and read it:
+
+   ```
+   /run print(format("%.3f",GetTime()),"tap",UnitIsTapDenied("target"),UnitPlayerControlled("target"),UnitAffectingCombat("target"),UnitIsDead("target"),UnitIsPlayer("target"))
+   ```
+
+   Seen: (to do). wowlua: `tap false false false false false`.
+3. Attack it and kill it. Watch the lines from step 1 as the first blow
+   lands.
+
+   Seen: (to do) whether a `UNIT_FACTION` or `UNIT_FLAGS` line comes with
+   your first blow. wowlua: no `UNIT_FACTION` (none in the recorded
+   `combat` scenario).
+4. Target a mob another player outside your group is fighting (its health
+   bar grey), and run the line from step 2 again.
+
+   Seen: (to do). wowlua: `tap true false true false false` (another
+   player's `hit` in a test). Best: target a mob another player is about
+   to attack before they do, and watch the lines from step 1 as their
+   first blow lands. Seen: (to do) whether `UNIT_FACTION` comes with it,
+   before or after its `UNIT_COMBAT`. wowlua: `UNIT_FACTION target true`
+   before the blow's `UNIT_COMBAT`.
+5. Keep it targeted. When it dies, run the line from step 2 again.
+
+   Seen: (to do) whether the corpse still answers `true` (its tag kept).
+   wowlua: `tap true` with `UnitIsDead` true (the tag kept).
+6. If you see a mob someone else tagged reset (the player dies or runs
+   away and the mob walks back, its health bar no longer grey), target it
+   before it does, and watch the lines from step 1 as it resets; then run
+   the line from step 2.
+
+   Seen: (to do) whether `UNIT_FACTION` (or `UNIT_FLAGS`) comes when the
+   tag goes, and the answer after. wowlua: the tag stays until a test's
+   `unit:untap()`, which fires `UNIT_FACTION`.
+7. Stop the printing frame:
+
+   ```
+   /run TDP:UnregisterAllEvents()
+   ```
+
+Open: a missed first blow tagging, and a tagger joining your group while
+the mob lives (wowlua: the mob is no longer tap-denied, without an event).

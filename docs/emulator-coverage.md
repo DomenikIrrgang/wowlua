@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,110 of the 5,115 documented camelot functions have
-  behaviour (99.9%): 1,078 modelled, 350 answered from recordings, 3,682 by a
+  behaviour (99.9%): 1,079 modelled, 349 answered from recordings, 3,682 by a
   documentation-based fill-in. Of all 7,180 C functions the client has,
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
@@ -28,11 +28,11 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,217 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,218 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| camelot | 5,115 | 5,110 (99.9%) | 350 | 1,477 | 1,477 (100.0%) | all |
+| camelot | 5,115 | 5,110 (99.9%) | 349 | 1,477 | 1,477 (100.0%) | all |
 | standard | 4,871 | 4,524 (92.9%) | 0 | 1,438 | 1,431 (99.5%) | none |
 | vanilla | 3,221 | 2,909 (90.3%) | 0 | 1,360 | 1,349 (99.2%) | none |
 | tbc | 3,221 | 2,909 (90.3%) | 0 | 1,360 | 1,349 (99.2%) | none |
@@ -60,7 +60,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 782 | 96 | 1,224 | 0 |
+| `(globals)` | 2,102 | 783 | 95 | 1,224 | 0 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -346,13 +346,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,180 | 1,701 | 431 | 5,043 | 5 |
+| **All** | 7,180 | 1,702 | 430 | 5,043 | 5 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,115 | 1,078 | 350 | 3,682 | 5 |
+| Blizzard's API documentation | 5,115 | 1,079 | 349 | 3,682 | 5 |
 | the client's other C functions (`/stdtest inventory`) | 2,065 | 623 | 81 | 1,361 | 0 |
 | the engine's own, in neither list | 16 | 15 | 0 | 1 | 0 |
 
@@ -381,7 +381,7 @@ The modules that answer, by how many functions and methods:
 | `collections` | fill-in | 374 |
 | `social` | fill-in | 373 |
 | `questinfo` | fill-in | 316 |
-| `recorded` | recorded | 315 |
+| `recorded` | recorded | 314 |
 | `systeminfo` | fill-in | 307 |
 | `iteminfo` | fill-in | 228 |
 | `methods3` | fill-in | 215 |
@@ -466,6 +466,7 @@ The modules that answer, by how many functions and methods:
 | `raidtargets` | model | 2 |
 | `ui` | model | 2 |
 | `inventory` | model | 1 |
+| `tapping` | model | 1 |
 
 Widget methods by the documentation's class (a setter without behaviour stores
 its arguments for the getter, which counts as a model; a getter answers a fresh
@@ -852,7 +853,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,217 rules unverified: each rests on Blizzard's
+The engine's code marks 1,218 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2120,6 +2121,10 @@ page changes only when a rule is added, removed or reworded.
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `C_AccountServices.RequestPreferredPlaySettings()`: started (SuuUI probe lfg: `true`), the settings arrive as `PREFER...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): Headers: the engine's list is the recorded one, flat (unverified: collapsing hides the children).
 
+### tapping (1)
+
+- [tapping.rs](../crates/wowlua-engine/src/tapping.rs): Unverified (probe "UnitIsTapDenied of a mob tagged by another"): the event (`UNIT_FACTION`) for another's tag and its...
+
 ### targeting (1)
 
 - [targeting.rs](../crates/wowlua-engine/src/targeting.rs): Unverified, none recorded: the range (40 yards here), whether a neutral creature counts as an enemy (it does here: it...
@@ -2557,6 +2562,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Aura buttons forbidden after their build (decision T632, 2026-11-11)
 - Lines under a pixel (decision T633, 2026-11-12)
 - The nameplates' scale (decisions T633, T634, 2026-11-12)
+- UnitIsTapDenied of a mob tagged by another (decision T635, 2026-11-12)
 
 ## In-game regressions
 

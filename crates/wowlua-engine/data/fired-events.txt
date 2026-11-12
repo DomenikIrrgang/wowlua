@@ -363,7 +363,7 @@ UNIT_DAMAGE	inventory,levels,stats
 UNIT_DEFENSE	levels,login,stats,trainer,units
 UNIT_DIED	death,units
 UNIT_DISPLAYPOWER	units
-UNIT_FACTION	death,party,units
+UNIT_FACTION	death,party,tapping,units
 UNIT_FLAGS	auras,death,login,loot,taxi,units
 UNIT_HAPPINESS	login,pets
 UNIT_HEALTH	death,inventory,levels,login,units

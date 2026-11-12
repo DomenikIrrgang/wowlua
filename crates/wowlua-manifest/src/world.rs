@@ -240,6 +240,9 @@ pub struct UnitData {
     pub zone: Option<String>,
     pub role: Option<String>,
     pub pvp: Option<bool>,
+    /// Tagged by a player outside the group: `UnitIsTapDenied` true
+    /// (decision T635).
+    pub tapped_by_other: Option<bool>,
     /// What it sells (decision T530): its window opens when the player
     /// talks to it.
     pub vendor: Option<UnitVendor>,

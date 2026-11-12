@@ -140,6 +140,8 @@ pub struct Unit {
     /// Another player who accepts the player's invitations (to the group,
     /// the guild) a moment after (`acceptsInvites`; decision T363).
     pub accepts_invites: bool,
+    /// Who tagged it first, an NPC (decision T635): `UnitIsTapDenied`.
+    pub tapped: Option<crate::tapping::Tapper>,
 }
 
 /// One of a unit's powers: its type (`Enum.PowerType`), how much it has
@@ -533,6 +535,7 @@ pub fn install(vm: &mut Vm) {
         subgroup: None,
         online: true,
         accepts_invites: false,
+        tapped: None,
     };
     engine_mut(vm).units.list.push(player);
 }
@@ -1861,6 +1864,8 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("setOnline", control_set_online),
         ("hideNameplate", control_hide_nameplate),
         ("despawn", control_despawn),
+        ("tap", crate::tapping::control_tap),
+        ("untap", crate::tapping::control_untap),
         ("token", control_tokens),
         ("setName", control_set_name),
         ("update", control_update),
@@ -2468,6 +2473,9 @@ fn unit_from(
         subgroup: None,
         online: !matches!(get(vm, "online"), Value::Bool(false)),
         accepts_invites: get(vm, "acceptsInvites").truthy(),
+        tapped: get(vm, "tappedByOther")
+            .truthy()
+            .then_some(crate::tapping::Tapper::Other),
     })
 }
 
@@ -3015,7 +3023,7 @@ fn control_set_name(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `UNIT_POWER_UPDATE`, `UNIT_MAXPOWER`, each power's with its token), the
 /// type shown (`UNIT_DISPLAYPOWER`; a new class shows its own, its powers
 /// the new class's, those of both kept: decision T512), the reaction,
-/// faction or PvP flag
+/// faction, PvP flag or tap denied (`tappedByOther`, decision T635)
 /// (`UNIT_FACTION`), the classification (`UNIT_CLASSIFICATION_CHANGED`),
 /// the class, race or sex (`UNIT_PORTRAIT_UPDATE`, `UNIT_MODEL_CHANGED`);
 /// the distance, role and being online as `setDistance`, `setRole` and
@@ -3072,6 +3080,7 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
         "zone",
         "world",
         "acceptsInvites",
+        "tappedByOther",
     ];
     let named: Vec<&str> = KEYS
         .iter()
@@ -3098,6 +3107,7 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
     let before = Before::of(old);
     let named_before = (old.realm.clone(), old.last_name.clone());
     let faction_before = (old.reaction, old.player_reaction, faction_of(old), old.pvp);
+    let denied_before = crate::tapping::denied(&engine(vm).units, me);
     let looks_before = (old.class.clone(), old.race.clone(), old.sex);
     let (classification, power_type) = (old.classification.clone(), old.power_type);
 
@@ -3202,6 +3212,9 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
     if has("acceptsInvites") {
         u.accepts_invites = new.accepts_invites;
     }
+    if has("tappedByOther") {
+        u.tapped = new.tapped;
+    }
 
     if me == PLAYER {
         tell_player_changes(vm, &before);
@@ -3230,9 +3243,10 @@ fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     let now = &engine(vm).units.list[me.0];
     let faction_now = (now.reaction, now.player_reaction, faction_of(now), now.pvp);
+    let denied_now = crate::tapping::denied(&engine(vm).units, me);
     let looks_now = (now.class.clone(), now.race.clone(), now.sex);
     let power_type_changed = now.power_type != power_type;
-    let faction_changed = faction_now != faction_before;
+    let faction_changed = faction_now != faction_before || denied_now != denied_before;
     let classification_changed = now.classification != classification;
     let looks_changed = looks_now != looks_before;
     if power_type_changed {
@@ -3403,6 +3417,9 @@ fn control_heal(vm: &mut Vm, c: NativeCall) -> Ret {
 fn control_kill(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let opts = Kill::of(vm, c.arg(2))?;
+    if let Some(by) = opts.by {
+        crate::tapping::hit(vm, by, me);
+    }
     let amount = opts.amount.unwrap_or(engine(vm).units.list[me.0].health);
     let blow = opts.by.map(|by| (by, amount));
     if let Some(by) = opts.by {
@@ -3884,6 +3901,7 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(victim) = handle_of(vm, c.arg(2)) else {
         return Err(vm.error("swing: a unit to hit expected"));
     };
+    crate::tapping::hit(vm, me, victim);
     let amount = vm.check_number(&c, 3)?;
     let opts = match c.arg(4) {
         Value::Table(t) => Some(t),
@@ -4263,6 +4281,7 @@ fn control_hit(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(victim) = handle_of(vm, c.arg(2)) else {
         return Err(vm.error("hit: a unit to hit expected"));
     };
+    crate::tapping::hit(vm, me, victim);
     let amount = vm.check_number(&c, 3)?;
     let opts = match c.arg(4) {
         Value::Table(t) => Some(t),
