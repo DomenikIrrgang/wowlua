@@ -175,6 +175,8 @@ The controls you reach for most:
   its class has (`powers = { COMBO_POINTS = { current = 2 } }`)
 - Shields and heal prediction: `unit:setAbsorb`, `unit:setHealAbsorb`,
   `unit:setIncomingHeal`; damage uses up a shield before health
+- Tagged mobs: `tappedByOther = true` in a unit's data, `unit:tap` and
+  `unit:untap` (see below)
 - The character: `mock.setPlayer`, `mock.player:setMoney`,
   `mock.player:equip`, `mock.setBag`, `mock.moveTo`
 - Combat: `mock.player:enterCombat`, `mock.player:leaveCombat`,
@@ -189,6 +191,36 @@ The controls you reach for most:
   the errors your code raised
 - Spies and stubs: `mock.spy`, `mock.stub`, `mock.fake`, all restored after
   each test
+
+A mob tagged by a player outside your group answers `UnitIsTapDenied`
+true, as in the game, so you can test the grey look you give it. Spawn it
+tagged, or let another player hit it first: the first player to hit a mob
+tags it. `UNIT_FACTION` fires for the mob when its tap becomes denied or
+free again.
+
+```wowlua title=tests/tagged.test.wowlua
+import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("a mob someone else tagged is tap-denied")
+local function tagged()
+    local wolf = mock.spawnUnit({ name = "Young Wolf", reaction = "hostile", tappedByOther = true })
+    mock.player:target(wolf)
+    expect(UnitIsTapDenied("target")).toBe(true)
+
+    wolf:untap()                      -- UNIT_FACTION
+    expect(UnitIsTapDenied("target")).toBe(false)
+
+    mock.player:hit(wolf, 10)         -- the player tags it first
+    local stranger = mock.spawnUnit({ name = "Stranger", player = true, reaction = "friendly" })
+    stranger:hit(wolf, 10)
+    expect(UnitIsTapDenied("target")).toBe(false)
+end
+```
+
+`unit:tap(by)` tags a mob for `by` (another player's unit, or the player);
+without `by`, for a player outside your group. A mob you or your group
+tagged, and a player or a pet, are never tap-denied.
 
 The whole list is in
 [Tooling §16.1.4](../../spec/toolchain/tooling.md#1614-wowluamock).

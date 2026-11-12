@@ -370,6 +370,25 @@ client may set a solo player's marker at once), whether the index is
 secret out of combat, a group's rules for who may mark, and a dead unit
 keeping its marker.
 
+NPCs are tagged (decision T635): the first player-controlled unit to hit
+an NPC no one has tagged (a test's `unit:hit`, `unit:swing` or `kill`'s
+`by`) tags it, a player unit for itself and the player's pet for the
+player; an NPC's blows tag nothing, and later blows change nothing.
+`UnitIsTapDenied(unit)` is true for an NPC tagged by someone outside the
+player's group (another player unit, or a player the world has no unit
+for: `tappedByOther`, `unit:tap()`), and false for one the player or a
+group member tagged, one no one tagged, a player-controlled unit (a
+player, the player's pet) and a unit that does not exist (recorded false
+for every token with nothing tagged). Its tap denied, or no longer,
+fires `UNIT_FACTION` for each of the unit's tokens, on which Blizzard's
+target frame greys a tap-denied unit (`CheckFaction`); the player's own
+tag fires none (recorded: the `combat` scenario, a mob the player pulled
+and killed, tells no `UNIT_FACTION`). Unverified (probe "UnitIsTapDenied
+of a mob tagged by another"): the event for another's tag and its order
+among the hit's, a missed blow tagging, the tag kept on the corpse, a
+tagger joining or leaving the group (the answer follows the group,
+untold), and the tag lost when the mob leaves combat (not modelled).
+
 The encounter timeline keeps addons' timers (`C_EncounterTimeline.
 AddScriptEvent`, decision T255; found in game though the timeline is off
 on Forever): listed, read, paused, resumed, finished, cancelled and ended

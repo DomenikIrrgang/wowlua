@@ -4,6 +4,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### New
+
+- **Tagged mobs**: `UnitIsTapDenied` answers true for a mob tagged by a player outside your group, as in the game, so you can test how your nameplates and unit frames grey such mobs. Spawn one tagged with `mock.spawnUnit({ ..., tappedByOther = true })` (also in a world profile's units and `unit:update`), tag it with `unit:tap()` (or `unit:tap(otherPlayer)`), and free it with `unit:untap()`; `UNIT_FACTION` fires for the mob when its tap becomes denied or free again. The first player to hit an untagged mob (`unit:hit`, `unit:swing`, `unit:kill({ by = … })`) tags it. A mob you or your group tagged, a player and your pet are never tap-denied. Before, `UnitIsTapDenied` was always false.
+
 ### Fixed
 
 - Profiles (`wowlua test --profile-out`), dev builds' error messages and the debugger name each class method at its own line. In a class whose constructor came before fields with a default value further down (`clickHooked: boolean = false` among the methods), every method above that field was reported at the field's line.

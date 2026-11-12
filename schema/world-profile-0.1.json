@@ -534,6 +534,13 @@
             "null"
           ]
         },
+        "tappedByOther": {
+          "description": "Tagged by a player outside the group: `UnitIsTapDenied` true\n(decision T635).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "vendor": {
           "description": "What it sells (decision T530): its window opens when the player\ntalks to it.",
           "anyOf": [
@@ -2155,6 +2162,13 @@
           ]
         },
         "pvp": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "tappedByOther": {
+          "description": "Tagged by a player outside the group: `UnitIsTapDenied` true\n(decision T635).",
           "type": [
             "boolean",
             "null"

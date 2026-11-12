@@ -95,6 +95,7 @@ pub mod spellinfo;
 pub mod standins;
 pub mod stats;
 pub mod systeminfo;
+pub mod tapping;
 pub mod targeting;
 pub mod taxi;
 pub mod text;
@@ -1374,6 +1375,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("clickbindings", clickbindings::behaviours()),
         Behaviours::new("targeting", targeting::behaviours()),
         Behaviours::new("raidtargets", raidtargets::behaviours()),
+        Behaviours::new("tapping", tapping::behaviours()),
         Behaviours::new("leftovers3", leftovers3::behaviours()),
         Behaviours::new("curves", curves::behaviours()),
         Behaviours::new("healcalc", healcalc::behaviours()),
