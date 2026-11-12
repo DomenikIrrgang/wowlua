@@ -270,8 +270,6 @@ fn plain_tile_pieces(
     Some(out)
 }
 
-/// A quad's rectangle on whole pixels, as the client draws textures that
-/// snap to the pixel grid (not turned ones).
 /// An image and its mipmaps down to 1x1, each level the average of the
 /// one above's 2x2 texels.
 fn mipmaps(img: &Rgba) -> Vec<Rgba> {
@@ -304,6 +302,11 @@ fn mipmaps(img: &Rgba) -> Vec<Rgba> {
     levels
 }
 
+/// A quad's rectangle on whole pixels, as the client draws textures that
+/// snap to the pixel grid (not turned ones): each edge rounded to the
+/// nearest (unverified). Others keep their exact edges, and the GPU fills
+/// the pixels whose centres they cover, one sample each: a line under a
+/// pixel shows only where it crosses a centre (decision T633).
 fn snapped(q: &wowlua_engine::scene::Quad, r: Rect) -> Rect {
     if !q.snap || q.rotation != 0.0 {
         return r;

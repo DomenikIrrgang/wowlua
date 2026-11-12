@@ -368,3 +368,64 @@ one:AddMaskTexture(m)
     assert!(red(50.0, 225.0), "one mask: its left half");
     assert!(!red(150.0, 225.0), "one mask: not its right half");
 }
+
+/// A texture that doesn't snap to the pixel grid fills the pixels whose
+/// centres it covers (decision T633): a line 0.7 of a pixel thick shows
+/// where it crosses a row's centre and nowhere where it lies between two;
+/// a line of a whole pixel always shows. One that snaps keeps its edges on
+/// whole pixels, a line under one pixel either one pixel or none. (SuuUI's
+/// nameplate debuff borders, 0.71 of a pixel, lost edges so in game.)
+#[test]
+fn unsnapped_lines_fill_the_pixels_whose_centres_they_cover() {
+    let mut r = match Renderer::new_blocking() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("skipped: {e}");
+            return;
+        }
+    };
+    // Lines from `top` pixels down, `thick` pixels thick, 100 wide, each in
+    // a column of its own 120 pixels apart (`u`: a pixel in UIParent's
+    // units).
+    let lines: [(f32, f32, bool); 6] = [
+        (10.1, 0.7, false),
+        (10.6, 0.7, false),
+        (10.6, 1.0, false),
+        (10.95, 1.0, false),
+        (10.1, 0.7, true),
+        (10.6, 0.7, true),
+    ];
+    let mut src =
+        String::from("local u = UIParent:GetHeight() / select(2, GetPhysicalScreenSize())\n");
+    for (i, (top, thick, snap)) in lines.iter().enumerate() {
+        src += &format!(
+            "do local t = UIParent:CreateTexture(nil, 'ARTWORK')
+t:SetPoint('TOPLEFT', {x} * u, -{top} * u)
+t:SetSize(100 * u, {thick} * u)
+t:SetColorTexture(1, 0, 0)
+{snap}t:SetTexelSnappingBias(0) end
+",
+            x = 10 + 120 * i,
+            snap = if *snap {
+                ""
+            } else {
+                "t:SetSnapToPixelGrid(false) "
+            },
+        );
+    }
+    let mut vm = vm(&src);
+    let s = scene::build(&mut vm);
+    let img = r.render_blocking(&s, 1.0, None, &mut NoAssets).unwrap();
+    // The rows each line fills, in its middle column.
+    let rows = |i: usize| -> Vec<u32> {
+        (5..20)
+            .filter(|&y| px(&img, (60 + 120 * i) as f32, y as f32)[0] > 128)
+            .collect()
+    };
+    assert_eq!(rows(0), [10], "0.7 across row 10's centre");
+    assert_eq!(rows(1), Vec::<u32>::new(), "0.7 between two centres");
+    assert_eq!(rows(2), [11], "a whole pixel, across a centre");
+    assert_eq!(rows(3), [11], "a whole pixel, the next row's centre");
+    assert_eq!(rows(4), [10], "snapped: rounded to one pixel");
+    assert_eq!(rows(5), Vec::<u32>::new(), "snapped: rounded to none");
+}
