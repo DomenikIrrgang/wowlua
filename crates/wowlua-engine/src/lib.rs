@@ -412,6 +412,8 @@ fn place_screen(vm: &mut Vm, screen: Screen) {
         (widget.width, widget.height) = screen.world_frame_size();
         widgets::layout_changed(vm);
     }
+    // (the nameplates draw at UIParent's scale: T634)
+    units::rescale_nameplates(vm);
 }
 
 /// A colour channel kept in eight bits, read back as the machine does it
