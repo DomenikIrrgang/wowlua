@@ -868,8 +868,8 @@ fn duration_tostring(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.str(&text)])
 }
 
-/// Addon code may not use a forbidden widget (unverified wording), nor one
-/// under access restrictions (`crate::protection::denied`). The error
+/// Addon code may not use a forbidden widget, nor one under access
+/// restrictions while they apply (`crate::protection::denied`). The error
 /// names the documented method's usage (made only for the error: every
 /// method call comes here).
 fn refuse_forbidden(
@@ -896,9 +896,9 @@ fn refuse_forbidden(
     );
     // A frame whose parent addon code may not use: `GetParent` does not
     // hand the parent out but raises the error the parent's own call
-    // would (decision T632: in game, a SuuUI frame on an aura button;
-    // unverified for an explicitly forbidden parent and for the other
-    // methods that return widgets).
+    // would (decisions T632, T636: in game, a frame on an aura button in
+    // combat; unverified for an explicitly forbidden parent; `GetChildren`
+    // and `GetPoint` hand a restricted frame out, out of combat).
     let parent = match short {
         "GetParent" => engine(vm).world.widgets[id.0].parent,
         _ => None,
@@ -906,16 +906,19 @@ fn refuse_forbidden(
     if (!open && crate::protection::denied(vm, id))
         || parent.is_some_and(|p| crate::protection::denied(vm, p))
     {
-        // `/stdtest engine`: "calling 'GetObjectType' on bad self (Attempt
-        // to access forbidden object from code tainted by an AddOn - Usage:
-        // local objectType = self:GetObjectType())".
+        // Lua's error for a bad first argument: called as a method,
+        // "calling 'GetObjectType' on bad self (Attempt to access forbidden
+        // object from code tainted by an AddOn - Usage: local objectType =
+        // self:GetObjectType())" (`/stdtest engine`, `StoreFrame`); through
+        // `pcall(b.GetWidth, b)`, "bad argument #1 to '?' (…)" (decision
+        // T636: an aura button in combat, `GetWidth` and a child's
+        // `GetParent`; unverified for a frame made forbidden).
         let usage = documented
             .map(|f| format!(" - {}", crate::args::usage(f)))
             .unwrap_or_default();
-        let msg = format!(
-            "calling '{short}' on bad self (Attempt to access forbidden object from code tainted by an AddOn{usage})"
-        );
-        return Err(vm.error(&msg));
+        let msg =
+            format!("Attempt to access forbidden object from code tainted by an AddOn{usage}");
+        return Err(vm.arg_error(1, &msg));
     }
     Ok(())
 }
@@ -4688,15 +4691,12 @@ fn get_line_height(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![font.get(1).copied().unwrap_or(Value::Num(0.0))])
 }
 
-/// Whether Blizzard's secure code made the widget.
-/// `IsForbidden()`: made forbidden, or under access restrictions to addon
-/// code (decision T632: the user's walk of every frame in game skipped
-/// SuuUI's aura buttons, by this answer or by `EnumerateFrames` leaving
-/// them out; unverified which, and what it answers inside the button's
-/// `initializeFrame`, before the restrictions).
+/// `IsForbidden()`: whether Blizzard's secure code made the widget
+/// forbidden. Access restrictions do not change it: an aura button answered
+/// false in and out of combat, also while it refused addon code (decision
+/// T636).
 fn is_forbidden(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    let made = engine(vm).world.widgets[id.0].forbidden;
-    Ok(vec![Value::Bool(made || crate::protection::denied(vm, id))])
+    Ok(vec![Value::Bool(engine(vm).world.widgets[id.0].forbidden)])
 }
 
 /// `Click([button [, isDown]])`: the button's `PreClick`, `OnClick` and
@@ -5472,7 +5472,8 @@ fn enumerate_frames(vm: &mut Vm, c: NativeCall) -> Ret {
     // toolkit asks every enumerated frame's `GetObjectType` before
     // `IsForbidden`, error-free in the client, where that call on a
     // forbidden frame errors, `/stdtest engine`), nor ones under access
-    // restrictions (decision T632, unverified).
+    // restrictions while they apply (decisions T632, T636: an aura button
+    // listed out of combat; unverified in combat, where it is left out).
     let e = engine(vm);
     let next = (start.min(e.world.widgets.len())..e.world.widgets.len())
         .find(|&i| {

@@ -409,20 +409,30 @@ pub fn add_forbidden_aspects(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `Enum.ScriptObjectAccessRestriction.DenyTaintedAccessWhenAurasAreSecret`,
+/// the only flag: tainted code may not use the object while aura
+/// information is secret.
+const DENY_WHEN_AURAS_SECRET: u32 = 1;
+
 /// Whether the code running now may not use the widget: tainted code, and
-/// the widget made forbidden or under access restrictions (decision T632).
+/// the widget made forbidden, or under access restrictions that apply now
+/// (decisions T632, T636).
 ///
 /// Blizzard's aura containers restrict the buttons they make
 /// (`DenyTaintedAccessWhenAurasAreSecret`) once the addon's
 /// `initializeFrame` has built each, or at `PLAYER_ENTERING_WORLD` for
 /// buttons made before login (`AuraContainerUtil.ApplyAccessRestrictions`).
-/// In game (WoW Forever 1.60.1, 2026-11-11) such a button refused addon
-/// code in the open world; the documented condition, while aura
-/// information is secret, is not applied (unverified: whether the game
-/// lets addon code in where `C_Secrets.ShouldAurasBeSecret()` is false).
+/// The restriction applies while `C_Secrets.ShouldAurasBeSecret()` is true
+/// (the user's probe, WoW Forever 1.60.1, 2026-11-12: such a button
+/// refused addon code in combat, where auras were secret, and served it
+/// out of combat; unverified: an encounter, a challenge mode or a PvP
+/// match out of combat).
 pub fn denied(vm: &Vm, id: WidgetId) -> bool {
-    let w = &engine(vm).world.widgets[id.0];
-    (w.forbidden || w.access_restrictions != 0) && tainted(vm)
+    let e = engine(vm);
+    let w = &e.world.widgets[id.0];
+    let restricted =
+        w.access_restrictions & DENY_WHEN_AURAS_SECRET != 0 && crate::units::auras_secret(&e.units);
+    (w.forbidden || restricted) && tainted(vm)
 }
 
 /// `AddAccessRestrictions(restrictions)`: from secure code only, as
@@ -455,12 +465,14 @@ pub fn has_any_access_restrictions(vm: &mut Vm, id: WidgetId, c: NativeCall) -> 
     Ok(vec![Value::Bool(flags & mask != 0)])
 }
 
-/// `CanBeAccessedInContext()`: whether the code running now may use it.
+/// `CanBeAccessedInContext()`: whether the code running now may use it
+/// (unverified for a restricted object: not probed).
 pub fn can_be_accessed_in_context(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(!denied(vm, id))])
 }
 
-/// `HasAccessConstraints()`: forbidden, or under access restrictions.
+/// `HasAccessConstraints()`: forbidden, or under access restrictions,
+/// whether or not they apply now (unverified: not probed).
 pub fn has_access_constraints(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let w = &engine(vm).world.widgets[id.0];
     Ok(vec![Value::Bool(w.forbidden || w.access_restrictions != 0)])

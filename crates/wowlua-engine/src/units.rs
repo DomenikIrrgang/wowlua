@@ -740,6 +740,12 @@ pub fn active(u: &Units, types: &[usize]) -> bool {
     types.iter().any(|&t| u.restrictions[t] == 2)
 }
 
+/// Whether aura information is secret (`C_Secrets.ShouldAurasBeSecret()`):
+/// in combat, an encounter, a challenge mode or a PvP match.
+pub fn auras_secret(u: &Units) -> bool {
+    active(u, &[COMBAT, ENCOUNTER, CHALLENGE_MODE, PVP_MATCH])
+}
+
 /// Whether a unit is under the player's control or in the group.
 pub(crate) fn ours(u: &Units, id: UnitId) -> bool {
     id == PLAYER || u.group.contains(&id)
@@ -798,7 +804,7 @@ pub fn secret_results_flagged(vm: &Vm, flags: u32, c: &NativeCall) -> bool {
         Value::Str(s) => resolve(u, &String::from_utf8_lossy(vm.str_bytes(s))),
         _ => None,
     };
-    let restricted = active(u, &[COMBAT, ENCOUNTER, CHALLENGE_MODE, PVP_MATCH]);
+    let restricted = auras_secret(u);
     if (flag("SecretWhenUnitAuraRestricted")
         || flag("SecretWhenAurasRestricted")
         || flag("SecretWhenCooldownsRestricted")

@@ -631,9 +631,9 @@ end
 /// counted as true. SuuUI's own shape too: a container per type, every
 /// type's or only the removable ones (`HARMFUL|RAID_PLAYER_DISPELLABLE`),
 /// the badge a frame its `initializeFrame` hangs on the button: no badge
-/// shows without a debuff, Magic's alone with one. The buttons themselves
-/// refuse addon code once built (decision T632): the test counts the
-/// markers each group's `initialize` hangs on its buttons.
+/// shows without a debuff, Magic's alone with one. The test counts the
+/// markers each group's `initialize` hangs on its buttons (the buttons
+/// themselves refuse addon code in combat, decision T636).
 #[test]
 fn aura_buttons_show_only_their_auras() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
@@ -767,15 +767,16 @@ end
     assert!(text.contains("2 passed, 0 failed"), "{text}");
 }
 
-/// An addon's own aura container on camelot (decision T632): its
+/// An addon's own aura container on camelot (decisions T632, T636): its
 /// `initializeFrame` builds each button with full access (textures,
 /// frames, `SetSize`), then Blizzard's code restricts the button
-/// (`DenyTaintedAccessWhenAurasAreSecret`): to the addon it is forbidden,
-/// its methods raise "on bad self", and `GetParent` of a frame the addon
-/// hung on it raises the same error, as SuuUI's met in game. The container
+/// (`DenyTaintedAccessWhenAurasAreSecret`). Out of combat the addon still
+/// uses it; in combat, where auras are secret, its methods raise Lua's
+/// bad-`self` error and `GetParent` of a frame the addon hung on it raises
+/// the same error, as in game. `IsForbidden` stays false. The container
 /// stays the addon's.
 #[test]
-fn aura_buttons_refuse_addon_code_after_their_build() {
+fn aura_buttons_refuse_addon_code_in_combat() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
     if !source.join("camelot/Interface").exists() {
         eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
@@ -788,7 +789,7 @@ fn aura_buttons_refuse_addon_code_after_their_build() {
             r#"import test, expect from "wowlua:test"
 import * as mock from "wowlua:mock"
 
-@test("built by the addon, forbidden to it after")
+@test("built by the addon, refused to it in combat")
 local function restricted()
     const seen: any = {}
     const c = CreateFrame("AuraContainer", nil, UIParent, "CustomAuraContainerTemplate") :: any
@@ -814,11 +815,24 @@ local function restricted()
     expect(seen.bar).toBe(true)
     expect(seen.parent).toBe(true)
     const button = seen.button
-    expect(button:IsForbidden()).toBe(true)
+    -- Out of combat: the addon's to use.
+    expect(C_Secrets.ShouldAurasBeSecret()).toBe(false)
+    expect(button:IsForbidden()).toBe(false)
+    expect(button:CanBeAccessedInContext()).toBe(true)
+    expect(button:GetWidth()).toBe(20)
+    expect(seen.deco:GetParent() == button).toBe(true)
+    -- In combat: refused, though not forbidden.
+    mock.player:enterCombat()
+    expect(C_Secrets.ShouldAurasBeSecret()).toBe(true)
+    expect(button:IsForbidden()).toBe(false)
     expect(button:CanBeAccessedInContext()).toBe(false)
     expect(function() button:GetWidth() end).toThrow(
         "calling 'GetWidth' on bad self (Attempt to access forbidden object from code tainted by an AddOn")
     expect(function() button:SetSize(30, 30) end).toThrow("calling 'SetSize' on bad self")
+    local ok, err = pcall(button.GetWidth, button)
+    expect(ok).toBe(false)
+    expect(err).toBe(
+        "bad argument #1 to '?' (Attempt to access forbidden object from code tainted by an AddOn - Usage: local width = self:GetWidth([ignoreRect]))")
     expect(seen.deco:IsForbidden()).toBe(false)
     expect(type(seen.deco:IsVisible())).toBe("boolean")
     expect(function() seen.deco:GetParent() end).toThrow(
@@ -826,6 +840,9 @@ local function restricted()
     expect(c:GetAuraGroupFrameCount("buffs") > 0).toBe(true)
     expect(c:IsForbidden()).toBe(false)
     expect(type(c:GetWidth())).toBe("number")
+    -- After the fight: the addon's again.
+    mock.player:leaveCombat()
+    expect(button:GetWidth()).toBe(20)
 end
 "#,
         )],

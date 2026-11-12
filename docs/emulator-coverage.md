@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,218 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,219 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -853,7 +853,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,218 rules unverified: each rests on Blizzard's
+The engine's code marks 1,219 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1908,7 +1908,7 @@ page changes only when a rule is added, removed or reworded.
 - [play.rs](../crates/wowlua-engine/src/play.rs): How far the mouse moves while held before it drags (pixels; unverified).
 - [play.rs](../crates/wowlua-engine/src/play.rs): The unit under the mouse in the world: `mouseover`, its tooltip shown as the client shows it (Blizzard's `GameTooltip...
 
-### protection (8)
+### protection (10)
 
 - [protection.rs](../crates/wowlua-engine/src/protection.rs): Protected methods are the documentation's (`IsProtectedFunction`); the documentation does not mark global functions,...
 - [protection.rs](../crates/wowlua-engine/src/protection.rs): Global functions only Blizzard's code may call (not in the documentation's flags).
@@ -1917,6 +1917,8 @@ page changes only when a rule is added, removed or reworded.
 - [protection.rs](../crates/wowlua-engine/src/protection.rs): `AddForbiddenAspects(aspects)`: from secure code only.
 - [protection.rs](../crates/wowlua-engine/src/protection.rs): Blizzard's aura containers restrict the buttons they make (`DenyTaintedAccessWhenAurasAreSecret`) once the addon's `i...
 - [protection.rs](../crates/wowlua-engine/src/protection.rs): `AddAccessRestrictions(restrictions)`: from secure code only, as `AddForbiddenAspects` (unverified: a tainted call do...
+- [protection.rs](../crates/wowlua-engine/src/protection.rs): `CanBeAccessedInContext()`: whether the code running now may use it (unverified for a restricted object: not probed).
+- [protection.rs](../crates/wowlua-engine/src/protection.rs): `HasAccessConstraints()`: forbidden, or under access restrictions, whether or not they apply now (unverified: not pro...
 - [protection.rs](../crates/wowlua-engine/src/protection.rs): Whether `v` is a widget whose untrusted layout scripts are forbidden (its own aspect; unverified and not kept: the do...
 
 ### queries (11)
@@ -2326,16 +2328,16 @@ page changes only when a rule is added, removed or reworded.
 - [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): `Frame:Raise()`: nothing seen, its level and its place among the frames of its level kept (decision T586; TBC Anniver...
 - [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): Methods of what the engine draws or keeps nothing of: model cameras, lights and animation kits, the browser and the s...
 
-### widgets (52)
+### widgets (51)
 
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Edit boxes Lua set the text of this frame: `OnTextChanged(false)` runs once each after the frame's `OnUpdate`, not at...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): An aura container is a frame (Blizzard_AuraContainer's intrinsic of a `Frame`): the client names it one and gives it...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Regions the client makes with the widget (`/stdtest engine`: a new edit box has 2, a new cooldown 1).
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A script object the documentation calls a userdata is one, with its class's methods (`ObjectType = "Userdata"`: `type...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A duration prints as the client's `LuaDurationObject: 0x…` (the full probe, 1.60.1; unverified: the other script obje...
-- [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Addon code may not use a forbidden widget (unverified wording), nor one under access restrictions (`crate::protection...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Attributes stay open: Blizzard's "Inbound" files talk to a forbidden frame through them from any code (`StoreFrame:Se...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A frame whose parent addon code may not use: `GetParent` does not hand the parent out but raises the error the parent...
+- [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Lua's error for a bad first argument: called as a method, "calling 'GetObjectType' on bad self (Attempt to access for...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): An intrinsic type of Blizzard's UI code, not loaded: a frame (unverified stand-in).
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Blizzard's secure templates are protected (unverified without their XML).
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): The ID before the templates and OnLoad (Blizzard's action buttons read it there for their slot).
@@ -2373,7 +2375,6 @@ page changes only when a rule is added, removed or reworded.
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `SetUsingParentLevel(using)`: kept; using its parent's, a frame drops the level set before (SuuUI probe trees: `Inset...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A frame's level: what `SetFrameLevel` set, else one above the parent (unverified).
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `SetFontObject(font)`: a font object or its name; the widget's font is then the object's until `SetFont` sets its own.
-- [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Whether Blizzard's secure code made the widget.
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Without a maximum, no limit (unverified).
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Enables or disables a button, edit box or slider; `OnEnable` / `OnDisable` run when it changes (unverified).
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `SetVertexColor(r, g, b [, a])`: alpha 1 when left out; white until set (unverified).
@@ -2559,7 +2560,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Group loot rolls (decision T629, 2026-11-11)
 - A second click on the same item link (2026-11-11)
 - SetRaidTarget in combat (decision T631, 2026-11-11)
-- Aura buttons forbidden after their build (decision T632, 2026-11-11)
+- Aura buttons forbidden after their build (decisions T632, T636, 2026-11-11)
 - Lines under a pixel (decision T633, 2026-11-12)
 - The nameplates' scale (decisions T633, T634, 2026-11-12)
 - UnitIsTapDenied of a mob tagged by another (decision T635, 2026-11-12)

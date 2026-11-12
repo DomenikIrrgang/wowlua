@@ -2852,7 +2852,7 @@ Open: the other flavors (Retail, Mists, TBC, Classic Era) document
 `SetRaidTarget` as restricted too, and wowlua leaves it unrestricted there;
 steps 1, 5 and 6 on each of those clients would settle it.
 
-## Aura buttons forbidden after their build (decision T632, 2026-11-11)
+## Aura buttons forbidden after their build (decisions T632, T636, 2026-11-11)
 
 Found in game: in the open world, with SuuUI loaded, a walk of every frame
 stopped at a frame SuuUI's `initializeFrame` had put on an engine aura
@@ -2860,17 +2860,29 @@ button: its `IsForbidden()` answered false, but its `GetParent()` raised
 "calling 'GetParent' on bad self (Attempt to access forbidden object from
 code tainted by an AddOn - Usage: local parent = self:GetParent())".
 Blizzard's aura container code restricts each button after the addon's
-`initializeFrame` (`DenyTaintedAccessWhenAurasAreSecret`), and wowlua now
-applies that restriction at all times. These steps check what is still
-guessed:
+`initializeFrame` (`DenyTaintedAccessWhenAurasAreSecret`), and wowlua
+applied that restriction at all times (decision T632). These steps check
+what was guessed:
 
 - what the button answers inside `initializeFrame` and after;
 - whether the restriction lifts out of combat, where
   `C_Secrets.ShouldAurasBeSecret()` was false;
 - which other calls hand the button out.
 
-Steps 1 to 8 are out of combat; steps 9 and 10 need a hostile creature a
-few levels below you to fight. Each line in the chat, one at a time.
+Steps 1 to 9 were answered on 2026-11-12 (WoW Forever 1.60.1, SuuUI
+loaded; step 9 re-ran steps 2 to 5 in combat with a fresh container): the
+restriction applies only while auras are secret, and the button's
+`IsForbidden` stays false. wowlua now does the same (decision T636).
+Still unverified, steps 11 and 12: `CanBeAccessedInContext` and
+`HasAccessConstraints` on the button, and whether `EnumerateFrames` lists
+it in combat (wowlua leaves it out). Not probed: an encounter, a challenge
+mode or a PvP match out of combat (wowlua restricts there too, as
+`ShouldAurasBeSecret()` is true), and the error a frame made forbidden
+(`StoreFrame`) raises through `pcall` (wowlua: "bad argument #1 to '?'",
+as for the button).
+
+Steps 1 to 8 are out of combat; steps 9, 11 and 12 need a hostile creature
+a few levels below you to fight. Each line in the chat, one at a time.
 
 1. Make an aura container of your own:
 
@@ -2892,63 +2904,91 @@ few levels below you to fight. Each line in the chat, one at a time.
    /run print("inside",AP.b~=nil,AP.f,AP.p,AP.s)
    ```
 
-   Seen: (to do). wowlua: `inside true false true true` (the button not
-   forbidden yet; the frame's parent is the button; `SetSize` works).
+   Seen: WoW Forever (2026-11-12): `inside true false true true` (the
+   button not forbidden; the frame's parent is the button; `SetSize`
+   works). wowlua: the same.
 4. Out of combat, ask the button itself:
 
    ```
    /run local b=AP.b print("after",InCombatLockdown(),C_Secrets.ShouldAurasBeSecret(),pcall(b.IsForbidden,b)) print(pcall(b.GetWidth,b))
    ```
 
-   Seen: (to do). wowlua: `after false false true true`, then `false
-   calling 'GetWidth' on bad self (Attempt to access forbidden object from
-   code tainted by an AddOn - Usage: local width =
-   self:GetWidth([ignoreRect]))`. If the game answers `true 20` on the
-   second line, the restriction lifts while auras are not secret.
+   Seen: WoW Forever (2026-11-12): `after false false true false`, then
+   `true 20.000003814697`: out of combat the button is not restricted.
+   wowlua said `after false false true true`, then `false calling
+   'GetWidth' on bad self (…)`; it now says `after false false true
+   false`, then `true 20`.
 5. Ask the frame on the button for its parent:
 
    ```
    /run local k=AP.k print("kid",k:IsForbidden(),pcall(k.GetParent,k))
    ```
 
-   Seen: (to do). wowlua: `kid false false calling 'GetParent' on bad self
-   (Attempt to access forbidden object from code tainted by an AddOn -
-   Usage: local parent = self:GetParent())`.
+   Seen: WoW Forever (2026-11-12): `kid false true table: 0x…` (the
+   button handed out). wowlua said `kid false false calling 'GetParent'
+   on bad self (…)`; it now says `kid false true table: …`.
 6. Does the container's `GetChildren` hand the button out:
 
    ```
    /run for i,f in ipairs({AC:GetChildren()}) do print("child",i,f==AP.b,pcall(f.IsForbidden,f)) end
    ```
 
-   Seen: (to do). wowlua: ten lines, `child 1 false true true` to
-   `child 10 true true true`: the batch of ten buttons the container makes
-   at once, all handed out and forbidden, the last one the button step 2
-   kept.
+   Seen: WoW Forever (2026-11-12): ten lines, `child 1 false true false`
+   to `child 10 true true false`: the batch of ten buttons, all handed out
+   and not forbidden, the last one the button step 2 kept. wowlua said
+   `… true true` on each (forbidden); it now says `… true false`.
 7. Does `EnumerateFrames` hand it out:
 
    ```
    /run local f,n=EnumerateFrames(),0 while f do if f==AP.b then n=n+1 end f=EnumerateFrames(f) end print("listed",n)
    ```
 
-   Seen: (to do). wowlua: `listed 0`.
+   Seen: WoW Forever (2026-11-12): `listed 1`. wowlua said `listed 0`; it
+   now says `listed 1` out of combat.
 8. Anchor the frame to the button, then ask for its anchor:
 
    ```
    /run local k=AP.k print("anchor",pcall(k.SetPoint,k,"CENTER",AP.b)) print(pcall(k.GetPoint,k,1))
    ```
 
-   Seen: (to do). wowlua: `anchor true`, then `true CENTER table: …
-   CENTER 0 0` (`GetPoint` hands the button out).
+   Seen: WoW Forever (2026-11-12): `anchor true`, then `true CENTER
+   table: 0x… CENTER 0 0` (`GetPoint` hands the button out). wowlua: the
+   same.
 9. Attack the creature so you are in combat, then repeat step 4's line and
    step 5's line.
 
-   Seen: (to do). wowlua: as out of combat, but `after true true …` on
-   step 4's first line.
+   Seen: WoW Forever (2026-11-12, steps 2 to 5 re-run in combat with a
+   fresh container): step 3 `inside true false true true`; step 4 `after
+   true true true false`, then `false bad argument #1 to '?' (Attempt to
+   access forbidden object from code tainted by an AddOn - Usage: local
+   width = self:GetWidth([ignoreRect]))`; step 5 `kid false false bad
+   argument #1 to '?' (Attempt to access forbidden object from code
+   tainted by an AddOn - Usage: local parent = self:GetParent())`. In
+   combat the button refuses addon code, but its `IsForbidden` still
+   answers false. wowlua said `after true true true true` and "calling
+   'GetWidth' on bad self (…)"; it now says the game's lines (Lua's
+   "calling 'X' on bad self" form only for a call written `b:GetWidth()`,
+   as in T632's finding).
 10. After the fight, put the container away:
 
     ```
     /run AC:SetUnit("none") AC:Hide()
     ```
+
+11. Make a fresh container (steps 1 and 2), then out of combat and again
+    in combat, ask whether the button may be used:
+
+    ```
+    /run local b=AP.b print("ctx",InCombatLockdown(),pcall(b.CanBeAccessedInContext,b)) print("constraints",pcall(b.HasAccessConstraints,b))
+    ```
+
+    Seen: (to do). wowlua: out of combat `ctx false true true`, then
+    `constraints true true`; in combat `ctx true true false`, then
+    `constraints true true`.
+12. In combat, repeat step 7's line.
+
+    Seen: (to do). wowlua: `listed 0`.
+13. After the fight, step 10's line.
 
 ## Lines under a pixel (decision T633, 2026-11-12)
 
