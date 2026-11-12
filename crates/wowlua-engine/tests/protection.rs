@@ -174,14 +174,18 @@ fn secure(vm: &mut Vm, src: &str) -> Vec<String> {
 }
 
 /// A frame Blizzard's code puts under access restrictions (as its aura
-/// containers do with each button, decision T632) is the addon's until
-/// then: its build works. After, it is forbidden to addon code: methods
-/// raise "on bad self", `IsForbidden` answers true, `EnumerateFrames`
-/// leaves it out, and `GetParent` of the addon's frame on it raises the
-/// same error; Blizzard's code still uses both. An addon's own
-/// `AddAccessRestrictions` does nothing.
+/// containers do with each button, decisions T632, T636) is the addon's
+/// until then: its build works. After, the restriction
+/// (`DenyTaintedAccessWhenAurasAreSecret`) applies while auras are secret:
+/// out of combat the addon uses it, `EnumerateFrames` lists it and the
+/// addon's frame on it hands it out; in combat its methods raise Lua's
+/// bad-`self` error ("bad argument #1 to '?'" through `pcall`, "calling
+/// 'X' on bad self" as a method call), `EnumerateFrames` leaves it out and
+/// `GetParent` of the addon's frame on it raises the same error. Its
+/// `IsForbidden` answers false throughout. Blizzard's code still uses
+/// both. An addon's own `AddAccessRestrictions` does nothing.
 #[test]
-fn restricted_frames_refuse_addon_code() {
+fn restricted_frames_refuse_addon_code_while_auras_are_secret() {
     let mut vm = vm();
     secure(
         &mut vm,
@@ -207,32 +211,53 @@ return b:IsForbidden(), b:GetWidth(), kid:GetParent() == b, b:GetAccessRestricti
     b:HasAnyAccessRestrictions(), b:CanBeAccessedInContext()",
     );
     assert_eq!(inside, ["false", "20", "true", "1", "true", "true"]);
-    let after = run(
-        &mut vm,
-        "local b = RestrictedButton
+    let ask = "local b = RestrictedButton
 local ok, err = pcall(b.GetWidth, b)
 local ok2, err2 = pcall(Kid.GetParent, Kid)
+local ok3, err3 = pcall(function() return b:GetWidth() end)
 local listed = false
 local f = EnumerateFrames()
 while f do
     if f == b then listed = true end
     f = EnumerateFrames(f)
 end
-return tostring(b:IsForbidden()), tostring(b:CanBeAccessedInContext()), tostring(b:HasAccessConstraints()),
-    tostring(ok), err, tostring(Kid:IsForbidden()), tostring(ok2), err2, tostring(listed)",
-    );
+return tostring(C_Secrets.ShouldAurasBeSecret()), tostring(b:IsForbidden()), tostring(b:CanBeAccessedInContext()),
+    tostring(b:HasAccessConstraints()), tostring(ok), tostring(err), tostring(Kid:IsForbidden()), tostring(ok2),
+    tostring(err2 == b or err2), tostring(ok3), tostring(err3), tostring(listed)";
+    let out_of_combat = run(&mut vm, ask);
     assert_eq!(
-        after,
+        out_of_combat,
+        [
+            "false", "false", "true", "true", "true", "20", "false", "true", "true", "true", "20",
+            "true",
+        ]
+    );
+    run(&mut vm, "mock.player:enterCombat()");
+    let in_combat = run(&mut vm, ask);
+    assert_eq!(
+        in_combat,
         [
             "true",
             "false",
+            "false",
             "true",
             "false",
-            "calling 'GetWidth' on bad self (Attempt to access forbidden object from code tainted by an AddOn - Usage: local width = self:GetWidth([ignoreRect]))",
+            "bad argument #1 to '?' (Attempt to access forbidden object from code tainted by an AddOn - Usage: local width = self:GetWidth([ignoreRect]))",
             "false",
             "false",
-            "calling 'GetParent' on bad self (Attempt to access forbidden object from code tainted by an AddOn - Usage: local parent = self:GetParent())",
+            "bad argument #1 to '?' (Attempt to access forbidden object from code tainted by an AddOn - Usage: local parent = self:GetParent())",
+            "false",
+            "MyAddon/main.lua:4: calling 'GetWidth' on bad self (Attempt to access forbidden object from code tainted by an AddOn - Usage: local width = self:GetWidth([ignoreRect]))",
             "false",
         ]
     );
+    let secure_in_combat = secure(
+        &mut vm,
+        "local b = RestrictedButton
+local kid = b:GetChildren()
+return b:GetWidth(), kid:GetParent() == b",
+    );
+    assert_eq!(secure_in_combat, ["20", "true"]);
+    run(&mut vm, "mock.player:leaveCombat()");
+    assert_eq!(run(&mut vm, ask), out_of_combat);
 }

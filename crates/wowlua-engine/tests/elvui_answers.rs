@@ -139,8 +139,10 @@ return ShopFrame:IsForbidden(), ShopFrame.Inner:IsForbidden(), StoreLikeFrame:Is
 }
 
 /// `GetParent` from addon code on its own frame whose parent is forbidden
-/// raises the error the parent's own call gives (decision T632; seen in
-/// game for an aura button's child, taken for a frame made forbidden too).
+/// raises the error the parent's own call gives (decisions T632, T636;
+/// seen in game for an aura button's child, taken for a frame made
+/// forbidden too): Lua's bad-`self` error, "bad argument #1 to '?'"
+/// through `pcall`, "calling 'GetParent' on bad self" as a method call.
 #[test]
 fn get_parent_refuses_a_forbidden_parent() {
     let interface = tree(
@@ -168,15 +170,18 @@ fn get_parent_refuses_a_forbidden_parent() {
         "local kid = CreateFrame('Frame', nil, StoreLikeFrame)
 local plain = CreateFrame('Frame', nil, kid)
 local ok, err = pcall(kid.GetParent, kid)
-return kid:IsForbidden(), ok, err, plain:GetParent() == kid",
+local ok2, err2 = pcall(function() return kid:GetParent() end)
+return kid:IsForbidden(), ok, err, plain:GetParent() == kid, ok2, err2",
     );
     assert_eq!(
         r,
         [
             "false",
             "false",
-            "calling 'GetParent' on bad self (Attempt to access forbidden object from code tainted by an AddOn - Usage: local parent = self:GetParent())",
+            "bad argument #1 to '?' (Attempt to access forbidden object from code tainted by an AddOn - Usage: local parent = self:GetParent())",
             "true",
+            "false",
+            "MyAddon/main.lua:4: calling 'GetParent' on bad self (Attempt to access forbidden object from code tainted by an AddOn - Usage: local parent = self:GetParent())",
         ]
     );
 }

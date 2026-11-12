@@ -500,9 +500,9 @@ class Container implements AuraContainer
             return
         end
         pcall(self.engine.SetAuraGroupLayout, self.engine, key, layout(g))
-        -- The buttons refuse addon code once built (decision T632; in the
-        -- game at least while auras are secret): their size is tried at
-        -- the end of combat (the latest size, once).
+        -- The buttons refuse addon code while auras are secret (decision
+        -- T636): their size is tried at the end of combat (the latest
+        -- size, once).
         defer(function()
             local ok, count = pcall(self.engine.GetAuraGroupFrameCount, self.engine, key)
             for i = 1, ok and count or 0 do
