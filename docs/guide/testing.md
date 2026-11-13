@@ -163,7 +163,9 @@ end
 
 The API answers as the flavor's client does. On camelot, a unit's health
 reaches addons as a secret value, so the test checks that it is one with
-`toBeSecret()`. Tests run tainted, like your addon, so `expect` never reads
+`toBeSecret()`. `toBeCloseTo`, `toBeGreaterThan` and `toBeLessThan` work on
+secret numbers too: `expect(fill:GetWidth()).toBeCloseTo(45)` measures a
+bar showing a secret value. Tests run tainted, like your addon, so `expect` never reads
 what a secret hides.
 
 The controls you reach for most:

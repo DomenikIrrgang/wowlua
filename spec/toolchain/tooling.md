@@ -136,7 +136,7 @@ the file, naming the addon. Coverage counts only the addon's own files.
 | `@flavors("standard", …)` | Run only for these flavors |
 | `config({ lifecycle: "auto" \| "manual", timeout?, profile?, platform?, screen?, perf? })` | Per-file runner settings (`profile`: the world profile; `platform`: `"mac"` or `"windows"`, the machine the client runs on, decision T236; `screen`: `{ width, height, dpiScale?, uiScale? }`, the screen it draws on, decision T237; `perf = true`: the file is a perf scenario, §16.1.8, decision T613; all read before anything loads) |
 | `describe(name, fn)` | Grouping for runtime-generated tests (`test(name)(fn)` inside `fn`) |
-| `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`, `toMatchSnapshot`, `toBeSecret`; for widgets `toBeShown`, `toBeVisible`, `toHaveText`, `toHaveSize`, `toBeAnchoredTo`, `toMatchScreenshot` ([Debugger §18.12.5](debugger.md#18125-in-tests)). Negation with `expect(v).never.toBe(x)`. Type-checked (below). Expected values may hold wildcards (decision T261): `anything` matches any value but `nil`, `ofType(kind)` any value whose `type()` is `kind`, in `toEqual` (at any depth) and `toHaveBeenCalledWith`; messages name them. |
+| `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toBeGreaterThan`, `toBeLessThan`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`, `toMatchSnapshot`, `toBeSecret`; for widgets `toBeShown`, `toBeVisible`, `toHaveText`, `toHaveSize`, `toBeAnchoredTo`, `toMatchScreenshot` ([Debugger §18.12.5](debugger.md#18125-in-tests)). Negation with `expect(v).never.toBe(x)`. Type-checked (below). Expected values may hold wildcards (decision T261): `anything` matches any value but `nil`, `ofType(kind)` any value whose `type()` is `kind`, in `toEqual` (at any depth) and `toHaveBeenCalledWith`; messages name them. |
 | `@cases(list)` | Runs a test once per case, the case's values as its arguments (below) |
 | `@expectError(code, …)` | A compile-time test: the function must not compile, with these diagnostics (below) |
 | `matcher(name, fn)` | Defines a typed matcher (below) |
@@ -146,7 +146,7 @@ the file, naming the addon. Coverage counts only the addon's own files.
 type `Expect<T>` for the type `T` of `x`, and its matchers take `T`:
 `expect(count).toBe("3")` is a type error, as is a matcher on a kind of
 value it does not take (E8121: `toHaveLength` and `toContain` need a string
-or a table, `toBeCloseTo` a number, `toThrow` and the spy matchers a
+or a table, `toBeCloseTo`, `toBeGreaterThan` and `toBeLessThan` a number (or a secret one), `toThrow` and the spy matchers a
 function). A spy keeps the type of the function it spies on, so
 `toHaveBeenCalledWith(...)` checks its arguments against that function's
 parameters. Matchers are called with a dot: `expect` returns a table of
@@ -163,7 +163,10 @@ value of another type (a secret number is not `"x"`), and two secrets
 apart by the values inside them (the runner looks, as the addon cannot:
 `toHaveBeenCalledWith(unit, mock.secret(true))` matches a spy handed a
 secret `true`); a secret against a plain value of its type they cannot
-tell; `toBeTruthy` and `toBeFalsy` take a secret that is not a boolean;
+tell; `toBeCloseTo`, `toBeGreaterThan` and `toBeLessThan` look inside a
+secret number, as value or argument, and tell only how the two compare
+(decision S66: a test measures a fill a secret value placed, its width
+reading back secret); `toBeTruthy` and `toBeFalsy` take a secret that is not a boolean;
 `toBeNil`, `toBeSecret` and `toMatchSnapshot` take any; the other
 matchers fail on a secret value or argument. Custom matchers get secrets
 as they are (an answer that is secret fails). A `@cases` case may be or

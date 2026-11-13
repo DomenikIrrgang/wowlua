@@ -2,13 +2,11 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
-## Unreleased
-
-### Fixed
-
-- An anchor that would make a loop fails as in the game: when the region you anchor to is itself placed by the one you're anchoring, through any number of anchors (`b:SetPoint("TOP", a, "BOTTOM")` and then `a:SetPoint("TOP", b, "BOTTOM")`), `SetPoint` and `SetAllPoints` fail with "Action[SetPoint] failed because[Cannot anchor to a region dependent on it]: attempted from: Button:SetPoint.", and the region keeps its points. Before, wowlua anchored it, so code that broke in game passed its tests.
+## 0.13.12 (2026-11-13)
 
 ### New
+
+- `toBeCloseTo` works on secret numbers, and the new `toBeGreaterThan` and `toBeLessThan` do too: `expect(bar:GetStatusBarTexture():GetWidth()).toBeCloseTo(45)` measures a bar showing a secret value (its size reads back secret, as in the game). Only how the numbers compare comes out; tests still never read a secret's value.
 
 - **Play in VS Code**: the wowlua: UI panel has a *Play* switch. With it on, the mouse and keyboard go to the game as when you play: the mouse hovers frames (their `OnEnter` and tooltips), clicks and drags them, and the wheel scrolls them; keys run their key bindings while you hold them (`W` walks, the arrows turn), and what you type goes into the focused edit box, such as the chat's. Off, a click in the panel is a click, as before.
 
@@ -24,6 +22,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Raid target markers work in tests: `SetRaidTarget` puts the marker on the unit (moving it off any other unit, 0 takes it off), `GetRaidTargetIndex` answers it and `RAID_TARGET_UPDATE` fires, so the game's target frame shows the icon. On WoW Forever an addon can no longer mark in combat: as in the game, its `SetRaidTarget` is refused with `ADDON_ACTION_FORBIDDEN` ("SetRaidTarget()") and the test fails, also when the addon's changes taint the game's unit menu. The game's own menu, untouched by addons, still marks in combat.
 - The aura buttons of your own aura container (`CreateFrame("AuraContainer", nil, parent, "CustomAuraContainerTemplate")`) are off limits to your addon in combat, as in the game: while `C_Secrets.ShouldAurasBeSecret()` is true, any call on a button, such as `button:SetSize(…)`, fails with "calling 'SetSize' on bad self (Attempt to access forbidden object from code tainted by an AddOn …)" (through `pcall(button.SetSize, button, …)`: "bad argument #1 to '?' (…)"), and `GetParent()` on a frame you put on the button fails the same way. `button:IsForbidden()` still answers false, as in the game. Out of combat, and in `initializeFrame`, the button is yours to use. Before, wowlua let addon code use the buttons in combat, so code that broke in game passed its tests. Set up the button itself inside `initializeFrame`, and keep your own frames on it for changes in combat.
 - Nameplates draw at the game's scale. When `NAME_PLATE_UNIT_ADDED` fires, the plate's frame (`C_NamePlate.GetNamePlateForUnit(unit)`) is still at scale 1, as in the game; from the next frame (`mock.nextFrame()` in a test) it draws at UIParent's scale times the game's nameplate settings: `nameplateSelectedScale` for your target, `nameplateMinScale` for a unit farther than `nameplateMinScaleDistance` (`mock.spawnUnit({ distance = 30 })`), `nameplateMaxScale` for a near one. On WoW Forever at a UI scale of 0.64 that is 0.512 far and 0.768 for your target. The plate follows the UI scale, your target, the unit's distance and those settings as they change. Before, wowlua drew plates at scale 1, so lines and sizes laid out for the plate's scale came out at another size than in game.
+- A status bar's fill answers `GetWidth`, `GetHeight` and `GetSize` with the part its value fills, as its edges do. Before, it answered 0 while `GetLeft` and `GetRight` gave the filled part.
+- An anchor that would make a loop fails as in the game: when the region you anchor to is itself placed by the one you're anchoring, through any number of anchors (`b:SetPoint("TOP", a, "BOTTOM")` and then `a:SetPoint("TOP", b, "BOTTOM")`), `SetPoint` and `SetAllPoints` fail with "Action[SetPoint] failed because[Cannot anchor to a region dependent on it]: attempted from: Button:SetPoint.", and the region keeps its points. Before, wowlua anchored it, so code that broke in game passed its tests.
 
 ## 0.13.11 (2026-11-11)
 
