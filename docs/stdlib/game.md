@@ -60,6 +60,7 @@ values are ordinary numbers and strings, and the same code works.
 | `secret.isSecret(v)`, `secret.readable(v)` | Test first, then use the value freely |
 | `secret.isNumber(v)`, `secret.isString(v)` | Whether `v` is a number or string that isn't secret |
 | `secret.asString(v)`, `asNumber(v)`, `asBoolean(v)` | Read a value typed `unknown`: the value, or nil |
+| `secret.showWhen(region, shown[, alpha])` | Show or hide a region by a boolean that may be secret, such as another region's `IsShown()`: a secret one shows it at `alpha` or 0, since `SetShown` refuses secrets |
 
 On a client without secret values nothing is secret, and the helpers return
 the value as it is.

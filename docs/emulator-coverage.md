@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,224 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,225 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -853,7 +853,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,224 rules unverified: each rests on Blizzard's
+The engine's code marks 1,225 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2332,7 +2332,7 @@ page changes only when a rule is added, removed or reworded.
 - [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): `Frame:Raise()`: nothing seen, its level and its place among the frames of its level kept (decision T586; TBC Anniver...
 - [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): Methods of what the engine draws or keeps nothing of: model cameras, lights and animation kits, the browser and the s...
 
-### widgets (52)
+### widgets (53)
 
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Edit boxes Lua set the text of this frame: `OnTextChanged(false)` runs once each after the frame's `OnUpdate`, not at...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): An aura container is a frame (Blizzard_AuraContainer's intrinsic of a `Frame`): the client names it one and gives it...
@@ -2352,6 +2352,7 @@ page changes only when a rule is added, removed or reworded.
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): (isRegistered, units): the units a unit event was registered for (unverified).
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Fires `event` at every widget registered for it, in creation order (unverified); a unit event only where the unit (th...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `SetShown(shown)`: a secret follows the value it hides (decision T575: Blizzard's aura buttons hide with `SetShown(se...
+- [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `IsVisible()`: shown with every parent; secret for a bar's fill as `IsShown` (decision T639, unverified: probe "A sec...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `GetObjectTable()`: the object's own table (Blizzard's aura containers hand it to an addon's button initializer, whic...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `CreateActor(name, template)`: a model scene's actor (its parent, not among its children: `GetNumActors`, `GetActorAt...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `MessageFrame:AddMessage(text, r, g, b, a, messageID)`: a font string of the frame shows it (`GetFontStringByID` find...
@@ -2570,6 +2571,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - The nameplates' scale (decisions T633, T634, T637, 2026-11-12)
 - UnitIsTapDenied of a mob tagged by another (decision T635, 2026-11-12)
 - Secret sizes and anchors (decision T638, 2026-11-12)
+- A secret bar's fill shows (decision T639, 2026-11-13)
 
 ## In-game regressions
 

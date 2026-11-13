@@ -1367,12 +1367,16 @@ fn fail(vm: &mut Vm, api: &Api, f: &Function, n: usize, why: Option<Refusal>) ->
         }
     };
     // A method's range or finiteness error is Lua's own (`s:SetValue(math.huge)` called
-    // directly names itself, `/stdtest engine answers`), its others the
-    // bindings' (unverified beyond the recordings).
+    // directly names itself, `/stdtest engine answers`), and so is its
+    // refusal of a secret (decision T639: in game `a:SetShown(secret)`
+    // raised "SuuUI.lua:44510: bad argument #1 to 'SetShown' (Usage: …
+    // Secret values are only allowed during untainted execution for this
+    // argument.)"); its others the bindings' (unverified beyond the
+    // recordings).
     let named = if f.name.contains(':') {
         matches!(
             why,
-            Some(Refusal::Range(..) | Refusal::FloatRange | Refusal::Finite)
+            Some(Refusal::Range(..) | Refusal::FloatRange | Refusal::Finite | Refusal::Secret(_))
         )
     } else {
         names_itself(api, f)

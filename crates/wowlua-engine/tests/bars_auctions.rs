@@ -594,6 +594,50 @@ return unpack(out)",
     );
 }
 
+/// A bar's fill answers `IsShown` and `IsVisible` with secrets while the
+/// bar's value is secret (the bar shows and hides it by the value), and
+/// `SetShown` refuses that answer: SuuUI copied a health fill's `IsShown`
+/// to its repeated art when the theme changed and the game raised
+/// (decision T639). The bar itself stays plain; a plain value makes the
+/// fill plain again.
+#[test]
+fn a_secret_bar_fill_answers_is_shown_with_a_secret() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local bar = CreateFrame('StatusBar', nil, UIParent)
+bar:SetPoint('CENTER')
+bar:SetSize(200, 20)
+bar:SetStatusBarTexture('Interface\\\\Buttons\\\\WHITE8X8')
+bar:SetMinMaxValues(0, 100)
+bar:SetValue(25)
+local fill = bar:GetStatusBarTexture()
+local copy = bar:CreateTexture()
+local plain = fill:IsShown()
+bar:SetValue(secretwrap(60))
+local shown, vis = fill:IsShown(), fill:IsVisible()
+local ok, err = pcall(function() copy:SetShown(shown) end)
+local out = { plain, issecretvalue(shown), issecretvalue(vis), bar:IsShown(), copy:IsShown(), ok, err }
+bar:SetValue(30)
+out[#out + 1] = issecretvalue(fill:IsShown())
+return unpack(out)",
+    );
+    assert_eq!(
+        r,
+        [
+            "true",
+            "true",
+            "true",
+            "true",
+            "true",
+            "false",
+            "MyAddon/main.lua:12: bad argument #1 to 'SetShown' (Usage: self:SetShown([show]). Secret \
+             values are only allowed during untainted execution for this argument.)",
+            "false",
+        ]
+    );
+}
+
 /// A size or anchor offsets set from secrets (secure code only: Blizzard's
 /// aura containers do) leave the rectangle plain: their buttons answered
 /// a plain width in game (decision T638; unverified, probe "Secret sizes

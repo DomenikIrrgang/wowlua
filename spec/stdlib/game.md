@@ -37,6 +37,7 @@ if secret.flag(UnitIsUnit("target", "focus")) then … end   -- a secret boolean
 if secret.flag(UnitInRaid("player")) then … end       -- legacy 1/nil answers too
 if not secret.isSecret(hp) then print(hp + 1) end     -- narrows like issecretvalue
 if secret.readable(hp) and hp > 0 then … end          -- present and not secret
+secret.showWhen(art, fill:IsShown())                  -- a secret answer too
 ```
 
 | API | Signature | Notes |
@@ -48,6 +49,7 @@ if secret.readable(hp) and hp > 0 then … end          -- present and not secre
 | `amount` | `(v: number \| Secret<number> \| nil) -> number \| Secret<number>` | For widgets that take secrets: nil becomes 0 |
 | `isNumber`, `isString` | `(v: unknown) -> v is number`, `-> v is string` | Whether `v` has that type and is not secret (decision S43) |
 | `asString`, `asNumber`, `asBoolean` | `(v: unknown) -> string?`, `-> number?`, `-> boolean?` | `v` when it has that type and is not secret, else nil: for values typed `unknown` (what `errors.try` gives, a loosely declared API's result, a callback's argument), where `known` needs the type already. Legacy `1`/`nil` answers are no booleans: read them with `flag` (decision S42). |
+| `showWhen` | `(region: Region, shown: boolean \| Secret<boolean> \| nil, alpha: number?)` | Shows `region` while `shown` is true, hides it while false. A secret `shown` (which `SetShown` refuses from addon code) shows it and sets its alpha from the secret: `SetAlphaFromBoolean(shown, alpha, 0)`. A plain one sets the alpha to `alpha` (default 1), undoing a secret one; `GetAlpha()` reads back secret from the first secret on (decision S65). For copying another region's `IsShown()`: a status bar's fill answers it with a secret while the bar's value is secret (T639). |
 
 The generated `wow-api` declarations type the arguments Blizzard documents
 with `SecretArguments = "AllowedWhenTainted"` (widget setters such as

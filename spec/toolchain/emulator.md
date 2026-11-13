@@ -354,6 +354,21 @@ size `OnSizeChanged` is given (plain here), and the documentation's other
 such functions (`IsMouseOver`, `Intersects`, a font string's measures),
 which answer plainly here.
 
+While the bar's value or range is secret, its fill (the texture without
+points) answers `IsShown()` and `IsVisible()` with a secret boolean: the
+bar shows and hides it by its value. The bar itself and other regions stay
+plain, and a plain value makes the fill plain again (decision T639). Found
+in game: SuuUI copied a health fill's `IsShown()` to its repeated bar art
+with `SetShown` when the theme changed, and the game refused the secret.
+A widget method's refusal of a secret argument is Lua's own error
+(`luaL_argerror`), like its range errors: called as a method it names the
+caller's position, the argument counted without `self` and the method
+("MyAddon/main.lua:12: bad argument #1 to 'SetShown' (Usage:
+self:SetShown([show]). Secret values are only allowed during untainted
+execution for this argument.)"), through `pcall(t.SetShown, t, v)` "bad
+argument #2 to '?' (…)". Unverified (probe "A secret bar's fill shows"):
+`IsVisible`, a secret range alone, and the fill of an empty bar.
+
 A protected frame anchored to a region (a texture, a font string, a line,
 a mask texture) is refused with the client's error, out of combat too:
 "Action[SetPoint] failed because[Cannot anchor protected frames to

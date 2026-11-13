@@ -3414,3 +3414,83 @@ secret value, `false` for a plain one.
     ```
     /run SB:Hide() SB:SetValue(0) AC:Hide()
     ```
+
+## A secret bar's fill shows (decision T639, 2026-11-13)
+
+Found in game: switching to SuuUI's Stranglethorn Ruins theme raised 1990
+times "SuuUI.lua:44510: bad argument #1 to 'SetShown' (Usage:
+self:SetShown([show]). Secret values are only allowed during untainted
+execution for this argument.)". Its repeated bar art copied a health
+fill's `IsShown()` with `SetShown`. wowlua now answers a secret bar's fill
+`IsShown()` and `IsVisible()` with a secret, and words a method's secret
+refusal as Lua's own error (position, `#1`, the method's name). These
+steps check what is guessed:
+
+- `IsVisible` on the fill;
+- a secret range alone (plain value);
+- the fill of a bar at its minimum (empty);
+- `SetAlphaFromBoolean` taking the secret (what `secret.showWhen` uses).
+
+All out of combat. Target a mob or another player (not yourself), then
+each line in the chat, one at a time. Each step prints `true` for a
+secret value, `false` for a plain one.
+
+1. Make a bar showing the target's health, and the helper:
+
+   ```
+   /run SF=CreateFrame("StatusBar",nil,UIParent) SF:SetSize(200,20) SF:SetPoint("CENTER",0,-240) SF:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8") SF:SetMinMaxValues(0,UnitHealthMax("target")) SF:SetValue(UnitHealth("target")) function SS(...) local o={} for i=1,select("#",...) do o[i]=tostring(issecretvalue((select(i,...)))) end return table.concat(o,",") end
+   ```
+
+2. Ask the fill whether it shows and is visible, and the bar:
+
+   ```
+   /run local f=SF:GetStatusBarTexture() print("fill",SS(f:IsShown(),f:IsVisible(),SF:IsShown()))
+   ```
+
+   Seen: (to do). wowlua: `fill true,true,false`.
+
+3. Hand the fill's answer to `SetAlphaFromBoolean` on a texture of your own:
+
+   ```
+   /run ST=SF:CreateTexture() ST:SetColorTexture(1,0,0) ST:SetAllPoints() print("alpha",pcall(ST.SetAlphaFromBoolean,ST,SF:GetStatusBarTexture():IsShown(),1,0))
+   ```
+
+   Seen: (to do). wowlua: `alpha true`.
+
+4. Hand it to `SetShown` as a method call (the error's wording):
+
+   ```
+   /run local ok,e=pcall(function() ST:SetShown(SF:GetStatusBarTexture():IsShown()) end) print("shown",ok,e)
+   ```
+
+   Seen: (to do). wowlua: `shown false [string "..."]:1: bad argument #1 to 'SetShown' (Usage: self:SetShown([show]). Secret values are only allowed during untainted execution for this argument.)`.
+
+5. A plain value with a secret range:
+
+   ```
+   /run SF:SetValue(1) print("range",SS(SF:GetStatusBarTexture():IsShown()))
+   ```
+
+   Seen: (to do). wowlua: `range true`.
+
+6. A plain value and range (both plain again):
+
+   ```
+   /run SF:SetMinMaxValues(0,100) SF:SetValue(50) print("plain",SS(SF:GetStatusBarTexture():IsShown()))
+   ```
+
+   Seen: (to do). wowlua: `plain false`.
+
+7. An empty bar (value at its minimum), plain and then secret:
+
+   ```
+   /run SF:SetValue(0) local a=SF:GetStatusBarTexture():IsShown() SF:SetMinMaxValues(0,UnitHealthMax("target")) SF:SetValue(0) print("empty",tostring(a),SS(SF:GetStatusBarTexture():IsShown()))
+   ```
+
+   Seen: (to do). wowlua: `empty true true`.
+
+8. Hide what the steps made:
+
+   ```
+   /run SF:Hide() ST:Hide()
+   ```
