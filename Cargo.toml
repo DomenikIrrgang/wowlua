@@ -108,6 +108,13 @@ codegen-units = 1
 inherits = "dist"
 opt-level = "s"
 
+# Line tables keep backtraces, panic locations and a debugger's breakpoints
+# by line; full debug info (variables and types) made the ~100 test binaries
+# gigabytes larger and slower to build and link. For a session in a
+# debugger: `CARGO_PROFILE_DEV_DEBUG=full cargo build`.
+[profile.dev]
+debug = "line-tables-only"
+
 # The VM and the engine run Blizzard's UI code in tests: optimized even in
 # debug builds, so those tests take seconds, not minutes.
 [profile.dev.package.wowlua-vm]

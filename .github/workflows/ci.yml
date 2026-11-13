@@ -13,9 +13,6 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # Line tables keep backtraces and panic locations; full debug info only
-  # makes the test binaries larger and slower to link and to start.
-  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   lint:
