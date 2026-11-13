@@ -358,6 +358,26 @@ local function same(a: any, b: any): boolean?
     return a == b
 end
 
+-- How two numbers compare (0 within `tolerance`, -1 below, 1 above), either
+-- secret: the runner looks inside, as for `toBe` (only the order comes out);
+-- nil when one is no number. Plain numbers are compared here.
+local function compareNumbers(a: any, b: any, tolerance: number): number?
+    if secret.isSecret(a) or secret.isSecret(b) then
+        local engine = wl.mockEngine
+        if not engine then
+            return nil
+        end
+        return engine.compareNumbers(a, b, tolerance)
+    end
+    if type(a) ~= "number" or type(b) ~= "number" then
+        return nil
+    end
+    if a == b or math.abs(a - b) < tolerance then
+        return 0
+    end
+    return a < b and -1 or 1
+end
+
 -- Both checks passed: false when one failed, else nil when one is unknown.
 local function both(a: boolean?, b: boolean?): boolean?
     if a == false or b == false then
@@ -474,8 +494,13 @@ export type Expect<T> = {
     toContain: (item: any) -> (),
     --- `#value` (a string or a table).
     toHaveLength: (n: number) -> (),
-    --- A number within `10^-digits / 2` of `n` (`digits`: 2).
-    toBeCloseTo: (n: number, digits: number?) -> (),
+    --- A number within `10^-digits / 2` of `n` (`digits`: 2). Either may
+    --- be secret: the runner looks inside, as for `toBe` (a secret bar
+    --- fill's width; decision S66).
+    toBeCloseTo: (n: number | Secret<number>, digits: number?) -> (),
+    --- A number above `n`, or below it; either may be secret (S66).
+    toBeGreaterThan: (n: number | Secret<number>) -> (),
+    toBeLessThan: (n: number | Secret<number>) -> (),
     --- A function that raises an error (containing `text`, when given).
     toThrow: (text: string?) -> (),
     --- A spy (wowlua:mock) that was called.
@@ -678,8 +703,27 @@ end
 
 -- The matchers that take a secret value, and those that take secret
 -- arguments; the others fail on one (they would need its value).
-local secretValues = { toBe = true, toEqual = true, toBeNil = true, toBeTruthy = true, toBeFalsy = true, toBeSecret = true, toMatchSnapshot = true }
-local secretArgs = { toBe = true, toEqual = true, toContain = true, toHaveBeenCalledWith = true }
+local secretValues = {
+    toBe = true,
+    toEqual = true,
+    toBeNil = true,
+    toBeTruthy = true,
+    toBeFalsy = true,
+    toBeSecret = true,
+    toMatchSnapshot = true,
+    toBeCloseTo = true,
+    toBeGreaterThan = true,
+    toBeLessThan = true,
+}
+local secretArgs = {
+    toBe = true,
+    toEqual = true,
+    toContain = true,
+    toHaveBeenCalledWith = true,
+    toBeCloseTo = true,
+    toBeGreaterThan = true,
+    toBeLessThan = true,
+}
 const tainted = " (tests run tainted, like the addon)"
 
 -- The matchers on a value: `negated` flips each check.
@@ -772,10 +816,18 @@ local function matchers(value: any, negated: boolean): any
         end
         check(len == n, `expected length {n}, got {show(len)}`, `expected a length other than {n}`)
     end
-    function m.toBeCloseTo(n: number, digits: number?)
+    function m.toBeCloseTo(n: number | Secret<number>, digits: number?)
         local tolerance = 10 ^ -(digits ?? 2) / 2
-        local pass = type(value) == "number" and math.abs(value - n) < tolerance
-        check(pass, `expected {show(value)} to be close to {n}`, `expected {show(value)} not to be close to {n}`)
+        local order = compareNumbers(value, n, tolerance)
+        check(order ~= nil and order == 0, `expected {show(value)} to be close to {show(n)}`, `expected {show(value)} not to be close to {show(n)}`)
+    end
+    function m.toBeGreaterThan(n: number | Secret<number>)
+        local order = compareNumbers(value, n, 0)
+        check(order ~= nil and order > 0, `expected {show(value)} to be greater than {show(n)}`, `expected {show(value)} not to be greater than {show(n)}`)
+    end
+    function m.toBeLessThan(n: number | Secret<number>)
+        local order = compareNumbers(value, n, 0)
+        check(order ~= nil and order < 0, `expected {show(value)} to be less than {show(n)}`, `expected {show(value)} not to be less than {show(n)}`)
     end
     function m.toThrow(text: string?)
         if type(value) ~= "function" then

@@ -24,6 +24,8 @@ const BUILTIN_MATCHERS: &[&str] = &[
     "toContain",
     "toHaveLength",
     "toBeCloseTo",
+    "toBeGreaterThan",
+    "toBeLessThan",
     "toThrow",
     "toHaveBeenCalled",
     "toHaveBeenCalledTimes",
@@ -3136,7 +3138,9 @@ impl Checker<'_, '_> {
                 },
                 "a string or a table",
             ),
-            "toBeCloseTo" => (|ty| matches!(ty, Ty::Number | Ty::Num(_)), "a number"),
+            "toBeCloseTo" | "toBeGreaterThan" | "toBeLessThan" => {
+                (|ty| matches!(ty, Ty::Number | Ty::Num(_)), "a number")
+            }
             "toThrow"
             | "toBeBlocked"
             | "toHaveBeenCalled"
@@ -3166,8 +3170,13 @@ impl Checker<'_, '_> {
             Ty::Union(m) => m.clone(),
             _ => vec![t],
         };
+        // (the number matchers look inside a secret: decision S66)
+        let secrets = matches!(matcher, "toBeCloseTo" | "toBeGreaterThan" | "toBeLessThan");
         let ok = members.iter().all(|&m| {
-            let ty = self.env.types.get(m);
+            let ty = match self.env.types.get(m) {
+                Ty::Secret(inner) if secrets => self.env.types.get(*inner),
+                ty => ty,
+            };
             matches!(
                 ty,
                 Ty::Any | Ty::Unknown | Ty::Error | Ty::Param(_) | Ty::Nil

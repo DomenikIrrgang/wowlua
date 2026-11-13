@@ -594,6 +594,34 @@ return unpack(out)",
     );
 }
 
+/// A bar's fill, placed by its bar, answers `GetWidth`, `GetHeight` and
+/// `GetSize` with the part the value fills, as its edges do (it had
+/// answered its set size, 0); vertical bars too (decision T642).
+#[test]
+fn a_bar_fill_has_the_size_its_value_fills() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local bar = CreateFrame('StatusBar', nil, UIParent)
+bar:SetPoint('CENTER')
+bar:SetSize(300, 10)
+bar:SetStatusBarTexture('Interface\\\\Buttons\\\\WHITE8X8')
+bar:SetMinMaxValues(0, 1000)
+bar:SetValue(150)
+local fill = bar:GetStatusBarTexture()
+local w, h = fill:GetSize()
+local up = CreateFrame('StatusBar', nil, UIParent)
+up:SetPoint('CENTER')
+up:SetSize(10, 200)
+up:SetOrientation('VERTICAL')
+up:SetStatusBarTexture('Interface\\\\Buttons\\\\WHITE8X8')
+up:SetMinMaxValues(0, 4)
+up:SetValue(1)
+return fill:GetWidth(), fill:GetRight() - fill:GetLeft(), h, up:GetStatusBarTexture():GetHeight()",
+    );
+    assert_eq!(r, ["45", "45", "10", "50"]);
+}
+
 /// A bar's fill answers `IsShown` and `IsVisible` with secrets while the
 /// bar's value is secret (the bar shows and hides it by the value), and
 /// `SetShown` refuses that answer: SuuUI copied a health fill's `IsShown`

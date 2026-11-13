@@ -123,6 +123,30 @@ fn same_secret(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(a.raw_eq(b))])
 }
 
+/// `compareNumbers(a, b, tolerance)`: how two numbers compare, either of
+/// them secret (the test runner's number matchers; addon code cannot
+/// look): 0 within `tolerance`, -1 when `a` is below, 1 above; nil when one
+/// is no number. Only the order comes out, never a secret's value
+/// (decision S66).
+fn compare_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
+    let num = |v: Value| match v {
+        Value::Num(n) => Some(n),
+        _ => None,
+    };
+    let (Some(a), Some(b)) = (num(vm.hidden(c.arg(1))), num(vm.hidden(c.arg(2)))) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let tolerance = num(vm.hidden(c.arg(3))).unwrap_or(0.0);
+    let order = if a == b || (a - b).abs() < tolerance {
+        0.0
+    } else if a < b {
+        -1.0
+    } else {
+        1.0
+    };
+    Ok(vec![Value::Num(order)])
+}
+
 /// `keepField(t, key)`: a function that puts `t[key]` back as it is now,
 /// its taint included (`mock.stub` and `mock.fake` restore with it: the
 /// test's own write would leave a global the client set tainted by the
@@ -387,6 +411,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("fireEvent", fire_event as wowlua_vm::NativeFn),
         ("fireUnitEvent", fire_unit_event),
         ("sameSecret", same_secret),
+        ("compareNumbers", compare_numbers),
         ("keepField", keep_field),
         ("advanceTime", advance_time),
         ("setTimeOfDay", set_time_of_day),
