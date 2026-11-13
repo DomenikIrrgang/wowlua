@@ -565,7 +565,7 @@ impl Verification {
         let stale = |what: &str, file: &str| -> anyhow::Error {
             anyhow::anyhow!(
                 "{file} is out of date ({what}): run `WOWLUA_COVERAGE_WRITE=1 cargo test -p \
-                 wowlua-cli --test engine_probe probe_as_the_client` with Blizzard's UI code \
+                 wowlua-cli --test suite engine_probe::probe_as_the_client` with Blizzard's UI code \
                  (`cargo xtask types fetch`), with the test's ratchet at what it matches"
             )
         };

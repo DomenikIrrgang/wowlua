@@ -129,7 +129,7 @@ fn boolean_patterns() {
 }
 
 /// Lists line mismatches for one file (`WOWLUA_LUAC_FILE=path cargo test
-/// -p wowlua-vm --test luac -- --ignored file_lines --nocapture`).
+/// -p wowlua-vm --test suite luac::file_lines -- --ignored --nocapture`).
 #[test]
 #[ignore]
 fn file_lines() {

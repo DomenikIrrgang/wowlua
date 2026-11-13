@@ -223,7 +223,7 @@ fn random_scopes_have_the_same_conflicts() {
 }
 
 /// Every `.lua` file below `$WOWLUA_CORPUS` (run with `cargo test --release
-/// -p wowlua-lower --test scope corpus -- --ignored`).
+/// -p wowlua-lower --test suite scope::corpus -- --ignored`).
 #[test]
 #[ignore]
 fn corpus() {

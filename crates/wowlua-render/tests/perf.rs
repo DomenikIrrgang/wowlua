@@ -3,8 +3,8 @@
 //! player running; the engine's frame, the scene, the drawing (the CPU's
 //! part, as Studio's window pays it: posing and encoding the frame) and
 //! the GPU's time after it timed apart, each frame drawn with its units
-//! posed on the GPU and again on the CPU (T540). Run by hand: `cargo test --release -p wowlua-render --test perf
-//! -- --ignored --nocapture`.
+//! posed on the GPU and again on the CPU (T540). Run by hand: `cargo test --release -p wowlua-render --test suite
+//! perf:: -- --ignored --nocapture`.
 
 use std::time::{Duration, Instant};
 use wowlua_vm::{Value, Vm};

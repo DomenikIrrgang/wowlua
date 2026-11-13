@@ -7,6 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+autotests = false
 
 [[bin]]
 name = "wowlua"
@@ -49,6 +50,10 @@ tar.workspace = true
 flate2.workspace = true
 sha2.workspace = true
 regex.workspace = true
+
+[[test]]
+name = "suite"
+path = "tests/suite.rs"
 
 [lints]
 workspace = true
