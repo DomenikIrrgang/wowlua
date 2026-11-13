@@ -18,6 +18,10 @@ wowlua-syntax.workspace = true
 wowlua-sema.workspace = true
 wowlua-runtime.workspace = true
 
+# The workspace-hack crate (CONTRIBUTING.md): not in WebAssembly builds.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wowlua-workspace-hack.workspace = true
+
 [dev-dependencies]
 mlua.workspace = true
 

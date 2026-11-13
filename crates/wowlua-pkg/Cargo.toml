@@ -27,6 +27,10 @@ ureq = { workspace = true, optional = true }
 walkdir.workspace = true
 zip.workspace = true
 
+# The workspace-hack crate (CONTRIBUTING.md): not in WebAssembly builds.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wowlua-workspace-hack.workspace = true
+
 [features]
 default = ["net"]
 # Downloads (archives over HTTPS); without it a package is read from the

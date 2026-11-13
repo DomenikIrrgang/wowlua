@@ -30,6 +30,11 @@ wowlua-flavors.workspace = true
 wasm-bindgen = "=0.2.129"
 
 # Drawing on the page's canvas (the browser's only).
+
+# The workspace-hack crate (CONTRIBUTING.md): not in WebAssembly builds.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wowlua-workspace-hack.workspace = true
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "=0.4.79"
 js-sys = "=0.3.106"

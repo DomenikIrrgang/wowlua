@@ -1,0 +1,24 @@
+# The settings of `cargo hakari`, which keeps the workspace-hack crate
+# (crates/wowlua-workspace-hack): see CONTRIBUTING.md, "The workspace-hack
+# crate", and https://docs.rs/cargo-hakari/latest/cargo_hakari/config.
+
+hakari-package = "wowlua-workspace-hack"
+
+# Format version for hakari's output. Version 4 requires cargo-hakari 0.9.22 or above.
+dep-format-version = "4"
+
+# The v2 and v3 resolvers are the same to hakari.
+resolver = "2"
+
+# The platforms wowlua is developed and tested on (CI's test matrix). The
+# WebAssembly builds (`--target wasm32-unknown-unknown`) do without the
+# workspace-hack: each crate depends on it for other targets only.
+platforms = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+]
+
+# `wowlua-workspace-hack.workspace = true` in each crate.
+workspace-hack-line-style = "workspace-dotted"
