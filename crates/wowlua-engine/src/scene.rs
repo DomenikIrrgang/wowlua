@@ -2,6 +2,8 @@
 //! as a draw list in the client's order, built from the engine's state on
 //! request. Coordinates are screen pixels from the top left.
 
+pub use wowlua_engine_core::scene::*;
+
 use wowlua_vm::{Value, Vm};
 
 use crate::engine;
@@ -159,35 +161,6 @@ pub struct Text {
     pub shadow: Option<([f32; 4], f32, f32)>,
     pub lines: Vec<TextLine>,
     pub clip: Option<Rect>,
-}
-
-/// What a model shows (spec debugger §18.9.7).
-#[derive(Clone, Debug, PartialEq)]
-pub enum ModelSource {
-    File(u32),
-    Path(String),
-    /// A creature display (`CreatureDisplayInfo`).
-    Display(u32),
-    /// A creature (`Creature`): its first display.
-    Creature(u32),
-    /// A character as a unit looks.
-    Character(Look),
-    /// An item's own model (`SetItem`).
-    Item(u32),
-    /// An item appearance's model (`SetItemAppearance`).
-    Appearance(u32),
-}
-
-/// How a character looks: race, sex (0 male, 1 female), class, and what it
-/// wears (inventory slot, item ID); items tried on (links or appearance
-/// IDs) over that.
-#[derive(Clone, Debug, PartialEq, Default)]
-pub struct Look {
-    pub race: u32,
-    pub sex: u32,
-    pub class: u32,
-    pub items: Vec<(u32, u32)>,
-    pub tried: Vec<String>,
 }
 
 /// A model placed in its frame or scene.
@@ -675,23 +648,6 @@ fn world_view(vm: &mut Vm) -> Option<WorldView> {
     })
 }
 
-pub(crate) const LAYERS: [&str; 5] = ["BACKGROUND", "BORDER", "ARTWORK", "OVERLAY", "HIGHLIGHT"];
-
-/// A draw layer's name as kept: a known one in capitals, whatever case it
-/// was given in, as `GetDrawLayer` answers (decision T597); others as given.
-pub(crate) fn layer_name(vm: &mut Vm, v: Value) -> Value {
-    let known = match v {
-        Value::Str(s) => {
-            let name = vm.heap.str_bytes(s);
-            LAYERS
-                .iter()
-                .find(|l| l.as_bytes().eq_ignore_ascii_case(name))
-        }
-        _ => None,
-    };
-    known.map_or(v, |l| vm.str(l))
-}
-
 /// Screen pixels per UIParent unit, and UIParent's height in its units.
 pub fn pixel_scale(vm: &Vm) -> (f64, f64) {
     let e = engine(vm);
@@ -787,6 +743,15 @@ pub(crate) struct Kept {
     /// The frames in drawing order, and those drawn on their parent's
     /// level, while `scene_order_valid` (decision T543).
     order: Option<(Vec<WidgetId>, std::collections::HashSet<usize>)>,
+}
+
+/// The items kept from the last scene (the engine's `scene_kept`).
+fn kept(vm: &Vm) -> std::cell::RefMut<'_, Kept> {
+    std::cell::RefMut::map(engine(vm).scene_kept.borrow_mut(), |k| {
+        k.get_or_insert_with(|| Box::new(Kept::default()))
+            .downcast_mut::<Kept>()
+            .expect("the scene's kept items")
+    })
 }
 
 struct Group {
@@ -1777,7 +1742,7 @@ fn nums(vm: &Vm, id: WidgetId, stem: &str, n: usize) -> Option<Vec<f32>> {
 
 /// A unit's look: its race, sex, class and what it wears, as the API
 /// answers them.
-pub(crate) fn look_of(vm: &mut Vm, unit: &str) -> Look {
+pub fn look_of(vm: &mut Vm, unit: &str) -> Look {
     let u = vm.str(unit);
     let call = |vm: &mut Vm, name: &str, extra: Option<Value>| -> Vec<Value> {
         let f = vm.get_global(name);
@@ -1814,13 +1779,6 @@ pub(crate) fn look_of(vm: &mut Vm, unit: &str) -> Look {
         items,
         tried: Vec::new(),
     }
-}
-
-/// A look as text (`race:sex:class:slot=item,…`), for a portrait kept
-/// as the unit looked when it was set.
-pub(crate) fn encode_look(l: &Look) -> String {
-    let items: Vec<String> = l.items.iter().map(|(s, i)| format!("{s}={i}")).collect();
-    format!("{}:{}:{}:{}", l.race, l.sex, l.class, items.join(","))
 }
 
 fn decode_look(t: &str) -> Option<Look> {
@@ -2540,7 +2498,7 @@ fn build_scene(vm: &mut Vm, keep: bool) -> Scene {
     // (the frames' order as the last scene found it, while no frame was
     // shown, hidden, made, reparented or re-layered: T543)
     let kept_order = if keep && engine(vm).world.scene_order_valid {
-        let kept = engine(vm).scene_kept.borrow();
+        let kept = kept(vm);
         kept.order.clone().filter(|_| kept.epoch == epoch)
     } else {
         None
@@ -2560,14 +2518,14 @@ fn build_scene(vm: &mut Vm, keep: bool) -> Scene {
                 .map(|f| f.0)
                 .collect();
             if keep {
-                engine(vm).scene_kept.borrow_mut().order = Some((order.clone(), merged.clone()));
+                kept(vm).order = Some((order.clone(), merged.clone()));
                 crate::engine_mut(vm).world.scene_order_valid = true;
             }
             (order, merged)
         }
     };
     let mut old = if keep {
-        let mut kept = engine(vm).scene_kept.borrow_mut();
+        let mut kept = kept(vm);
         if kept.epoch != epoch {
             kept.groups.clear();
             kept.epoch = epoch;
@@ -2769,7 +2727,7 @@ fn build_scene(vm: &mut Vm, keep: bool) -> Scene {
         }
     }
     if keep {
-        engine(vm).scene_kept.borrow_mut().groups = new;
+        kept(vm).groups = new;
     }
     let mut items = all;
     let world = world_view(vm);

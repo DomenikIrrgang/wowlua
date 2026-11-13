@@ -31,6 +31,7 @@ wowlua-driver = { path = "crates/wowlua-driver", default-features = false }
 wowlua-pkg = { path = "crates/wowlua-pkg", default-features = false }
 wowlua-vm = { path = "crates/wowlua-vm" }
 wowlua-engine = { path = "crates/wowlua-engine" }
+wowlua-engine-core = { path = "crates/wowlua-engine-core" }
 wowlua-test = { path = "crates/wowlua-test", default-features = false }
 wowlua-debug = { path = "crates/wowlua-debug", default-features = false }
 wowlua-casc = { path = "crates/wowlua-casc" }
@@ -122,6 +123,9 @@ debug = "line-tables-only"
 opt-level = 2
 
 [profile.dev.package.wowlua-engine]
+opt-level = 2
+
+[profile.dev.package.wowlua-engine-core]
 opt-level = 2
 
 # What loading Blizzard's UI code spends its time in besides: the parser

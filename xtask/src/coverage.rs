@@ -18,7 +18,8 @@ use wowlua_vm::{Value, Vm};
 pub const REPORT: &str = "docs/emulator-coverage.md";
 const PROBE_TESTS: &str = "crates/wowlua-cli/tests/engine_probe.rs";
 const CLIENT: &str = "crates/wowlua-engine/tests/client";
-const ENGINE_SRC: &str = "crates/wowlua-engine/src";
+/// The engine's two crates' sources: the engine's and its core's.
+const ENGINE_SRCS: [&str; 2] = ["crates/wowlua-engine/src", "crates/wowlua-engine-core/src"];
 const GAPS: &str = "crates/wowlua-engine/data/coverage-gaps.md";
 const REGRESSIONS: &str = "crates/wowlua-engine/data/coverage-regressions.txt";
 const PROBES: &str = "tests/ingame/PROBES.md";
@@ -849,25 +850,33 @@ fn first_sentence(text: &str) -> String {
 }
 
 fn unverified_rules(root: &Path) -> Result<Vec<Rule>> {
-    let src = root.join(ENGINE_SRC);
-    let mut files: Vec<std::path::PathBuf> = walkdir::WalkDir::new(&src)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .map(|e| e.into_path())
-        .filter(|p| p.extension().is_some_and(|e| e == "rs"))
-        .collect();
-    files.sort();
+    let mut files: Vec<(&str, std::path::PathBuf)> = Vec::new();
+    for dir in ENGINE_SRCS {
+        let src = root.join(dir);
+        for e in walkdir::WalkDir::new(&src)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let path = e.into_path();
+            if path.extension().is_some_and(|e| e == "rs") {
+                let rel = path
+                    .strip_prefix(&src)?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                files.push((dir, std::path::PathBuf::from(rel)));
+            }
+        }
+    }
+    files.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.cmp(b.0)));
     let mut rules = Vec::new();
-    for path in files {
-        let rel = path
-            .strip_prefix(&src)?
-            .to_string_lossy()
-            .replace('\\', "/");
+    for (dir, rel) in files {
+        let rel = rel.to_string_lossy().into_owned();
+        let path = root.join(dir).join(&rel);
         let module = rel
             .trim_end_matches(".rs")
             .trim_end_matches("/mod")
             .to_string();
-        let file = format!("{ENGINE_SRC}/{rel}");
+        let file = format!("{dir}/{rel}");
         let text = fs::read_to_string(&path)?;
         // Comment paragraphs: consecutive comment lines up to an empty
         // one; a trailing comment is one of its own.
@@ -931,7 +940,9 @@ fn write_unverified(out: &mut String, rules: &[Rule]) {
             writeln!(
                 out,
                 "- [{}](../{}): {}",
-                r.file.trim_start_matches(&format!("{ENGINE_SRC}/")),
+                r.file
+                    .rsplit_once("/src/")
+                    .map_or(r.file.as_str(), |(_, f)| f),
                 r.file,
                 r.summary
             )

@@ -15,6 +15,8 @@
 //! nothing (unverified, each: the client's answers with the player in
 //! such systems were not recorded).
 
+pub use wowlua_engine_core::social::*;
+
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
 
@@ -74,21 +76,6 @@ fn text(vm: &Vm, v: Value) -> Option<String> {
         Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
         _ => None,
     }
-}
-
-/// The player's realm as `GetRealmName` gives it: the world's, else the
-/// engine's placeholder "Realm".
-pub(crate) fn player_realm_name(vm: &Vm) -> String {
-    engine(vm).units.list[units::PLAYER.0]
-        .realm
-        .clone()
-        .unwrap_or_else(|| "Realm".into())
-}
-
-/// The player's realm as `GetNormalizedRealmName` gives it (no spaces or
-/// hyphens).
-pub(crate) fn player_realm(vm: &Vm) -> String {
-    player_realm_name(vm).replace([' ', '-'], "")
 }
 
 /// A `Voice…` CVar as a number, else its recorded default.

@@ -9,6 +9,8 @@
 //! the keyboard focus, else to the frames taking keys and the bindings
 //! (`input::key_down`); text to the focused edit box (`input::type_text`).
 
+pub use wowlua_engine_core::play::*;
+
 use wowlua_vm::{Value, Vm};
 
 use crate::units::UnitId;
@@ -18,20 +20,6 @@ use crate::{engine, engine_mut};
 /// How far the mouse moves while held before it drags (pixels;
 /// unverified).
 const SLACK: f64 = 4.0;
-
-/// The mouse held down while playing.
-pub struct Press {
-    right: bool,
-    /// The frame it was pressed on; none: the world.
-    frame: Option<WidgetId>,
-    /// Where it was pressed, and where it was last (screen pixels).
-    from: (f64, f64),
-    last: (f64, f64),
-    /// It moved beyond a click's slack: no click when let go.
-    dragged: bool,
-    /// The frame's drag under way.
-    dragging: Option<widgets::Dragging>,
-}
 
 /// The frame under a point of the screen (pixels from the top left) that
 /// takes the mouse, not the world's own.

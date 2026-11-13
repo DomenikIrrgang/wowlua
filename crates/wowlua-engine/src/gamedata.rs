@@ -12,23 +12,14 @@
 //! `GetItemInfo` gives nothing until then and fetches it itself
 //! (`GET_ITEM_INFO_RECEIVED`). An item's `itemLevel` is 1 unless given.
 
+pub use wowlua_engine_core::gamedata::*;
+
 use std::collections::HashMap;
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
 
 use crate::{engine, engine_mut, widgets};
-
-/// The defined spells and items: ID → the test's table.
-#[derive(Default)]
-pub struct GameData {
-    pub spells: HashMap<i64, TableRef>,
-    pub items: HashMap<i64, TableRef>,
-    /// The client's spell table's spells asked so far (`scanned_spell`).
-    pub scanned: HashMap<i64, TableRef>,
-    /// Items requested, in order.
-    pub item_requests: Vec<i64>,
-}
 
 fn field(vm: &mut Vm, t: TableRef, key: &str) -> Value {
     let k = vm.str(key);
@@ -1001,7 +992,7 @@ fn request_load_spell_data(vm: &mut Vm, c: NativeCall) -> Ret {
 // ----------------------------------------------------------------- items
 
 /// The item an `itemInfo` names: an ID, a link, or a cached item's name.
-pub(crate) fn item_id(vm: &mut Vm, v: Value) -> Option<i64> {
+pub fn item_id(vm: &mut Vm, v: Value) -> Option<i64> {
     match vm.hidden(v) {
         Value::Num(n) => Some(n as i64),
         Value::Str(s) => {
