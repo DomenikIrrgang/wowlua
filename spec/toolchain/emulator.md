@@ -381,6 +381,11 @@ frame deep). The check is made when the frame anchors, for its own
 protection (a secure template), not a secure child's; unverified: deeper
 chains, the parent's place, a frame protected through its children.
 
+A status bar's fill (its texture without points) has the size of the
+part the value fills: `GetWidth`, `GetHeight` and `GetSize` answer it, as
+its edges do, horizontal or vertical (decision T642; it answered its set
+size, 0, while `GetLeft` and `GetRight` answered the part).
+
 An anchor that would make a loop is refused for every region: when the
 relative's rectangle comes from the region anchoring (its anchors lead
 back to it, through any number of regions; an anchor without a relative is

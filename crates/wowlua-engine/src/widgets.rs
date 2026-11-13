@@ -3426,10 +3426,13 @@ pub fn run_text_changes(vm: &mut Vm) {
 /// points, `SetAllPoints`), else as set (unverified: recorded for fresh,
 /// unanchored widgets only).
 pub(crate) fn laid_out_size(vm: &mut Vm, id: WidgetId) -> (f64, f64) {
-    let (w, h, anchored) = {
+    let (w, h, points) = {
         let r = &engine(vm).world.widgets[id.0];
         (r.width, r.height, !r.points.is_empty())
     };
+    // (a status bar's fill without points is placed by its bar: its size
+    // is the part the value fills, as its edges are; decision T642)
+    let anchored = points || crate::bars::fill_place(vm, id).is_some();
     let s = layout_scale(engine(vm), id);
     match bounds(vm, id, 0).filter(|_| anchored) {
         Some(b) => (b.2 / s, b.3 / s),

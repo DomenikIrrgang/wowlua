@@ -2543,6 +2543,76 @@ end
     assert!(out.contains("2 passed, 1 failed"), "{out}");
 }
 
+/// The number matchers on secrets (decision S66): `toBeCloseTo`,
+/// `toBeGreaterThan` and `toBeLessThan` look inside a secret value or
+/// argument, as `toBe` does, so a test can measure a fill a secret value
+/// placed (its width reads back secret); negated too. A failure shows the
+/// secret as `<secret>`. Plain numbers as before.
+#[test]
+fn number_matchers_look_inside_secrets() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[(
+            "tests/close.test.wowlua",
+            r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("secret widths")
+local function widths()
+    local bar = CreateFrame("StatusBar", nil, UIParent)
+    bar:SetPoint("CENTER")
+    bar:SetSize(300, 10)
+    bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+    bar:SetMinMaxValues(0, 1000)
+    bar:SetValue(mock.secret(150))
+    mock.advanceFrames(1)
+    local w = bar:GetStatusBarTexture():GetWidth()
+    expect(w).toBeSecret()
+    expect(w).toBeCloseTo(45)
+    expect(w).never.toBeCloseTo(46)
+    expect(w).toBeGreaterThan(44)
+    expect(w).toBeLessThan(mock.secret(46))
+    expect(44.999).toBeCloseTo(w)
+    expect(w).never.toBeGreaterThan(45.5)
+end
+
+@test("plain numbers")
+local function plain()
+    expect(1.004).toBeCloseTo(1)
+    expect(2).toBeGreaterThan(1)
+    expect(1).toBeLessThan(2)
+    expect(1).never.toBeLessThan(1)
+end
+"#,
+        )],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+    fs::write(
+        dir.path().join("tests/close.test.wowlua"),
+        r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test local function far() expect(mock.secret(5)).toBeCloseTo(6) end
+@test local function above() expect(mock.secret(5)).toBeGreaterThan(5) end
+local five: any = mock.secret("5")
+@test local function text() expect(five).toBeLessThan(6) end
+"#,
+    )
+    .unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("0 passed, 3 failed"), "{out}");
+    for line in [
+        "expected <secret> to be close to 6",
+        "expected <secret> to be greater than 5",
+        "expected <secret> to be less than 6",
+    ] {
+        assert!(out.contains(line), "missing {line:?} in:\n{out}");
+    }
+}
+
 /// Secret values in tests (spec Tooling §16.1.3): tests run tainted, so
 /// the framework never reads a secret. What needs no value passes or fails
 /// as it should; secrets show as `<secret>` in names, messages and
