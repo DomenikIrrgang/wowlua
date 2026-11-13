@@ -6502,6 +6502,48 @@ print(type(format.date()))
     );
 }
 
+/// `secret.showWhen`: a plain answer shows or hides the region and sets its
+/// alpha; a secret one (a status bar's fill answers `IsShown` with one while
+/// the bar's value is secret) shows it and sets its alpha from the secret,
+/// which `SetShown` would refuse; a plain answer after it undoes it
+/// (decision S65).
+#[test]
+fn show_when_takes_a_secret_answer() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as secret from \"wowlua:secret\"\n_G.StdS = secret\n",
+        )],
+        "",
+        r##"Mock.loadAddon("Std")
+local s = StdS
+local t = UIParent:CreateTexture()
+s.showWhen(t, true, 0.6)
+print(t:IsShown(), t:GetAlpha())
+s.showWhen(t, false)
+print(t:IsShown(), t:GetAlpha())
+s.showWhen(t, Mock.secret(true), 0.75)
+print(t:IsShown(), issecretvalue(t:GetAlpha()))
+s.showWhen(t, Mock.secret(false))
+print(t:IsShown(), issecretvalue(t:GetAlpha()))
+s.showWhen(t, true)
+print(t:IsShown(), issecretvalue(t:GetAlpha()))
+s.showWhen(t, nil)
+print(t:IsShown())"##,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "true 0.60000002384186",
+            "false 1",
+            "true true",
+            "true true",
+            "true true",
+            "false",
+        ]
+    );
+}
+
 /// Reading what the game gives without trusting its type: `secret.asString`
 /// and friends, `errors.try`/`tryMethod` (silent), `table.field` and the
 /// weak tables, `frames.find`/`as…` and `frames.keepAway`, the short money

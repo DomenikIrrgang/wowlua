@@ -2038,12 +2038,37 @@ fn set_shown_method(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-fn is_shown(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(engine(vm).world.widgets[id.0].shown)])
+/// Whether a region is a status bar's fill (its texture, without points:
+/// the bar places it) while the bar's value or range is secret: the bar
+/// shows and hides it by its value, so whether it shows is secret too
+/// (decision T639).
+fn secret_fill(vm: &Vm, id: WidgetId) -> bool {
+    engine(vm).world.widgets[id.0].points.is_empty()
+        && crate::bars::fill_place(vm, id)
+            .is_some_and(|(bar, ..)| crate::bars::secret_value(vm, bar))
 }
 
+/// `IsShown()`: its own shown flag; a secret one for a bar's fill while
+/// the bar's value is secret (decision T639; found in game: SuuUI passed
+/// it to `SetShown`, which refused it).
+fn is_shown(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let shown = Value::Bool(engine(vm).world.widgets[id.0].shown);
+    Ok(vec![if secret_fill(vm, id) {
+        vm.secret_wrap(shown)
+    } else {
+        shown
+    }])
+}
+
+/// `IsVisible()`: shown with every parent; secret for a bar's fill as
+/// `IsShown` (decision T639, unverified: probe "A secret bar's fill shows").
 fn is_visible(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(visible(engine(vm), id))])
+    let shown = Value::Bool(visible(engine(vm), id));
+    Ok(vec![if secret_fill(vm, id) {
+        vm.secret_wrap(shown)
+    } else {
+        shown
+    }])
 }
 
 // ------------------------------------------------------------ identity
