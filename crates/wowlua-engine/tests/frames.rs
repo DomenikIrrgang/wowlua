@@ -29,6 +29,41 @@ fn run(vm: &mut Vm, src: &str) -> Vec<String> {
     }
 }
 
+/// The client keeps a size as a 32-bit float: 10.1 reads back a hair off,
+/// whole and half pixels exactly (decision T643). An addon comparing a
+/// size it set with `==` sees a change every time (SuuUI's layouts laid
+/// themselves out every frame in game).
+#[test]
+fn sizes_are_kept_as_32_bit_floats() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+f:SetWidth(10.1)
+local w = f:GetWidth()
+f:SetSize(2.5, 1 / 3)
+local w2, h2 = f:GetSize()
+f:SetHeight(48)
+local t = f:CreateTexture()
+t:SetSize(0.1, 7)
+return tostring(w == 10.1), string.format('%.17g', w), tostring(math.abs(w - 10.1) < 1e-6),
+    tostring(w2 == 2.5), string.format('%.17g', h2), tostring(f:GetHeight() == 48),
+    string.format('%.17g', (t:GetWidth()))",
+    );
+    assert_eq!(
+        r,
+        [
+            "false",
+            "10.100000381469727",
+            "true",
+            "true",
+            "0.3333333432674408",
+            "true",
+            "0.10000000149011612"
+        ]
+    );
+}
+
 #[test]
 fn frames_are_tables_with_their_class_methods() {
     let mut vm = vm();

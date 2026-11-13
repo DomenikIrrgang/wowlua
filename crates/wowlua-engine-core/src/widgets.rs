@@ -3111,13 +3111,20 @@ fn set_height(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// A size as the client keeps it: a 32-bit float (`SetWidth(10.1)` answers
+/// `GetWidth()` 10.100000381469727, as UIParent's 1365.333… width is
+/// 1365.3333740234375; decision T643).
+fn kept_size(v: f64) -> f64 {
+    f64::from(v as f32)
+}
+
 /// Sets the size; `OnSizeChanged` runs when it changes.
 fn resize(vm: &mut Vm, id: WidgetId, w: Option<f64>, h: Option<f64>) {
     mark(engine_mut(vm), id);
     let widget = &mut engine_mut(vm).world.widgets[id.0];
     let old = (widget.width, widget.height);
-    widget.width = w.unwrap_or(old.0);
-    widget.height = h.unwrap_or(old.1);
+    widget.width = w.map_or(old.0, kept_size);
+    widget.height = h.map_or(old.1, kept_size);
     let new = (widget.width, widget.height);
     // `OnSizeChanged` waits until the rectangle is laid out: asked for, or
     // the layout pass before the next `OnUpdate` (also when resized in

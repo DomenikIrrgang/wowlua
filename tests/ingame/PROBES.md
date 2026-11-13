@@ -3545,3 +3545,43 @@ Out of combat, each line in the chat, one at a time.
    ```
    /run LA:Hide() LB:Hide() LC:Hide()
    ```
+
+## Sizes are 32-bit floats (decision T643, 2026-11-13)
+
+Found in game: SuuUI's layouts compared the size they gave a container with
+`GetWidth()` and saw a change on every pass, so they laid themselves out
+again every frame. wowlua kept the exact number and showed nothing. It now
+keeps a size as a 32-bit float. These steps check that guess for sizes
+an addon sets (UIParent's width, 1365.3333740234 at 1366×768, is known).
+
+Out of combat, each line in the chat, one at a time.
+
+1. Give a frame a width that a 32-bit float can't hold exactly:
+
+   ```
+   /run SZ=CreateFrame("Frame",nil,UIParent) SZ:SetWidth(10.1) print("w",format("%.17g",SZ:GetWidth()),SZ:GetWidth()==10.1)
+   ```
+
+   Seen: (to do). wowlua: `w 10.100000381469727 false`.
+
+2. A third, and a half (exact in a 32-bit float):
+
+   ```
+   /run SZ:SetSize(2.5,1/3) local w,h=SZ:GetSize() print("wh",w==2.5,format("%.17g",h))
+   ```
+
+   Seen: (to do). wowlua: `wh true 0.3333333432674408`.
+
+3. A texture's size:
+
+   ```
+   /run local t=SZ:CreateTexture() t:SetSize(0.1,7) print("t",format("%.17g",t:GetWidth()))
+   ```
+
+   Seen: (to do). wowlua: `t 0.10000000149011612`.
+
+4. Hide the frame:
+
+   ```
+   /run SZ:Hide()
+   ```
