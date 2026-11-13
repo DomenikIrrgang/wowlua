@@ -10,6 +10,7 @@ authors.workspace = true
 autotests = false
 
 [dependencies]
+wowlua-engine-core.workspace = true
 wowlua-host.workspace = true
 flate2.workspace = true
 fontdue = "0.9.5"

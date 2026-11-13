@@ -1,0 +1,28 @@
+[package]
+name = "wowlua-engine-core"
+description = "The core of wowlua's WoW client engine: its state (widgets, units, the world), the API's arguments and the modules the rest builds on; wowlua-engine adds the other answers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+wowlua-host.workspace = true
+flate2.workspace = true
+fontdue = "0.9.5"
+quick-xml.workspace = true
+rustc-hash.workspace = true
+serde_json.workspace = true
+wowlua-api.workspace = true
+wowlua-flavors.workspace = true
+wowlua-toc.workspace = true
+wowlua-vm.workspace = true
+
+# The workspace-hack crate (CONTRIBUTING.md): not in WebAssembly builds.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wowlua-workspace-hack.workspace = true
+
+[lints]
+workspace = true

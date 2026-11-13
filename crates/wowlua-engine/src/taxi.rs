@@ -26,6 +26,8 @@
 //! sent during the flight (a spell's cooldown, the worn items'
 //! durability: their cause unknown).
 
+pub use wowlua_engine_core::taxi::*;
+
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
 
@@ -42,15 +44,6 @@ const BOARDED_AFTER: f64 = 0.077;
 /// The shapeshift bar's usability told again after boarding (recorded; its
 /// cause unknown).
 const SHAPESHIFT_AFTER: f64 = 1.096;
-
-#[derive(Default)]
-pub struct Taxis {
-    /// The flight masters' maps: unit → the test's table.
-    pub defined: std::collections::BTreeMap<usize, TableRef>,
-    pub open: Option<UnitId>,
-    /// The flights taken: a landing of an earlier one is stale.
-    pub flights: u32,
-}
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
     widgets::fire_event(vm, e, args);

@@ -15,7 +15,7 @@
 //! Unverified unless a comment says otherwise: Forever's own answers to
 //! these were not recorded.
 
-use std::rc::Rc;
+pub use wowlua_engine_core::leftovers2::*;
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
@@ -23,27 +23,6 @@ use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
 use crate::{engine, engine_mut, widgets};
 
 // ------------------------------------------------------------- helpers
-
-/// What the engine answers for the client function `name` called with
-/// `args` (its behaviour; none: nothing), secret answers unwrapped (as
-/// `extras::ask`).
-pub(crate) fn ask(vm: &mut Vm, name: &'static str, args: &[Value]) -> Vec<Value> {
-    let Some(f) = engine(vm).behaviour(name) else {
-        return vec![];
-    };
-    let full = vm.str(name);
-    let call = NativeCall {
-        args: args.iter().copied().collect(),
-        taints: args.iter().map(|_| Default::default()).collect(),
-        origins: args.iter().map(|_| Default::default()).collect(),
-        upvals: Rc::from([full]),
-        upval_taints: Rc::from([Default::default()]),
-    };
-    match f(vm, call) {
-        Ok(values) => values.into_iter().map(|v| vm.hidden(v)).collect(),
-        Err(_) => vec![],
-    }
-}
 
 /// The engine's first answer to `name` as a number.
 fn ask_num(vm: &mut Vm, name: &'static str, args: &[Value]) -> Option<f64> {

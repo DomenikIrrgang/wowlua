@@ -12,6 +12,8 @@
 //! taken from the API documentation, Blizzard's UI code or
 //! warcraft.wiki.gg.
 
+pub use wowlua_engine_core::unitinfo::*;
+
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
 
@@ -547,12 +549,6 @@ fn get_player_facing(vm: &mut Vm, _c: NativeCall) -> Ret {
         return Ok(vec![Value::Nil]);
     }
     Ok(vec![Value::Num(player_facing(vm))])
-}
-
-/// The player's facing, radians counter-clockwise from north, 0 to 2π:
-/// `mock.moveTo`'s `facing`, north at first.
-pub(crate) fn player_facing(vm: &Vm) -> f64 {
-    engine(vm).world.character.position.facing
 }
 
 /// `GetRaidDifficultyID()`: the one `SetRaidDifficultyID` chose

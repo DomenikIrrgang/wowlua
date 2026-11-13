@@ -29,7 +29,7 @@
 //! told (`QueryOwnedAuctions`) and cancelled (`CancelAuction`), as
 //! Auctionator's shopping and cancelling tabs use them.
 
-use std::collections::{BTreeMap, VecDeque};
+pub use wowlua_engine_core::auction::*;
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
@@ -58,67 +58,6 @@ const PAID_AFTER: f64 = 0.113;
 /// (recorded: 0.107 and 0.324 s after the answer).
 const POSTED_INVENTORY_AFTER: f64 = 0.107;
 const POSTED_BAG_AFTER: f64 = 0.324;
-
-/// What a query's answer does.
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Query {
-    Bids,
-    Browse,
-    MoreBrowse,
-    Owned,
-    Cancel(f64),
-    Commodity(i64),
-    Item(i64),
-    Price(i64, f64),
-    Purchase(i64, f64),
-    Post(i64, usize, i64),
-}
-
-#[derive(Default)]
-pub struct AuctionHouse {
-    pub houses: BTreeMap<usize, TableRef>,
-    pub open: Option<UnitId>,
-    /// The throttled system ready for a message.
-    ready: bool,
-    queue: VecDeque<Query>,
-    /// The browse results shown (after a browse search).
-    browsed: bool,
-    /// The browse query's search string (lower case; none: everything).
-    browse_filter: Option<String>,
-    /// The browse results all told (`HasFullBrowseResults`).
-    browse_full: bool,
-    /// The player's auctions as the last owned auctions query told them
-    /// (`GetNumOwnedAuctions`: none before one).
-    owned_told: Option<Vec<Owned>>,
-    /// Commodities searched: the results' answer (`GetTime`) and owners
-    /// known; how many were bought.
-    searched: BTreeMap<i64, (f64, bool)>,
-    /// Commodities ever searched: the first search's answer (`GetTime`),
-    /// whether their owners' names came.
-    first_searched: BTreeMap<i64, (f64, bool)>,
-    bought: BTreeMap<i64, f64>,
-    /// Items searched (their results told).
-    item_searched: BTreeMap<i64, bool>,
-    /// The player's auctions.
-    owned: Vec<Owned>,
-    next_auction: f64,
-    /// The item being posted: its buyout, its duration (seconds), its
-    /// link.
-    posting: (f64, f64, Option<String>),
-    /// A purchase's quote's end (`GetTime`).
-    quote_until: f64,
-}
-
-/// An auction of the player's: its ID, item, buyout, the item's link (the
-/// bag's, as posted), its end (`GetTime`).
-#[derive(Clone, Debug)]
-struct Owned {
-    auction: f64,
-    item: i64,
-    buyout: f64,
-    link: Option<String>,
-    ends: f64,
-}
 
 /// A posting's duration (`PostItem`'s `duration`, 1 to 3) in seconds: the
 /// sell frame's choices, `AUCTION_DURATION_ONE` to `_THREE` (2, 8 and 24

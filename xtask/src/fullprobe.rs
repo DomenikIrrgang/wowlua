@@ -200,7 +200,7 @@ fn client_functions(root: &Path) -> Result<Vec<String>> {
 
 /// A `pub const NAME: &[&str] = &[ … ];` list of the engine's sources.
 fn engine_list(root: &Path, file: &str, name: &str) -> Result<Vec<String>> {
-    let path = root.join("crates/wowlua-engine/src").join(file);
+    let path = root.join("crates/wowlua-engine-core/src").join(file);
     let text = std::fs::read_to_string(&path).with_context(|| path.display().to_string())?;
     let start = text
         .find(&format!("pub const {name}: &[&str] = &["))

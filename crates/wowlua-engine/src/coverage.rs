@@ -458,14 +458,20 @@ mod tests {
     /// together; the events of the recordings `login` replays.
     fn fired_in_code(root: &Path) -> BTreeMap<String, BTreeSet<String>> {
         let known = known_events();
+        // Both crates of the engine: this one's and the core's.
         let src = root.join("src");
+        let core_src = root.join("../wowlua-engine-core/src");
         let mut files = Vec::new();
         rust_files(&src, &mut files);
+        rust_files(&core_src, &mut files);
         let mut out: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         let mut lists = BTreeSet::new();
         let mut sources = BTreeMap::new();
         for file in files {
-            let rel = file.strip_prefix(&src).expect("below src");
+            let rel = file
+                .strip_prefix(&src)
+                .or_else(|_| file.strip_prefix(&core_src))
+                .expect("below src");
             // Path components, so Windows' backslashes name modules as `/` does.
             let module = rel
                 .with_extension("")
@@ -475,7 +481,10 @@ mod tests {
                 .join("::");
             let module = module.strip_suffix("::mod").unwrap_or(&module).to_string();
             let text = std::fs::read_to_string(&file).expect("a source");
-            sources.insert(module.clone(), text.clone());
+            sources
+                .entry(module.clone())
+                .or_insert_with(String::new)
+                .push_str(&text);
             if SILENT_MODULES.contains(&module.as_str()) {
                 continue;
             }
@@ -535,7 +544,7 @@ mod tests {
         }
         for file in REPLAYED {
             assert!(
-                sources["login"].contains(&format!("include_str!(\"../data/{file}\")")),
+                sources["login"].contains(&format!("wowlua-engine/data/{file}\"")),
                 "`login` replays no {file}: REPLAYED is stale"
             );
             let text = std::fs::read_to_string(root.join("data").join(file)).expect("a recording");
