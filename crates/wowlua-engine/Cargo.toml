@@ -7,6 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+autotests = false
 
 [dependencies]
 wowlua-host.workspace = true
@@ -19,6 +20,10 @@ wowlua-api.workspace = true
 wowlua-flavors.workspace = true
 wowlua-toc.workspace = true
 wowlua-vm.workspace = true
+
+[[test]]
+name = "suite"
+path = "tests/suite.rs"
 
 [lints]
 workspace = true
