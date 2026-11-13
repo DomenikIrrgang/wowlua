@@ -87,13 +87,25 @@ result_large_err = "allow"
 [profile.release]
 # Keep `panic = "unwind"` (the default): parallel regions catch a job's
 # panic and run again in order (`wowlua_driver::parallel`).
+#
+# Local builds (`cargo build --release`): fast to rebuild. Incremental and
+# without LTO, a change to the engine rebuilds `target/release/wowlua` in
+# about 10 s instead of 100 s; the binary runs about 5% slower than the
+# shipped one (`dist`).
+incremental = true
+strip = true
+
+# What is shipped (`.github/workflows/release.yml`, the registry's image):
+# the fastest binary, slow to build (thin LTO over one codegen unit per crate).
+[profile.dist]
+inherits = "release"
+incremental = false
 lto = "thin"
 codegen-units = 1
-strip = true
 
 # The playground's WebAssembly (`web/`): smaller over the network.
 [profile.web]
-inherits = "release"
+inherits = "dist"
 opt-level = "s"
 
 # The VM and the engine run Blizzard's UI code in tests: optimized even in
