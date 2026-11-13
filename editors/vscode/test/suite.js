@@ -205,6 +205,70 @@ async function chatScenario() {
     }
 }
 
+// Play in the UI panel (decision T535): with Play on, a key held turns the
+// character, and the mouse moved, pressed and let go over the counter
+// clicks it.
+async function playScenario() {
+    const name = "addon: playing in the panel";
+    log(`== ${name}`);
+    const api = await vscode.extensions.getExtension("wowlua.wowlua").activate();
+    const folder = vscode.workspace.workspaceFolders[0];
+    // (no stop at the counter's breakpoint: the click counts)
+    const breakpoints = vscode.debug.breakpoints;
+    vscode.debug.removeBreakpoints(breakpoints);
+    const input = (i) => api.ui.handleMessage({ type: "input", input: i });
+    const value = async (session, expression) => (await session.customRequest("evaluate", { expression, context: "repl" })).result;
+    try {
+        await vscode.debug.startDebugging(folder, { type: "wowlua", request: "launch", name: "run the addon", addon: true, flavor: "camelot", profile: "camelot" });
+        const session = await waitFor(() => vscode.debug.activeDebugSession, 30000, "the session");
+        await waitFor(() => api.ui.state().open && api.ui.state().shots >= 2, 60000, "the panel drawing twice");
+        // Off, input goes nowhere.
+        await input({ action: "keyDown", key: "LEFT" });
+        assert(api.ui.state().sent === 0, "input sent with Play off");
+        await api.ui.handleMessage({ type: "play", on: true });
+        assert(api.ui.state().playing, "Play did not turn on");
+        // The Left arrow held turns the character (TURNLEFT) until let go.
+        assert((await value(session, 'GetBindingAction("LEFT")')) === '"TURNLEFT"', "LEFT is not bound to TURNLEFT");
+        const facing = await value(session, "GetPlayerFacing()");
+        await input({ action: "keyDown", key: "LEFT" });
+        await new Promise((r) => setTimeout(r, 1000));
+        await input({ action: "keyUp", key: "LEFT" });
+        const turned = await value(session, "GetPlayerFacing()");
+        log("facing:", facing, "→", turned);
+        assert(turned !== facing, "holding LEFT did not turn the character");
+        await new Promise((r) => setTimeout(r, 500));
+        assert((await value(session, "GetPlayerFacing()")) === turned, "the character turns on after LEFT was let go");
+        // The mouse: moved over the counter, pressed and let go, a click.
+        await session.customRequest("wowlua/input", { action: "slash", text: "/wdemo" });
+        let button;
+        await waitFor(() => {
+            session.customRequest("wowlua/findFrames", { query: "Clicks" }).then((list) => {
+                button = list.find((f) => f.type === "Button" && f.rect && f.visible);
+            });
+            return button;
+        }, 30000, "the counter button");
+        const at = { x: button.rect.x + button.rect.width / 2, y: button.rect.y + button.rect.height / 2 };
+        await input({ action: "mouseMove", ...at });
+        await input({ action: "mouseDown", ...at, right: false });
+        await input({ action: "mouseUp", ...at, right: false });
+        let text;
+        await waitFor(() => {
+            session.customRequest("wowlua/findFrames", { query: "Clicks" }).then((list) => {
+                const b = list.find((f) => f.type === "Button" && f.visible);
+                text = b && b.text;
+            });
+            return text === "Clicks: 1";
+        }, 30000, "the button's text Clicks: 1");
+        log("after the played click:", text, "panel:", JSON.stringify(api.ui.state()));
+        log("PASS", name);
+    } finally {
+        await api.ui.handleMessage({ type: "play", on: false });
+        vscode.debug.addBreakpoints(breakpoints);
+        if (vscode.debug.activeDebugSession) await vscode.debug.stopDebugging();
+        await new Promise(r => setTimeout(r, 2000));
+    }
+}
+
 // The language client (decision T368): an unsaved edit's type error shows
 // in the Problems view and goes again when undone; the outline lists the
 // file's functions; go to definition, hover, completion, references and
@@ -423,6 +487,12 @@ exports.run = async function () {
         if (failed) throw new Error(`${failed} scenarios failed`);
         return;
     }
+    if (process.env.WOWLUA_SCENARIO === "play") {
+        try { await playScenario(); } catch (e) { failed++; log(String(e)); }
+        log(failed ? `${failed} FAILED` : "ALL PASSED");
+        if (failed) throw new Error(`${failed} scenarios failed`);
+        return;
+    }
     if (process.env.WOWLUA_SCENARIO === "chat") {
         try { await chatScenario(); } catch (e) { failed++; log(String(e)); }
         log(failed ? `${failed} FAILED` : "ALL PASSED");
@@ -449,6 +519,9 @@ exports.run = async function () {
     } catch (e) { failed++; log(String(e)); }
     try {
         await chatScenario();
+    } catch (e) { failed++; log(String(e)); }
+    try {
+        await playScenario();
     } catch (e) { failed++; log(String(e)); }
     try {
         await lspScenario(widgets);

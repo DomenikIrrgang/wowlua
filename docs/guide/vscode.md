@@ -199,10 +199,16 @@ stop and step, and once a second while the game runs.
 
 - Click in it to click in the game; right-click for the right button. The
   frame under the pointer gets the click, so its `OnClick` breakpoints stop.
+- Turn on **Play** to play the game in the panel: the mouse hovers frames
+  (their `OnEnter` and tooltips), clicks and drags them, and the wheel
+  scrolls them. Keys run their key bindings while you hold them, so `W`
+  walks and the arrows turn your character, and what you type goes into the
+  edit box that has the focus, such as the chat's. Click in the panel first
+  so it has the keyboard; keys you hold come up when it loses it.
 - Zoom with `Ctrl`/`Cmd` and the wheel, a pinch or the panel's buttons, or
   pick *Zoom to frame…* and type a frame's name. Zoomed in, the screen is
   drawn sharper. Pan with the scrollbars, the wheel, or a drag with the
-  middle button or `Space` held.
+  middle button or `Space` held (not while playing: `Space` is the game's).
 - The **wowlua Frames** view in the debug sidebar lists the frames on screen
   with their type, size and text. Select one to outline it in the panel.
 

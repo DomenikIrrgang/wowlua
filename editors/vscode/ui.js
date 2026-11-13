@@ -1,7 +1,9 @@
 // The UI panel: the emulated client's screen beside the editor, drawn by
 // the debug session (`wowlua/screenshot`), refreshed on every stop and
 // while the game runs; clicks in it are clicks in the game (`wowlua/input`).
-// It zooms (the wheel with Ctrl or Cmd, a pinch, its buttons) and zooms to
+// With Play on, the mouse and keyboard go to the game as when playing
+// (decision T535): the mouse moved, its buttons held and let go, the wheel,
+// keys held down by their binding names, text typed. It zooms (the wheel with Ctrl or Cmd, a pinch, its buttons) and zooms to
 // a frame picked by name; zoomed in, the session draws it sharper.
 const vscode = require("vscode");
 
@@ -21,6 +23,10 @@ class UiPanel {
         this.scale = 1; // the drawing's scale, as the panel's zoom asks
         this.frames = []; // the frames the picker offers: { label, rect }
         this.metrics = undefined; // the picture as displayed: { width, height, zoom }
+        this.playing = false; // Play: the mouse and keyboard go to the game
+        this.inputs = []; // play input waiting to be sent, in order
+        this.sending = false;
+        this.sent = 0; // play input the session took
     }
 
     /// A wowlua session started: the panel follows it.
@@ -31,11 +37,12 @@ class UiPanel {
         this.shots = 0;
         this.last = undefined;
         this.highlight = undefined;
+        this.inputs = [];
         this.post({ type: "highlight", rect: null });
         if (vscode.workspace.getConfiguration("wowlua").get("ui.autoOpen")) {
             this.show(true);
         }
-        this.post({ type: "status", text: "Running" });
+        this.post({ type: "status", text: this.runningText() });
         this.schedule();
     }
 
@@ -44,6 +51,7 @@ class UiPanel {
             return;
         }
         this.ended = true;
+        this.inputs = [];
         this.stopTimer();
         this.post({ type: "status", text: "The session ended" });
     }
@@ -57,8 +65,14 @@ class UiPanel {
 
     continued() {
         this.paused = false;
-        this.post({ type: "status", text: "Running" });
+        this.post({ type: "status", text: this.runningText() });
         this.schedule();
+        // (keys and buttons let go during the stop)
+        this.pump();
+    }
+
+    runningText() {
+        return this.playing ? "Playing: the mouse and keyboard go to the game" : "Running";
     }
 
     show(preserveFocus) {
@@ -80,7 +94,7 @@ class UiPanel {
         });
         this.post({ type: "frames", frames: this.frames });
         if (this.session && !this.ended) {
-            this.post({ type: "status", text: this.paused ? "Paused (continue to click in the game)" : "Running" });
+            this.post({ type: "status", text: this.paused ? "Paused (continue to click in the game)" : this.runningText() });
         }
         this.refresh();
         // Opened again during a session: drawing on as the game runs (its
@@ -100,11 +114,12 @@ class UiPanel {
 
     schedule() {
         this.stopTimer();
-        const ms = this.interval();
+        // (playing: drawn as often as the session draws, PLAY_INTERVAL at most)
+        const ms = this.playing ? Math.min(this.interval() || PLAY_INTERVAL, PLAY_INTERVAL) : this.interval();
         if (!this.live || !ms || this.paused || this.ended || !this.session) {
             return;
         }
-        this.timer = setInterval(() => this.refresh(), Math.max(200, ms));
+        this.timer = setInterval(() => this.refresh(), Math.max(this.playing ? 50 : 200, ms));
     }
 
     stopTimer() {
@@ -177,10 +192,67 @@ class UiPanel {
         this.post({ type: "frames", frames: out });
     }
 
+    /// Play input, sent one request at a time in the order given; mouse
+    /// moves waiting behind another collapse into the latest.
+    give(input) {
+        const last = this.inputs[this.inputs.length - 1];
+        if (input.action === "mouseMove" && last && last.action === "mouseMove") {
+            this.inputs[this.inputs.length - 1] = input;
+        } else {
+            this.inputs.push(input);
+        }
+        return this.pump();
+    }
+
+    async pump() {
+        if (this.sending) {
+            return;
+        }
+        this.sending = true;
+        try {
+            while (this.inputs.length && this.session && !this.ended && !this.paused) {
+                const input = this.inputs.shift();
+                try {
+                    await this.session.customRequest("wowlua/input", input);
+                    this.sent += 1;
+                } catch (e) {
+                    this.post({ type: "status", text: String(e.message || e) });
+                }
+                if (input.action !== "mouseMove") {
+                    this.refresh();
+                }
+            }
+        } finally {
+            this.sending = false;
+        }
+    }
+
     async handleMessage(m) {
         switch (m.type) {
             case "refresh":
                 return this.refresh();
+            case "play":
+                this.playing = !!m.on;
+                if (this.session && !this.ended && !this.paused) {
+                    this.post({ type: "status", text: this.runningText() });
+                }
+                return this.schedule();
+            case "input": {
+                const input = playInput(m.input);
+                if (!input || !this.playing || !this.session || this.ended) {
+                    return;
+                }
+                if (this.paused) {
+                    // (a key or button let go reaches the game once it runs)
+                    if (input.action === "keyUp" || input.action === "mouseUp") {
+                        this.inputs.push(input);
+                    } else if (input.action !== "mouseMove") {
+                        this.post({ type: "status", text: "Paused: continue to play" });
+                    }
+                    return;
+                }
+                return this.give(input);
+            }
             case "live":
                 this.live = !!m.on;
                 return this.schedule();
@@ -248,7 +320,40 @@ class UiPanel {
             frames: this.frames.length,
             metrics: this.metrics,
             picker: this.picker,
+            playing: this.playing,
+            sent: this.sent,
         };
+    }
+}
+
+// How often the panel draws while playing, in milliseconds.
+const PLAY_INTERVAL = 100;
+
+/// The play input the panel may send (decision T535's `wowlua/input`
+/// actions), checked and rounded; anything else is dropped.
+function playInput(i) {
+    if (!i || typeof i !== "object") {
+        return undefined;
+    }
+    const at = () => Number.isFinite(i.x) && Number.isFinite(i.y);
+    switch (i.action) {
+        case "mouseMove":
+            return at() ? { action: "mouseMove", x: Math.round(i.x), y: Math.round(i.y) } : undefined;
+        case "mouseDown":
+        case "mouseUp":
+            return at() ? { action: i.action, x: Math.round(i.x), y: Math.round(i.y), right: !!i.right } : undefined;
+        case "wheel":
+            // (whole notches, as the game's OnMouseWheel gets them)
+            return at() && Number.isFinite(i.delta) && i.delta !== 0
+                ? { action: "wheel", x: Math.round(i.x), y: Math.round(i.y), delta: Math.sign(i.delta) * Math.min(10, Math.max(1, Math.round(Math.abs(i.delta)))) }
+                : undefined;
+        case "keyDown":
+        case "keyUp":
+            return typeof i.key === "string" && /^[A-Z0-9-]{1,40}$/.test(i.key) ? { action: i.action, key: i.key } : undefined;
+        case "text":
+            return typeof i.text === "string" && i.text.length > 0 && i.text.length <= 64 ? { action: "text", text: i.text } : undefined;
+        default:
+            return undefined;
     }
 }
 
@@ -287,6 +392,8 @@ function html() {
   /* VS Code's webview styles cap images at the container (max-width:
      100%): zoomed in, that squeezed the screen sideways. */
   img { display: block; cursor: crosshair; max-width: none; max-height: none; }
+  body.playing img { cursor: default; }
+  #stage:focus { outline: none; }
   #outline { position: absolute; border: 2px solid var(--vscode-focusBorder); pointer-events: none; display: none; box-sizing: border-box; }
   #empty { padding: 24px; opacity: 0.7; line-height: 1.5; }
   .picker { position: relative; }
@@ -304,6 +411,7 @@ function html() {
 <div class="bar">
   <button id="refresh" title="Draw the screen again">Refresh</button>
   <label title="Draw the screen while the game runs"><input type="checkbox" id="live" checked> Live</label>
+  <label title="The mouse and keyboard go to the game, as when playing: hover, click, drag, the wheel, keys held, typing"><input type="checkbox" id="play"> Play</label>
   <span class="sep"></span>
   <button id="out" title="Zoom out (Ctrl/Cmd + wheel)">−</button>
   <span id="zoomText">Fit</span>
@@ -314,8 +422,8 @@ function html() {
   <span class="picker"><input type="text" id="pick" placeholder="Zoom to frame…" title="Pick a frame, or type part of its name" autocomplete="off" spellcheck="false"><ul id="pickList" hidden></ul></span>
   <span id="status">Waiting for the session</span>
 </div>
-<div id="stage">
-  <div id="empty">The game's screen shows here once the session runs.<br>Click in it to click in the game (right-click: the right button). Zoom with Ctrl/Cmd and the wheel or a pinch; pan with the scrollbars, the wheel, or by dragging with the middle button or Space held.</div>
+<div id="stage" tabindex="0">
+  <div id="empty">The game's screen shows here once the session runs.<br>Click in it to click in the game (right-click: the right button), or turn on Play to play: the mouse hovers, clicks and drags, the wheel scrolls, and keys run their key bindings (W walks) or type into the focused edit box. Zoom with Ctrl/Cmd and the wheel or a pinch; pan with the scrollbars, the wheel, or by dragging with the middle button or Space held.</div>
   <div class="wrap" id="wrap" hidden><img id="screen" alt="The emulated client's screen" draggable="false"><div id="outline"></div></div>
 </div>
 <script nonce="${n}">
@@ -465,9 +573,10 @@ function html() {
     zoomAt(current() * Math.exp(-e.deltaY * 0.0025), e.clientX - r.left, e.clientY - r.top);
   }, { passive: false });
 
-  // Panning: the middle button, or the left one with Space held.
+  // Panning: the middle button, or the left one with Space held (not
+  // while playing: Space is the game's).
   let space = false, pan = null;
-  window.addEventListener("keydown", (e) => { if (e.code === "Space" && document.activeElement !== pick) { space = true; e.preventDefault(); } });
+  window.addEventListener("keydown", (e) => { if (e.code === "Space" && !playing && document.activeElement !== pick) { space = true; e.preventDefault(); } });
   window.addEventListener("keyup", (e) => { if (e.code === "Space") space = false; });
   stage.addEventListener("mousedown", (e) => {
     if (e.button === 1 || (e.button === 0 && space)) {
@@ -489,10 +598,95 @@ function html() {
     return { x: (e.clientX - r.left) * screen.width / r.width, y: (e.clientY - r.top) * screen.height / r.height };
   }
   img.addEventListener("click", (e) => {
-    if (pan || space) return;
+    if (pan || space || playing) return;
     vscode.postMessage({ type: "click", button: "LeftButton", ...point(e) });
   });
-  img.addEventListener("contextmenu", (e) => { e.preventDefault(); vscode.postMessage({ type: "click", button: "RightButton", ...point(e) }); });
+  img.addEventListener("contextmenu", (e) => { e.preventDefault(); if (!playing) vscode.postMessage({ type: "click", button: "RightButton", ...point(e) }); });
+
+  // Play (decision T535): the mouse and keyboard as the game takes them.
+  let playing = false;
+  let held = null; // the mouse button held in the game: { right }
+  let keys = new Map(); // keys held in the game: KeyboardEvent.code → name
+  let moveAt = null; // a mouse move waiting for the next animation frame
+  let notches = 0; // the wheel's turn not yet a whole notch
+  const send = (input) => vscode.postMessage({ type: "input", input });
+  function over(e) {
+    const r = img.getBoundingClientRect();
+    return !wrap.hidden && e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom;
+  }
+  function flushMove() { if (moveAt) { send({ action: "mouseMove", ...moveAt }); moveAt = null; } }
+  // Lets go of what is held, as the game would see the keys come up.
+  function release(at) {
+    flushMove();
+    for (const key of keys.values()) send({ action: "keyUp", key });
+    keys.clear();
+    if (held) { send({ action: "mouseUp", ...(at || { x: -1, y: -1 }), right: held.right }); held = null; }
+  }
+  function setPlaying(on) {
+    if (!on) release();
+    playing = on;
+    document.body.classList.toggle("playing", on);
+    vscode.postMessage({ type: "play", on });
+    if (on) stage.focus();
+  }
+  document.getElementById("play").onchange = (e) => setPlaying(e.target.checked);
+  img.addEventListener("mousedown", (e) => {
+    if (!playing || (e.button !== 0 && e.button !== 2) || held) return;
+    e.preventDefault();
+    stage.focus();
+    flushMove();
+    held = { right: e.button === 2 };
+    send({ action: "mouseDown", ...point(e), right: held.right });
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!playing || pan || !(held || over(e))) return;
+    const first = !moveAt;
+    moveAt = point(e);
+    if (first) requestAnimationFrame(flushMove);
+  });
+  window.addEventListener("mouseup", (e) => {
+    if (!playing || !held || (e.button === 2) !== held.right) return;
+    flushMove();
+    send({ action: "mouseUp", ...point(e), right: held.right });
+    held = null;
+  });
+  stage.addEventListener("wheel", (e) => {
+    if (!playing || e.ctrlKey || e.metaKey || !over(e)) return;
+    e.preventDefault();
+    // (a notch: about 100 pixels, or 3 lines; up is +1 to the game)
+    notches -= e.deltaMode === 1 ? e.deltaY / 3 : e.deltaY / 100;
+    const whole = Math.trunc(notches);
+    if (whole) { notches -= whole; flushMove(); send({ action: "wheel", ...point(e), delta: whole }); }
+  }, { passive: false });
+  // A key as WoW's bindings name it (SHIFT-1, ESCAPE), by its place on the
+  // keyboard; modifiers in the client's order (ALT-, CTRL-, SHIFT-, META-).
+  const NAMED = { Escape: "ESCAPE", Enter: "ENTER", NumpadEnter: "ENTER", Tab: "TAB", Space: "SPACE", Backspace: "BACKSPACE", Delete: "DELETE",
+    ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT", Home: "HOME", End: "END", PageUp: "PAGEUP", PageDown: "PAGEDOWN" };
+  function wowKey(e) {
+    let name = NAMED[e.code];
+    if (!name) {
+      const m = /^(?:Key([A-Z])|Digit([0-9])|(F[0-9]{1,2}))$/.exec(e.code);
+      if (!m) return null;
+      name = m[1] || m[2] || m[3];
+    }
+    return (e.altKey ? "ALT-" : "") + (e.ctrlKey ? "CTRL-" : "") + (e.shiftKey ? "SHIFT-" : "") + (e.metaKey ? "META-" : "") + name;
+  }
+  window.addEventListener("keydown", (e) => {
+    if (!playing || document.activeElement === pick) return;
+    const name = wowKey(e);
+    const text = e.key.length === 1 && !e.ctrlKey && !e.metaKey ? e.key : null;
+    if (!name && !text) return;
+    e.preventDefault();
+    if (name && !e.repeat && !keys.has(e.code)) { keys.set(e.code, name); send({ action: "keyDown", key: name }); }
+    if (text) send({ action: "text", text });
+  });
+  window.addEventListener("keyup", (e) => {
+    if (!keys.has(e.code)) return;
+    send({ action: "keyUp", key: keys.get(e.code) });
+    keys.delete(e.code);
+  });
+  // (keys and the button held as the panel loses the keyboard come up)
+  window.addEventListener("blur", () => { if (playing) release(); });
   window.addEventListener("resize", () => { if (zoom === null) layout(); else placeOutline(); });
 
   window.addEventListener("message", (event) => {
@@ -529,4 +723,4 @@ function html() {
 </html>`;
 }
 
-module.exports = { UiPanel };
+module.exports = { UiPanel, playInput };

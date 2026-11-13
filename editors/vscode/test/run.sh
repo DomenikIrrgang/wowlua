@@ -2,7 +2,7 @@
 # Runs the extension's tests in a VS Code of its own (a fresh profile, no
 # other extensions) on examples/widget-demo, with target/release/wowlua.
 # Needs VS Code, a WoW installation and `cargo build --release -p wowlua-cli`
-# (or WOWLUA_BIN); WOWLUA_SCENARIO=lsp, complete or chat runs that scenario
+# (or WOWLUA_BIN); WOWLUA_SCENARIO=lsp, complete, chat or play runs that scenario
 # alone. WOWLUA_FOLDER opens another folder (with WOWLUA_COMPLETE_FILE, the
 # file the complete scenario types in; WOWLUA_SETTLE, how long it waits for
 # the first check, in ms), WOWLUA_USER_SETTINGS gives the profile a

@@ -836,7 +836,22 @@ as before. Shown larger than its pixels, the screen is drawn at 2
 `wowlua/screenshot`'s scale, so it stays sharp. A click in it is `wowlua/input`'s click at that pixel (the
 right button for a right-click), so the frame under it gets the click and
 its handlers' breakpoints stop; while the session is paused, clicks wait
-for it to run. The **wowlua Frames** view in the debug sidebar is
+for it to run. With *Play* on (decision T640), the panel gives the mouse
+and keyboard as the game takes them instead (T535): the pointer over the
+screen, and anywhere while a button is held, is `mouseMove` (one per
+animation frame; moves waiting behind another request collapse into the
+latest), the left and right buttons `mouseDown` and `mouseUp`, the wheel
+without Ctrl or Cmd `wheel` in whole notches (about 100 pixels or 3 lines
+each, up positive). A key with a binding name (letters and digits by their
+place on the keyboard, F1 to F24, Escape, Enter, Tab, Space, Backspace,
+Delete, the arrows, Home, End, Page Up and Page Down) is `keyDown` with
+`ALT-`, `CTRL-`, `SHIFT-` and `META-` (Cmd) as held, once however long it
+repeats, and `keyUp` by the same name when let go; a key that types a
+character (no Ctrl or Cmd) also gives `text`, each repeat again. Keys and
+the button held come up when the panel loses the keyboard or Play turns
+off; while paused, other input is dropped and those wait for the session
+to run. Playing, Space is the game's (no panning) and the panel draws every
+100 milliseconds at most (`wowlua.ui.refreshInterval` when it is shorter). The **wowlua Frames** view in the debug sidebar is
 `wowlua/frameTree`'s shown frames, refreshed at every stop (and with its
 Refresh button); each shows its type, size and text, and selecting one
 outlines its rectangle in the panel.

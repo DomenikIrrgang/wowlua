@@ -6,6 +6,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- **Play in VS Code**: the wowlua: UI panel has a *Play* switch. With it on, the mouse and keyboard go to the game as when you play: the mouse hovers frames (their `OnEnter` and tooltips), clicks and drags them, and the wheel scrolls them; keys run their key bindings while you hold them (`W` walks, the arrows turn), and what you type goes into the focused edit box, such as the chat's. Off, a click in the panel is a click, as before.
+
 - **Tagged mobs**: `UnitIsTapDenied` answers true for a mob tagged by a player outside your group, as in the game, so you can test how your nameplates and unit frames grey such mobs. Spawn one tagged with `mock.spawnUnit({ ..., tappedByOther = true })` (also in a world profile's units and `unit:update`), tag it with `unit:tap()` (or `unit:tap(otherPlayer)`), and free it with `unit:untap()`; `UNIT_FACTION` fires for the mob when its tap becomes denied or free again. The first player to hit an untagged mob (`unit:hit`, `unit:swing`, `unit:kill({ by = … })`) tags it. A mob you or your group tagged, a player and your pet are never tap-denied. Before, `UnitIsTapDenied` was always false.
 
 - `secret.showWhen(region, shown[, alpha])` in `wowlua:secret` shows or hides a region by a boolean that may be secret, such as another region's `IsShown()`. `SetShown` refuses a secret from addon code; `showWhen` shows the region and sets its alpha from the secret instead.
