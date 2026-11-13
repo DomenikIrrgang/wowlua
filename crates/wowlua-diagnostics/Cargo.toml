@@ -13,5 +13,9 @@ wowlua-span.workspace = true
 codespan-reporting.workspace = true
 serde_json.workspace = true
 
+# The workspace-hack crate (CONTRIBUTING.md): not in WebAssembly builds.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wowlua-workspace-hack.workspace = true
+
 [lints]
 workspace = true

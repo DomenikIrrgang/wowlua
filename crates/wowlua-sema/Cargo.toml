@@ -21,5 +21,9 @@ wowlua-span.workspace = true
 wowlua-syntax.workspace = true
 wowlua-xml.workspace = true
 
+# The workspace-hack crate (CONTRIBUTING.md): not in WebAssembly builds.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wowlua-workspace-hack.workspace = true
+
 [lints]
 workspace = true

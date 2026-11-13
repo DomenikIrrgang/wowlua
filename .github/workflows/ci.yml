@@ -29,6 +29,15 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Generated files are up to date
         run: cargo xtask check
+      # The workspace-hack crate (CONTRIBUTING.md): up to date, and every
+      # crate depends on it.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hakari
+      - name: The workspace-hack is up to date
+        run: |
+          cargo hakari generate --diff
+          cargo hakari manage-deps --dry-run
 
   # The layers that are to run in the browser (decisions T212, T301, T394):
   # the VM, the engine, the debugger's core, the asset reader, the renderer,

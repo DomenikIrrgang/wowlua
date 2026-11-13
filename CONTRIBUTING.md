@@ -47,6 +47,29 @@ tests stay a binary per file: a playground's files are the whole process's.)
 the shipped binaries are built with `--profile dist` (thin LTO, one codegen
 unit per crate).
 
+### The workspace-hack crate
+
+Every crate depends on `crates/wowlua-workspace-hack`, which turns on, for
+every build, the features any crate of the workspace needs of a shared
+dependency (`serde`, `syn`, `libc` and the others it lists). Without it,
+`cargo build -p wowlua-cli`, `cargo test -p wowlua-engine`, `cargo xtask
+check` and `cargo build --workspace` each asked for a different mix of
+features and rebuilt those dependencies and everything above them, about
+25 s and 1–2 GB each time one followed another. It is kept by
+[cargo-hakari](https://docs.rs/cargo-hakari) (settings: `.config/hakari.toml`):
+
+```sh
+cargo install cargo-hakari --locked
+cargo hakari generate            # after a change to any crate's dependencies
+cargo hakari manage-deps         # after adding a crate: gives it the dependency
+cargo hakari generate --diff     # up to date? (CI checks both)
+cargo hakari manage-deps --dry-run
+```
+
+A new crate takes the dependency for targets other than WebAssembly, as the
+others do (`[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`), so
+the browser builds never pull in what only the native tools need.
+
 Every change comes with tests for what it changes. The README's
 [Developing](README.md#developing) section lists the other tasks: regenerating
 the diagnostic codes, the manifest schema and the WoW API declarations, the

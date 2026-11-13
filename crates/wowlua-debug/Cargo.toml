@@ -8,6 +8,10 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+# The workspace-hack crate (CONTRIBUTING.md): not in WebAssembly builds.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wowlua-workspace-hack.workspace = true
+
 [features]
 default = ["native"]
 # Sessions of test files and the addon (through the test runner), and the

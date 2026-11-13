@@ -19,6 +19,10 @@ wowlua-casc.workspace = true
 wowlua-engine.workspace = true
 wowlua-host.workspace = true
 
+# The workspace-hack crate (CONTRIBUTING.md): not in WebAssembly builds.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wowlua-workspace-hack.workspace = true
+
 [dev-dependencies]
 wowlua-casc.workspace = true
 wowlua-vm.workspace = true
