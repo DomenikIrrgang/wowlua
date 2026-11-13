@@ -17,7 +17,8 @@ mod upvalues;
 /// `autotests = false` builds no other.
 #[test]
 fn every_test_file_is_a_module() {
-    let main = include_str!("suite.rs");
+    // (a Windows checkout ends its lines with CRLF)
+    let main = include_str!("suite.rs").replace("\r\n", "\n");
     let own: &[&str] = &["suite"];
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     #[allow(clippy::disallowed_methods)] // (the test reads its own directory)
