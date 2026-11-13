@@ -4,6 +4,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### Fixed
+
+- An anchor that would make a loop fails as in the game: when the region you anchor to is itself placed by the one you're anchoring, through any number of anchors (`b:SetPoint("TOP", a, "BOTTOM")` and then `a:SetPoint("TOP", b, "BOTTOM")`), `SetPoint` and `SetAllPoints` fail with "Action[SetPoint] failed because[Cannot anchor to a region dependent on it]: attempted from: Button:SetPoint.", and the region keeps its points. Before, wowlua anchored it, so code that broke in game passed its tests.
+
 ### New
 
 - **Play in VS Code**: the wowlua: UI panel has a *Play* switch. With it on, the mouse and keyboard go to the game as when you play: the mouse hovers frames (their `OnEnter` and tooltips), clicks and drags them, and the wheel scrolls them; keys run their key bindings while you hold them (`W` walks, the arrows turn), and what you type goes into the focused edit box, such as the chat's. Off, a click in the panel is a click, as before.

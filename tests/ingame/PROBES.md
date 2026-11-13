@@ -3494,3 +3494,54 @@ secret value, `false` for a plain one.
    ```
    /run SF:Hide() ST:Hide()
    ```
+
+## Anchor loops (decision T641, 2026-11-13)
+
+Found in game: opening the friends list raised "Action[SetPoint] failed
+because[Cannot anchor to a region dependent on it]: attempted from:
+Button:SetPoint." with "Relative: [SocialUIFrame.7a275c3df0 UIParent,
+SocialUIFrame.7a275c3df0]" and "Dependent: […]". wowlua now refuses such
+an anchor with that first line. These steps check what is guessed:
+
+- whether the call raises (a `pcall` false) or only reports;
+- the "Relative" and "Dependent" lines for plain frames;
+- `SetAllPoints` into a loop;
+- a loop through a parent (an anchor without a relative).
+
+Out of combat, each line in the chat, one at a time.
+
+1. Make three frames in a chain:
+
+   ```
+   /run LA=CreateFrame("Frame",nil,UIParent) LA:SetSize(10,10) LA:SetPoint("CENTER") LB=CreateFrame("Frame","LoopB",UIParent) LB:SetSize(10,10) LB:SetPoint("TOP",LA,"BOTTOM") LC=CreateFrame("Frame",nil,UIParent) LC:SetSize(10,10) LC:SetPoint("TOP",LB,"BOTTOM")
+   ```
+
+2. Anchor the first to the last, through `pcall`:
+
+   ```
+   /run local ok,e=pcall(LA.SetPoint,LA,"TOP",LC,"BOTTOM") print("loop",ok,e) print("kept",select(2,LA:GetPoint(1))==UIParent)
+   ```
+
+   Seen: (to do). wowlua: `loop false Action[SetPoint] failed because[Cannot anchor to a region dependent on it]: attempted from: Frame:SetPoint.` then the Relative and Dependent lines, and `kept true`.
+
+3. The same with `SetAllPoints`:
+
+   ```
+   /run local ok,e=pcall(LA.SetAllPoints,LA,LB) print("all",ok,e)
+   ```
+
+   Seen: (to do). wowlua: `all false Action[SetPoint] … attempted from: Frame:SetAllPoints.`
+
+4. A loop through a parent (a child placed by its parent's place, the parent anchored to it):
+
+   ```
+   /run LK=CreateFrame("Frame",nil,LA) LK:SetPoint("CENTER") local ok,e=pcall(LA.SetPoint,LA,"CENTER",LK,"CENTER") print("parent",ok,e)
+   ```
+
+   Seen: (to do). wowlua: `parent false Action[SetPoint] …`.
+
+5. Hide what the steps made:
+
+   ```
+   /run LA:Hide() LB:Hide() LC:Hide()
+   ```

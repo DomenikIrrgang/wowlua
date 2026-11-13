@@ -2750,6 +2750,7 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         }
     };
     refuse_region_anchor(vm, id, relative, "SetPoint")?;
+    refuse_dependent_anchor(vm, id, relative, "SetPoint")?;
     let w = &mut engine_mut(vm).world.widgets[id.0];
     // The XML's fill of an unanchored font string gives way to the first
     // point set (decision T602).
@@ -2822,6 +2823,7 @@ fn set_all_points(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         v => Some(v),
     };
     refuse_region_anchor(vm, id, rel, "SetAllPoints")?;
+    refuse_dependent_anchor(vm, id, rel, "SetAllPoints")?;
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.points.clear();
     w.default_points = false;
@@ -2871,6 +2873,58 @@ fn refuse_region_anchor(
     let class = engine(vm).world.widgets[id.0].class.clone();
     Err(vm.error(&format!(
         "Action[SetPoint] failed because[Cannot anchor protected frames to regions]: attempted from: {class}:{method}."
+    )))
+}
+
+/// An anchor to a region whose rectangle comes from the one anchoring (its
+/// anchors lead back to it, through any number of regions; an anchor
+/// without a relative is to the parent) is refused with the client's
+/// error, for every region: "Action[SetPoint] failed because[Cannot anchor
+/// to a region dependent on it]: attempted from: Button:SetPoint.",
+/// then the two regions (found in game: Blizzard's social window anchored a
+/// pooled tab under another that SuuUI had anchored to it, decision T641).
+/// Unverified: the lines naming the regions (here their debug names; in
+/// game "Relative: [SocialUIFrame.7a275c3df0 UIParent,
+/// SocialUIFrame.7a275c3df0]"), `SetAllPoints`, and anchoring a region to
+/// itself (left as it was).
+fn refuse_dependent_anchor(
+    vm: &mut Vm,
+    id: WidgetId,
+    relative: Option<Value>,
+    method: &str,
+) -> Result<(), LuaError> {
+    let rel = match relative {
+        Some(v) => widget_of(vm, v),
+        None => engine(vm).world.widgets[id.0].parent,
+    };
+    let Some(rel) = rel.filter(|r| *r != id) else {
+        return Ok(());
+    };
+    let mut seen = vec![rel];
+    let mut todo = vec![rel];
+    let mut loops = false;
+    while let Some(w) = todo.pop() {
+        for t in anchor_targets(vm, w) {
+            if t == id {
+                loops = true;
+                break;
+            }
+            if !seen.contains(&t) {
+                seen.push(t);
+                todo.push(t);
+            }
+        }
+        if loops {
+            break;
+        }
+    }
+    if !loops {
+        return Ok(());
+    }
+    let class = engine(vm).world.widgets[id.0].class.clone();
+    let (relative_name, dependent_name) = (debug_name(vm, rel), debug_name(vm, id));
+    Err(vm.error(&format!(
+        "Action[SetPoint] failed because[Cannot anchor to a region dependent on it]: attempted from: {class}:{method}.\nRelative: [{relative_name}]\nDependent: [{dependent_name}]"
     )))
 }
 
