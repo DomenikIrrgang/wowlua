@@ -209,6 +209,53 @@ return tostring(InCombatLockdown()), tostring(issecretvalue(s:GetVerticalScrollR
     assert_eq!(r, ["true", "false", "150"]);
 }
 
+/// An anchor that would make a loop (the relative's rectangle comes from
+/// the one anchoring, through any number of anchors; one without a
+/// relative is to the parent) is refused for every region, and the old
+/// points stay: Blizzard's social window anchored a pooled tab under one
+/// SuuUI had anchored to it, found in game (T641). A chain without a loop,
+/// and a region anchored to itself (left as it was), pass.
+#[test]
+fn an_anchor_that_makes_a_loop_is_refused() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local p = CreateFrame('Frame', nil, UIParent)
+p:SetSize(100, 100)
+p:SetPoint('CENTER')
+local a = CreateFrame('Button', nil, p)
+local b = CreateFrame('Button', nil, p)
+local c = CreateFrame('Button', nil, p)
+a:SetSize(10, 10)
+b:SetSize(10, 10)
+c:SetSize(10, 10)
+a:SetPoint('TOPLEFT', p, 'TOPLEFT')
+b:SetPoint('TOPLEFT', a, 'BOTTOMLEFT')
+c:SetPoint('TOPLEFT', b, 'BOTTOMLEFT')
+local ok1, err1 = pcall(a.SetPoint, a, 'TOPLEFT', c, 'BOTTOMLEFT')
+local _, rel = a:GetPoint(1)
+local ok2, err2 = pcall(a.SetAllPoints, a, b)
+local child = CreateFrame('Frame', nil, a)
+child:SetPoint('CENTER')
+local ok3 = pcall(a.SetPoint, a, 'CENTER', child, 'CENTER')
+local ok4 = pcall(c.SetPoint, c, 'TOPLEFT', a, 'BOTTOMLEFT')
+return tostring(ok1), tostring(err1):match('Action[^\\n]*'), tostring(rel == p), tostring(ok2),
+  tostring(err2):match('Action[^\\n]*'), tostring(ok3), tostring(ok4)",
+    );
+    assert_eq!(
+        r,
+        [
+            "false",
+            "Action[SetPoint] failed because[Cannot anchor to a region dependent on it]: attempted from: Button:SetPoint.",
+            "true",
+            "false",
+            "Action[SetPoint] failed because[Cannot anchor to a region dependent on it]: attempted from: Button:SetAllPoints.",
+            "false",
+            "true"
+        ]
+    );
+}
+
 /// A protected frame anchored to a region is refused, out of combat too;
 /// to a frame, or an unprotected frame to a region, it is not (T252).
 #[test]

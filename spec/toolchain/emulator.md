@@ -381,6 +381,21 @@ frame deep). The check is made when the frame anchors, for its own
 protection (a secure template), not a secure child's; unverified: deeper
 chains, the parent's place, a frame protected through its children.
 
+An anchor that would make a loop is refused for every region: when the
+relative's rectangle comes from the region anchoring (its anchors lead
+back to it, through any number of regions; an anchor without a relative is
+to the parent, a status bar's fill to its bar, a scroll child to its
+scroll frame), `SetPoint` and `SetAllPoints` raise "Action[SetPoint]
+failed because[Cannot anchor to a region dependent on it]: attempted from:
+Button:SetPoint." followed by a line naming the relative and one naming
+the region, and the region keeps its points (decision T641). Found in
+game: Blizzard's social window anchors each tab it takes from its pool
+under the one before, and SuuUI had anchored that one to it. Unverified
+(probe "Anchor loops"): the two lines' text (here the debug names; the
+game wrote "Relative: [SocialUIFrame.7a275c3df0 UIParent,
+SocialUIFrame.7a275c3df0]"), `SetAllPoints`, a loop through the parent,
+and whether the call raises or only reports.
+
 Some global functions are blocked for tainted code in combat lockdown
 only, with `ADDON_ACTION_BLOCKED`: `C_SpellBook.PickupSpellBookItem`
 (decision T253; found in game) and `C_GuildInfo.GetMOTD`, which
