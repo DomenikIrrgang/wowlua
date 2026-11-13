@@ -91,7 +91,7 @@ jobs:
           ln -sfn ~/types-src target/types-src
         env:
           WOWLUA_FETCH_ONLY: camelot
-      - run: cargo test -p wowlua-cli --test suite -- test_runner:: engine_probe::
+      - run: "cargo test -p wowlua-cli --test suite -- test_runner:: engine_probe::"
       # The playground's game after Blizzard's UI, as the page fetches it (T396).
       - run: cargo test -p wowlua-web --test run
 
