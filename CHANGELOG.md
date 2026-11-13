@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Changed
+
+- A size you give a frame or texture (`SetWidth`, `SetHeight`, `SetSize`) reads back as the game keeps it, a 32-bit float: `SetWidth(10.1)` then `GetWidth()` answers 10.100000381469727, not 10.1. Code that compares a size it set with `==` now sees what it sees in the game, where that check never matches and can make a layout run again every frame. Compare with a small tolerance instead.
+
 ## 0.13.12 (2026-11-13)
 
 ### New

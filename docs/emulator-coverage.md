@@ -2574,6 +2574,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Secret sizes and anchors (decision T638, 2026-11-12)
 - A secret bar's fill shows (decision T639, 2026-11-13)
 - Anchor loops (decision T641, 2026-11-13)
+- Sizes are 32-bit floats (decision T643, 2026-11-13)
 
 ## In-game regressions
 

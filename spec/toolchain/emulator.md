@@ -759,7 +759,10 @@ The WoW API the VM's code calls, per flavor.
   and `GetPoint(i)` answers them in that order (decision T337). Points that
   put the right edge left of the left one, or the top below the bottom,
   give no size: 0, at the `LEFT` and `BOTTOM` points (decision T266; seen
-  in game). `GetSize`,
+  in game). A size given with `SetWidth`, `SetHeight` or `SetSize` is kept
+  as the client keeps it, a 32-bit float: `SetWidth(10.1)` answers
+  `GetWidth()` 10.100000381469727, whole and half sizes exactly (decision
+  T643; as UIParent's width, 1365.3333740234 at 1366×768). `GetSize`,
   `GetWidth` and `GetHeight` give the laid-out size of an anchored region
   (unverified beyond fresh widgets; `/stdtest engine` records
   `layoutSizes`). A rectangle is laid out when it is asked for (`GetLeft`,
