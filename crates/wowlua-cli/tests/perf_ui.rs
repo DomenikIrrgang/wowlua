@@ -4,7 +4,7 @@
 //! from the installation, the camera zoomed out (`PERF_ZOOM` steps, 50 by
 //! default) over the profile's units; the engine's frame and the scene
 //! timed apart. Run by hand: `PERF_PACKAGE=<dir> cargo test --release -p
-//! wowlua-cli --test perf_ui -- --ignored --nocapture`.
+//! wowlua-cli --test suite perf_ui:: -- --ignored --nocapture`.
 
 use std::time::{Duration, Instant};
 

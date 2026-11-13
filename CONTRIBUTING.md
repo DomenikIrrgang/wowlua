@@ -35,6 +35,18 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+The integration tests of `wowlua-engine`, `wowlua-cli`, `wowlua-render`,
+`wowlua-vm` and `wowlua-lower` are one test binary per crate,
+`tests/suite.rs`: each `tests/*.rs` file is a module of it, so the crate is
+linked (and started) once rather than once per file. A new file there needs
+its `mod` line in `suite.rs` (a test checks). Run one file's tests with a
+filter: `cargo test -p wowlua-engine --test suite frames::`. (`wowlua-web`'s
+tests stay a binary per file: a playground's files are the whole process's.)
+
+`cargo build --release` is incremental and without LTO, quick to rebuild;
+the shipped binaries are built with `--profile dist` (thin LTO, one codegen
+unit per crate).
+
 Every change comes with tests for what it changes. The README's
 [Developing](README.md#developing) section lists the other tasks: regenerating
 the diagnostic codes, the manifest schema and the WoW API declarations, the

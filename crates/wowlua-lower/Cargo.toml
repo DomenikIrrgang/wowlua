@@ -7,6 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+autotests = false
 
 [dependencies]
 stacker.workspace = true
@@ -19,6 +20,10 @@ wowlua-runtime.workspace = true
 
 [dev-dependencies]
 mlua.workspace = true
+
+[[test]]
+name = "suite"
+path = "tests/suite.rs"
 
 [lints]
 workspace = true

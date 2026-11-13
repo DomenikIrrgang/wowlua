@@ -35,14 +35,14 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - name: Build
-        run: cargo build --release --locked -p wowlua-cli --target ${{ matrix.target }}
+        run: cargo build --profile dist --locked -p wowlua-cli --target ${{ matrix.target }}
       - name: Package (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
           name="wowlua-${GITHUB_REF_NAME}-${{ matrix.target }}"
           mkdir "$name"
-          cp "target/${{ matrix.target }}/release/wowlua" README.md LICENSE crates/wowlua-api/data/LICENSE-vscode-wow-api.txt "$name/"
+          cp "target/${{ matrix.target }}/dist/wowlua" README.md LICENSE crates/wowlua-api/data/LICENSE-vscode-wow-api.txt "$name/"
           tar czf "$name.tar.gz" "$name"
           shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
       - name: Package (Windows)
@@ -51,7 +51,7 @@ jobs:
         run: |
           $name = "wowlua-$env:GITHUB_REF_NAME-${{ matrix.target }}"
           New-Item -ItemType Directory $name | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/wowlua.exe", README.md, LICENSE, crates/wowlua-api/data/LICENSE-vscode-wow-api.txt $name
+          Copy-Item "target/${{ matrix.target }}/dist/wowlua.exe", README.md, LICENSE, crates/wowlua-api/data/LICENSE-vscode-wow-api.txt $name
           Compress-Archive -Path $name -DestinationPath "$name.zip"
           (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLower() + "  $name.zip" | Out-File -Encoding ascii "$name.zip.sha256"
       - uses: actions/upload-artifact@v4

@@ -176,8 +176,8 @@ fn forever_camelot() {
     );
 }
 
-/// Prints our results (`cargo test -p wowlua-vm --test client -- --ignored
-/// --nocapture`).
+/// Prints our results (`cargo test -p wowlua-vm --test suite client:: --
+/// --ignored --nocapture`).
 #[test]
 #[ignore]
 fn print_ours() {

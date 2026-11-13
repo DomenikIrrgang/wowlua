@@ -14,8 +14,8 @@ WORKDIR /src
 COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    CARGO_INCREMENTAL=0 cargo build --release --locked -p wowlua-registry \
-    && cp target/release/wowlua-registry /wowlua-registry \
+    CARGO_INCREMENTAL=0 cargo build --profile dist --locked -p wowlua-registry \
+    && cp target/dist/wowlua-registry /wowlua-registry \
     && mkdir /data
 
 # glibc, libgcc and CA certificates, no shell; runs as uid 65532.
