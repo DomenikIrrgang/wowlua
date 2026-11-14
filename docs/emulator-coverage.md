@@ -2577,6 +2577,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Anchor loops (decision T641, 2026-11-13)
 - Sizes are 32-bit floats (decision T643, 2026-11-13)
 - Group pets and mouseover (decision T644, 2026-11-14)
+- A group pet's reaction as it comes (2026-11-14)
 
 ## In-game regressions
 
