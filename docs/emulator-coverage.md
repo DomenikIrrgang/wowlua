@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,226 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,227 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -853,7 +853,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,226 rules unverified: each rests on Blizzard's
+The engine's code marks 1,227 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2270,7 +2270,7 @@ page changes only when a rule is added, removed or reworded.
 - [unitnames.rs](../crates/wowlua-engine/src/unitnames.rs): Whether the game's name settings show a unit's name (decision T534): another player's by friend or foe; an NPC's all...
 - [unitnames.rs](../crates/wowlua-engine/src/unitnames.rs): A unit's name color: an NPC's its reaction's (red, yellow, green), another player's blue unless hostile (unverified:...
 
-### units (53)
+### units (54)
 
 - [units.rs](../crates/wowlua-engine-core/src/units.rs): Unverified until probed: the player's defaults; GUID formats; the order of the events a change fires (a unit event fi...
 - [units.rs](../crates/wowlua-engine-core/src/units.rs): Each class's ID, file and name (enUS; the client's for Paladin, `UnitClass`; the others unverified).
@@ -2281,6 +2281,7 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine-core/src/units.rs): The pet's (unverified: its place in the order).
 - [units.rs](../crates/wowlua-engine-core/src/units.rs): After target (`/stdtest engine record combat`: UNIT_AURA for softenemy after target); the rest's order unverified.
 - [units.rs](../crates/wowlua-engine-core/src/units.rs): In a raid too, the player's subgroup's (unverified: after raidN).
+- [units.rs](../crates/wowlua-engine-core/src/units.rs): A group member's pet (decision T644; the order unverified).
 - [units.rs](../crates/wowlua-engine-core/src/units.rs): `UnitTokenFromGUID(guid)`: a token naming the unit (the first in `tokens_of`'s order; unverified which the client pre...
 - [units.rs](../crates/wowlua-engine-core/src/units.rs): "none" has a name (the full probe, blanked: a string and nil; unverified which, here `UNKNOWNOBJECT`'s).
 - [units.rs](../crates/wowlua-engine-core/src/units.rs): A race's file name and ID (the client's races; the Undead's and the Skyborne's recorded, the others unverified).
@@ -2575,6 +2576,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - A secret bar's fill shows (decision T639, 2026-11-13)
 - Anchor loops (decision T641, 2026-11-13)
 - Sizes are 32-bit floats (decision T643, 2026-11-13)
+- Group pets and mouseover (decision T644, 2026-11-14)
 
 ## In-game regressions
 

@@ -1106,7 +1106,9 @@ export type PetSpell = {
 --- Called again for the same pet, it changes what `opts` gives
 --- (`UNIT_HAPPINESS`, `UNIT_PET_EXPERIENCE`, `PET_BAR_UPDATE`; its spells
 --- `SPELLS_CHANGED`; its points `UNIT_PET_TRAINING_POINTS("pet")`).
-export function setPet(pet: MockUnit?, opts: { hunter?: boolean, happiness?: number, loyalty?: string, xp?: number, xpMax?: number, actions?: { [number]: PetAction }, spells?: PetSpell[], icon?: number | string, trainingPoints?: number, trainingPointsUsed?: number }?)
+--- `owner`, a group member: that member's pet instead (`partypetN`,
+--- `raidpetN`; `UNIT_PET` with the member's tokens), `nil` dismissing it.
+export function setPet(pet: MockUnit?, opts: { owner?: MockUnit, hunter?: boolean, happiness?: number, loyalty?: string, xp?: number, xpMax?: number, actions?: { [number]: PetAction }, spells?: PetSpell[], icon?: number | string, trainingPoints?: number, trainingPointsUsed?: number }?)
     engine().setPet(pet, opts)
 end
 

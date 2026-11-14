@@ -105,11 +105,15 @@ pub fn mouse_move(vm: &mut Vm, x: f64, y: f64) {
     }
     let frame = frame_at(vm, x, y);
     crate::input::mouse_onto(vm, frame);
-    let unit = match frame {
-        Some(_) => None,
-        None => crate::camera::unit_at(vm, x, y),
-    };
-    mouseover(vm, unit);
+    match frame {
+        // a unit button's unit: set as the mouse went onto it (`mouse_onto`)
+        Some(f) if crate::input::frame_unit(vm, f).is_some() => {}
+        Some(_) => mouseover(vm, None),
+        None => {
+            let unit = crate::camera::unit_at(vm, x, y);
+            mouseover(vm, unit);
+        }
+    }
 }
 
 /// A mouse button pressed at a point: held until let go.
