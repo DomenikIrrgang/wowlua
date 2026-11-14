@@ -2,7 +2,7 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
-## Unreleased
+## 0.13.15 (2026-11-14)
 
 ### New
 
