@@ -3627,3 +3627,44 @@ whose pet is out, in party slot 1 (`party1`), and SuuUI's party frames.
    ```
 
    Seen: (to do). wowlua: `mo <the member's name>`.
+
+## A group pet's reaction as it comes (2026-11-14)
+
+Seen with SuuUI 0.17.0: a party member's pet frame drew the theme's bar
+colour, not the friendly green, until a `/reload`; after it, green. So
+`UnitReaction(pet, "player")` most likely answered nil when the frame first
+drew the pet, and no event told when it knew. wowlua answers "friendly" for
+every mock pet at once. These steps find when the game answers nil. You
+need a party member with a hunter or warlock, in party slot 1 (`party1`).
+
+1. Ask the party member to stand far away (out of sight, over 100 yards),
+   dismiss their pet and call it again there, then:
+
+   ```
+   /run local r=UnitReaction("partypet1","player") print("far",UnitExists("partypet1"),UnitIsVisible("partypet1"),r,type(r))
+   ```
+
+   Seen: (to do). wowlua: `far true true 5 number`.
+
+2. Watch `UNIT_FACTION` and `UNIT_FLAGS` for the pet, then ask the party
+   member to walk up to you:
+
+   ```
+   /run PR=CreateFrame("Frame") PR:RegisterUnitEvent("UNIT_FACTION","partypet1") PR:RegisterUnitEvent("UNIT_FLAGS","partypet1") PR:SetScript("OnEvent",function(_,e,u) print(e,u,UnitReaction(u,"player")) end)
+   ```
+
+   Seen: (to do: which events come, if any, as the pet comes into sight).
+
+3. Next to you:
+
+   ```
+   /run local r=UnitReaction("partypet1","player") print("near",UnitIsVisible("partypet1"),r,type(r))
+   ```
+
+   Seen: (to do). wowlua: `near true 5 number`.
+
+4. Stop watching:
+
+   ```
+   /run PR:UnregisterAllEvents()
+   ```
