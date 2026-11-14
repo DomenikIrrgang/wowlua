@@ -344,6 +344,9 @@ pub struct Units {
     pub arena: Vec<Option<UnitId>>,
     /// The player's pet (`pets.rs`).
     pub pet: Option<UnitId>,
+    /// The group members' pets, owner then pet (`mock.setPet`'s `owner`;
+    /// `partypetN`, `raidpetN`; decision T644).
+    pub member_pets: Vec<(UnitId, UnitId)>,
     /// Each restriction type's state: 0 inactive, 1 activating, 2 active.
     pub restrictions: [u8; 6],
     pub lockdown: bool,
@@ -545,6 +548,18 @@ pub fn install(vm: &mut Vm) {
 
 // ------------------------------------------------------------- tokens
 
+/// A unit's pet: the player's (`pet`), a group member's (`mock.setPet`'s
+/// `owner`).
+pub fn pet_of(u: &Units, owner: UnitId) -> Option<UnitId> {
+    if owner == PLAYER {
+        return u.pet;
+    }
+    u.member_pets
+        .iter()
+        .find(|(o, _)| *o == owner)
+        .map(|(_, p)| *p)
+}
+
 /// The unit a token names, if any (`target`, `nameplate3`, `party1target`).
 pub fn resolve(u: &Units, token: &str) -> Option<UnitId> {
     let t = token.to_ascii_lowercase();
@@ -589,6 +604,9 @@ fn base_token<'a>(u: &Units, t: &'a str) -> Option<(Option<UnitId>, &'a str)> {
         Some((list(n), &rest[digits..]))
     };
     for (name, unit) in [
+        // before `player`, which it starts with (Blizzard's secure
+        // templates name the player's pet so: `SecureButton_GetUnit`)
+        ("playerpet", u.pet),
         ("player", Some(PLAYER)),
         ("pet", u.pet),
         ("target", u.target),
@@ -621,9 +639,15 @@ fn base_token<'a>(u: &Units, t: &'a str) -> Option<(Option<UnitId>, &'a str)> {
     // The party: in a raid, the others of the player's subgroup
     // (recorded: a member there party1, one moved away none).
     let party = |n: usize| party_members(u).get(n.wrapping_sub(1)).copied();
+    // A member's pet: `partypetN` the pet of `partyN`, `raidpetN` of
+    // `raidN` (`raidpet1` the player's; decision T644).
+    let party_pet = |n: usize| party(n).and_then(|o| pet_of(u, o));
+    let raid_pet = |n: usize| group(n).and_then(|o| pet_of(u, o));
     numbered("nameplate", &|n| {
         u.nameplates.get(n.wrapping_sub(1)).copied().flatten()
     })
+    .or_else(|| numbered("partypet", &party_pet))
+    .or_else(|| numbered("raidpet", &raid_pet))
     .or_else(|| numbered("party", &party))
     .or_else(|| numbered("raid", &group))
     .or_else(|| {
@@ -708,6 +732,22 @@ pub fn tokens_of(u: &Units, id: UnitId) -> Vec<String> {
     }
     if u.raid && id == PLAYER {
         out.push("raid1".into());
+    }
+    // A group member's pet (decision T644; the order unverified).
+    for (i, g) in party_members(u).iter().enumerate() {
+        if pet_of(u, *g) == Some(id) {
+            out.push(format!("partypet{}", i + 1));
+        }
+    }
+    if u.raid {
+        if u.pet == Some(id) {
+            out.push("raidpet1".into());
+        }
+        for (i, g) in u.group.iter().enumerate() {
+            if pet_of(u, *g) == Some(id) {
+                out.push(format!("raidpet{}", i + 2));
+            }
+        }
     }
     for (i, b) in u.bosses.iter().enumerate() {
         if *b == Some(id) {

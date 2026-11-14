@@ -1016,3 +1016,107 @@ return denied(stranger), denied(stranger, mock.player), denied(mock.player, stra
         ]
     );
 }
+
+/// A group member's pet (decision T644): `partypetN` the pet of `partyN`,
+/// `raidpetN` of `raidN` (`raidpet1` the player's), `playerpet` the
+/// player's; `UNIT_PET` with each of the owner's tokens; dismissed, gone.
+#[test]
+fn group_members_pets_have_their_tokens() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local hunter = mock.spawnUnit({ name = 'Vessa', player = true, reaction = 'friendly' })
+mock.addToGroup(hunter)
+local wolf = mock.spawnUnit({ name = 'Wolf', reaction = 'friendly' })
+local told = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('UNIT_PET')
+f:SetScript('OnEvent', function(_, _, unit) told[#told + 1] = unit end)
+mock.setPet(wolf, { owner = hunter })
+local party = tostring(UnitExists('partypet1')) .. ' ' .. tostring(UnitName('partypet1'))
+    .. ' ' .. tostring(UnitExists('partypet2'))
+local imp = mock.spawnUnit({ name = 'Imp', reaction = 'friendly' })
+mock.setPet(imp)
+local own = tostring(UnitName('playerpet')) .. ' ' .. tostring(UnitName('pet'))
+mock.setPet(wolf, { owner = hunter }) -- the same pet again: untold
+mock.setPet(nil, { owner = hunter })
+return party, own, tostring(UnitExists('partypet1')), table.concat(told, ' ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "true Wolf false",
+            "Imp Imp",
+            "false",
+            "party1 player party1"
+        ]
+    );
+}
+
+/// In a raid: `raidpetN` the pet of `raidN` (`raidN` 2 the first other),
+/// `raidpet1` the player's, the party's pets as `partypetN` too; a pet's
+/// unit events fire for its group tokens (decision T644).
+#[test]
+fn raid_members_pets_and_their_events() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local hunter = mock.spawnUnit({ name = 'Kesh', player = true, reaction = 'friendly' })
+mock.addToGroup(hunter, { raid = true, subgroup = 1 })
+local cat = mock.spawnUnit({ name = 'Cat', reaction = 'friendly', health = 100, healthMax = 100 })
+mock.setPet(cat, { owner = hunter })
+local imp = mock.spawnUnit({ name = 'Imp', reaction = 'friendly' })
+mock.setPet(imp)
+local told = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('UNIT_HEALTH')
+f:SetScript('OnEvent', function(_, _, unit) told[#told + 1] = unit end)
+cat:damage(10)
+return tostring(UnitName('raidpet2')), tostring(UnitName('raidpet1')), tostring(UnitName('partypet1')),
+    tostring(UnitExists('raidpet3')), table.concat(told, ' ')",
+    );
+    assert_eq!(r, ["Cat", "Imp", "Cat", "false", "partypet1 raidpet2"]);
+}
+
+/// The mouse over a unit button (a frame with a `unit` attribute) makes its
+/// unit the mouseover unit, before the frame's `OnEnter`, with
+/// `UPDATE_MOUSEOVER_UNIT`; off it, none; a frame without a unit leaves
+/// what a test set (decision T644).
+#[test]
+fn hovering_a_unit_button_sets_the_mouseover_unit() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local hunter = mock.spawnUnit({ name = 'Vessa', player = true, reaction = 'friendly' })
+mock.addToGroup(hunter)
+local wolf = mock.spawnUnit({ name = 'Wolf', reaction = 'friendly' })
+mock.setPet(wolf, { owner = hunter })
+local told = 0
+local f = CreateFrame('Frame')
+f:RegisterEvent('UPDATE_MOUSEOVER_UNIT')
+f:SetScript('OnEvent', function() told = told + 1 end)
+local function button(unit)
+    local b = CreateFrame('Button', nil, UIParent, 'SecureUnitButtonTemplate')
+    b:SetSize(100, 20)
+    b:SetPoint('CENTER')
+    b:SetAttribute('unit', unit)
+    return b
+end
+local owner, pet, plain = button('party1'), button('partypet1'), CreateFrame('Frame', nil, UIParent)
+plain:SetSize(10, 10)
+plain:SetPoint('TOPLEFT')
+local onEnter
+owner:SetScript('OnEnter', function() onEnter = UnitName('mouseover') end)
+mock.hover(owner)
+local a = tostring(UnitName('mouseover'))
+mock.hover(pet)
+local b = tostring(UnitName('mouseover'))
+mock.hover(plain)
+local c = tostring(UnitExists('mouseover'))
+mock.player:mouseover(hunter)
+mock.hover(nil)
+local d = tostring(UnitName('mouseover'))
+return a, tostring(onEnter), b, c, d, tostring(told)",
+    );
+    assert_eq!(r, ["Vessa", "Vessa", "Wolf", "false", "Vessa", "4"]);
+}

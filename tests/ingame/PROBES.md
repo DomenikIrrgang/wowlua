@@ -3585,3 +3585,45 @@ Out of combat, each line in the chat, one at a time.
    ```
    /run SZ:Hide()
    ```
+
+## Group pets and mouseover (decision T644, 2026-11-14)
+
+Needed for SuuUI's party and raid pet frames: wowlua now gives a group
+member's pet the tokens `partypetN` and `raidpetN`, tells `UNIT_PET` with the
+owner's tokens, and makes a hovered unit button's unit the mouseover unit.
+These steps check that guess. You need a party with a hunter or warlock
+whose pet is out, in party slot 1 (`party1`), and SuuUI's party frames.
+
+1. The pet's tokens:
+
+   ```
+   /run print("pp",UnitExists("partypet1"),UnitName("partypet1"),UnitExists("party1pet"),UnitName("playerpet"))
+   ```
+
+   Seen: (to do). wowlua: `pp true <pet's name> false <your pet's name, or nil>`.
+
+2. Watch `UNIT_PET`, then ask the party member to dismiss and call back
+   their pet:
+
+   ```
+   /run PP=CreateFrame("Frame") PP:RegisterEvent("UNIT_PET") PP:SetScript("OnEvent",function(_,e,u) print(e,u) end)
+   ```
+
+   Seen: (to do). wowlua: `UNIT_PET party1` each time (in a raid also
+   `UNIT_PET raidN`).
+
+3. Stop watching:
+
+   ```
+   /run PP:UnregisterAllEvents()
+   ```
+
+4. Rest the mouse on the party member's frame, then type this without
+   moving the mouse (type it in the chat box with the mouse still on the
+   frame):
+
+   ```
+   /run print("mo",UnitName("mouseover"))
+   ```
+
+   Seen: (to do). wowlua: `mo <the member's name>`.

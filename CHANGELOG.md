@@ -2,6 +2,13 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### New
+
+- A group member can have a pet: `mock.setPet(pet, { owner = member })` (and `mock.setPet(nil, { owner = member })` to dismiss it). The group's pets have their tokens as in the game, `partypet1` to `partypet4` and `raidpet1` to `raidpet40` (with `playerpet` for your own), so `UnitExists("partypet1")`, the game's secure pet group headers and `RegisterUnitWatch` on a pet button work in tests; `UNIT_PET` fires with the owner's tokens.
+- Hovering a unit button (a frame with a `unit` attribute) makes its unit the mouseover unit, as in the game: `UnitExists("mouseover")` and `[@mouseover]` macros now see it after `mock.hover(frame)`.
+
 ## 0.13.14 (2026-11-14)
 
 ### New

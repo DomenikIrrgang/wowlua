@@ -115,8 +115,30 @@ pub fn mouse_onto(vm: &mut Vm, new: Option<WidgetId>) {
     if let Some(o) = old {
         widgets::run_script(vm, o, "OnLeave", &[Value::Bool(true)]);
     }
+    // A unit button's unit is the mouseover unit while the mouse is over it
+    // (`@mouseover` macros on unit frames; decision T644): onto one, its
+    // unit; off one, none (a frame without a unit leaves it alone).
+    let had = old.is_some_and(|o| frame_unit(vm, o).is_some());
+    let unit = new.and_then(|n| frame_unit(vm, n));
+    if (unit.is_some() || had) && engine(vm).units.mouseover != unit {
+        engine_mut(vm).units.mouseover = unit;
+        widgets::fire_event(vm, "UPDATE_MOUSEOVER_UNIT", &[]);
+    }
     if let Some(n) = new {
         widgets::run_script(vm, n, "OnEnter", &[Value::Bool(true)]);
+    }
+}
+
+/// The unit a frame stands for: its `unit` attribute's (a unit button's),
+/// if it names one now.
+pub fn frame_unit(vm: &mut Vm, id: WidgetId) -> Option<crate::units::UnitId> {
+    let v = widgets::attribute(vm, id, "unit");
+    match vm.hidden(v) {
+        Value::Str(s) => {
+            let token = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+            crate::units::resolve(&engine(vm).units, &token)
+        }
+        _ => None,
     }
 }
 

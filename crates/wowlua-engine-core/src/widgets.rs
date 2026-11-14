@@ -4384,7 +4384,7 @@ fn set_attribute_no_handler(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-fn attribute(vm: &mut Vm, id: WidgetId, name: &str) -> Value {
+pub fn attribute(vm: &mut Vm, id: WidgetId, name: &str) -> Value {
     let attributes = engine(vm).world.widgets[id.0].attributes;
     let key = vm.str(&name.to_lowercase());
     vm.heap.table(attributes).get(key)

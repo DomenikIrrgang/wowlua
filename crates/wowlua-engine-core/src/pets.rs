@@ -11,6 +11,11 @@
 //! experience: `UNIT_PET_EXPERIENCE`; its actions: `PET_BAR_UPDATE`).
 //! `mock.setPet(nil)`: dismissed (`UNIT_PET("player")`, `PET_BAR_UPDATE`).
 //!
+//! `mock.setPet(unit, { owner = member })` (decision T644): a group
+//! member's pet instead (`partypetN`, `raidpetN`; `UNIT_PET` with each of
+//! the member's tokens); `mock.setPet(nil, { owner = member })` dismisses
+//! it. None of the player's pet's bar, happiness or spellbook.
+//!
 //! The pet's bar is a hunter's (classic's order: attack, follow, stay,
 //! four spells, aggressive, defensive, passive; follow and defensive
 //! active) unless `actions` replaces slots. `CastPetAction`, `PetAttack`,
@@ -170,6 +175,22 @@ fn pet(vm: &Vm) -> Option<UnitId> {
     engine(vm).units.pet
 }
 
+/// A group member's pet set (`None`: dismissed), told by `UNIT_PET` with
+/// each of the owner's tokens.
+fn member_pet(vm: &mut Vm, owner: UnitId, pet: Option<UnitId>) -> Ret {
+    let pets = &mut engine_mut(vm).units.member_pets;
+    let before = pets.iter().find(|(o, _)| *o == owner).map(|(_, p)| *p);
+    if before == pet {
+        return Ok(vec![]);
+    }
+    pets.retain(|(o, _)| *o != owner);
+    if let Some(p) = pet {
+        pets.push((owner, p));
+    }
+    units::fire_unit(vm, "UNIT_PET", owner, &[]);
+    Ok(vec![])
+}
+
 /// `mock.setPet(unit?, opts?)`.
 pub fn control_set_pet(vm: &mut Vm, c: NativeCall) -> Ret {
     let unit = match c.arg(1) {
@@ -179,6 +200,18 @@ pub fn control_set_pet(vm: &mut Vm, c: NativeCall) -> Ret {
             None => return Err(vm.error("setPet: a unit (or nil) expected")),
         },
     };
+    // a group member's pet (decision T644)
+    if let Value::Table(t) = c.arg(2) {
+        let owner = get(vm, t, "owner");
+        if !owner.is_nil() {
+            let Some(owner) = units::handle_of(vm, owner) else {
+                return Err(vm.error("setPet: owner must be a unit"));
+            };
+            if owner != units::PLAYER {
+                return member_pet(vm, owner, unit);
+            }
+        }
+    }
     let spells_before = book_ids(vm);
     let Some(id) = unit else {
         if engine(vm).units.pet.is_some() {
