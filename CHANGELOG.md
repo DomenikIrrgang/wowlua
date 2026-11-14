@@ -6,6 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- `mock.player:setStats` takes `specGroups` and `activeSpecGroup`, typed, so a test can switch to the other spec (`ACTIVE_TALENT_GROUP_CHANGED`) without a cast: `mock.player:setStats({ specGroups = 2, activeSpecGroup = 2 })`.
 - `chat.sendToGroup(text)` in `wowlua:chat` writes a line in your group's chat: raid chat in a raid, party chat in a party, instance chat in a dungeon finder group. In fights where the game locks addon chat messages, the line waits and goes out once the lock lifts. `chat.groupChannel()` tells you which chat that is.
 
 ## 0.13.13 (2026-11-14)

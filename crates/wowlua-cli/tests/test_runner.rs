@@ -385,6 +385,40 @@ end
 }
 
 #[test]
+fn the_spec_groups_are_typed_player_stats() {
+    // (`mock.player:setStats` took them untyped: a test switching specs
+    // needed a cast)
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "local _ = 1\n"),
+            (
+                "tests/spec.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("dual spec: two groups, the second in use, told")
+local function dual()
+    local told = 0
+    local f = CreateFrame("Frame")
+    f:RegisterEvent("ACTIVE_TALENT_GROUP_CHANGED")
+    f:SetScript("OnEvent", function()
+        told = told + 1
+    end)
+    mock.player:setStats({ specGroups = 2, activeSpecGroup = 2 })
+    mock.advanceFrames(1)
+    expect(C_SpecializationInfo.GetActiveSpecGroup()).toBe(2)
+    expect(told).toBe(1)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, text) = test(dir.path(), &[]);
+    assert!(ok, "{text}");
+}
+
+#[test]
 fn test_modules_are_only_for_test_files() {
     let dir = project(
         r#""standard": {}"#,
