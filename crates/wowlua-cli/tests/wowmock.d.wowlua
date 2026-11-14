@@ -31,6 +31,8 @@ interface MockClient
     --- Addon messages: sent ones, results to return next, lockdown, the
     --- group and guild, and who sent messages come back as.
     sent: table[]
+    --- Chat messages sent (`SendChatMessage`): their text and chat type.
+    said: { msg: string, chatType: string? }[]
     sendResults: number[]
     lockdown: boolean
     group?: "party" | "raid" | "instance"

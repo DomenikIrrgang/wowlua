@@ -1626,6 +1626,10 @@ end
 function C_ChatInfo.InChatMessagingLockdown(): boolean
     return Mock.lockdown
 end
+Mock.said = {}
+function C_ChatInfo.SendChatMessage(message: string, chatType: string?, _languageID: number?, _target: string?)
+    Mock.said[#Mock.said + 1] = { msg = message, chatType = chatType }
+end
 Ambiguate = (function(name: string): string
     return (name:gsub("%-MockRealm$", ""))
 end) :: any
