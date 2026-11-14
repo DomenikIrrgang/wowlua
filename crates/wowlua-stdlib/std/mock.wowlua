@@ -329,6 +329,11 @@ export type PlayerStats = {
     restState?: StatAnswer,
     --- `IsXPUserDisabled`.
     xpDisabled?: StatAnswer,
+    --- `GetNumSpecGroups`: 2 with dual spec (`PLAYER_TALENT_UPDATE`).
+    specGroups?: StatAnswer,
+    --- `C_SpecializationInfo.GetActiveSpecGroup`: the spec group in use,
+    --- 1 or 2 (`ACTIVE_TALENT_GROUP_CHANGED` when it changes).
+    activeSpecGroup?: StatAnswer,
     --- `GetExpertise`.
     expertise?: StatAnswer,
     --- `GetSpellBonusHealing`.
