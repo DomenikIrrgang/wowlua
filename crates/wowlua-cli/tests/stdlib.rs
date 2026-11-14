@@ -6834,6 +6834,74 @@ print(filters.CHAT_MSG_SYSTEM == nil, f(nil, "CHAT_MSG_SYSTEM", "hide", 1))
     );
 }
 
+/// `wowlua:chat` to the player's group: the instance group's, raid's or
+/// party's chat; nothing out of a group; held while chat messaging is
+/// locked down and sent in order once it lifts (decision S67).
+#[test]
+fn chat_to_the_group() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as chat from \"wowlua:chat\"\n_G.StdChat = chat\n",
+        )],
+        "",
+        r##"Mock.loadAddon("Std")
+local C = StdChat
+local function said()
+    local out = {}
+    for _, s in ipairs(Mock.said) do out[#out + 1] = tostring(s.chatType) .. ":" .. s.msg end
+    return table.concat(out, " ")
+end
+print(C.groupChannel(), C.sendToGroup("solo"), #Mock.said)
+Mock.group = "party"
+print(C.groupChannel(), C.sendToGroup("one"))
+Mock.group = "raid"
+print(C.groupChannel(), C.sendToGroup("two"))
+Mock.group = "instance"
+print(C.groupChannel(), C.sendToGroup("three"))
+print(said())
+-- locked down: held, in order; a change that leaves it locked sends nothing
+Mock.group = "party"
+Mock.lockdown = true
+print(C.sendToGroup("a"), C.sendToGroup("b"), #Mock.said)
+Mock.fire("ADDON_RESTRICTION_STATE_CHANGED", 5, 1)
+print(#Mock.said)
+Mock.lockdown = false
+Mock.fire("ADDON_RESTRICTION_STATE_CHANGED", 5, 0)
+print(said())
+-- lifted without the event: the held ones go before the next
+Mock.lockdown = true
+C.sendToGroup("c")
+Mock.lockdown = false
+C.sendToGroup("d")
+Mock.fire("ADDON_RESTRICTION_STATE_CHANGED", 5, 0)
+print(said())
+-- held, then the group is gone: dropped
+Mock.lockdown = true
+C.sendToGroup("e")
+Mock.group = nil
+Mock.lockdown = false
+Mock.fire("ADDON_RESTRICTION_STATE_CHANGED", 5, 0)
+print(#Mock.said)
+"##,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "nil false 0",
+            "PARTY true",
+            "RAID true",
+            "INSTANCE_CHAT true",
+            "PARTY:one RAID:two INSTANCE_CHAT:three",
+            "true true 3",
+            "3",
+            "PARTY:one RAID:two INSTANCE_CHAT:three PARTY:a PARTY:b",
+            "PARTY:one RAID:two INSTANCE_CHAT:three PARTY:a PARTY:b PARTY:c PARTY:d",
+            "7",
+        ]
+    );
+}
+
 /// `wowlua:chat`'s windows: the numbered ones, then the temporary ones;
 /// those docked with General in the dock's order; a window's edit box;
 /// what a temporary window is for (decision S48).

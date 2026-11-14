@@ -200,6 +200,27 @@ Chat addons that restyle or mirror the chat windows can find them:
 | `chat.isTemporary(w)` | Whether it is a temporary window, such as a whisper window |
 | `chat.conversation(w)` | A temporary window's chat type and target (`"WHISPER"`, the player) |
 
+## Tell your group
+
+`chat.sendToGroup` writes a line in your group's chat: raid chat in a raid,
+party chat in a party, instance chat in a group the dungeon finder made.
+Out of a group it sends nothing and returns false.
+
+```wowlua title=src/announce.wowlua
+import * as chat from "wowlua:chat"
+
+export function objectiveDone(quest: string, objective: string)
+    chat.sendToGroup(`MyAddon: {quest}: {objective}`)
+end
+
+print(chat.groupChannel())                   -- "RAID", "PARTY", "INSTANCE_CHAT" or nil
+```
+
+In some fights the game locks chat messages from addons
+(`C_ChatInfo.InChatMessagingLockdown()`). A message sent then waits, and goes
+out with any others in the order you sent them once the lock lifts, so it is
+neither blocked nor lost.
+
 ## Get the player's attention
 
 For moments that can't wait, `wowlua:alert` shows large text in the middle
@@ -234,7 +255,7 @@ alert.flash()                                -- taskbar only
 |--------|-----------|
 | `wowlua:log` | `print`, `print.color`, `print.to`; `trace`, `debug`, `info`, `warn`, `error`; `configure`, `setLevel`, `sink`, `history` |
 | `wowlua:links` | `link`, `onClick` |
-| `wowlua:chat` | `whisper`, `whisperBnet`, `open`, `insertLink`, `filter`; `windows`, `docked`, `window`, `editBox`, `isTemporary`, `conversation` |
+| `wowlua:chat` | `whisper`, `whisperBnet`, `open`, `insertLink`, `filter`; `groupChannel`, `sendToGroup`; `windows`, `docked`, `window`, `editBox`, `isTemporary`, `conversation` |
 | `wowlua:alert` | `warn`, `raidWarning`, `sound`, `flash` |
 
 > [!TIP]

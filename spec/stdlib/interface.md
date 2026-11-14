@@ -511,6 +511,8 @@ linkButton:SetScript("OnClick", function() chat.insertLink(recipeLink) end)
 | `open` | `(text: string, frame?: Frame)` | Opens the chat line with `text` in it (`OpenChat`) |
 | `insertLink` | `(link: string)` | Puts `link` into the line being typed, as a shift-click does (`InsertLink`); with none open, opens one with it |
 | `filter` | `(event: string, fn: (text: unknown, ...unknown) -> boolean?) -> Subscription` | Hides the chat lines of `event` for which `fn` returns true, through the game's message filters (`AddMessageEventFilter`); `fn` gets the line's values, its text first. Isolated: an error is reported and the line shows. Cancelling removes the filter (`RemoveMessageEventFilter`) (decision S46) |
+| `groupChannel` | `() -> ("INSTANCE_CHAT" \| "RAID" \| "PARTY")?` | The chat type a message to the player's group goes to: the instance group's (`IsInGroup(LE_PARTY_CATEGORY_INSTANCE)`, only where the client has that category), else the raid's, else the party's; nil out of a group (decision S67) |
+| `sendToGroup` | `(text: string) -> boolean` | Sends `text` to `groupChannel()` (`C_ChatInfo.SendChatMessage`, else `SendChatMessage`). While `C_ChatInfo.InChatMessagingLockdown()` is true the message is held; held messages go out in order when `ADDON_RESTRICTION_STATE_CHANGED` finds the lockdown lifted, or before the next message sent while it is not, each to the group the player is in then (none: dropped). False, and nothing sent or held, out of a group (decision S67) |
 
 It also finds the game's chat windows, typed as `chat.Window`
 (`ScrollingMessageFrameMixin & Frame`: a message frame, its window ID

@@ -6,6 +6,7 @@ import * as tbl from "wowlua:table"
 import * as secret from "wowlua:secret"
 import try, callOwned from "wowlua:errors"
 import type Subscription from "wowlua:events"
+import * as events from "wowlua:events"
 import asFrame, asEditBox from "wowlua:frames"
 
 local function game(name: string, old: string): unknown
@@ -38,6 +39,81 @@ end
 --- one the game picks).
 export function open(text: string, frame: Frame?)
     call(game("OpenChat", "ChatFrame_OpenChat"), text, frame)
+end
+
+--- The chat type a message to the player's group goes to: the instance
+--- group's (`INSTANCE_CHAT`, a group the dungeon finder made), else the
+--- raid's or the party's; nil out of a group.
+export function groupChannel(): ("INSTANCE_CHAT" | "RAID" | "PARTY")?
+    local instance = tbl.field(_G, "LE_PARTY_CATEGORY_INSTANCE")
+    if instance ~= nil and secret.flag(try(tbl.field(_G, "IsInGroup"), instance)) then
+        return "INSTANCE_CHAT"
+    end
+    if secret.flag(try(tbl.field(_G, "IsInRaid"))) then
+        return "RAID"
+    end
+    if secret.flag(try(tbl.field(_G, "IsInGroup"))) then
+        return "PARTY"
+    end
+    return nil
+end
+
+-- Messages to the group held while chat messaging is locked down, in order,
+-- and the subscription that sends them when it lifts.
+local held: string[] = {}
+local waiting: Subscription? = nil
+
+local function lockedDown(): boolean
+    return secret.flag(try(tbl.field(_G, "C_ChatInfo", "InChatMessagingLockdown")))
+end
+
+-- To the group's channel as it is now (nothing out of a group).
+local function sayToGroup(text: string)
+    local channel = groupChannel()
+    local send = tbl.field(_G, "C_ChatInfo", "SendChatMessage") or tbl.field(_G, "SendChatMessage")
+    if channel and send then
+        try(send, text, channel)
+    end
+end
+
+local function sendHeld()
+    if lockedDown() then
+        return
+    end
+    if waiting then
+        events.off(waiting)
+        waiting = nil
+    end
+    local list = held
+    held = {}
+    for _, text in ipairs(list) do
+        sayToGroup(text)
+    end
+end
+
+--- Sends `text` to the player's group chat (`groupChannel`): the raid's,
+--- the party's or the instance group's. While the game locks chat
+--- messaging down (`C_ChatInfo.InChatMessagingLockdown`, in a restricted
+--- fight), the message waits and goes out, after the ones before it, once
+--- the restriction lifts (`ADDON_RESTRICTION_STATE_CHANGED`), to the group
+--- the player is in then. False, and nothing sent, out of a group.
+export function sendToGroup(text: string): boolean
+    if groupChannel() == nil then
+        return false
+    end
+    if lockedDown() then
+        held[#held + 1] = text
+        if not waiting then
+            waiting = events.on("ADDON_RESTRICTION_STATE_CHANGED", sendHeld)
+        end
+        return true
+    end
+    -- (lifted without the event saying so: the held ones first)
+    if #held > 0 then
+        sendHeld()
+    end
+    sayToGroup(text)
+    return true
 end
 
 --- Puts `link` into the chat line being typed, as a shift-click does; with

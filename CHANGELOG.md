@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### New
+
+- `chat.sendToGroup(text)` in `wowlua:chat` writes a line in your group's chat: raid chat in a raid, party chat in a party, instance chat in a dungeon finder group. In fights where the game locks addon chat messages, the line waits and goes out once the lock lifts. `chat.groupChannel()` tells you which chat that is.
+
 ## 0.13.13 (2026-11-14)
 
 ### Changed
