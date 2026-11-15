@@ -3637,6 +3637,16 @@ drew the pet, and no event told when it knew. wowlua answers "friendly" for
 every mock pet at once. These steps find when the game answers nil. You
 need a party member with a hunter or warlock, in party slot 1 (`party1`).
 
+Seen first with a party member without a pet (2026-11-15, the same steps on
+`party1`): `far true 5 number` (still visible, so not out of sight),
+`UNIT_FLAGS party1 5` many times as they walked back, no `UNIT_FACTION`,
+`near true 5 number`. wowlua gives the same reaction and visibility, but it
+sends `UNIT_FLAGS` only for flight paths: what makes the game send it for a
+party member (walking, their combat state, something else) is still to find.
+So a player's reaction is known near and far while visible; when a pet's
+isn't is still open (steps below, with a pet). SuuUI asks again on the unit's
+`UNIT_FLAGS`.
+
 1. Ask the party member to stand far away (out of sight, over 100 yards),
    dismiss their pet and call it again there, then:
 
