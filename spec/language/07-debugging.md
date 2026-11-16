@@ -180,7 +180,9 @@ default 2 ms) is a **slow call**. Only the deepest one is recorded: a call
 inside which a slow call was recorded is not, because the callers that were
 waiting for it are in that entry's stack. It is recorded with its time,
 function and location, the root that started the work (§7.3.2) and a stack
-from `debugstack()`. Only calls over the threshold pay for the stack. The last 200
+from `debugstack()`. Only calls over the threshold pay for the stack. A stack
+the game gives as a secret value is left out (the entry's stack is empty):
+it can't be compared, kept as a key or shown. The last 200
 slow calls per addon are kept (decision T178), and so are each recording's
 **slowest**: the 100 slowest slow calls since it started, at most 3 per
 function (a slower call of a function that has 3 takes the place of its

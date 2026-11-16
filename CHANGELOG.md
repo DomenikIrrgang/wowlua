@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- Dev builds with the script monitor: a slow call whose stack the game gives as a secret value no longer breaks the monitor ("attempt to compare field 'stack' (a secret string value)" when a recording stopped). The call is kept, without its stack.
+
 ## 0.13.15 (2026-11-14)
 
 ### New
