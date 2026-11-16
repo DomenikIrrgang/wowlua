@@ -206,6 +206,13 @@ end
 local function logSlow(name: string, location: string?, elapsed: number)
 	local open = perf.open
 	local rec = open[#open]
+	-- a stack the game gives as a secret string can't be compared, kept as a
+	-- key or shown: none (seen in game, SuuUI's dev build: stopping a
+	-- recording compared it)
+	local stack = debugstack and debugstack(3) or ""
+	if issecretvalue and issecretvalue(stack) then
+		stack = ""
+	end
 	local e = {
 		at = now(),
 		ms = elapsed,
@@ -213,7 +220,7 @@ local function logSlow(name: string, location: string?, elapsed: number)
 		location = location,
 		root = perf.root ?? "other",
 		recording = rec and rec.name or "live",
-		stack = debugstack and debugstack(3) or "",
+		stack = stack,
 	}
 	perf.slow[#perf.slow + 1] = e
 	if #perf.slow > SLOW then

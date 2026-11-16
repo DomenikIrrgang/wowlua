@@ -163,6 +163,40 @@ end
     );
 }
 
+/// A slow call whose stack the game gives as a secret string (seen in game,
+/// SuuUI's dev build: stopping a recording compared it, "attempt to compare
+/// field 'stack' (a secret string value)"): kept without its stack, and the
+/// recording stops.
+#[test]
+fn a_secret_stack_is_left_out() {
+    run(
+        r#", "slow-call": 3"#,
+        r#"
+@test
+@noprofile
+local function secretStack()
+    local perf = probe().runtime.perf
+    local G: any = _G
+    local real = G.debugstack
+    G.debugstack = function(): any
+        return mock.secret("Interface/AddOns/Probe/main.lua:5: in function 'heavy'")
+    end
+    hooks.work = function() mock.spend(5) end
+    local rec = perf.start("manual")
+    mock.fireEvent("BAG_UPDATE", 0)
+    mock.nextFrame()
+    G.debugstack = real
+    perf.stop(rec)
+    local slow = perf.slow[#perf.slow]
+    expect(slow.name).toBe("heavy")
+    expect(slow.stack).toBe("")
+    expect(#rec.data.slow).toBe(1)
+    expect(rec.data.slow[1].stack).toBe(0)
+end
+"#,
+    );
+}
+
 /// A recording keeps its slowest calls when the newest 200 no longer hold
 /// them, at most 3 per function, sums every slow call by function and root,
 /// and names each second's worst call (§7.3.1, decision T615).
