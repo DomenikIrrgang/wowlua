@@ -15,6 +15,11 @@ use std::path::Path;
 use wowlua_engine::coverage::{Entry, Group, Source};
 use wowlua_vm::{Value, Vm};
 
+/// Functions a newer camelot build than the declarations' added, which the
+/// engine answers before the declarations are generated from that build
+/// (decision T645).
+const NEWER_BUILD: &[&str] = &["C_Mail.IsCODEnabled", "C_TradeSkillUI.HasNoReagentCost"];
+
 pub const REPORT: &str = "docs/emulator-coverage.md";
 const PROBE_TESTS: &str = "crates/wowlua-cli/tests/engine_probe.rs";
 const CLIENT: &str = "crates/wowlua-engine/tests/client";
@@ -412,6 +417,10 @@ fn behaviour(out: &mut String, functions: &[Entry], methods: &[Entry], inventory
         .iter()
         .filter(|e| e.group == Group::EngineOnly)
         .partition(|e| lua.contains(e.name.as_str()));
+    // A newer build's functions the declarations do not have yet.
+    let (newer, engine_only): (Vec<&Entry>, Vec<&Entry>) = engine_only
+        .into_iter()
+        .partition(|e| NEWER_BUILD.contains(&e.name.as_str()));
     let quoted = |list: &[&Entry]| -> String {
         list.iter()
             .map(|e| format!("`{}`", e.name))
@@ -426,6 +435,15 @@ fn behaviour(out: &mut String, functions: &[Entry], methods: &[Entry], inventory
              `C_` functions); the engine's natives stand in for them until that code \
              loads: {}.\n",
             quoted(&blizzard)
+        )
+        .unwrap();
+    }
+    if !newer.is_empty() {
+        writeln!(
+            out,
+            "A newer client than the declarations' build has these, and Blizzard's UI \
+             code of that build calls them (WoW Forever 1.60.1 70959; decision T645): {}.\n",
+            quoted(&newer)
         )
         .unwrap();
     }
