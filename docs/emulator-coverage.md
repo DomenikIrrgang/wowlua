@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,227 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,229 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -354,7 +354,7 @@ By where the function is listed:
 |------|----------:|------:|---------:|--------:|----------:|
 | Blizzard's API documentation | 5,115 | 1,079 | 349 | 3,682 | 5 |
 | the client's other C functions (`/stdtest inventory`) | 2,065 | 623 | 81 | 1,361 | 0 |
-| the engine's own, in neither list | 16 | 15 | 0 | 1 | 0 |
+| the engine's own, in neither list | 18 | 17 | 0 | 1 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
 functions in the client's inventory, its deprecation files' wrappers of the `C_`
@@ -363,6 +363,10 @@ functions); the engine's natives stand in for them until that code loads:
 `GetActionText`, `GetActionTexture`, `GetMoneyString`, `HasAction`,
 `IsAttackAction`, `IsPlayerSpell`, `IsUsableAction`, `SecondsToClock`,
 `SecondsToTime`, `SecondsToTimeAbbrev`, `SendChatMessage`.
+
+A newer client than the declarations' build has these, and Blizzard's UI code of
+that build calls them (WoW Forever 1.60.1 70959; decision T645):
+`C_Mail.IsCODEnabled`, `C_TradeSkillUI.HasNoReagentCost`.
 
 The engine's own functions are defined in camelot's environment though the
 client's inventory lacks them, so an addon's call of one works in `wowlua test`
@@ -396,7 +400,7 @@ The modules that answer, by how many functions and methods:
 | `units` | model | 92 |
 | `guild` | model | 80 |
 | `extras` | model | 78 |
-| `tradeskill` | model | 71 |
+| `tradeskill` | model | 72 |
 | `curves` | model | 70 |
 | `facts` | recorded | 69 |
 | `formatters` | model | 62 |
@@ -413,7 +417,7 @@ The modules that answer, by how many functions and methods:
 | `protection` | model | 33 |
 | `misc` | model | 32 |
 | `lfg` | model | 31 |
-| `mail` | model | 30 |
+| `mail` | model | 31 |
 | `maps` | model | 28 |
 | `measures` | model | 28 |
 | `actions` | model | 27 |
@@ -853,7 +857,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,227 rules unverified: each rests on Blizzard's
+The engine's code marks 1,229 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1730,7 +1734,7 @@ page changes only when a rule is added, removed or reworded.
 - [macros.rs](../crates/wowlua-engine-core/src/macros.rs): Runs a macro's text line by line through the line callback, each as typed into chat (decision T601): the client's sec...
 - [macros.rs](../crates/wowlua-engine-core/src/macros.rs): `C_Macro.RunMacroText(text, button)`: the text run as a macro (a secure button's `macrotext`).
 
-### mail (6)
+### mail (7)
 
 - [mail.rs](../crates/wowlua-engine-core/src/mail.rs): Unverified: `GetInboxText`'s values (not recorded), deleting and returning letters, COD letters, more than one attach...
 - [mail.rs](../crates/wowlua-engine-core/src/mail.rs): `GetInboxText(i)`: the letter read (the server's `MAIL_INBOX_UPDATE` a round trip later): its text (empty without one...
@@ -1738,6 +1742,7 @@ page changes only when a rule is added, removed or reworded.
 - [mail.rs](../crates/wowlua-engine-core/src/mail.rs): `ClickSendMailItemButton(i, clear)`: the attachment taken back (to its bag slot, unlocked; picking it up unverified).
 - [mail.rs](../crates/wowlua-engine-core/src/mail.rs): `GetSendMailPrice()`: 30 copper a letter, an item more each after the first (unverified beyond one).
 - [mail.rs](../crates/wowlua-engine-core/src/mail.rs): The player walked away from the open mailbox `unit` (`unit:setDistance`, or the player moving): past the interaction'...
+- [mail.rs](../crates/wowlua-engine-core/src/mail.rs): `C_Mail.IsCODEnabled()`: letters can be sent cash on delivery, unless a test turned it off (`mock.setCODEnabled`; unv...
 
 ### maps (6)
 
@@ -2169,7 +2174,7 @@ page changes only when a rule is added, removed or reworded.
 - [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): `C_TooltipInfo.GetEquipmentSet(setID)`: the set's name with its items' count on the right ("10 |4Item:Items;", gold),...
 - [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): `C_TooltipInfo.GetQuestPartyProgress(questID [, omitTitle, ignoreActivePlayer])`: a quest in the log's title (gold, `...
 
-### tradeskill (6)
+### tradeskill (7)
 
 - [tradeskill.rs](../crates/wowlua-engine/src/tradeskill.rs): Unverified: the delays (one recording each), the clicks the client ignored (a request unanswered: no `CRAFT_BEGIN`; n...
 - [tradeskill.rs](../crates/wowlua-engine/src/tradeskill.rs): The window's data after it opened, and the list's update after that (recorded: 0.029 and 0.012 s, 0.006 and 0.005 s;...
@@ -2177,6 +2182,7 @@ page changes only when a rule is added, removed or reworded.
 - [tradeskill.rs](../crates/wowlua-engine/src/tradeskill.rs): `C_TradeSkillUI.CanTradeSkillShowCraftingUI(spell)`: a profession's spell of the character's (`setSpellTraits`' `prof...
 - [tradeskill.rs](../crates/wowlua-engine/src/tradeskill.rs): Unverified: what follows the last cast, one held.
 - [tradeskill.rs](../crates/wowlua-engine/src/tradeskill.rs): A new slot's bag told at once (recorded: the first copper and bronze bars; unverified: the wheel's in the backpack, t...
+- [tradeskill.rs](../crates/wowlua-engine/src/tradeskill.rs): `C_TradeSkillUI.HasNoReagentCost(recipeID)`: whether the recipe costs no reagents, false unless a test says (`mock.se...
 
 ### trainer (13)
 
@@ -2578,6 +2584,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Sizes are 32-bit floats (decision T643, 2026-11-13)
 - Group pets and mouseover (decision T644, 2026-11-14)
 - A group pet's reaction as it comes (2026-11-14)
+- No reagent cost and cash on delivery (decision T645, 2026-11-19)
 
 ## In-game regressions
 

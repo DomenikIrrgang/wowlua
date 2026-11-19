@@ -1774,6 +1774,22 @@ export function setNewMail(senders: string[]?)
     engine().setNewMail(senders)
 end
 
+--- Whether letters can be sent cash on delivery (`C_Mail.IsCODEnabled`,
+--- WoW Forever; true unless turned off): off, Blizzard's send frame keeps
+--- its COD button disabled. A world's state: no event.
+export function setCODEnabled(enabled: boolean)
+    engine().setCODEnabled(enabled)
+end
+
+--- The recipe costs no reagents (`C_TradeSkillUI.HasNoReagentCost`, WoW
+--- Forever; false for every recipe unless set): `noCost` true or left
+--- out, or false to cost reagents again. Blizzard's professions window
+--- then offers no Create All and no tracking for it. A world's state: no
+--- event.
+export function setNoReagentCost(recipeID: number, noCost: boolean?)
+    engine().setNoReagentCost(recipeID, noCost)
+end
+
 --- The character's saved equipment sets: `{ { name, icon, items = {
 --- [slot] = itemID }, ignored = { slot, … }, spec, id }, … }`, their IDs
 --- from 0 in order unless given (`C_EquipmentSet`; worn, in the bags or

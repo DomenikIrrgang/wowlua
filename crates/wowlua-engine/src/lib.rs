@@ -162,7 +162,7 @@ pub fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("taxi", taxi::behaviours()),
         Behaviours::new("maps", maps::behaviours()),
         Behaviours::new("misc", misc::behaviours()),
-        Behaviours::new("mail", mail::behaviours()),
+        Behaviours::new("mail", mail::behaviours(flavor)),
         Behaviours::new("bank", bank::behaviours()),
         Behaviours::new("auction", auction::behaviours()),
         Behaviours::new("itemlocation", itemlocation::behaviours()),

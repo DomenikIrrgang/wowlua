@@ -49,6 +49,11 @@
 //! character's. `player:setSpellFocus({ "Forge" })`: the spell focuses near
 //! the player (the recorded windows were away from any).
 //!
+//! `C_TradeSkillUI.HasNoReagentCost(recipe)` (WoW Forever 1.60.1 70959
+//! on): false unless a test says the recipe costs no reagents
+//! (`mock.setNoReagentCost(recipe)`); Blizzard's window then offers no
+//! Create All and no tracking for it.
+//!
 //! Unverified: the delays (one recording each), the clicks the client
 //! ignored (a request unanswered: no `CRAFT_BEGIN`; not modelled), a held
 //! craft after the last cast, a reagent's stack emptied (its packet
@@ -1648,6 +1653,30 @@ pub fn control_skill_ups(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `mock.setNoReagentCost(recipe, noCost?)`: the recipe costs no reagents
+/// (`noCost` true or left out) or does again (false). A world's state: no
+/// event.
+pub fn control_no_reagent_cost(vm: &mut Vm, c: NativeCall) -> Ret {
+    let recipe = vm.check_number(&c, 1)? as i64;
+    let free = !matches!(c.arg(2), Value::Bool(false));
+    let set = &mut state_mut(vm).no_reagent_cost;
+    if free {
+        set.insert(recipe);
+    } else {
+        set.remove(&recipe);
+    }
+    Ok(vec![])
+}
+
+/// `C_TradeSkillUI.HasNoReagentCost(recipeID)`: whether the recipe costs
+/// no reagents, false unless a test says (`mock.setNoReagentCost`;
+/// unverified: which of the game's recipes do).
+fn has_no_reagent_cost(vm: &mut Vm, c: NativeCall) -> Ret {
+    let recipe = vm.check_number(&c, 1)? as i64;
+    let free = state(vm).no_reagent_cost.contains(&recipe);
+    Ok(vec![Value::Bool(free)])
+}
+
 /// The functions the windows were asked, and the window's own.
 pub fn behaviours(flavor: &str) -> Vec<(&'static str, NativeFn)> {
     if flavor != "camelot" {
@@ -1687,6 +1716,8 @@ pub fn behaviours(flavor: &str) -> Vec<(&'static str, NativeFn)> {
             ),
             ("C_TradeSkillUI.GetCraftableCount", get_craftable_count),
             ("C_TradeSkillUI.CraftRecipe", craft_recipe),
+            // WoW Forever's from 1.60.1 70959 on.
+            ("C_TradeSkillUI.HasNoReagentCost", has_no_reagent_cost),
         ])
         .collect()
 }

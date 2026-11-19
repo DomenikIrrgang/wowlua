@@ -3678,3 +3678,32 @@ isn't is still open (steps below, with a pet). SuuUI asks again on the unit's
    ```
    /run PR:UnregisterAllEvents()
    ```
+
+## No reagent cost and cash on delivery (decision T645, 2026-11-19)
+
+WoW Forever 1.60.1 70959 added `C_TradeSkillUI.HasNoReagentCost` and
+`C_Mail.IsCODEnabled`, which Blizzard's professions window and send frame
+call. wowlua answers false for every recipe and true for cash on delivery
+(a test changes them with `mock.setNoReagentCost` and `mock.setCODEnabled`).
+These steps check that guess.
+
+Out of combat, each line in the chat, one at a time.
+
+1. Cash on delivery:
+
+   ```
+   /run print("cod",C_Mail.IsCODEnabled())
+   ```
+
+   Seen: (to do). wowlua: `cod true`.
+
+2. Open a profession you craft with (Blacksmithing, Tailoring…), choose a
+   recipe, then:
+
+   ```
+   /run local r=ProfessionsFrame.CraftingPage.SchematicForm:GetRecipeInfo() print("nrc",r and r.recipeID,r and C_TradeSkillUI.HasNoReagentCost(r.recipeID))
+   ```
+
+   Seen: (to do). wowlua: `nrc <the recipe's ID> false`. If you know a
+   recipe that costs nothing to make, choose it and run the line again.
+

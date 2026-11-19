@@ -923,6 +923,12 @@ The WoW API the VM's code calls, per flavor.
   client's. The client's debug switches and the systems the engine does not
   model answer their documented empty values (decision T295). Every
   function the camelot client has now has behaviour.
+- **Newer than the declarations.** What WoW Forever 1.60.1 70959 added
+  that Blizzard's UI calls has behaviour on camelot before the
+  declarations are generated from that build: `C_TradeSkillUI.HasNoReagentCost`
+  answers false unless `mock.setNoReagentCost(recipeID, noCost?)` says the
+  recipe costs no reagents, `C_Mail.IsCODEnabled` true unless
+  `mock.setCODEnabled(false)` (decision T645, unverified).
 - **Not mocked.** A generated function without behaviour raises
   "`<name>` is not mocked" when called, unless the project provides a mock
   (Tooling §16.1.4), so gaps are visible instead of silently returning nil.

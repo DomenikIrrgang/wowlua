@@ -40,6 +40,11 @@
 //! the mailbox's data name them (`namesAfter`, `dataAfter`, `bagAfter`,
 //! `goneAfter`; a letter's `readAfter`, an item's `itemAfter`).
 //!
+//! `C_Mail.IsCODEnabled()` (WoW Forever 1.60.1 70959 on): whether letters
+//! can be sent cash on delivery, true unless a test turns it off
+//! (`mock.setCODEnabled(false)`); Blizzard's send frame then keeps its COD
+//! button disabled.
+//!
 //! Unverified: `GetInboxText`'s values (not recorded), deleting and
 //! returning letters, COD letters, more than one attachment, a letter one
 //! can answer, the postage beyond one item (30 copper).
@@ -93,6 +98,9 @@ pub struct Mail {
     pub money: f64,
     pub cod: f64,
     pub new_mail: bool,
+    /// Cash on delivery turned off (`mock.setCODEnabled(false)`;
+    /// `C_Mail.IsCODEnabled`).
+    pub cod_disabled: bool,
     /// Senders of mail on its way (an auction's: "Horde Auction House").
     pub senders: Vec<String>,
     /// The inbox fetched this session (the mailbox's `fetched`, true when
@@ -252,6 +260,17 @@ pub fn control_set_new_mail(vm: &mut Vm, c: NativeCall) -> Ret {
     let m = mail_mut(vm);
     m.new_mail = !senders.is_empty();
     m.senders = senders;
+    Ok(vec![])
+}
+
+/// `mock.setCODEnabled(enabled)`: whether letters can be sent cash on
+/// delivery (`C_Mail.IsCODEnabled`; true unless turned off). A world's
+/// state, as a snapshot would hold it: no event.
+pub fn control_set_cod_enabled(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Bool(enabled) = c.arg(1) else {
+        return Err(vm.error("setCODEnabled: a boolean expected"));
+    };
+    mail_mut(vm).cod_disabled = !enabled;
     Ok(vec![])
 }
 
@@ -1103,8 +1122,15 @@ fn has_inbox_money(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(money > 0.0)])
 }
 
-pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
-    vec![
+/// `C_Mail.IsCODEnabled()`: letters can be sent cash on delivery, unless
+/// a test turned it off (`mock.setCODEnabled`; unverified: when the game
+/// turns it off).
+fn is_cod_enabled(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(!mail(vm).cod_disabled)])
+}
+
+pub fn behaviours(flavor: &str) -> Vec<(&'static str, NativeFn)> {
+    let mut out: Vec<(&'static str, NativeFn)> = vec![
         ("CheckInbox", check_inbox),
         ("GetInboxNumItems", get_inbox_num_items),
         ("HasNewMail", has_new_mail),
@@ -1135,5 +1161,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Mail.IsCommandPending", no),
         ("C_Mail.CanCheckInbox", yes),
         ("C_Mail.SetOpeningAll", nothing),
-    ]
+    ];
+    // WoW Forever's from 1.60.1 70959 on.
+    if flavor == "camelot" {
+        out.push(("C_Mail.IsCODEnabled", is_cod_enabled));
+    }
+    out
 }
