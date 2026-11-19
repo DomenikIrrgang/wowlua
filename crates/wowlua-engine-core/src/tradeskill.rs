@@ -1,6 +1,6 @@
 //! A trade skill window's state (wowlua-engine's `tradeskill` answers from it).
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, Vm};
@@ -88,6 +88,9 @@ pub struct TradeSkill {
     pub focus: Vec<String>,
     /// Whether each craft to come raises the skill, by recipe.
     pub skill_ups: HashMap<i64, VecDeque<bool>>,
+    /// The recipes that cost no reagents (`mock.setNoReagentCost`;
+    /// `C_TradeSkillUI.HasNoReagentCost`).
+    pub no_reagent_cost: HashSet<i64>,
     /// Items made so far (their GUIDs' counter).
     pub made: u64,
     /// The recorded timings of the casts to come, and the running one's.

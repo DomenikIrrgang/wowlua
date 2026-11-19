@@ -25,6 +25,7 @@ mod cvars;
 mod damagemeter;
 mod elvui_answers;
 mod encounters;
+mod forever_70959;
 mod frames;
 mod gamedata;
 mod graphics;

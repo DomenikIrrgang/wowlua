@@ -462,6 +462,11 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("defineTaxi", crate::taxi::control_define),
         ("defineMailbox", crate::mail::control_define),
         ("setNewMail", crate::mail::control_set_new_mail),
+        ("setCODEnabled", crate::mail::control_set_cod_enabled),
+        (
+            "setNoReagentCost",
+            crate::tradeskill::control_no_reagent_cost,
+        ),
         ("setEquipmentSets", crate::equipsets::control_set),
         ("defineBank", crate::bank::control_define),
         ("defineAuctionHouse", crate::auction::control_define),
