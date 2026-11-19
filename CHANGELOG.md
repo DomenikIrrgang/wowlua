@@ -2,7 +2,7 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
-## Unreleased
+## 0.13.16 (2026-11-19)
 
 ### New
 
@@ -11,7 +11,6 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### Fixed
 
 - WoW Forever 1.60.1 70959: Blizzard's professions window and send mail frame work again in tests that load Blizzard's UI from the installed client. They call `C_TradeSkillUI.HasNoReagentCost` and `C_Mail.IsCODEnabled`, new in that build, and failed with "attempt to call a nil value".
-
 - Dev builds with the script monitor: a slow call whose stack the game gives as a secret value no longer breaks the monitor ("attempt to compare field 'stack' (a secret string value)" when a recording stopped). The call is kept, without its stack.
 
 ## 0.13.15 (2026-11-14)
