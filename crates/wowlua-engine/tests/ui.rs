@@ -150,6 +150,48 @@ return table.concat(LoadLog, ','), tostring(FamilyLoaded), tostring(LazyLoaded),
     );
 }
 
+/// A secure handler that reads a field an addon wrote is tainted from then
+/// on (§17.8: secure code reading a tainted table field is tainted): a
+/// value it writes from a register is the addon's. A constant written
+/// straight into a table stays secure, as in the client (elune's
+/// "OP_SETTABLE: Write secure constant from tainted context"; issue #260).
+#[test]
+fn a_secure_handler_reading_an_addons_field_is_tainted() {
+    let interface = tree(
+        "fieldread",
+        &[
+            ("AddOns/Blizzard_Box/Blizzard_Box.toc", "Box.lua\n"),
+            (
+                "AddOns/Blizzard_Box/Box.lua",
+                "local box = CreateFrame('Frame', 'BlizzBox', UIParent)
+box.flag = 0
+box:SetScript('OnUpdate', function(self)
+    self.before = issecure()
+    if self.flag == 1 then
+        self.flag = 0
+        self.after = issecure()
+        local text = 'done'
+        self.text = text
+    end
+end)
+",
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    run(&mut vm, "BlizzBox.flag = 1");
+    wowlua_engine::clock::advance_frames(&mut vm, 1, 16.0);
+    let r = run(
+        &mut vm,
+        "local b = BlizzBox
+return tostring(b.before), tostring(b.after), b.flag,
+    tostring(issecurevariable(b, 'flag')), tostring(issecurevariable(b, 'text'))",
+    );
+    assert_eq!(r, ["true", "false", "0", "true", "false"]);
+}
+
 /// A secure addon's API for addons, as Blizzard_AuraContainer builds it: a
 /// template under `allowUntaintedCreation` is built untainted for an
 /// addon (its scripts and `OnLoad` Blizzard's), and its inbound mixin's
