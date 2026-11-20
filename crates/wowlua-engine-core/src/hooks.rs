@@ -44,6 +44,9 @@ pub struct Hooks {
     pub trainer_learn: NativeFn,
     pub trainer_unlearn: NativeFn,
     pub look_of: fn(&mut Vm, &str) -> Look,
+    /// The topmost visible frame taking the mouse under the cursor, as a
+    /// click there finds it (`mock.click`, decision T657).
+    pub frame_under_cursor: fn(&mut Vm) -> Option<crate::widgets::WidgetId>,
     pub format_with: fn(&mut Vm, Value, f64, bool) -> Result<Value, LuaError>,
     pub navigation_frame: fn(&mut Vm) -> Result<(), LuaError>,
     pub poi_map: fn(&mut Vm) -> f64,

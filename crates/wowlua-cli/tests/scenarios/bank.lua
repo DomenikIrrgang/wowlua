@@ -51,7 +51,7 @@ local function at(t)
     now = t
 end
 local function press(frame, button)
-    local ok, err = pcall(e.click, frame, button)
+    local ok, err = pcall(e.click, frame, button, true)
     if not ok then check("clicked: " .. tostring(err), false) end
 end
 -- A bag slot's button (the bags' or the bank's).

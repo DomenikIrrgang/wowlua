@@ -969,7 +969,10 @@ For its debugger page (decision T494):
 [--scale <s>] -o <file.png>` runs the test file (its tests whose names contain
 `--test`) and draws the screen, or the named frame and what it holds, as each
 test leaves it: the first test's image at `-o`, the others' beside it
-(`<file>-<test>.png`).
+(`<file>-<test>.png`). A frame's image holds its own rectangle and what is
+drawn of it and the widgets under it; an empty frame under it (a container
+with nothing shown) adds nothing (decision T658). `toMatchScreenshot` and
+`mock.screenshot` crop a frame the same way.
 
 ### 18.12.5 In tests
 

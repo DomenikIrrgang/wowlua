@@ -33610,6 +33610,9 @@ declare global CraftIcon_OnLeave: (self: unknown) -> ()
 declare global CraftIcon_OnUpdate: (self: unknown) -> ()
 @onDemand("Blizzard_DebugTools")
 declare global CanAccessObject: (obj: unknown) -> unknown
+declare global UnitAura: (unitToken: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?) -> (string?, number?, number?, string?, number?, number?, string?, boolean?, boolean?, number?, boolean?, boolean?, boolean?, boolean?, number?, ...unknown)
+declare global UnitBuff: (unitToken: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?) -> (string?, number?, number?, string?, number?, number?, string?, boolean?, boolean?, number?, boolean?, boolean?, boolean?, boolean?, number?, ...unknown)
+declare global UnitDebuff: (unitToken: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?) -> (string?, number?, number?, string?, number?, number?, string?, boolean?, boolean?, number?, boolean?, boolean?, boolean?, boolean?, number?, ...unknown)
 declare global GetActionCount: (actionID: number) -> number
 declare global GetActionCooldown: (actionID: number) -> (number, number, boolean, number)
 declare global GetActionCharges: (actionID: number) -> (number, number, number, number, number)
@@ -46674,7 +46677,7 @@ declare namespace C_CurveUtil
     --- Evaluates a potentially-secret boolean value and returns a color.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_CurveUtil.EvaluateColorFromBoolean)
-    function EvaluateColorFromBoolean(boolean: boolean, valueIfTrue: ColorMixin, valueIfFalse: ColorMixin): ColorMixin
+    function EvaluateColorFromBoolean(boolean: boolean, valueIfTrue: ColorWithAlpha, valueIfFalse: ColorWithAlpha): ColorWithAlpha
     --- Evaluates a potentially-secret boolean value and returns a single color component (eg. alpha).
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_CurveUtil.EvaluateColorValueFromBoolean)

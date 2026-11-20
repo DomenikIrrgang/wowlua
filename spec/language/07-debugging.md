@@ -647,7 +647,8 @@ other addon or Blizzard frame is affected.
 The addon's own `frame:GetScript(name)` calls are routed too, and give back
 the handler the addon set rather than the monitor's wrapper, so
 `frame:GetScript(name) == fn` holds as in a build without the monitor
-(decision L108). Other addons and Blizzard's code see the wrapper.
+(decision L108). Other addons and Blizzard's code see the wrapper. A test
+file's own calls are not routed: they are not the addon's (decision T663).
 
 | Monitored | Recorded per entry |
 |-----------|--------------------|

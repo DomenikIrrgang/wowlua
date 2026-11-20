@@ -4792,9 +4792,13 @@ fn set_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let _ = vm.heap.table_mut(list).set(n, Value::Num(1.0));
     let key = vm.str("FontObject");
     let _ = vm.heap.table_mut(props).set(key, Value::Table(list));
-    // Its own font gives way to the object's.
+    // Its own font gives way to the object's, and so does its own color:
+    // the string reads the object's after (the game, Forever 1.60.1, a
+    // reskin's texts; issue #278, decision T651; unverified: the shadow,
+    // which stays its own).
     let own = vm.str("Font");
     let _ = vm.heap.table_mut(props).set(own, Value::Nil);
+    unstore(vm, id, "TextColor");
     Ok(vec![])
 }
 

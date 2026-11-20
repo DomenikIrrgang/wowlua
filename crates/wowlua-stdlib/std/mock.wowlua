@@ -592,7 +592,9 @@ export function setItemCooldown(itemID: number, duration: number, remaining: num
 end
 
 --- A bag's contents (`nil`: no bag): `BAG_UPDATE`, `BAG_UPDATE_DELAYED`.
-export function setBag(bag: number, contents: { slots?: number, items?: { [number]: number | HeldItem } }?)
+--- `family`: a special bag's (a quiver, a soul bag: `GetItemFamily`'s
+--- bits), which takes only items whose `defineItem` `family` shares one.
+export function setBag(bag: number, contents: { slots?: number, items?: { [number]: number | HeldItem }, family?: number }?)
     engine().setBag(bag, contents)
 end
 
@@ -1182,7 +1184,9 @@ export function snapshotTaken()
 end
 
 --- Moves the virtual clock (`GetTime`, `C_Timer`) on by `sec` seconds,
---- running the timers that come due on the way, in order.
+--- running the timers that come due on the way, in order. No frames run:
+--- `OnUpdate` scripts and animations stand still. `waitSeconds` passes the
+--- time as the game does, frame by frame.
 export function advanceTime(sec: number)
     engine().advanceTime(sec)
 end

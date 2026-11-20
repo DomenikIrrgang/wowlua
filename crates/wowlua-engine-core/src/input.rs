@@ -102,6 +102,34 @@ pub fn cursor_onto(vm: &mut Vm, id: WidgetId) {
     }
 }
 
+/// Whether frame `over`, on top under the pointer, takes a click meant for
+/// `id`: a frame the addon or a test made (not Blizzard's: the engine's
+/// stacking of Blizzard's UI is not exact enough to take clicks from what
+/// a test names), and not one of `id`'s parents, which is never above it
+/// in the game (decision T657).
+fn covers(vm: &Vm, over: WidgetId, id: WidgetId) -> bool {
+    let e = engine(vm);
+    let mut cur = e.world.widgets[id.0].parent;
+    while let Some(p) = cur {
+        if p == over {
+            return false;
+        }
+        cur = e.world.widgets[p.0].parent;
+    }
+    match &e.world.widgets[over.0].created {
+        None => false,
+        Some((chunk, _)) => {
+            let chunk = String::from_utf8_lossy(chunk)
+                .to_ascii_lowercase()
+                .replace('\\', "/");
+            !(chunk.contains("/blizzard_")
+                || chunk.contains("framexml/")
+                || chunk.contains("sharedxml/")
+                || chunk.contains("gluexml/"))
+        }
+    }
+}
+
 /// The mouse moved onto `new` (`None`: off every frame): onto its middle
 /// unless it is over it already; `OnLeave` for the frame it left, then
 /// `OnEnter` for the new one (`motion` true).
@@ -298,6 +326,22 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
         button = vm.str("RightButton");
         engine_mut(vm).world.input.modifiers[3] = false;
     }
+    // The mouse onto the frame's middle, and the click goes to the frame
+    // on top there that takes the mouse, as in the game (issue #277,
+    // decision T657): an overlay left over a button takes it. A frame
+    // without a rectangle, or with nothing taking the mouse there, is
+    // clicked itself.
+    cursor_onto(vm, id);
+    // (a third argument true clicks the frame itself: a recorded
+    // scenario's click, whose target the game told)
+    let exact = c.arg(3).truthy();
+    let id = if !exact && mouse_inside(vm, id, [0.0; 4]) {
+        (crate::hooks::get().frame_under_cursor)(vm)
+            .filter(|&t| t != id && covers(vm, t, id))
+            .unwrap_or(id)
+    } else {
+        id
+    };
     // The mouse is over what it clicks.
     mouse_onto(vm, Some(id));
     as_user(vm, |vm| {

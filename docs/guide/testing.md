@@ -269,6 +269,11 @@ along with every parent), `toHaveText`, `toHaveSize` and `toBeAnchoredTo`.
 `.never` negates any matcher. `mock.hover`, `mock.drag`, `mock.wheel` and
 `mock.pressBinding` cover the rest of what a player does.
 
+`mock.click` clicks the way a player does: the mouse moves onto the frame's
+middle, and the click goes to the frame on top there that takes the mouse. If
+your addon leaves an invisible overlay over a button, the overlay gets the
+click in the test, as it would in the game.
+
 ## Time and waiting
 
 Tests run on a virtual clock, so timers and `OnUpdate` code run at once and
@@ -300,9 +305,12 @@ end
 
 `mock.waitFor` returns the event's arguments. `mock.waitFrames`,
 `mock.waitSeconds` and `mock.waitUntil` wait the same way, each frame running
-`OnUpdate` and the timers that are due. `mock.advanceTime` runs only the
-timers: code that waits for an `OnUpdate`, as Blizzard's aura containers do
-before they show their auras, needs frames (`mock.nextFrame()` or a wait). A wait longer than 10 virtual seconds
+`OnUpdate` and the timers that are due: that is how time passes in the game,
+so reach for `mock.waitSeconds` first. `mock.advanceTime` is a jump that runs
+only the timers: `OnUpdate` scripts and animations stand still while
+`GetTime()` moves on. Code that waits for an `OnUpdate`, as Blizzard's aura
+containers do before they show their auras, or a fade keyed to `GetTime()`,
+needs frames (`mock.nextFrame()` or a wait). A wait longer than 10 virtual seconds
 fails the test and says what it waited for; `config({ timeout = … })` or
 `@test(name, { timeout = … })` changes the limit.
 

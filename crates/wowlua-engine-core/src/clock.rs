@@ -241,12 +241,20 @@ fn schedule(vm: &mut Vm, seconds: f64, callback: Value, runs: f64, handle: bool)
     let pin = vm.pin(kept);
     let mut due = now(vm) + seconds.max(0.0);
     // A timer a running timer sets without a delay waits for the next
-    // run of timers (the next frame), so one that sets itself again does
-    // not hold time still (unverified: the client's order).
-    if seconds <= 0.0
-        && let Some(target) = engine(vm).timers.advancing
-    {
-        due = due.max(target + NEXT_RUN);
+    // frame, a frame's length on (the last frame's, else a 60th of a
+    // second): within an advance of the clock that has the time, as the
+    // game runs it on its next frame, and so one that sets itself again
+    // does not hold time still (issue #270, decision T659; unverified: the
+    // client's order).
+    if seconds <= 0.0 && engine(vm).timers.advancing.is_some() {
+        let frame = match engine(vm).timers.tick_time {
+            t if t > 0.0 => t,
+            _ => 1.0 / 60.0,
+        };
+        // (in whole milliseconds, as the clock counts: a frame's 16.67
+        // ms after a time the clock rounded is not past the next frame)
+        let next = ((now(vm) + frame) * 1000.0).floor() / 1000.0;
+        due = due.max(next).max(now(vm) + NEXT_RUN);
     }
     let index = engine(vm).timers.list.len();
     engine_mut(vm).timers.active.push(index);

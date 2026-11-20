@@ -146,10 +146,15 @@ pub const PROTECTED: &[&str] = &[
 /// `C_SummonInfo.ConfirmSummon`, `CancelSummon`, AcceptDuel, CancelDuel,
 /// ConfirmReadyCheck, the area spirit heal's, RetrieveCorpse, RepopMe,
 /// CancelTrade and RejectProposal ran. Unverified: refused during a
-/// user's action too, or for Blizzard's code.
+/// user's action too, or for Blizzard's code. `C_AuctionHouse.PlaceBid`
+/// (a single auction's bid or buyout): Forever took it from SuuUI's own
+/// click (2026-11-17) and refused it from the addon's code otherwise
+/// (2026-11-15, issue #264; decision T660; unverified: the event, and
+/// `/run`, which the game refused).
 pub const HARDWARE: &[&str] = &[
     "AcceptProposal",
     "AcceptTrade",
+    "C_AuctionHouse.PlaceBid",
     "CancelLogout",
     "DeleteCursorItem",
 ];

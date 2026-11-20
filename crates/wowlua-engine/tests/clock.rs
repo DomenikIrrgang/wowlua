@@ -242,3 +242,26 @@ return tostring(grown < 100), runs, kept.note, kept.seen, tostring(kept:IsCancel
     );
     assert_eq!(r, ["true", "2", "mine", "2", "false"]);
 }
+
+/// A timer set without a delay in a timer's callback runs a frame later:
+/// within the same `advanceTime` when it has the time (issue #270,
+/// decision T659); one that sets itself again moves time on.
+#[test]
+fn a_zero_delay_timer_in_a_timer_runs_a_frame_later() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local ran = {}
+C_Timer.After(0.1, function()
+    ran[#ran + 1] = 'outer@' .. GetTime()
+    C_Timer.After(0, function() ran[#ran + 1] = 'inner' end)
+end)
+mock.advanceTime(1)
+local polls = 0
+local function poll() polls = polls + 1 if polls < 5 then C_Timer.After(0, poll) end end
+C_Timer.After(0, poll)
+mock.advanceTime(1)
+return table.concat(ran, ' '), polls, GetTime()",
+    );
+    assert_eq!(r, ["outer@0.1 inner", "5", "2"]);
+}

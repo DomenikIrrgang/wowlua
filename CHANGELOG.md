@@ -6,12 +6,28 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- Bag families in tests: `mock.defineItem(id, { family = 1 })` gives an item its family (`C_Item.GetItemFamily`), `mock.setBag(bag, { family = 1 })` makes a special bag (a quiver, a soul bag) that `GetContainerNumFreeSlots` reports and that takes only items of its family, first.
 - E1006 (W1006 in basic mode): a function that uses a file-level `local` declared further down the file is reported when a global of that name exists. The function can't see the local yet, so it read the game's global instead, silently (`GLYPHS` is the client's string "Glyphs"). Move the local above the function, or write `_G.GLYPHS` to mean the global. When no such global exists, E1001 now says the local is declared further down.
 - An addon can extend a class of an addon it depends on: give the class `@global("Name")` and write `class Plugin extends Name`.
 - A class re-exported by another module (`export const Base = base.Base`) can be extended when imported by name (`import Base from "./api"`), as it already could through `import * as api`.
 
+### Changed
+
+- `mock.click(frame)` clicks what a player's click on the frame's middle would: the frame on top there that takes the mouse. A frame left over a button (an overlay, a dim, a click catcher) now takes the click in tests too, as in the game. When nothing there takes the mouse, the frame you name is clicked as before.
+
 ### Fixed
 
+- Profiles with the monitor on: a test file's own scripts and timers no longer run under the monitor's wrapper, and the wrapper shows as `[wowlua] wowlua/runtime.lua` in `--profile-out` reports instead of a file of your addon. Your addon's cost per frame is no longer inflated by the test's own work.
+- Tests: `TakeInboxItem` with no room in the bags is refused as in the game ("Inventory is full.", then `MAIL_FAILED` with the item), and the item stays in the letter. It was lost. Taking an item from a COD letter now pays the COD.
+- Tests (WoW Forever): `C_AuctionHouse.PlaceBid` from addon code is refused (`ADDON_ACTION_BLOCKED`) unless it runs in the player's click or key press, as in the game, so an addon's "the game said no" path runs in tests too.
+- Tests: a `C_Timer.After(0, …)` set inside a timer's callback runs a frame later, so within the same `mock.advanceTime(1)`, as on the game's next frame. It waited for the next advance.
+- A frame's screenshot (`wowlua screenshot --frame`, `toMatchScreenshot`, `mock.screenshot`) is cropped to the frame and what is drawn of it. An empty container inside it (an aura row with no aura) no longer widens the image with the screen behind it. Stored images of such frames need `wowlua test -u` once.
+- The `C_UnitAuras` getters (`GetAuraDataByIndex`, `GetPlayerAuraBySpellID`, …) and `C_TooltipInfo`'s aura functions return a plain `AuraData?` (`TooltipData?`): read `a.spellId` after `if a then`, no secrecy test first. The game gives addon code a plain table, or an error while auras are restricted, never a secret table.
+- `C_CurveUtil.EvaluateColorFromBoolean` with a colour that has no alpha, such as `C_ClassColor.GetClassColor`'s, is reported by `wowlua check` (E2001) and fails in tests with the game's "Usage: …" error. The game refuses it; wowlua took it and used alpha 1. A `ColorMixin`'s `a` is now optional (`number?`), since a class colour has none.
+- WoW Forever (camelot): `UnitAura`, `UnitBuff` and `UnitDebuff` are no longer declared, so `wowlua check` reports them (E1001 / W1001): the client has none of them and the call fails in the game. Use `C_UnitAuras`. The classic flavors keep them.
+- Tests (WoW Forever): `C_CVar.GetCVarInfo` tells whether a CVar is stored per account or per character for the CVars recorded so far (`miniWorldMap` per character, `lockActionBars` per account, …). It said neither for every CVar.
+- Tests: `GetMacroInfo` of a macro left on the question mark gives the icon of the spell (or item) it casts, as in the game. It gave the question mark.
+- Tests: `fontString:SetFontObject(font)` gives the text the font object's colour, as in the game. A colour set before with `SetTextColor` stayed.
 - Tests: `SelectTrainerService(i)` no longer fires `TRAINER_DESCRIPTION_UPDATE`, as on WoW Forever, so Blizzard's trainer frame keeps its own row and its Train button follows that row, not your addon's choice.
 - `--manifest <file>` works in a workspace: at a root that is a package too, and in a member, `wowlua build`, `test` and `perf run` read that file instead of the folder's `wowlua.json`. So `wowlua perf run --manifest wowlua.perf.json` can measure without runtime checks while `wowlua test` keeps them.
 - Tests and `wowlua perf`: a `C_Timer` timer that has fired its last time or is cancelled no longer stays in memory. Each one kept 125 to 210 bytes for the whole run, counted as your addon's memory.

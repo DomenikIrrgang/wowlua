@@ -7,8 +7,8 @@
 --     461 undocumented and not named as a query
 --     311 a setter without a curated read-back and restore
 --     205 a Lua or WoW language function (the conformance suite probes these)
---     185 restricted (HasRestrictions)
---      90 protected
+--     184 restricted (HasRestrictions)
+--      91 protected
 --      16 acts: a request that joins, buys or answers
 --       2 acts: sets the group role
 --       1 acts: completes the quest and takes its reward
@@ -8136,7 +8136,7 @@ local skipped = {
     { [==[C_AuctionHouse.ConfirmPostCommodity]==], [==[restricted (HasRestrictions)]==] },
     { [==[C_AuctionHouse.ConfirmPostItem]==], [==[restricted (HasRestrictions)]==] },
     { [==[C_AuctionHouse.MakeItemKey]==], [==[not named as a query (an action or a state change)]==] },
-    { [==[C_AuctionHouse.PlaceBid]==], [==[restricted (HasRestrictions)]==] },
+    { [==[C_AuctionHouse.PlaceBid]==], [==[protected]==] },
     { [==[C_AuctionHouse.PostCommodity]==], [==[restricted (HasRestrictions)]==] },
     { [==[C_AuctionHouse.PostItem]==], [==[restricted (HasRestrictions)]==] },
     { [==[C_AuctionHouse.QueryBids]==], [==[not named as a query (an action or a state change)]==] },
@@ -11168,4 +11168,4 @@ local skipped = {
     { [==[xpcall]==], [==[a Lua or WoW language function (the conformance suite probes these)]==] },
 }
 
-ns.__wowlua.define("fullprobeplan", { calls = calls, risky = risky, suspect = suspect, setters = setters, skipped = skipped, version = "3f8370968cdcfc70" })
+ns.__wowlua.define("fullprobeplan", { calls = calls, risky = risky, suspect = suspect, setters = setters, skipped = skipped, version = "cd2b8d7867ff79e9" })

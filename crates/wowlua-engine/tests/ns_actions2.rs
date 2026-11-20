@@ -95,3 +95,56 @@ return moved, select(3, GetRaidRosterInfo(2)), (select(3, GetRaidRosterInfo(3)))
     );
     assert_eq!(r, ["3", "1", "3"]);
 }
+
+/// A take with full bags is refused: "Inventory is full." at once,
+/// `MAIL_FAILED` with the item a round trip later, the item still in the
+/// letter; a COD letter's item is paid for as it is taken (issue #265,
+/// decision T661).
+#[test]
+fn mail_takes_need_room_and_pay_cod() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "mock.defineItem(2589, { name = 'Linen Cloth' })
+mock.defineItem(159, { name = 'Refreshing Spring Water' })
+mock.setBag(0, { slots = 1, items = { [1] = 159 } })
+for bag = 1, 4 do mock.setBag(bag, { slots = 0 }) end
+mock.player:setMoney(10000)
+local box = mock.spawnUnit({ name = 'Mailbox' })
+mock.defineMailbox(box, { letters = {
+    { sender = 'Someone', subject = 'full bags', items = { { id = 2589, count = 1 } } },
+    { sender = 'Someone', subject = 'cod', cod = 500, items = { { id = 2589, count = 1 } } },
+} })
+SEEN = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('MAIL_FAILED')
+f:RegisterEvent('UI_ERROR_MESSAGE')
+f:SetScript('OnEvent', function(_, e, a, b) SEEN[#SEEN + 1] = e .. ' ' .. tostring(e == 'UI_ERROR_MESSAGE' and b or a) end)
+TakeInboxItem(1, 1)
+NOW = #SEEN",
+    );
+    wowlua_engine::clock::advance(&mut vm, 1.0);
+    let r = run(
+        &mut vm,
+        "local seen = table.concat(SEEN, '; ')
+local still = GetInboxItem(1, 1)
+mock.setBag(1, { slots = 4 })
+TakeInboxItem(2, 1)
+return NOW, seen, still, GetMoney()",
+    );
+    assert_eq!(
+        r,
+        [
+            "1",
+            "UI_ERROR_MESSAGE Inventory is full.; MAIL_FAILED 2589",
+            "Linen Cloth",
+            "10000"
+        ]
+    );
+    wowlua_engine::clock::advance(&mut vm, 1.0);
+    let r = run(
+        &mut vm,
+        "local _, _, _, _, _, cod = GetInboxHeaderInfo(2) return GetMoney(), cod, C_Container.GetContainerItemID(1, 1)",
+    );
+    assert_eq!(r, ["9500", "0", "2589"]);
+}

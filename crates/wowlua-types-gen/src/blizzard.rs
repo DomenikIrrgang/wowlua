@@ -397,11 +397,22 @@ fn function_sig(f: &Table, structures: &mut Structures) -> Sig {
         })
         .collect();
     let vararg = (!stride_args.is_empty()).then(|| stride_args.join(" | "));
+    // An aura getter that needs aura access raises for addon code while
+    // auras are restricted, rather than answer a secret table: its
+    // `SecretWhenUnitAuraRestricted` makes no secret (recorded on Forever:
+    // `GetAuraDataByIndex` errors in combat, a plain table outside; issue
+    // #283, decision T656).
+    let raises_for_auras = b(f, "RequiresUnitAuraAccess") || b(f, "RequiresNonSecretAura");
+    let aura_secret = b(f, "SecretWhenUnitAuraRestricted");
     let secret = b(f, "SecretReturns")
         || has(f, "SecretReturnsForAspect")
         || f.pairs::<String, Value>()
             .filter_map(Result::ok)
-            .any(|(k, v)| k.starts_with("SecretWhen") && matches!(v, Value::Boolean(true)));
+            .any(|(k, v)| {
+                k.starts_with("SecretWhen")
+                    && matches!(v, Value::Boolean(true))
+                    && !(raises_for_auras && k == "SecretWhenUnitAuraRestricted")
+            });
     let may_return_nothing = b(f, "MayReturnNothing");
     let all_returns = list(f, "Returns");
     let ret_vararg = all_returns.iter().any(|r| has(r, "StrideIndex")).then(|| {
@@ -417,6 +428,10 @@ fn function_sig(f: &Table, structures: &mut Structures) -> Sig {
         .take_while(|r| !has(r, "StrideIndex"))
         .map(|r| {
             let mut ty = field_type(r);
+            // (the table, not a value read from the aura: those keep their
+            // secret, unrecorded)
+            let secret =
+                secret || (aura_secret && matches!(ty.as_str(), "string" | "number" | "boolean"));
             if secret && structures.never_secret.contains_key(&ty) {
                 structures.secret_fields.insert(ty.clone());
                 ty = secret_companion(&ty);

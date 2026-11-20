@@ -28,6 +28,17 @@ fn frame_at(vm: &mut Vm, x: f64, y: f64) -> Option<WidgetId> {
         .filter(|f| engine(vm).world.widgets[f.0].name.as_deref() != Some("WorldFrame"))
 }
 
+/// The frame under the cursor (`GetCursorPosition`'s place) that takes
+/// the mouse, not the world's own: what a click there finds.
+pub fn frame_under_cursor(vm: &mut Vm) -> Option<WidgetId> {
+    let (cx, cy) = engine(vm).world.input.cursor;
+    let (k, ui_h) = crate::scene::pixel_scale(vm);
+    let ui = widgets::ui_parent_scale(engine(vm));
+    let (x, y) = (cx / ui * k, (ui_h - cy / ui) * k);
+    crate::scene::click_test(vm, x, y)
+        .filter(|f| engine(vm).world.widgets[f.0].name.as_deref() != Some("WorldFrame"))
+}
+
 /// Pixels of the screen in `GetCursorPosition`'s units (bottom left).
 fn screen_units(vm: &Vm, x: f64, y: f64) -> (f64, f64) {
     let (k, ui_h) = crate::scene::pixel_scale(vm);

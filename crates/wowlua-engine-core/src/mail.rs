@@ -45,9 +45,13 @@
 //! (`mock.setCODEnabled(false)`); Blizzard's send frame then keeps its COD
 //! button disabled.
 //!
+//! A take the bags have no room for is refused, and a COD letter's item
+//! is paid for as it is taken (decision T661, a real addon's play).
+//!
 //! Unverified: `GetInboxText`'s values (not recorded), deleting and
-//! returning letters, COD letters, more than one attachment, a letter one
-//! can answer, the postage beyond one item (30 copper).
+//! returning letters, COD letters beyond their payment, more than one
+//! attachment, a letter one can answer, the postage beyond one item (30
+//! copper).
 
 use std::collections::BTreeMap;
 
@@ -651,7 +655,10 @@ fn take_inbox_item(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let a = num(vm.hidden(c.arg(2))).unwrap_or(1.0) as usize;
-    if attachment(vm, t, a).is_none() {
+    let Some((id, count)) = attachment(vm, t, a) else {
+        return Ok(vec![]);
+    };
+    if refuses_take(vm, t, id, count) {
         return Ok(vec![]);
     }
     let delay = crate::clock::server_delay(vm);
@@ -673,6 +680,11 @@ fn auto_loot_mail_item(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((a, _, _)) = items_of(vm, t).first().copied() else {
         return Ok(vec![]);
     };
+    if let Some((id, count)) = attachment(vm, t, a)
+        && refuses_take(vm, t, id, count)
+    {
+        return Ok(vec![]);
+    }
     let delay = crate::clock::server_delay(vm);
     later(
         vm,
@@ -681,6 +693,53 @@ fn auto_loot_mail_item(vm: &mut Vm, c: NativeCall) -> Ret {
         taken,
         vec![Value::Num(i as f64), Value::Num(a as f64)],
     );
+    Ok(vec![])
+}
+
+/// A take the game refuses: no room in the bags ("Inventory is full." at
+/// once, `MAIL_FAILED` with the item a round trip later), or a COD the
+/// player cannot pay (`ERR_NOT_ENOUGH_MONEY`); the item stays in the
+/// letter (the game, Forever 1.60.1, a real addon's mail collector; issue
+/// #265, decision T661; unverified: the COD's refusal, a unique item
+/// already carried).
+fn refuses_take(vm: &mut Vm, t: TableRef, id: i64, count: f64) -> bool {
+    let cod = num(field(vm, t, "cod")).unwrap_or(0.0);
+    if cod > 0.0 && engine(vm).world.character.money < cod {
+        let code = vm.get_global("LE_GAME_ERR_NOT_ENOUGH_MONEY");
+        let text = match vm.get_global("ERR_NOT_ENOUGH_MONEY") {
+            Value::Nil => vm.str("You don't have enough money."),
+            v => v,
+        };
+        fire(vm, "UI_ERROR_MESSAGE", &[code, text]);
+        return true;
+    }
+    if character::bag_for(vm, id, count).is_some() {
+        return false;
+    }
+    // (as the merchant's: the global string, else its English text)
+    let code = match vm.get_global("LE_GAME_ERR_INV_FULL") {
+        Value::Nil => Value::Num(3.0),
+        v => v,
+    };
+    let text = match vm.get_global("ERR_INV_FULL") {
+        Value::Nil => vm.str("Inventory is full."),
+        v => v,
+    };
+    fire(vm, "UI_ERROR_MESSAGE", &[code, text]);
+    let delay = crate::clock::server_delay(vm);
+    later(
+        vm,
+        delay,
+        "mailFailed",
+        mail_failed,
+        vec![Value::Num(id as f64)],
+    );
+    true
+}
+
+/// The server refused a take: `MAIL_FAILED(itemID)`.
+fn mail_failed(vm: &mut Vm, c: NativeCall) -> Ret {
+    fire(vm, "MAIL_FAILED", &[c.upvals[0]]);
     Ok(vec![])
 }
 
@@ -696,6 +755,18 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((id, count)) = attachment(vm, t, a) else {
         return Ok(vec![]);
     };
+    // A COD letter's item is paid for as it is taken: the money goes, the
+    // letter's COD is paid (decision T661; unverified: the order of
+    // `PLAYER_MONEY` among the inbox's events).
+    let cod = num(field(vm, t, "cod")).unwrap_or(0.0);
+    if cod > 0.0 {
+        if engine(vm).world.character.money < cod {
+            return Ok(vec![]);
+        }
+        engine_mut(vm).world.character.money -= cod;
+        set(vm, t, "cod", Value::Num(0.0));
+        fire(vm, "PLAYER_MONEY", &[]);
+    }
     let mut item_after = None;
     if let Value::Table(l) = field(vm, t, "items")
         && let Value::Table(item) = vm.heap.table(l).get(Value::Num(a as f64))

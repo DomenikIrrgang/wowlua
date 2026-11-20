@@ -2108,8 +2108,11 @@ fn poi_texture_coords(vm: &mut Vm, c: NativeCall) -> Ret {
 /// first macro's 841219, 0 and 2147483647 the question mark).
 fn selected_macro_icon(vm: &mut Vm, c: NativeCall) -> Ret {
     let i = arg_num(vm, &c, 1).unwrap_or(0.0).trunc();
-    let info = ask(vm, "GetMacroInfo", &[Value::Num(i)]);
-    let icon = info.get(1).copied().and_then(num).unwrap_or(134400.0);
+    // (the icon it was given, not the one `GetMacroInfo` shows for the
+    // question mark, decision T652)
+    let icon = crate::macros::stored_icon(vm, Value::Num(i))
+        .and_then(num)
+        .unwrap_or(134400.0);
     Ok(vec![Value::Num(icon)])
 }
 

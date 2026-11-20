@@ -584,6 +584,26 @@ return outside, tostring(refused), soft, C_CVar.GetCVar('autoLootDefault'), #r, 
     );
 }
 
+/// `GetCVarInfo`'s storage flags: per character, per account, or neither
+/// (the machine), as recorded on Forever (issue #272, decision T653).
+#[test]
+fn cvars_tell_where_they_are_stored() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local out = {}
+for _, name in ipairs({ 'miniWorldMap', 'lockActionBars', 'uiScale' }) do
+    local _, _, account, character = C_CVar.GetCVarInfo(name)
+    out[#out + 1] = name .. ' ' .. tostring(account) .. ' ' .. tostring(character)
+end
+return table.concat(out, ', ')",
+    );
+    assert_eq!(
+        r,
+        ["miniWorldMap false true, lockActionBars true false, uiScale false false"]
+    );
+}
+
 /// Kills as the client recorded the player's: in the open world (scenario
 /// combat: plain GUIDs, `UNIT_LOOT` last) and in an instance (`/stdtest
 /// engine record combat` in Ragefire Chasm: GUIDs secret, `UNIT_LOOT`

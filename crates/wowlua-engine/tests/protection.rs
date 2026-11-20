@@ -293,3 +293,23 @@ return before, tostring(f:GetPropagateKeyboardInput()), tostring(f:IsKeyboardEna
         ]
     );
 }
+
+/// `C_AuctionHouse.PlaceBid` from addon code is refused unless the player
+/// is acting: in a button's click it goes on (issue #264, decision T660).
+#[test]
+fn a_bid_needs_the_players_action() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "C_AuctionHouse.PlaceBid(7, 500)
+local direct = #mock.refusals()
+local b = CreateFrame('Button', nil, UIParent)
+b:SetSize(40, 20)
+b:SetPoint('CENTER')
+b:SetScript('OnClick', function() C_AuctionHouse.PlaceBid(7, 500) end)
+mock.click(b)
+local r = mock.refusals()
+return direct, #r, r[1].event, r[1].action",
+    );
+    assert_eq!(r, ["1", "1", "ADDON_ACTION_BLOCKED", "PlaceBid()"]);
+}

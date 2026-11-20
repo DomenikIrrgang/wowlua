@@ -227,3 +227,34 @@ return table.concat(out, ' | ')",
         ["leave true false | nil | child leave true | stop true | stop false"]
     );
 }
+
+/// `mock.click` clicks the frame on top under the pointer that takes the
+/// mouse, as the client does: an overlay left over a button takes the
+/// click; with it hidden, the button has it (issue #277, decision T657).
+#[test]
+fn a_click_goes_to_the_frame_on_top() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local hits = {}
+local under = CreateFrame('Button', nil, UIParent)
+under:SetSize(100, 40)
+under:SetPoint('CENTER')
+under:SetScript('OnClick', function() hits[#hits + 1] = 'under' end)
+local over = CreateFrame('Button', nil, UIParent)
+over:SetFrameStrata('DIALOG')
+over:SetAllPoints(under)
+over:SetScript('OnClick', function() hits[#hits + 1] = 'over' end)
+mock.click(under)
+over:Hide()
+mock.click(under)
+-- a frame that does not take the mouse lets it through
+local plain = CreateFrame('Frame', nil, UIParent)
+plain:SetFrameStrata('DIALOG')
+plain:SetAllPoints(under)
+plain:Show()
+mock.click(under)
+return table.concat(hits, ',')",
+    );
+    assert_eq!(r, ["over,under,under"]);
+}

@@ -177,6 +177,7 @@ LOOT_OPENED	loot
 LOOT_READY	loot
 LOOT_ROLLS_COMPLETE	lootroll
 LOOT_SLOT_CLEARED	loot
+MAIL_FAILED	mail
 MAIL_INBOX_UPDATE	actions2,mail
 MAIL_SEND_INFO_UPDATE	actions2,mail
 MAIL_SEND_SUCCESS	mail
@@ -346,7 +347,7 @@ TRANSMOG_COLLECTION_ITEM_FAVORITE_UPDATE	collected
 TRANSMOG_COLLECTION_UPDATED	collected
 TRANSMOG_SEARCH_UPDATED	login
 TREASURE_PICKER_CACHE_FLUSH	levels
-UI_ERROR_MESSAGE	casting,controls,inventory,merchant,quests,tradeskill
+UI_ERROR_MESSAGE	casting,controls,inventory,mail,merchant,quests,tradeskill
 UI_INFO_MESSAGE	mail,party,quests
 UI_SCALE_CHANGED	lib,login
 UNIT_ABSORB_AMOUNT_CHANGED	units

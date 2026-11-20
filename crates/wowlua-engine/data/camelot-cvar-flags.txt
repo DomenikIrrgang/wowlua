@@ -1,6 +1,9 @@
 # The CVars C_CVar.GetCVarInfo flags on WoW Forever 1.60.1 (70425)
 # (/stdtest engine, probe.cvarFlags): secure (addons may not set them),
-# readOnly, locked (from the user); one per line, the flag then the name.
+# readOnly, locked (from the user), account and character (stored on the
+# server per account, per character); one per line, the flag then the name.
+# (account and character: a real addon's probe on 1.60.1 70888, issue #272,
+# until StdTest records them all.)
 secure	ActionButtonUseKeyDown
 secure	ActionButtonUseKeyHeldSpell
 secure	KioskCanAutoDeleteCharacters
@@ -152,3 +155,17 @@ locked	wardrobeSetsFilters
 locked	wardrobeShowCollected
 locked	wardrobeShowUncollected
 locked	wardrobeSourceFilters
+account	communitiesShowOffline
+account	showInGameNavigation
+account	nameplateShowEnemies
+account	nameplateShowFriendlyNPCs
+account	nameplateShowFriendlyPlayers
+account	lockActionBars
+account	showTargetOfTarget
+account	timeMgrUseLocalTime
+account	timeMgrUseMilitaryTime
+character	miniWorldMap
+character	damageMeterEnabled
+character	cooldownViewerEnabled
+character	showQuestObjectivesInLog
+character	nameplateMaxDistance

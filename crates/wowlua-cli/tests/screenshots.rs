@@ -22,6 +22,10 @@ f:SetPoint('CENTER')
 local t = f:CreateTexture(nil, 'BACKGROUND')
 t:SetAllPoints()
 t:SetColorTexture({r}, 0.5, 0.2, 1)
+-- an empty container beside it, shown: nothing of it is drawn (issue #280)
+local empty = CreateFrame('Frame', nil, f)
+empty:SetSize(300, 20)
+empty:SetPoint('TOPLEFT', f, 'TOPRIGHT', 4, 0)
 "
     )
 }
@@ -75,7 +79,8 @@ fn screenshots_are_written_compared_and_updated() {
     assert!(stored.exists(), "{text}");
     assert!(shots.join("the-box-screen.png").exists());
     let first = fs::read(&stored).unwrap();
-    // The frame's image is its size: 120 by 60 units at the screen's scale.
+    // The frame's image is its size: 120 by 60 units at the screen's scale
+    // (its empty container left out).
     let img = wowlua_render_size(&first);
     assert!(img.0 > 100 && img.1 > 50 && img.0 < 300, "{img:?}");
 

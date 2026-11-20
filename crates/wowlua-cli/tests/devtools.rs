@@ -51,6 +51,17 @@ end
 -- A frame that only runs code: no size, nothing in it.
 export const ticker = CreateFrame("Frame")
 export function poll() end
+-- The addon's own script on it, and what it reads back (#258).
+export function watchShow(fn: () -> ())
+    ticker:SetScript("OnShow", fn)
+end
+export function shownScript(): any
+    return ticker:GetScript("OnShow")
+end
+-- The addon's polling on the frame without a size (a hint's subject).
+export function startPolling()
+    ticker:SetScript("OnUpdate", function() poll() end)
+end
 "#;
 
 fn run(profile: &str, test: &str) {
@@ -74,7 +85,7 @@ fn package(profile: &str, test: &str) -> tempfile::TempDir {
         dir.path().join("tests/devtools.test.wowlua"),
         format!(
             "import test, expect from \"wowlua:test\"\nimport * as mock from \"wowlua:mock\"\n\
-             import hooks, ticker, poll, heavy, side from \"/main\"\n\
+             import hooks, ticker, poll, heavy, side, watchShow, shownScript, startPolling from \"/main\"\n\
              local dev: any = _G.WOWLUA_DEV\nlocal function probe(): any return dev.addons.Probe end\n{test}"
         ),
     )
@@ -209,8 +220,8 @@ fn get_script_gives_the_handler_back() {
 local function identity()
     local shown = 0
     local function onShow() shown += 1 end
-    ticker:SetScript("OnShow", onShow)
-    expect(ticker:GetScript("OnShow") == onShow).toBe(true)
+    watchShow(onShow)
+    expect(shownScript() == onShow).toBe(true)
     ticker:Hide()
     ticker:Show()
     expect(shown).toBe(1)
@@ -220,8 +231,11 @@ local function identity()
         if key:find("OnShow", 1, true) and stat.count > 0 then counted = true end
     end
     expect(counted).toBe(true)
-    ticker:SetScript("OnShow", nil)
-    expect(ticker:GetScript("OnShow")).toBeNil()
+    -- the test file's own script is not the addon's: not monitored (#282)
+    local own = CreateFrame("Frame")
+    local function mine() end
+    own:SetScript("OnShow", mine)
+    expect(own:GetScript("OnShow") == mine).toBe(true)
 end
 "#,
     );
@@ -444,7 +458,7 @@ end
 
 @test
 local function rules()
-    ticker:SetScript("OnUpdate", function() poll() end)
+    startPolling()
     hooks.work = function() mock.spend(4) end
     -- Bursts: the event six times a frame, in ten frames.
     for _ = 1, 10 do

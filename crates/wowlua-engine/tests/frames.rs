@@ -1145,6 +1145,31 @@ return file, size, r == dr and g == dg and 'same color' or 'differs', file2, siz
     assert_eq!(&r[2..4], ["same color", "Fonts\\ARIALN.TTF"]);
 }
 
+/// `SetFontObject` gives a string the font object's color: a color set
+/// before gives way (the game, Forever 1.60.1; issue #278, decision T651).
+#[test]
+fn set_font_object_gives_its_color() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local white = CreateFont('WhiteFont')
+white:SetTextColor(1, 1, 1)
+local gold = CreateFont('GoldFont')
+gold:SetTextColor(1, 0.82, 0)
+local f = CreateFrame('Frame')
+local fs = f:CreateFontString()
+fs:SetFontObject(gold)
+fs:SetTextColor(1, 0, 0)
+local r1, g1 = fs:GetTextColor()
+fs:SetFontObject('WhiteFont')
+local r2, g2, b2 = fs:GetTextColor()
+fs:SetTextColor(0, 1, 0)
+local r3, g3 = fs:GetTextColor()
+return r1 .. ' ' .. g1, r2 .. ' ' .. g2 .. ' ' .. b2, r3 .. ' ' .. g3",
+    );
+    assert_eq!(r, ["1 0", "1 1 1", "0 1"]);
+}
+
 /// A message frame's messages are drawn inside it, newest at the bottom
 /// (spec debugger §18.9); a portrait the client would render is drawn as
 /// the unit's race portrait.

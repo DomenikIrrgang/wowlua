@@ -162,6 +162,7 @@ type FrameEvent = string
 type CVar = string
 type colorRGB = ColorMixin
 type colorRGBA = ColorMixin
+type ColorWithAlpha = { a: number } & ColorMixin
 
 declare interface TextureInfoTable
     width: number
@@ -12333,7 +12334,7 @@ declare class ColorMixin
     g: number
     b: number
     colorStr?: string
-    a: number
+    a?: number
     function IsEqualTo(otherColor: colorRGBA): boolean
     function GetRGB(): (number, number, number)
     function GetRGBAsBytes(): (number, number, number)
@@ -13078,6 +13079,7 @@ declare function getglobal(varr: string): unknown
 ---
 --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_setglobal)
 declare function setglobal(varr: string, value: unknown)
+declare function CreateColor(r: number, g: number, b: number, a: number): ColorWithAlpha
 declare function CreateColor(r: number, g: number, b: number, a: number?): colorRGBA
 declare function WrapTextInColorCode(text: string, colorHexString: string): string
 declare function CreateColorFromHexString(hexColor: string): colorRGBA
@@ -23558,9 +23560,6 @@ declare global TexelSnappingVisualizerMixin: TexelSnappingVisualizerMixin
 declare global TextureInfoGeneratorMixin: TextureInfoGeneratorMixin
 declare global GMError: (...: unknown) -> ()
 declare global OnExcessiveErrors: () -> ()
-declare global UnitAura: (unitToken: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?) -> (string?, number?, number?, string?, number?, number?, string?, boolean?, boolean?, number?, boolean?, boolean?, boolean?, boolean?, number?, ...unknown)
-declare global UnitBuff: (unitToken: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?) -> (string?, number?, number?, string?, number?, number?, string?, boolean?, boolean?, number?, boolean?, boolean?, boolean?, boolean?, number?, ...unknown)
-declare global UnitDebuff: (unitToken: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?) -> (string?, number?, number?, string?, number?, number?, string?, boolean?, boolean?, number?, boolean?, boolean?, boolean?, boolean?, number?, ...unknown)
 declare global GetActionAutocast: (actionID: number) -> (boolean, boolean)
 declare global GetActionText: (actionID: number) -> string?
 declare global GetActionTexture: (actionID: number) -> number

@@ -159,10 +159,27 @@ return c.a, C_CurveUtil.EvaluateColorValueFromBoolean(true, 0.25, 1)",
     assert_eq!(r, ["0.501960813999176", "0.25"]);
     let r = secure(
         &mut vm,
-        "local c = C_CurveUtil.EvaluateColorFromBoolean(secretwrap(true), { r = 1, g = 1, b = 1 }, { r = 0, g = 0, b = 0 })
+        "local c = C_CurveUtil.EvaluateColorFromBoolean(secretwrap(true), { r = 1, g = 1, b = 1, a = 1 }, { r = 0, g = 0, b = 0, a = 1 })
 return c.r, C_CurveUtil.EvaluateColorValueFromBoolean(secretwrap(false), 0.25, 1)",
     );
     assert_eq!(r, ["secret:1", "secret:1"]);
+    // A color without alpha is refused, the one not chosen too (decision
+    // T655).
+    let r = run(
+        &mut vm,
+        "local rgba, rgb = { r = 1, g = 0, b = 0, a = 1 }, { r = 0, g = 1, b = 0 }
+local ok3, e3 = pcall(C_CurveUtil.EvaluateColorFromBoolean, true, rgba, rgb)
+local ok2, e2 = pcall(C_CurveUtil.EvaluateColorFromBoolean, false, rgb, rgba)
+return tostring(ok3), e3, tostring(ok2), e2",
+    );
+    assert_eq!(r[0], "false");
+    assert!(
+        r[1].contains("bad argument #3 to ")
+            && r[1].contains("(Usage: local value = C_CurveUtil.EvaluateColorFromBoolean(boolean, valueIfTrue, valueIfFalse))"),
+        "{r:?}"
+    );
+    assert_eq!(r[2], "false");
+    assert!(r[3].contains("bad argument #2"), "{r:?}");
 }
 
 /// SuuUI's aura duration format: whole seconds under a minute, m:ss under

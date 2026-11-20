@@ -3781,3 +3781,49 @@ Out of combat, each line in the chat, one at a time.
    ```
    /run P1:Hide() P2:Hide() P3:Hide() P4:Hide()
    ```
+
+## Colors without alpha (decision T655, 2026-11-20)
+
+Found in game (issues #255, #256): `C_CurveUtil.EvaluateColorFromBoolean`
+refuses a color without alpha (`C_ClassColor.GetClassColor`'s has none),
+as either color. wowlua now requires the alpha there only. These steps
+check the client's other functions documented as taking a `colorRGBA`, so
+wowlua can type and refuse them as the game does. Each line prints `true`
+where the call took the class color, `false` and the error where it
+refused it.
+
+Out of combat, each line in the chat, one at a time.
+
+1. A texture's gradient (the class color as the second color):
+
+   ```
+   /run CC=C_ClassColor.GetClassColor("WARRIOR") T=UIParent:CreateTexture() print("cc a",CC.a,"grad",pcall(T.SetGradient,T,"HORIZONTAL",CC,CreateColor(1,1,1,1)))
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+2. A texture's color from a boolean (the class color not chosen):
+
+   ```
+   /run print("vcb",pcall(T.SetVertexColorFromBoolean,T,true,CreateColor(1,1,1,1),CC))
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+3. A color curve's point:
+
+   ```
+   /run local c=C_CurveUtil.CreateColorCurve() print("curve",pcall(c.AddPoint,c,0,CC))
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+4. A vertex color animation's start and end colors:
+
+   ```
+   /run local g=UIParent:CreateAnimationGroup() local a=g:CreateAnimation("VertexColor") print("anim",pcall(a.SetStartColor,a,CC),pcall(a.SetEndColor,a,CC))
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+Take one screenshot of the four lines.
