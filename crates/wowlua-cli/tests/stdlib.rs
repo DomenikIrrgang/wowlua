@@ -1784,6 +1784,9 @@ fn hooks_edge_cases() {
 hook("StdAdd", function(a: number, b: number) print("added", a, b) end)
 hook("StdAdd", function() error("hook failed") end)
 hook(StdObject, "Get", function(self: any, k: string) print("got", k) end)
+-- Not isolated: installed as it is (issue #268).
+local raw = function(self: any, k: string) print("raw", k) end
+hook(StdObject, "Get", raw, { isolate = false })
 hookScript(PlayerFrame, "OnHide", function(frame: any) print("hidden") end)
 
 -- A missing target is an error where the hook is installed.
@@ -1815,6 +1818,7 @@ Mock.loadAddon("Blizzard_Never")
             "added 1 2",
             "result 3 sum",
             "got k",
+            "raw k",
             "get k!",
             "hidden",
             "other shown",
@@ -6763,9 +6767,10 @@ print("flashes", Mock.flashes)
     );
 }
 
-/// `wowlua:chat` and `unit.invite` call the game's chat code and group
-/// invite, the older globals where a client has those, nothing where it
-/// has neither (decision S44).
+/// `wowlua:chat` aims the chat line (its edit box's attributes, the open
+/// one's header) and opens none but `open`; `unit.invite` calls the game's
+/// group invite; the older globals where a client has those, nothing where
+/// it has neither (decisions S44, S68).
 #[test]
 fn chat_line_and_invites() {
     let out = modes(
@@ -6778,25 +6783,29 @@ fn chat_line_and_invites() {
 local C, U = StdChat.chat, StdChat.unit
 local seen = {}
 local function note(what) return function(...) seen[#seen + 1] = what .. select("#", ...) .. ":" .. tostring((...)) end end
-ChatFrameUtil, ChatFrame_SendTell, ChatFrame_OpenChat, ChatEdit_InsertLink = nil, nil, nil, nil
-C.whisper("Ann")
+ChatFrameUtil, ChatEdit_ChooseBoxForSend, ChatEdit_GetActiveWindow, ChatFrame_OpenChat, ChatEdit_InsertLink = nil, nil, nil, nil, nil
+print(C.whisper("Ann"), C.insertLink("[x]"))
 C.open("hi")
-C.insertLink("[x]")
 print(#seen)
-ChatFrame_SendTell, ChatFrame_OpenChat = note("oldTell"), note("oldOpen")
+local old = CreateFrame("EditBox")
+ChatEdit_ChooseBoxForSend = function() return old end
+ChatEdit_GetActiveWindow = function() return nil end
+ChatFrame_OpenChat = note("oldOpen")
 ChatEdit_InsertLink = function(link) seen[#seen + 1] = "oldInsert:" .. link return false end
-C.whisper("Ann")
-C.insertLink("[x]")
+print(C.whisper("Ann"), old:GetAttribute("chatType"), old:GetAttribute("tellTarget"), C.insertLink("[x]"))
+local box = CreateFrame("EditBox")
+box.UpdateHeader = function(self) seen[#seen + 1] = "header:" .. tostring(self == box) end
 local filters = {}
-ChatFrameUtil = { SendTell = note("tell"), OpenChat = note("open"), InsertLink = function(link) seen[#seen + 1] = "insert:" .. link return true end,
-    SendBNetTell = note("bntell"),
+ChatFrameUtil = { ChooseBoxForSend = function() return box end, GetActiveWindow = function() return box end,
+    OpenChat = note("open"), InsertLink = function(link) seen[#seen + 1] = "insert:" .. link return true end,
+    GetCharacterWhisperTargetIfTitleFriend = function(name) if name == "K2" then return "Kara" end end,
     AddMessageEventFilter = function(event, f) filters[event] = f end,
     RemoveMessageEventFilter = function(event, f) if filters[event] == f then filters[event] = nil end end }
-C.whisper("Bob")
-C.whisper("Bob", CreateFrame("Frame"))
+print(C.whisper("Bob"), box:GetAttribute("chatType"), box:GetAttribute("tellTarget"))
 C.open("hi")
-C.insertLink("[y]")
-C.whisperBnet("K1")
+print(C.insertLink("[y]"))
+print(C.whisperBnet("K1"), box:GetAttribute("chatType"), box:GetAttribute("tellTarget"))
+print(C.whisperBnet("K2"), box:GetAttribute("chatType"), box:GetAttribute("tellTarget"))
 local real = C_PartyInfo.InviteUnit
 C_PartyInfo.InviteUnit = note("invite")
 U.invite("Cara")
@@ -6825,8 +6834,14 @@ print(filters.CHAT_MSG_SYSTEM == nil, f(nil, "CHAT_MSG_SYSTEM", "hide", 1))
     assert_eq!(
         plain(&out),
         [
+            "false false",
             "0",
-            "oldTell1:Ann oldInsert:[x] oldOpen1:[x] tell1:Bob tell2:Bob open1:hi insert:[y] bntell1:K1 invite1:Cara oldInvite1:Dan bninvite1:77 oldBn1:78",
+            "false WHISPER Ann false",
+            "true WHISPER Bob",
+            "true",
+            "true BN_WHISPER K1",
+            "true WHISPER Kara",
+            "oldInsert:[x] header:true open1:hi insert:[y] header:true header:true invite1:Cara oldInvite1:Dan bninvite1:77 oldBn1:78",
             "true false",
             "false",
             "true false",

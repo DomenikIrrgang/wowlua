@@ -217,6 +217,12 @@ its parameter types from the target. `{ owner = … }` in the options is handed
 to error listeners when the hook fails (see
 [`wowlua:errors`](utils.md#when-something-goes-wrong)).
 
+A hook runs isolated: if it fails, the error is reported and the hooked call
+goes on. That costs a little per call. For a hook on something the game
+calls hundreds of times a frame (a nameplate's `SetVertexColor`, say) and
+that can't fail, `{ isolate = false }` installs your function as it is.
+Its errors then go to the game's error handler, not to `onError`.
+
 > [!WARNING]
 > Hooks run after the original and can't be removed, as in the game itself.
 > There are deliberately no pre-hooks and no replacements: replacing

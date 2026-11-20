@@ -22,21 +22,72 @@ local function call(fn: unknown, text: string, frame: Frame?): unknown
     return try(fn, text)
 end
 
---- Opens the chat line to whisper `name` (in `frame`, default the one the
---- game picks), as the game's own "Whisper" in a menu does.
-export function whisper(name: string, frame: Frame?)
-    call(game("SendTell", "ChatFrame_SendTell"), name, frame)
+-- The chat line the player's Enter would open (`ChooseBoxForSend`: it only
+-- reads).
+local function boxFor(frame: Frame?): EditBox?
+    local choose = game("ChooseBoxForSend", "ChatEdit_ChooseBoxForSend")
+    if choose == nil then
+        return nil
+    end
+    local box: unknown
+    if frame then
+        box = try(choose, frame)
+    else
+        box = try(choose)
+    end
+    return asEditBox(box)
 end
 
---- Opens the chat line to whisper a Battle.net friend by their account
+-- Aims the chat line at `chatType` to `target`, as the game's own reply
+-- (`ReplyTell`) does: the edit box's attributes, which the game reads with
+-- `GetAttribute`, so no addon taint reaches its state. An open line's
+-- header follows; a closed one is the player's to open (Enter). Opening it
+-- from addon code (`SendTell`, `OpenChat`) would write the chat's globals
+-- as the addon's, and on WoW Forever every line the player then sends in
+-- a fight is blocked (decision S68).
+local function aim(chatType: string, target: string, frame: Frame?): boolean
+    local box = boxFor(frame)
+    if box == nil then
+        return false
+    end
+    box:SetAttribute("chatType", chatType)
+    box:SetAttribute("tellTarget", target)
+    local active = try(game("GetActiveWindow", "ChatEdit_GetActiveWindow"))
+    local open = active ~= nil and active == box
+    if open then
+        local update = tbl.field(box, "UpdateHeader") or tbl.field(_G, "ChatEdit_UpdateHeader")
+        try(update, box)
+    end
+    return open
+end
+
+--- Aims the chat line at a whisper to `name` (in `frame`'s line, default
+--- the one the game picks): the player's next Enter opens it there. True
+--- when the line is open already (its header now says the whisper).
+--- Nothing taints the game's chat (decision S68); a line opened from an
+--- addon's code would block the player's chat in combat on WoW Forever.
+export function whisper(name: string, frame: Frame?): boolean
+    return aim("WHISPER", name, frame)
+end
+
+--- Aims the chat line at a whisper to a Battle.net friend by their account
 --- name as the game gives it (protected text only the game can draw), as
---- the friends list's "Whisper" does (`SendBNetTell`).
-export function whisperBnet(accountName: string, frame: Frame?)
-    call(game("SendBNetTell", "ChatFrame_SendBNetTell"), accountName, frame)
+--- the friends list's "Whisper" does; a friend whose title has a character
+--- to whisper, that character (`SendBNetTell`). True when the line is open
+--- already. As `whisper`, it opens nothing.
+export function whisperBnet(accountName: string, frame: Frame?): boolean
+    local character = try(tbl.field(_G, "ChatFrameUtil", "GetCharacterWhisperTargetIfTitleFriend"), accountName)
+    if type(character) == "string" then
+        return aim("WHISPER", character, frame)
+    end
+    return aim("BN_WHISPER", accountName, frame)
 end
 
 --- Opens the chat line with `text` written in it (in `frame`, default the
---- one the game picks).
+--- one the game picks). It writes the game's chat state as your addon's:
+--- call it only from the player's own click or key, never from a timer or
+--- an event, or the player's chat may be blocked in combat on WoW Forever
+--- (decision S68).
 export function open(text: string, frame: Frame?)
     call(game("OpenChat", "ChatFrame_OpenChat"), text, frame)
 end
@@ -116,12 +167,11 @@ export function sendToGroup(text: string): boolean
     return true
 end
 
---- Puts `link` into the chat line being typed, as a shift-click does; with
---- none open, opens one with it.
-export function insertLink(link: string)
-    if not secret.flag(try(game("InsertLink", "ChatEdit_InsertLink"), link)) then
-        open(link)
-    end
+--- Puts `link` into the chat line being typed, as a shift-click does; true
+--- if a line took it. With none open it opens none (that would taint the
+--- game's chat, decision S68): false.
+export function insertLink(link: string): boolean
+    return secret.flag(try(game("InsertLink", "ChatEdit_InsertLink"), link))
 end
 
 --- Hides the chat lines of `event` (`"CHAT_MSG_SYSTEM"`, …) for which `fn`

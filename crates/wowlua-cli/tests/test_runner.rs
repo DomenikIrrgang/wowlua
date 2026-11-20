@@ -3989,6 +3989,38 @@ end
     );
 }
 
+/// `wowlua:chat`'s whisper with Blizzard's chat: the line aimed, the game's
+/// chat state left secure (on WoW Forever a tainted one blocks the
+/// player's chat in combat), the player's Enter opening the whisper
+/// (issue #261, decision S68).
+#[test]
+fn blizzard_ui_chat_whisper_aims() {
+    blizzard_ui_test(
+        "tests/chat.test.wowlua",
+        r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import * as chat from "wowlua:chat"
+
+@test("whisper aims the line and taints nothing")
+local function aims()
+    local G: any = _G
+    expect(chat.whisper("Someone")).toBe(false)
+    expect((issecurevariable("LAST_ACTIVE_CHAT_EDIT_BOX"))).toBe(true)
+    expect((issecurevariable("ACTIVE_CHAT_EDIT_BOX"))).toBe(true)
+    expect(chat.insertLink("[x]")).toBe(false)
+    mock.pressKey("ENTER")
+    local box = G.ChatFrame1EditBox
+    expect(box:HasFocus()).toBe(true)
+    expect(box:GetAttribute("chatType")).toBe("WHISPER")
+    expect(box:GetAttribute("tellTarget")).toBe("Someone")
+    expect(chat.whisper("Other")).toBe(true)
+    expect(box:GetAttribute("tellTarget")).toBe("Other")
+end
+"#,
+        "1 passed, 0 failed",
+    );
+}
+
 /// Every panel's key binding with Blizzard's UI, opened and closed, as the
 /// fresh character (the default) and as the recorded one (its profile):
 /// not a single Blizzard error, nothing refused.

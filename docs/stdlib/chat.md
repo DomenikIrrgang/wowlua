@@ -159,21 +159,21 @@ work in the player's own chat windows.
 
 ## The chat line and chat windows
 
-`wowlua:chat` opens the line the player types in, through the game's own
-chat code, the way its own buttons do.
+`wowlua:chat` works with the line the player types in, through the game's
+own chat code.
 
 ```wowlua title=src/roster.wowlua
 import * as chat from "wowlua:chat"
 
 export function whisperTo(name: string)
-    chat.whisper(name)                       -- "/w Name " ready to type
+    if not chat.whisper(name) then           -- the next Enter whispers Name
+        print("Press Enter to whisper " .. name)
+    end
 end
 
 export function shareLink(link: string)
     chat.insertLink(link)                    -- as a shift-click does
 end
-
-chat.open("/roll 100")                       -- the chat line with text in it
 
 -- hide lines: return true to drop one
 local filter = chat.filter("CHAT_MSG_CHANNEL", function(text: unknown)
@@ -185,9 +185,20 @@ export function showTradeAgain()
 end
 ```
 
-`insertLink` opens a chat line when none is open. `whisperBnet` opens a
-whisper to a Battle.net friend by the account name the game gives you. A
-filter that raises an error is reported, and the line is shown.
+`whisper` and `whisperBnet` aim the chat line rather than open it: the
+player's next Enter opens it as a whisper, and a line that is open already
+switches to it (they return `true` then). `whisperBnet` takes a Battle.net
+friend's account name as the game gives it to you. `insertLink` puts a
+link into an open line and returns `false` when none is open.
+
+> [!WARNING]
+> Opening the chat line from your addon's code makes the game's chat state
+> your addon's. On WoW Forever every line the player then sends in a fight
+> is blocked until `/reload`. That is why `whisper` only aims the line.
+> `chat.open(text)` does open it: call it only from the player's own click
+> or key press, never from a timer or an event.
+
+A filter that raises an error is reported, and the line is shown.
 
 Chat addons that restyle or mirror the chat windows can find them:
 

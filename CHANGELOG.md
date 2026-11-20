@@ -6,6 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- `wowlua:hooks`: `hook(target, name, fn, { isolate = false })` (and `hookScript`) installs a hook as it is, for hot paths that can't fail. Isolated hooks are cheaper too: the isolation is set up once, not per call.
 - Bag families in tests: `mock.defineItem(id, { family = 1 })` gives an item its family (`C_Item.GetItemFamily`), `mock.setBag(bag, { family = 1 })` makes a special bag (a quiver, a soul bag) that `GetContainerNumFreeSlots` reports and that takes only items of its family, first.
 - E1006 (W1006 in basic mode): a function that uses a file-level `local` declared further down the file is reported when a global of that name exists. The function can't see the local yet, so it read the game's global instead, silently (`GLYPHS` is the client's string "Glyphs"). Move the local above the function, or write `_G.GLYPHS` to mean the global. When no such global exists, E1001 now says the local is declared further down.
 - An addon can extend a class of an addon it depends on: give the class `@global("Name")` and write `class Plugin extends Name`.
@@ -13,6 +14,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- `wowlua:chat`: `whisper` and `whisperBnet` no longer open the chat line from your code. They aim it: the player's next Enter opens the whisper, and an open line switches to it; they return `true` when the line is open. Opening it from an addon made the game's chat state the addon's, and on WoW Forever every message the player sent in a fight was blocked until `/reload`. `insertLink` returns whether a line took the link and no longer opens one. `chat.open` is documented as safe only from the player's own click or key.
 - `mock.click(frame)` clicks what a player's click on the frame's middle would: the frame on top there that takes the mouse. A frame left over a button (an overlay, a dim, a click catcher) now takes the click in tests too, as in the game. When nothing there takes the mouse, the frame you name is clicked as before.
 
 ### Fixed

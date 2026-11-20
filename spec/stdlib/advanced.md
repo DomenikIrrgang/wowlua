@@ -123,7 +123,7 @@ overload function hook(name: string): HookDecorator
 overload function hook(target: unknown, name: string, opts: Options?): HookDecorator
 overload function hookScript(frame: ScriptRegion | string, script: string, fn: function, opts: Options?)
 overload function hookScript(frame: ScriptRegion | string, script: string, opts: Options?): HookDecorator
-type Options = { addon?: string, owner?: unknown }
+type Options = { addon?: string, owner?: unknown, isolate?: boolean }
 type HookDecorator = (fn: function, ctx: DecoratorContext?) -> ()
 ```
 
@@ -142,6 +142,12 @@ naming it, when it has no such function.
   load-on-demand addon without `opts.addon` is warning W8102.
 - **Owner.** `opts.owner` is passed to error listeners when the hook fails
   (`ErrorInfo.owner`, [`wowlua:errors`](infrastructure.md#errors)).
+- **Isolation.** A hook runs isolated: its error is reported and the caller
+  goes on. The isolated function is made once, setting the error context and
+  calling `xpcall` itself (no closure or table per call). `opts.isolate =
+  false` installs the function as it is, for a hook that runs very often
+  and cannot fail: an error in it reaches the game's error handler, not
+  `onError` (decision S69).
 - **Signatures.** The hook's parameters are checked against the hooked
   function's declared signature, with the receiver first for method hooks.
   A function written in a `hook(…)` or `hookScript(…)` call takes its
