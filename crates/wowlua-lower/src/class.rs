@@ -848,6 +848,39 @@ impl<'a> Lowerer<'a> {
         self.func_depth -= 1;
     }
 
+    /// A constructor's name and marks, which `class_decl` set for it (as
+    /// `func_shape` takes a function's), and whether it checks its
+    /// arguments (spec §7.5): a function in its body has its own.
+    fn ctor_marks(&mut self, f: Func<'a>) -> (bool, crate::instrument::FnMarks) {
+        let name = self.next_fn_name.take();
+        let mut marks = std::mem::take(&mut self.next_fn_marks);
+        marks.label = name.clone();
+        let checks = self.checks_function(&marks);
+        if marks.reflect && self.ctx.tools.reflection > 0 {
+            let label = name.clone().unwrap_or_else(|| "?".into());
+            marks.reflect_meta = Some(self.function_meta(&FnShape::of(f), &label));
+        }
+        self.fn_names.push(name);
+        (checks, marks)
+    }
+
+    /// A constructor's first statements: default values, then the entry
+    /// checks (its parameters are declared).
+    fn ctor_entry(
+        &mut self,
+        f: Func<'a>,
+        checks: bool,
+        marks: &crate::instrument::FnMarks,
+    ) -> Vec<ir::Stmt> {
+        let shape = FnShape::of(f);
+        let mut stmts = self.default_params(&shape);
+        if checks {
+            let label = marks.label.clone().unwrap_or_else(|| "?".into());
+            stmts.extend(self.entry_checks(&shape, &label));
+        }
+        stmts
+    }
+
     /// The constructor of a class: `function C:__init(…)`; field
     /// initializers run first (base class) or right after `super(…)`.
     fn ctor(
@@ -858,12 +891,13 @@ impl<'a> Lowerer<'a> {
         inits: &[ClassMember<'a>],
         pos: Pos,
     ) -> ir::Stmt {
+        let (checks, marks) = self.ctor_marks(f);
         let saved = self.enter_function();
         self.declare("self", Binding::Local);
         for p in &f.params() {
             self.declare(p.name().text(), Binding::Local);
         }
-        let mut stmts = self.default_params(&FnShape::of(f));
+        let mut stmts = self.ctor_entry(f, checks, &marks);
         if base.is_none() {
             stmts.extend(self.param_property_stmts(f, pos));
             stmts.extend(self.field_init_stmts(inits, pos));
@@ -901,6 +935,8 @@ impl<'a> Lowerer<'a> {
             },
         };
         self.leave_function(saved);
+        self.fn_names.pop();
+        self.fn_marks.insert(func.pos, marks);
         stmt(
             ir::StmtKind::Function {
                 path: vec![ident(name, pos)],
@@ -954,12 +990,13 @@ impl<'a> Lowerer<'a> {
         own_inits: bool,
         pos: Pos,
     ) -> ir::Stmt {
+        let (checks, marks) = self.ctor_marks(f);
         let saved = self.enter_function();
         for p in &f.params() {
             self.declare(p.name().text(), Binding::Local);
         }
         let saved_ctor = self.widget_ctor.replace(self.func_depth);
-        let mut stmts = self.default_params(&FnShape::of(f));
+        let mut stmts = self.ctor_entry(f, checks, &marks);
         let mut ends_with_return = false;
         for s in &f.body().stmts() {
             ends_with_return = matches!(s.kind(), StmtKind::Return(_));
@@ -1004,6 +1041,8 @@ impl<'a> Lowerer<'a> {
             body: ir::Block { stmts, end },
         };
         self.leave_function(saved);
+        self.fn_names.pop();
+        self.fn_marks.insert(func.pos, marks);
         stmt(
             ir::StmtKind::Function {
                 path: vec![ident(name, pos), ident("__ctor", pos)],

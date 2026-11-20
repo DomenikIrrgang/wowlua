@@ -1,5 +1,5 @@
 //! A disabled button's clicks (decision T616), the trainer's choice and
-//! `TRAINER_DESCRIPTION_UPDATE` (decision T617), a hunter's Beast Training
+//! no `TRAINER_DESCRIPTION_UPDATE` (decisions T617, T650), a hunter's Beast Training
 //! (decision T618): what the engine does without Blizzard's UI.
 
 use wowlua_vm::{Value, Vm};
@@ -97,11 +97,12 @@ fn open(data: &str) -> String {
     OPEN.replace("DATA", data)
 }
 
-/// The first available service is chosen as the list comes; a change of
-/// the choice sends `TRAINER_DESCRIPTION_UPDATE` at once, the same one
-/// again nothing; an index past the list none.
+/// The first available service is chosen as the list comes;
+/// `SelectTrainerService` changes the choice and sends no
+/// `TRAINER_DESCRIPTION_UPDATE` (decision T650); an index past the list
+/// none.
 #[test]
-fn a_change_of_the_trainers_choice_is_told() {
+fn a_change_of_the_trainers_choice_is_not_told() {
     let mut vm = vm();
     let src = format!(
         "mock.setPlayer({{ level = 10 }})
@@ -128,7 +129,7 @@ return first, same, during, table.concat(told, ','), tostring(GetTrainerSelectio
         )
     );
     let r = run(&mut vm, &src);
-    assert_eq!(r, ["2", "0", "3", "3,nil", "nil"]);
+    assert_eq!(r, ["2", "0", "", "", "nil"]);
 }
 
 /// Beast Training, the hunter's spell: cast with a pet out, it opens the

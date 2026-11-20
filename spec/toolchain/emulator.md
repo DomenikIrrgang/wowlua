@@ -141,7 +141,9 @@ The client's security model, in the VM:
   - Protected methods (the documentation's `IsProtectedFunction`: `Show`,
     `Hide`, `SetPoint`, `SetSize`, `SetParent`, …) and `SetAttribute` of a
     protected frame, in combat lockdown: `ADDON_ACTION_BLOCKED`, after the
-    method's own argument checks (`/stdtest engine blocked`). A frame is
+    method's own argument checks (`/stdtest engine blocked`).
+    `SetPropagateKeyboardInput` is blocked in combat lockdown on any frame,
+    protected or not (decision T647). A frame is
     protected through a secure template (`Secure…Template`; `IsProtected`
     then gives `true, true`) or `mock.protect`, and through a protected
     frame it holds, however deep (`true, false`; decision T254): such a
@@ -618,11 +620,9 @@ The WoW API the VM's code calls, per flavor.
   gossip lists its services; as the list comes its first available
   service is chosen (`GetTrainerSelectionIndex`), with no event.
   `SelectTrainerService(i)` chooses the listed service `i`, any other
-  index none, and a change of the choice sends
-  `TRAINER_DESCRIPTION_UPDATE()` at once, in which Blizzard's trainer
-  frame takes it up; the same choice again sends nothing (decision T617;
-  unverified: at once rather than with the server's answer, the choice
-  with none available).
+  index none, and sends no event: Blizzard's trainer frame keeps the row
+  it chose, and its Train button follows that row (decisions T617, T650;
+  unverified: a class trainer's, the choice with none available).
 - **Beast Training.** In WoW Forever a hunter's Beast Training is a
   spell, not an NPC (reported by the user, 2026-11-10): the player's cast
   of it (5149; inferred, of the client's two spells of that name) with a

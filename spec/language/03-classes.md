@@ -88,7 +88,10 @@ Construction order:
 
 A class without a constructor gets an implicit one. For a base class it takes
 no parameters. For a derived class it forwards all arguments to the
-superclass constructor and has the superclass constructor's parameter types.
+superclass constructor and has the superclass constructor's parameter types,
+with the type arguments `extends` gives the superclass: for `class Sub<T>
+extends Box<T>`, `Sub.new(5)` is a `Sub<number>`, and for `class Nums extends
+Box<number>`, `Nums.new` takes a number (decision L105).
 
 **Varargs.** A constructor may be variadic (`constructor(...: string)`). Field
 initializers run inside the generated `__init` but are not part of the
@@ -171,6 +174,15 @@ end
 - Single inheritance. A class extends at most one class (E3008 for non-class
   values, and for a class only `import type` brings: a type, with nothing to
   extend at run time, decision L69).
+- `extends` reads its name as a value: the compiled class extends whatever
+  the name is at run time. So the name must be a class there (decision
+  L104). It may be the class's own name, an import of it, `ns.Name` through
+  `import * as ns`, a file-level `local` or `const` set to one of those
+  (`export const Base = base.Base` re-exports a class, and importers extend
+  it by name or through a namespace), or the global a class's `@global`
+  makes (an addon extends a class of an addon it depends on that way). A
+  type alias of a class names no value: extending it is E3008, also as
+  `ns.Alias`, unless a value of the same name is that class.
 - In a derived class's constructor, `super(args)` calls the superclass
   constructor. It must be called exactly once, as a top-level statement of the
   constructor body, before any access to `self` (E3001), its own arguments

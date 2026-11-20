@@ -128,3 +128,33 @@ return held, C.GetContainerItemInfo(1, 2).stackCount, C.GetContainerItemInfo(1, 
     );
     assert_eq!(r, ["nil", "20", "2"]);
 }
+
+/// Bag families: an item's (`defineItem`'s `family`) and a special bag's
+/// (`setBag`'s): the bag answers its family with its free slots, takes
+/// only items of its family, and takes them first (issue #269, decision
+/// T662).
+#[test]
+fn special_bags_take_their_family() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "mock.defineItem(2512, { name = 'Rough Arrow', family = 1, stackCount = 200 })
+mock.defineItem(2589, { name = 'Linen Cloth', stackCount = 20 })
+mock.setBag(0, { slots = 2 })
+mock.setBag(1, { slots = 2, family = 1 })
+local _, quiver = C_Container.GetContainerNumFreeSlots(1)
+local _, backpack = C_Container.GetContainerNumFreeSlots(0)
+return C_Item.GetItemFamily(2512), C_Item.GetItemFamily(2589), quiver, backpack",
+    );
+    assert_eq!(r, ["1", "0", "1", "0"]);
+    for (id, count) in [(2512, 50.0), (2589, 1.0), (2589, 20.0), (2589, 20.0)] {
+        wowlua_engine::character::add_to_bags(&mut vm, id, count);
+    }
+    let r = run(
+        &mut vm,
+        "return C_Container.GetContainerItemID(1, 1), tostring((C_Container.GetContainerItemID(1, 2))),
+    C_Container.GetContainerItemID(0, 1), C_Container.GetContainerItemID(0, 2)",
+    );
+    // (the third cloth found no room: the quiver takes none)
+    assert_eq!(r, ["2512", "nil", "2589", "2589"]);
+}

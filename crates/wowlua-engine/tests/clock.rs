@@ -213,3 +213,55 @@ fn timer_callbacks_must_be_functions() {
         r[0]
     );
 }
+
+/// A timer that has run its last, or is cancelled, keeps nothing (issue
+/// #267): only what the addon holds stays. A handle kept by the addon still
+/// answers, keeps its fields and can be invoked.
+#[test]
+fn finished_timers_are_let_go() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local function noop() end
+collectgarbage('collect')
+local base = collectgarbage('count')
+for _ = 1, 10000 do C_Timer.NewTimer(0.05, noop) end
+for _ = 1, 10000 do C_Timer.After(0.05, noop) end
+for _ = 1, 10000 do C_Timer.NewTimer(5, noop):Cancel() end
+mock.advanceFrames(10)
+mock.advanceTime(6)
+collectgarbage('collect')
+local grown = collectgarbage('count') - base
+local runs = 0
+local kept = C_Timer.NewTimer(1, function(self) runs = runs + 1 self.seen = (self.seen or 0) + 1 end)
+kept.note = 'mine'
+mock.advanceTime(2)
+collectgarbage('collect')
+kept:Invoke()
+return tostring(grown < 100), runs, kept.note, kept.seen, tostring(kept:IsCancelled())",
+    );
+    assert_eq!(r, ["true", "2", "mine", "2", "false"]);
+}
+
+/// A timer set without a delay in a timer's callback runs a frame later:
+/// within the same `advanceTime` when it has the time (issue #270,
+/// decision T659); one that sets itself again moves time on.
+#[test]
+fn a_zero_delay_timer_in_a_timer_runs_a_frame_later() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local ran = {}
+C_Timer.After(0.1, function()
+    ran[#ran + 1] = 'outer@' .. GetTime()
+    C_Timer.After(0, function() ran[#ran + 1] = 'inner' end)
+end)
+mock.advanceTime(1)
+local polls = 0
+local function poll() polls = polls + 1 if polls < 5 then C_Timer.After(0, poll) end end
+C_Timer.After(0, poll)
+mock.advanceTime(1)
+return table.concat(ran, ' '), polls, GetTime()",
+    );
+    assert_eq!(r, ["outer@0.1 inner", "5", "2"]);
+}

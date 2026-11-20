@@ -489,6 +489,17 @@ impl Checker<'_, '_> {
         let mut yes = Vec::new();
         let mut no = Vec::new();
         for m in self.env.types.members(t) {
+            // A secret value has its value's `type()`: `type(v) == "number"`
+            // keeps it secret (`Secret<number>`, decision L107).
+            if let Ty::Secret(inner) = self.env.types.get(m).clone() {
+                let (y, n) = self.split_by_type_name(inner, name);
+                for (part, out) in [(y, &mut yes), (n, &mut no)] {
+                    if part != Types::NEVER {
+                        out.push(self.env.types.intern(Ty::Secret(part)));
+                    }
+                }
+                continue;
+            }
             match self.lua_type_of(m) {
                 Some(n) if n == name => yes.push(m),
                 Some(_) => no.push(m),

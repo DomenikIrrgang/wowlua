@@ -83,3 +83,24 @@ return C_ActionBar.HasAction(3), select('#', GetActionInfo(3))",
     );
     assert_eq!(r, ["false", "0"]);
 }
+
+/// A macro left on the question mark answers the icon of the spell it
+/// casts in `GetMacroInfo`; one given an icon keeps it, and the macro
+/// window's choice (`C_Macro.GetSelectedMacroIcon`) stays the question
+/// mark (the game, Forever 1.60.1; issue #273, decision T652).
+#[test]
+fn a_question_mark_macro_shows_its_spells_icon() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "mock.defineSpell(90116, { name = 'Test Bolt', iconID = 135846, known = true })
+CreateMacro('Auto', 134400, '#showtooltip\\n/cast Test Bolt', false)
+CreateMacro('Own', 132337, '/cast Test Bolt', false)
+CreateMacro('None', 134400, '/say hi', false)
+local _, a = GetMacroInfo('Auto')
+local _, o = GetMacroInfo('Own')
+local _, n = GetMacroInfo('None')
+return a, o, n, C_Macro.GetSelectedMacroIcon(GetMacroIndexByName('Auto'))",
+    );
+    assert_eq!(r, ["135846", "132337", "134400", "134400"]);
+}

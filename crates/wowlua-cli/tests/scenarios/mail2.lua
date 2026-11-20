@@ -59,7 +59,7 @@ local function at(t)
     now = t
 end
 local function press(frame, button)
-    local ok, err = pcall(e.click, frame, button)
+    local ok, err = pcall(e.click, frame, button, true)
     if not ok then check("clicked: " .. tostring(err), false) end
 end
 -- The world's own, not modelled: the server's events as recorded.

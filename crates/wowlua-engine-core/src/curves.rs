@@ -439,8 +439,23 @@ pub fn apply(vm: &mut Vm, curve: Value, value: f64) -> Result<Value, LuaError> {
 
 /// `C_CurveUtil.EvaluateColorFromBoolean(boolean, ifTrue, ifFalse)`: a new
 /// color of the chosen one's channels, secret when the boolean is
-/// (unverified: a new color rather than the one passed).
+/// (unverified: a new color rather than the one passed). Both colors need
+/// their alpha: one without (`C_ClassColor.GetClassColor`'s) is refused
+/// with the usage, the one not chosen too (the game, Forever 1.60.1 70938;
+/// issue #256, decision T655; unverified: a color that is not a table).
 fn color_from_boolean(vm: &mut Vm, c: NativeCall) -> Ret {
+    for n in [2, 3] {
+        let has_alpha = match vm.hidden(c.arg(n)) {
+            Value::Table(t) => !field(vm, t, "a").0.is_nil(),
+            _ => false,
+        };
+        if !has_alpha {
+            return Err(vm.api_arg_error(
+                n,
+                "Usage: local value = C_CurveUtil.EvaluateColorFromBoolean(boolean, valueIfTrue, valueIfFalse)",
+            ));
+        }
+    }
     let b = c.arg(1);
     let secret = matches!(b, Value::Secret(_));
     let pick = if vm.hidden(b).truthy() {

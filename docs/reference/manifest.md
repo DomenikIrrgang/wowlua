@@ -521,6 +521,12 @@ The debugging settings, with their built-in values. What each does is in
 | `capture-errors` | bool | `true` | `false` | `false` |
 | `source-maps` | bool | `true` | `true` | `true` |
 
+`monitor` times the handlers your addon sets: its `SetScript`, `HookScript`
+and `C_Timer` calls install a timing wrapper around your function. Your own
+`frame:GetScript(name)` still gives back the function you set, so
+`frame:GetScript("OnShow") == onShow` works as in a release build; other
+addons see the wrapper.
+
 `profile-call-paths` and `profile-garbage` start the dev window with call
 paths or garbage per function switched on, and `frame-budget` and
 `slow-call` are its starting frame budget and slow-call threshold. The

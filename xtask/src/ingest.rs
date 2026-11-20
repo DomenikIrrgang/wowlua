@@ -1593,10 +1593,11 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
     let mut flags = String::from(&format!(
         "# The CVars C_CVar.GetCVarInfo flags on WoW Forever {version}\n\
          # (/stdtest engine, probe.cvarFlags): secure (addons may not set them),\n\
-         # readOnly, locked (from the user); one per line, the flag then the name.\n"
+         # readOnly, locked (from the user), account and character (stored on the\n\
+         # server per account, per character); one per line, the flag then the name.\n"
     ));
     let mut any_flags = false;
-    for kind in ["secure", "readOnly", "locked"] {
+    for kind in ["secure", "readOnly", "locked", "account", "character"] {
         if !probed {
             break;
         }

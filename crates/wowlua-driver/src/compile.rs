@@ -1961,7 +1961,9 @@ pub fn compile_flavor(
                 runtime_checks: profile.runtime_checks as u8,
                 reflection: profile.reflection as u8,
                 reflect_used,
-                monitor: profile.monitor,
+                // (a test file's own scripts and timers are not the
+                // addon's: unmonitored, issue #282)
+                monitor: profile.monitor && crate::sources::TestRole::of(&source.rel).is_none(),
             };
             ctx.value_checks = value_checks_of.remove(file).unwrap_or_default();
             ctx.type_names = type_names_of.remove(file).unwrap_or_default();

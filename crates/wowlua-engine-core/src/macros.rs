@@ -120,13 +120,58 @@ fn get_num_macros(vm: &mut Vm, _c: NativeCall) -> Ret {
     ])
 }
 
-/// `GetMacroInfo(index or name)`: name, icon, body.
+/// `GetMacroInfo(index or name)`: name, icon, body. A macro left on the
+/// question mark (the macro window's "pick automatically") answers the
+/// icon of what it casts now: its spell's, else its item's (the game,
+/// Forever 1.60.1, one probe: the cast spell's; issue #273, decision
+/// T652; unverified: the item's, and a macro that casts nothing).
 fn get_macro_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(at) = find(vm, c.arg(1)) else {
         return Ok(vec![]);
     };
     let m = get(vm, at);
-    Ok(vec![vm.str(&m.name), m.icon, vm.str(&m.body)])
+    let (name, body, mut icon) = (vm.str(&m.name), vm.str(&m.body), m.icon);
+    if is_question_mark(vm, icon)
+        && let Some(shown) = shown_icon(vm, c.arg(1))
+    {
+        icon = shown;
+    }
+    Ok(vec![name, icon, body])
+}
+
+/// The icon a macro was given (by index or name), the question mark
+/// included: the macro window's choice (`C_Macro.GetSelectedMacroIcon`).
+pub fn stored_icon(vm: &mut Vm, id: Value) -> Option<Value> {
+    let at = find(vm, id)?;
+    Some(get(vm, at).icon)
+}
+
+/// The question mark's icon, by file ID or path.
+fn is_question_mark(vm: &Vm, icon: Value) -> bool {
+    match icon {
+        Value::Num(n) => n == 134400.0,
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s))
+            .to_ascii_lowercase()
+            .ends_with("inv_misc_questionmark"),
+        _ => false,
+    }
+}
+
+/// The icon of what the macro casts or uses now.
+fn shown_icon(vm: &mut Vm, id: Value) -> Option<Value> {
+    if let Some(spell) = (crate::hooks::get().macro_spell)(vm, id) {
+        let r = crate::leftovers2::ask(vm, "C_Spell.GetSpellTexture", &[Value::Num(spell)]);
+        if let Some(icon @ Value::Num(_)) = r.first().copied() {
+            return Some(icon);
+        }
+    }
+    let item = crate::leftovers2::ask(vm, "GetMacroItem", &[id]);
+    let link = item.get(1).or(item.first()).copied()?;
+    if link.is_nil() {
+        return None;
+    }
+    let r = crate::leftovers2::ask(vm, "C_Item.GetItemIconByID", &[link]);
+    r.first().copied().filter(|v| matches!(v, Value::Num(_)))
 }
 
 fn get_macro_body(vm: &mut Vm, c: NativeCall) -> Ret {

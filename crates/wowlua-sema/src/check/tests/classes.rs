@@ -186,6 +186,42 @@ fn inherited_constructors_do_not_depend_on_order() {
     );
 }
 
+/// A generic subclass without a constructor takes its base's with the
+/// type arguments `extends` gives (decision L105): `Sub.new(5)` is
+/// `Sub<number>`, and a wrong argument is reported.
+#[test]
+fn inherited_generic_constructors_bind_the_subclass_parameters() {
+    let classes = "class Box<T>\n    value: T\n    constructor(value: T)\n        self.value = value\n    end\nend\nclass Sub<T> extends Box<T>\nend\nclass Nums extends Box<number>\nend\n";
+    let errs = strict_codes(&format!(
+        "{classes}local b = Sub.new(5)\nlocal _b: boolean = b\n"
+    ));
+    assert!(
+        errs.iter()
+            .any(|e| e.starts_with("E2001:") && e.contains("Sub<number>")),
+        "{errs:#?}"
+    );
+    assert!(has(
+        &strict_codes(&format!(
+            "{classes}local b = Sub.new(5)\nlocal _s: string = b.value\n"
+        )),
+        "E2001"
+    ));
+    assert!(has(
+        &strict_codes(&format!(
+            "{classes}local _c: Sub<number> = Sub.new(\"text\")\n"
+        )),
+        "E2001"
+    ));
+    assert!(has(
+        &strict_codes(&format!("{classes}local _n = Nums.new(\"text\")\n")),
+        "E2001"
+    ));
+    let errs = strict_codes(&format!(
+        "{classes}local b: Sub<number> = Sub.new(5)\nlocal n: number = Nums.new(2).value + b.value\nprint(n)\n"
+    ));
+    assert!(errs.is_empty(), "{errs:#?}");
+}
+
 /// `__wowlua` on the addon namespace is the runtime's: assigning it is
 /// E2003 (spec §2.4.7), not a type mismatch.
 #[test]

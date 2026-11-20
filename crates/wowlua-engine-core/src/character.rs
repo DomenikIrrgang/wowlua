@@ -49,6 +49,10 @@ pub struct Held {
 pub struct Bag {
     pub slots: usize,
     pub items: BTreeMap<usize, Held>,
+    /// The bag's family (`GetItemFamily`'s bits: 1 arrows, 2 bullets, 4
+    /// soul shards, …): a special bag takes only items of its family; 0, a
+    /// general bag, anything (issue #269, decision T662).
+    pub family: u32,
 }
 
 /// Where the player is.
@@ -112,6 +116,7 @@ impl Default for Character {
             Bag {
                 slots: 16,
                 items: BTreeMap::new(),
+                family: 0,
             },
         );
         Character {
@@ -614,8 +619,14 @@ fn get_container_num_slots(vm: &mut Vm, c: NativeCall) -> Ret {
 /// unbought bag slots, the bank's tabs, the other negative indexes).
 fn get_container_num_free_slots(vm: &mut Vm, c: NativeCall) -> Ret {
     let bag = num(c.arg(1)).unwrap_or(-99.0) as i64;
+    let family = engine(vm)
+        .world
+        .character
+        .bags
+        .get(&bag)
+        .map_or(0, |b| b.family);
     Ok(match bag_space(vm, bag) {
-        Some((_, free)) => vec![Value::Num(free.len() as f64), Value::Num(0.0)],
+        Some((_, free)) => vec![Value::Num(free.len() as f64), Value::Num(f64::from(family))],
         None => vec![Value::Num(0.0), Value::Nil],
     })
 }
@@ -733,11 +744,14 @@ pub fn place_bag(vm: &mut Vm, bag: i64, slots: usize, items: Option<TableRef>) {
             }
         }
     }
-    engine_mut(vm)
-        .world
-        .character
-        .bags
-        .insert(bag, Bag { slots, items: held });
+    engine_mut(vm).world.character.bags.insert(
+        bag,
+        Bag {
+            slots,
+            items: held,
+            family: 0,
+        },
+    );
 }
 
 pub fn control_set_bag(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -765,7 +779,12 @@ pub fn control_set_bag(vm: &mut Vm, c: NativeCall) -> Ret {
                     }
                 }
             }
-            Some(Bag { slots, items })
+            let family = num(field(vm, t, "family")).unwrap_or(0.0) as u32;
+            Some(Bag {
+                slots,
+                items,
+                family,
+            })
         }
         _ => None,
     };
@@ -872,20 +891,39 @@ pub const REAGENT_BAG: i64 = 5;
 /// never the reagent bag (unverified: the client's flag for reagents).
 fn new_slot_bags(vm: &mut Vm, id: i64) -> Vec<i64> {
     let reagent = matches!(item_field(vm, id, "classID"), Value::Num(c) if c == 7.0);
-    let bags: Vec<i64> = engine(vm)
-        .world
-        .character
-        .bags
-        .keys()
-        .copied()
-        .filter(|b| carried(*b))
+    let family = item_family(vm, id);
+    let all = &engine(vm).world.character.bags;
+    // A special bag takes only its family's items, and takes them first
+    // (decision T662; unverified: the client's order among special bags).
+    let bags: Vec<i64> = all
+        .iter()
+        .filter(|(b, bag)| carried(**b) && (bag.family == 0 || bag.family & family != 0))
+        .map(|(b, _)| *b)
         .collect();
+    let special = |b: &i64| all.get(b).is_some_and(|bag| bag.family != 0);
     let mut out: Vec<i64> = Vec::new();
     if reagent && bags.contains(&REAGENT_BAG) {
         out.push(REAGENT_BAG);
     }
-    out.extend(bags.into_iter().filter(|b| *b != REAGENT_BAG));
+    out.extend(
+        bags.iter()
+            .copied()
+            .filter(|b| *b != REAGENT_BAG && special(b)),
+    );
+    out.extend(
+        bags.iter()
+            .copied()
+            .filter(|b| *b != REAGENT_BAG && !special(b)),
+    );
     out
+}
+
+/// An item's bag family (`defineItem`'s `family`; 0 for none).
+pub fn item_family(vm: &mut Vm, id: i64) -> u32 {
+    match item_field(vm, id, "family") {
+        Value::Num(n) if n > 0.0 => n as u32,
+        _ => 0,
+    }
 }
 
 /// `count` of item `id` into the bags: onto a stack of it with room (its
@@ -902,7 +940,10 @@ pub fn add_to_bags(vm: &mut Vm, id: i64, count: f64) -> Option<(i64, bool)> {
     // recorded bound: a quest's item, a quest's reward).
     let binds = matches!(item_field(vm, id, "bindType"), Value::Num(b) if b == 1.0 || b == 4.0);
     let bags = &mut engine_mut(vm).world.character.bags;
-    for (bag, b) in bags.iter_mut().filter(|(b, _)| carried(**b)) {
+    for (bag, b) in bags
+        .iter_mut()
+        .filter(|(b, _)| carried(**b) && order.contains(b))
+    {
         for held in b.items.values_mut() {
             if held.id == id && held.count + count <= stack {
                 held.count += count;
@@ -976,8 +1017,12 @@ pub fn bag_for(vm: &mut Vm, id: i64, count: f64) -> Option<i64> {
         Value::Num(n) if n >= 1.0 => n,
         _ => 1.0,
     };
+    let order = new_slot_bags(vm, id);
     let bags = &engine(vm).world.character.bags;
-    for (bag, b) in bags.iter().filter(|(b, _)| carried(**b)) {
+    for (bag, b) in bags
+        .iter()
+        .filter(|(b, _)| carried(**b) && order.contains(b))
+    {
         if b.items
             .values()
             .any(|h| h.id == id && h.count + count <= stack)

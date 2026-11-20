@@ -26,9 +26,11 @@ pub struct Timer {
     pub cancelled: bool,
     /// The engine's (the server's answer), not an addon's.
     pub engine: bool,
-    /// The callback and the handle it gets (none for `C_Timer.After`), kept
-    /// in a registry table.
-    pub slot: TableRef,
+    /// While it is to run: the pin (`Vm::pin`) that keeps its callback
+    /// (`C_Timer.After`), or its handle, whose own table holds the
+    /// callback. Once it has run its last or is cancelled, none: nothing
+    /// of it stays but what the addon holds (issue #267).
+    pub pin: Option<usize>,
 }
 
 #[derive(Default)]
@@ -107,17 +109,43 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
     meta
 }
 
-/// A handle's own fields (made on the first write), in its slot.
-fn handle_fields(vm: &mut Vm, id: TimerId, make: bool) -> Option<TableRef> {
-    let slot = engine(vm).timers.list[id.0].slot;
-    match vm.heap.table(slot).get(Value::Num(3.0)) {
+/// A timer no longer runs: let go of its callback and handle.
+fn release(vm: &mut Vm, index: usize) {
+    if let Some(pin) = engine_mut(vm).timers.list[index].pin.take() {
+        vm.unpin(pin);
+    }
+}
+
+/// Drops the timers that have run their last or are cancelled from the
+/// ones to run, and lets go of them.
+fn drop_finished(vm: &mut Vm) {
+    let timers = &mut engine_mut(vm).timers;
+    let list = &timers.list;
+    let mut done = Vec::new();
+    timers.active.retain(|&i| {
+        let keep = !list[i].cancelled && list[i].left > 0.0;
+        if !keep {
+            done.push(i);
+        }
+        keep
+    });
+    for i in done {
+        release(vm, i);
+    }
+}
+
+/// A handle's own table: [1] its callback, [2] the fields written to it
+/// (made on the first write).
+fn handle_fields(vm: &mut Vm, handle: Value, make: bool) -> Option<TableRef> {
+    let Value::Userdata(u) = handle else {
+        return None;
+    };
+    let own = vm.heap.userdata(u).env?;
+    match vm.heap.table(own).get(Value::Num(2.0)) {
         Value::Table(t) => Some(t),
         _ if make => {
             let t = vm.new_table();
-            let _ = vm
-                .heap
-                .table_mut(slot)
-                .set(Value::Num(3.0), Value::Table(t));
+            let _ = vm.heap.table_mut(own).set(Value::Num(2.0), Value::Table(t));
             Some(t)
         }
         _ => None,
@@ -133,7 +161,7 @@ fn handle_index(vm: &mut Vm, c: NativeCall) -> Ret {
             return Ok(vec![m]);
         }
     }
-    let v = match timer_of(vm, c.arg(1)).and_then(|id| handle_fields(vm, id, false)) {
+    let v = match handle_fields(vm, c.arg(1), false) {
         Some(t) => vm.heap.table(t).get(key),
         None => Value::Nil,
     };
@@ -142,7 +170,7 @@ fn handle_index(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `handle[key] = value`: kept on the handle.
 fn handle_newindex(vm: &mut Vm, c: NativeCall) -> Ret {
-    if let Some(t) = timer_of(vm, c.arg(1)).and_then(|id| handle_fields(vm, id, true)) {
+    if let Some(t) = handle_fields(vm, c.arg(1), true) {
         let (k, v) = (c.arg(2), c.arg(3));
         if k.is_nil() {
             return Err(vm.error("table index is nil"));
@@ -170,8 +198,8 @@ fn is_cancelled(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn invoke(vm: &mut Vm, c: NativeCall) -> Ret {
-    if let Some(id) = timer_of(vm, c.arg(1)) {
-        fire(vm, id);
+    if timer_of(vm, c.arg(1)).is_some() {
+        fire_value(vm, c.arg(1));
     }
     Ok(vec![])
 }
@@ -194,32 +222,39 @@ pub fn after_engine(vm: &mut Vm, seconds: f64, callback: Value) {
 /// when `handle`.
 fn schedule(vm: &mut Vm, seconds: f64, callback: Value, runs: f64, handle: bool) -> Value {
     let id = TimerId(engine(vm).timers.list.len());
-    let slot = vm.new_table();
-    crate::widgets::keep(vm, Value::Table(slot));
-    let _ = vm.heap.table_mut(slot).set(Value::Num(1.0), callback);
     let mut out = Value::Nil;
-    if handle {
+    let kept = if handle {
         let meta = handle_meta(vm);
+        let own = vm.new_table();
+        let _ = vm.heap.table_mut(own).set(Value::Num(1.0), callback);
         let ud = vm.heap.alloc_userdata(Userdata {
             serial: 0,
             meta: Some(meta),
-            env: None,
+            env: Some(own),
             data: Box::new(id),
         });
-        let _ = vm
-            .heap
-            .table_mut(slot)
-            .set(Value::Num(2.0), Value::Userdata(ud));
         out = Value::Userdata(ud);
-    }
+        out
+    } else {
+        callback
+    };
+    let pin = vm.pin(kept);
     let mut due = now(vm) + seconds.max(0.0);
     // A timer a running timer sets without a delay waits for the next
-    // run of timers (the next frame), so one that sets itself again does
-    // not hold time still (unverified: the client's order).
-    if seconds <= 0.0
-        && let Some(target) = engine(vm).timers.advancing
-    {
-        due = due.max(target + NEXT_RUN);
+    // frame, a frame's length on (the last frame's, else a 60th of a
+    // second): within an advance of the clock that has the time, as the
+    // game runs it on its next frame, and so one that sets itself again
+    // does not hold time still (issue #270, decision T659; unverified: the
+    // client's order).
+    if seconds <= 0.0 && engine(vm).timers.advancing.is_some() {
+        let frame = match engine(vm).timers.tick_time {
+            t if t > 0.0 => t,
+            _ => 1.0 / 60.0,
+        };
+        // (in whole milliseconds, as the clock counts: a frame's 16.67
+        // ms after a time the clock rounded is not past the next frame)
+        let next = ((now(vm) + frame) * 1000.0).floor() / 1000.0;
+        due = due.max(next).max(now(vm) + NEXT_RUN);
     }
     let index = engine(vm).timers.list.len();
     engine_mut(vm).timers.active.push(index);
@@ -229,7 +264,7 @@ fn schedule(vm: &mut Vm, seconds: f64, callback: Value, runs: f64, handle: bool)
         left: runs,
         cancelled: false,
         engine: false,
-        slot,
+        pin: Some(pin),
     });
     out
 }
@@ -256,13 +291,25 @@ fn new_ticker(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// Runs a timer's callback once (as the client's C code calls it).
 fn fire(vm: &mut Vm, id: TimerId) {
-    let slot = engine(vm).timers.list[id.0].slot;
-    let callback = vm.heap.table(slot).get(Value::Num(1.0));
-    let handle = vm.heap.table(slot).get(Value::Num(2.0));
-    let args: Vec<Value> = if handle.is_nil() {
-        vec![]
-    } else {
-        vec![handle]
+    let Some(pin) = engine(vm).timers.list[id.0].pin else {
+        return;
+    };
+    let kept = vm.pinned(pin);
+    fire_value(vm, kept);
+}
+
+/// Runs the callback of a live timer's entry: a callback, or a handle
+/// (given to its callback).
+fn fire_value(vm: &mut Vm, kept: Value) {
+    let (callback, args) = match kept {
+        Value::Userdata(u) => {
+            let Some(own) = vm.heap.userdata(u).env else {
+                return;
+            };
+            (vm.heap.table(own).get(Value::Num(1.0)), vec![kept])
+        }
+        Value::Nil => return,
+        callback => (callback, vec![]),
     };
     let d = vm.dispatch_enter(DispatchKind::Timer, || "timer".to_string());
     vm.call_from_engine(callback, &args);
@@ -323,11 +370,8 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
     let target = end_ms.round() / 1000.0;
     let outer = engine_mut(vm).timers.advancing.replace(target);
     loop {
-        let timers = &mut engine_mut(vm).timers;
-        let list = &timers.list;
-        timers
-            .active
-            .retain(|&i| !list[i].cancelled && list[i].left > 0.0);
+        drop_finished(vm);
+        let timers = &engine(vm).timers;
         let next = timers
             .active
             .iter()
@@ -462,11 +506,8 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
 /// each at its time.
 fn engine_answers(vm: &mut Vm, end_ms: f64) {
     loop {
-        let timers = &mut engine_mut(vm).timers;
-        let list = &timers.list;
-        timers
-            .active
-            .retain(|&i| !list[i].cancelled && list[i].left > 0.0);
+        drop_finished(vm);
+        let timers = &engine(vm).timers;
         let next = timers
             .active
             .iter()

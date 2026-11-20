@@ -309,9 +309,9 @@ fn register_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// A CVar's flags on camelot (`/stdtest engine`): (locked from the user,
 /// secure, read-only).
-fn cvar_flags(vm: &Vm, name: &str) -> (bool, bool, bool) {
+fn cvar_flags(vm: &Vm, name: &str) -> [bool; 5] {
     if engine(vm).flavor != "camelot" {
-        return (false, false, false);
+        return [false; 5];
     }
     let has = |kind: &str| {
         include_str!("../../wowlua-engine/data/camelot-cvar-flags.txt")
@@ -320,11 +320,18 @@ fn cvar_flags(vm: &Vm, name: &str) -> (bool, bool, bool) {
             .filter_map(|l| l.split_once('\t'))
             .any(|(k, n)| k == kind && n.eq_ignore_ascii_case(name))
     };
-    (has("locked"), has("secure"), has("readOnly"))
+    [
+        has("account"),
+        has("character"),
+        has("locked"),
+        has("secure"),
+        has("readOnly"),
+    ]
 }
 
 /// `C_CVar.GetCVarInfo(name)`: value, default, stored on the server for the
-/// account and the character (unknown here: false), locked from the user,
+/// account and the character (the recorded ones, decision T653; others
+/// false: unverified for those not recorded), locked from the user,
 /// secure, read-only.
 fn get_cvar_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = string_arg(vm, &c, 1)?;
@@ -338,12 +345,12 @@ fn get_cvar_info(vm: &mut Vm, c: NativeCall) -> Ret {
         .find(|(k, _)| k.eq_ignore_ascii_case(&name))
         .map(|(_, v)| v.clone())
         .unwrap_or_default();
-    let (locked, secure, read_only) = cvar_flags(vm, &name);
+    let [account, character, locked, secure, read_only] = cvar_flags(vm, &name);
     Ok(vec![
         vm.str(&value),
         vm.str(&default),
-        Value::Bool(false),
-        Value::Bool(false),
+        Value::Bool(account),
+        Value::Bool(character),
         Value::Bool(locked),
         Value::Bool(secure),
         Value::Bool(read_only),
@@ -387,7 +394,7 @@ pub fn set_cvar_text(vm: &mut Vm, name: &str, text: String, tell: bool) -> Ret {
     if unknown {
         return Ok(vec![]);
     }
-    let (_, secure, read_only) = cvar_flags(vm, &name);
+    let [_, _, _, secure, read_only] = cvar_flags(vm, &name);
     if secure && crate::protection::forbids_in_combat(vm) {
         return Ok(vec![]);
     }

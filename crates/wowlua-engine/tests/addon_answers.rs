@@ -56,6 +56,10 @@ return Map:GetSignalCount(), key, time, tostring(Map:HasSignal(4)), Map:Register
     assert_eq!(r, ["2 3 1", "0", "nil"]);
 }
 
+/// A zero-delay timer a timer sets is due a frame later: one that sets
+/// itself again runs once a frame's worth of time, within an advance of
+/// the clock too (decision T659: 5 s at a 60th of a second, the clock in
+/// whole milliseconds, 313 runs), and once a frame when frames run.
 #[test]
 fn a_zero_delay_timer_set_by_a_timer_waits_for_the_next_frame() {
     let mut vm = vm();
@@ -66,9 +70,9 @@ local function again() Runs = Runs + 1; C_Timer.After(0, again) end
 C_Timer.After(0, again)",
     );
     wowlua_engine::clock::advance(&mut vm, 5.0);
-    assert_eq!(run(&mut vm, "return Runs"), ["1"]);
+    assert_eq!(run(&mut vm, "return Runs"), ["313"]);
     wowlua_engine::clock::advance_frames(&mut vm, 3, 1000.0 / 60.0);
-    assert_eq!(run(&mut vm, "return Runs"), ["4"]);
+    assert_eq!(run(&mut vm, "return Runs"), ["316"]);
 }
 
 #[test]

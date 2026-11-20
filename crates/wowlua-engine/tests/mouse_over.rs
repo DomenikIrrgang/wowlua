@@ -175,3 +175,86 @@ return tostring(t:GetWidth()), tostring(t:GetLeft()), select('#', t:GetRect())",
     );
     assert_eq!(r, ["0", "nil", "0"]);
 }
+
+/// A frame that hides under the mouse gets its `OnLeave` during the
+/// `Hide()`, also when its parent hides, and one hidden mid-drag its
+/// `OnDragStop`, once (the game, Forever 1.60.1; issue #263).
+#[test]
+fn hiding_under_the_mouse_leaves_and_stops_the_drag() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local function square()
+    local f = CreateFrame('Frame', nil, UIParent)
+    f:SetSize(170, 26)
+    f:SetPoint('TOP', 0, -140)
+    f:EnableMouse(true)
+    f:RegisterForDrag('LeftButton')
+    return f
+end
+local out = {}
+local hiding = false
+local f = square()
+f:SetScript('OnLeave', function(_, motion) out[#out + 1] = 'leave ' .. tostring(hiding) .. ' ' .. tostring(motion) end)
+mock.hover(f)
+hiding = true
+f:Hide()
+hiding = false
+out[#out + 1] = tostring(GetMouseFocus and GetMouseFocus() or nil)
+-- a child under the mouse, its parent hidden
+local p = square()
+local c = CreateFrame('Frame', nil, p)
+c:SetAllPoints()
+c:EnableMouse(true)
+c:SetScript('OnLeave', function() out[#out + 1] = 'child leave ' .. tostring(hiding) end)
+mock.hover(c)
+hiding = true
+p:Hide()
+hiding = false
+-- hidden mid-drag: OnDragStop in the Hide, not again at the mouse up
+local d = square()
+d:SetScript('OnDragStart', function(self) hiding = true self:Hide() hiding = false end)
+d:SetScript('OnDragStop', function() out[#out + 1] = 'stop ' .. tostring(hiding) end)
+mock.drag(d, 40, 0)
+-- a drag that ends: OnDragStop at the mouse up
+local e = square()
+e:SetScript('OnDragStop', function() out[#out + 1] = 'stop ' .. tostring(hiding) end)
+mock.drag(e, 40, 0)
+return table.concat(out, ' | ')",
+    );
+    assert_eq!(
+        r,
+        ["leave true false | nil | child leave true | stop true | stop false"]
+    );
+}
+
+/// `mock.click` clicks the frame on top under the pointer that takes the
+/// mouse, as the client does: an overlay left over a button takes the
+/// click; with it hidden, the button has it (issue #277, decision T657).
+#[test]
+fn a_click_goes_to_the_frame_on_top() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local hits = {}
+local under = CreateFrame('Button', nil, UIParent)
+under:SetSize(100, 40)
+under:SetPoint('CENTER')
+under:SetScript('OnClick', function() hits[#hits + 1] = 'under' end)
+local over = CreateFrame('Button', nil, UIParent)
+over:SetFrameStrata('DIALOG')
+over:SetAllPoints(under)
+over:SetScript('OnClick', function() hits[#hits + 1] = 'over' end)
+mock.click(under)
+over:Hide()
+mock.click(under)
+-- a frame that does not take the mouse lets it through
+local plain = CreateFrame('Frame', nil, UIParent)
+plain:SetFrameStrata('DIALOG')
+plain:SetAllPoints(under)
+plain:Show()
+mock.click(under)
+return table.concat(hits, ',')",
+    );
+    assert_eq!(r, ["over,under,under"]);
+}

@@ -650,7 +650,18 @@ pub fn load_projects(session: &mut Session, options: &LoadOptions) -> Option<Vec
             }
             load_single(session, options, &path).map(|p| vec![p])
         }
-        Some(root) => load_workspace(session, options, &root, (!is_root).then_some(dir.as_path())),
+        // (`--manifest` names the root's or the member's file: it is read in
+        // place of the folder's `wowlua.json`, issue #266)
+        Some(root) => {
+            let given = options.manifest.as_ref().map(|_| path.clone());
+            load_workspace(
+                session,
+                options,
+                &root,
+                (!is_root).then_some(dir.as_path()),
+                given,
+            )
+        }
     }
 }
 
@@ -837,8 +848,16 @@ fn load_workspace(
     options: &LoadOptions,
     root: &Path,
     inside: Option<&Path>,
+    given: Option<PathBuf>,
 ) -> Option<Vec<Project>> {
-    let root_path = root.join(wowlua_manifest::MANIFEST_FILE);
+    // The manifest `--manifest` gave: the root's, or that of the member
+    // `inside` names.
+    let (given_root, given_member) = match (given, inside) {
+        (Some(p), None) => (Some(p), None),
+        (Some(p), Some(_)) => (None, Some(p)),
+        (None, _) => (None, None),
+    };
+    let root_path = given_root.unwrap_or_else(|| root.join(wowlua_manifest::MANIFEST_FILE));
     let root_text = match crate::host::read_to_string(&root_path) {
         Ok(t) => t,
         Err(error) => {
@@ -888,7 +907,10 @@ fn load_workspace(
 
     let mut manifests: Vec<LoadedManifest> = Vec::new();
     for dir in &dirs {
-        let path = dir.join(wowlua_manifest::MANIFEST_FILE);
+        let path = match &given_member {
+            Some(p) if Some(dir.as_path()) == inside => p.clone(),
+            _ => dir.join(wowlua_manifest::MANIFEST_FILE),
+        };
         if dir == root {
             let mut m = root_manifest.clone();
             m.manifest.workspace = None;

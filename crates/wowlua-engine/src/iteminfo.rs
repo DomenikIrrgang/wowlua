@@ -740,14 +740,19 @@ fn get_item_creation_context(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
-/// `C_Item.GetItemFamily(item)`: no bag family (0) for an item with data,
-/// nil otherwise (unverified: special bags' and their goods' families).
+/// `C_Item.GetItemFamily(item)`: an item with data, its bag family
+/// (`defineItem`'s `family`, else 0, decision T662); nil otherwise
+/// (unverified: the client's items' families).
 fn get_item_family(vm: &mut Vm, c: NativeCall) -> Ret {
-    let known = match item_of(vm, c.arg(1)) {
-        Some(id) => crate::gamedata::item_data(vm, id).is_some(),
-        None => false,
+    let Some(id) = item_of(vm, c.arg(1)) else {
+        return Ok(vec![Value::Nil]);
     };
-    Ok(vec![if known { Value::Num(0.0) } else { Value::Nil }])
+    if crate::gamedata::item_data(vm, id).is_none() {
+        return Ok(vec![Value::Nil]);
+    }
+    Ok(vec![Value::Num(f64::from(crate::character::item_family(
+        vm, id,
+    )))])
 }
 
 /// `C_Item.GetItemUniquenessByID(item)`: not unique, no limit category,

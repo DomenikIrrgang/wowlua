@@ -73,7 +73,7 @@ local function press(frame, button)
         check("clicked: no frame", false)
         return
     end
-    local ok, err = pcall(e.click, frame, button)
+    local ok, err = pcall(e.click, frame, button, true)
     if not ok then check("clicked: " .. tostring(err), false) end
 end
 local function pick(recipe)

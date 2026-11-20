@@ -2766,14 +2766,38 @@ pub fn wheel_test(vm: &mut Vm, x: f64, y: f64) -> Option<WidgetId> {
     topmost_at(vm, x, y, true)
 }
 
+/// The topmost visible frame at a point that takes a click there: one
+/// taking the mouse whose clicks are on (`SetMouseClickEnabled(false)`,
+/// as the unit frames' bars, and `SetPropagateMouseClicks(true)` let them
+/// through to what is below; decision T657).
+pub fn click_test(vm: &mut Vm, x: f64, y: f64) -> Option<WidgetId> {
+    topmost_at_by(vm, x, y, |vm, f| {
+        let clicks =
+            first(vm, f, "MouseClickEnabled").map_or_else(|| mouse_enabled(vm, f), |v| v.truthy());
+        let through = first(vm, f, "PropagateMouseClicks").is_some_and(|v| v.truthy());
+        clicks && !through
+    })
+}
+
 fn topmost_at(vm: &mut Vm, x: f64, y: f64, wheel: bool) -> Option<WidgetId> {
-    let order = frames_in_order(vm);
-    order.into_iter().rev().find(|&f| {
-        let takes = if wheel {
+    topmost_at_by(vm, x, y, |vm, f| {
+        if wheel {
             first(vm, f, "MouseWheelEnabled").is_some_and(|v| v.truthy())
         } else {
             mouse_enabled(vm, f)
-        };
+        }
+    })
+}
+
+fn topmost_at_by(
+    vm: &mut Vm,
+    x: f64,
+    y: f64,
+    takes: impl Fn(&Vm, WidgetId) -> bool,
+) -> Option<WidgetId> {
+    let order = frames_in_order(vm);
+    order.into_iter().rev().find(|&f| {
+        let takes = takes(vm, f);
         if !takes {
             return false;
         }
@@ -2819,32 +2843,45 @@ pub fn takes_mouse(vm: &Vm, id: WidgetId) -> bool {
 }
 
 /// The rectangle that holds a frame and everything drawn of it (a
-/// screenshot of one frame).
-pub fn extent(vm: &Vm, id: WidgetId) -> Option<Rect> {
+/// screenshot of one frame): its own, and what `scene` draws of it and the
+/// widgets under it. An empty container under it adds nothing, however
+/// big (issue #280).
+pub fn extent(vm: &Vm, scene: &Scene, id: WidgetId) -> Option<Rect> {
+    let union = |acc: Option<Rect>, r: Rect| match acc {
+        None => r,
+        Some(a) => {
+            let x0 = a.x.min(r.x);
+            let y0 = a.y.min(r.y);
+            let x1 = (a.x + a.w).max(r.x + r.w);
+            let y1 = (a.y + a.h).max(r.y + r.h);
+            Rect {
+                x: x0,
+                y: y0,
+                w: x1 - x0,
+                h: y1 - y0,
+            }
+        }
+    };
+    let under = |w: WidgetId| {
+        let mut cur = Some(w);
+        while let Some(c) = cur {
+            if c == id {
+                return true;
+            }
+            cur = engine(vm).world.widgets[c.0].parent;
+        }
+        false
+    };
     let mut acc: Option<Rect> = rect_of(vm, id);
-    let mut stack = engine(vm).world.widgets[id.0].children.clone();
-    while let Some(c) = stack.pop() {
-        if !engine(vm).world.widgets[c.0].shown {
-            continue;
+    for item in &scene.items {
+        let (widget, rect) = match item {
+            Item::Quad(q) => (q.widget, q.rect),
+            Item::Text(t) => (t.widget, t.rect),
+            Item::Model(m) => (m.widget, m.rect),
+        };
+        if under(WidgetId(widget)) {
+            acc = Some(union(acc, rect));
         }
-        if let Some(r) = rect_of(vm, c) {
-            acc = Some(match acc {
-                None => r,
-                Some(a) => {
-                    let x0 = a.x.min(r.x);
-                    let y0 = a.y.min(r.y);
-                    let x1 = (a.x + a.w).max(r.x + r.w);
-                    let y1 = (a.y + a.h).max(r.y + r.h);
-                    Rect {
-                        x: x0,
-                        y: y0,
-                        w: x1 - x0,
-                        h: y1 - y0,
-                    }
-                }
-            });
-        }
-        stack.extend(engine(vm).world.widgets[c.0].children.iter().copied());
     }
     acc
 }

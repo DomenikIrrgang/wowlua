@@ -347,8 +347,10 @@ pub fn fetch(dir: &Path) -> Result<()> {
 /// The Lua and XML files of Blizzard's UI code, without the documentation.
 fn ui_files(
     dir: &Path,
+    game_types: &[String],
     lua: &mut Vec<(String, String)>,
     xml: &mut Vec<(String, String)>,
+    unloaded: &mut HashSet<String>,
 ) -> Result<()> {
     let mut entries: Vec<PathBuf> = fs::read_dir(dir)?
         .filter_map(|e| e.ok().map(|e| e.path()))
@@ -360,8 +362,24 @@ fn ui_files(
         {
             continue;
         }
+        // The deprecation fallbacks: the files its TOC does not load in
+        // this game make no globals there (`Classic/Deprecated_1_15_8.lua
+        // [AllowLoadGameType classic]` defines `UnitAura`, which WoW
+        // Forever lacks; issue #271). Their calls still type what they
+        // call (`AuraUtil.UnpackAuraData`).
+        if p.ends_with("Blizzard_Deprecated") {
+            let loaded = toc_loaded(&p, game_types)?;
+            let from = lua.len();
+            ui_files(&p, game_types, lua, xml, unloaded)?;
+            for (path, _) in &lua[from..] {
+                if !loaded.contains(&PathBuf::from(path)) {
+                    unloaded.insert(path.clone());
+                }
+            }
+            continue;
+        }
         if p.is_dir() {
-            ui_files(&p, lua, xml)?;
+            ui_files(&p, game_types, lua, xml, unloaded)?;
             continue;
         }
         let target = match p.extension().and_then(|e| e.to_str()) {
@@ -373,6 +391,44 @@ fn ui_files(
         target.push((p.to_string_lossy().into_owned(), text));
     }
     Ok(())
+}
+
+/// The files an addon folder's TOCs list for a game of `game_types`: a
+/// line `path [AllowLoadGameType a, b]` only where one of those is the
+/// game's.
+fn toc_loaded(folder: &Path, game_types: &[String]) -> Result<Vec<PathBuf>> {
+    let mut tocs: Vec<PathBuf> = fs::read_dir(folder)?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|e| e == "toc"))
+        .collect();
+    tocs.sort();
+    let mut out: Vec<PathBuf> = Vec::new();
+    for toc in tocs {
+        let text = String::from_utf8_lossy(&fs::read(&toc)?).into_owned();
+        for line in text.lines().map(str::trim) {
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let (path, attrs) = match line.find(" [") {
+                Some(i) => (&line[..i], &line[i..]),
+                None => (line, ""),
+            };
+            let allowed = match attrs.find("[AllowLoadGameType") {
+                Some(i) => {
+                    let rest = &attrs[i + "[AllowLoadGameType".len()..];
+                    let list = rest.split(']').next().unwrap_or("");
+                    list.split(',')
+                        .any(|g| game_types.iter().any(|t| t.eq_ignore_ascii_case(g.trim())))
+                }
+                None => true,
+            };
+            let file = folder.join(path.replace('\\', "/"));
+            if allowed && file.is_file() && !out.contains(&file) {
+                out.push(file);
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// The files only Blizzard's load-on-demand addons load (from their TOCs
@@ -724,10 +780,19 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
         // Blizzard's UI code (the documentation excluded).
         let mut ui_lua = Vec::new();
         let mut ui_xml = Vec::new();
+        // (the game types its TOCs' load directives name: the flavor's and
+        // its family's)
+        let family = wowlua_flavors::table()
+            .flavor(&flavor)
+            .map(|f| f.family.name().to_string())
+            .unwrap_or_else(|| "mainline".into());
+        let mut unloaded = HashSet::new();
         ui_files(
             &dir.join(&flavor).join("Interface/AddOns"),
+            &[flavor.clone(), family],
             &mut ui_lua,
             &mut ui_xml,
+            &mut unloaded,
         )?;
         let (branch, commit) = STRINGS
             .iter()
@@ -810,6 +875,7 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
             files,
             ui_lua,
             ui_xml,
+            unloaded,
             strings: wowlua_types_gen::framexml::global_strings(&strings_text),
             api_names: Some(wowlua_types_gen::framexml::quoted_names(
                 &fs::read_to_string(dir.join("api").join(format!("{commit}.lua")))

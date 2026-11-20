@@ -47,6 +47,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E1002 | Implicit global assignment (strict mode) |
 | E1003 | Undefined local or upvalue in a `wowlua` construct (e.g. a decorator argument) |
 | E1004 | A parameter's default reads that parameter or a later one, which is not set yet (in Lua every parameter is in scope there, so the name is the parameter, not an outer one) |
+| E1006 | A function reads or assigns a global that a file-level local of the same name, declared further down, hides after it (strict mode) |
 | E1010 | Assignment to an exported or imported binding |
 | E1011 | Top-level `import` after another (non-import) statement |
 | E1012 | Module has no export with this name |
@@ -176,6 +177,7 @@ is reported as the warning with the same number (`E2001` → `W2001`, `E2030` �
 | W1003 | Unused local, parameter or import |
 | W1004 | Local shadows another local, or a `local function` is named like a local of the same block; also a parameter named `self` inside a class's method or constructor, which hides the instance (a plain `function M:m()`'s `self` may be shadowed, as frame handlers do) |
 | W1005 | Unreachable code |
+| W1006 | A function reads or assigns a global that a file-level local of the same name, declared further down, hides after it (basic mode) |
 | W1033 | Load order cannot be determined (dynamic names, several writers, external names); files keep their source order |
 | W1034 | Name read at load time but only defined at run time |
 | W1035 | Usage-analysis dependency contradicts `build.load-order`; the listed order is kept (contradicting imports are E1035) |

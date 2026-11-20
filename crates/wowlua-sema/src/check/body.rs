@@ -223,6 +223,11 @@ pub struct Checker<'e, 'p> {
     /// The span of the file's top-level block (whose types the environment
     /// declares).
     file_block: Option<(u32, u32)>,
+    /// The file's top-level `local`, `local function` and `const` names
+    /// not declared yet: where their statement starts, and the name. A
+    /// function above one that uses the name reads the global
+    /// (E1006/W1006).
+    pub(crate) later_locals: FxHashMap<Box<str>, (u32, Span)>,
     /// Locals declared with a table literal (`local t = { … }`): their open
     /// tables are the ones the file fills in (spec §2.4.2).
     pub(crate) literal_locals: FxHashSet<VarId>,
@@ -465,6 +470,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             own_open: false,
             method_lookup: false,
             file_block: None,
+            later_locals: FxHashMap::default(),
             literal_locals: FxHashSet::default(),
             pcall_packs: FxHashMap::default(),
             pcall_links: FxHashMap::default(),
@@ -529,17 +535,34 @@ impl<'e, 'p> Checker<'e, 'p> {
     /// Reports a diagnostic of the name/type ranges, as a warning in pure
     /// Lua files (spec §2.1).
     pub fn report(&mut self, code: &'static str, span: Span, message: impl Into<String>) {
+        let d = self.diagnostic(code, message);
+        self.diagnostics.push(d.with_label(span, "here"));
+    }
+
+    /// A file-level `local` (or `const`, `local function`) of this name
+    /// declared below the function being checked: its name. The function
+    /// reads the global of that name, not the local (spec §2.3.4).
+    pub(crate) fn later_local(&self, n: Name<'_>) -> Option<Span> {
+        if self.fns.len() <= 1 {
+            return None;
+        }
+        let &(start, span) = self.later_locals.get(n.text())?;
+        (n.span().start < start).then_some(span)
+    }
+
+    /// A diagnostic with no labels yet: in a plain Lua file, the E1/E2
+    /// errors are their warnings.
+    pub(crate) fn diagnostic(&self, code: &'static str, message: impl Into<String>) -> Diagnostic {
         let (code, warn) = if self.pure_lua && (code.starts_with("E1") || code.starts_with("E2")) {
             (warning_code(code), true)
         } else {
             (code, code.starts_with('W'))
         };
-        let d = if warn {
+        if warn {
             Diagnostic::warning(code, message)
         } else {
             Diagnostic::error(code, message)
-        };
-        self.diagnostics.push(d.with_label(span, "here"));
+        }
     }
 
     /// A type mismatch (E2001).
@@ -1261,6 +1284,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.stored_fields = stored_fields(parse.view().block());
         let span = parse.view().block().span();
         self.file_block = Some((span.start, span.end));
+        self.later_locals.clear();
         self.hoist(parse.view().block());
         self.block_stmts(parse.view().block());
         // Calls of methods defined further down, now that all are known.
@@ -1339,6 +1363,18 @@ impl<'e, 'p> Checker<'e, 'p> {
         // The overload signatures before a function: callers see them.
         let mut overloads: Vec<(Box<str>, TypeId)> = Vec::new();
         for s in b.stmts() {
+            let start = s.span().start;
+            let later: Vec<Name<'_>> = match s.kind() {
+                StmtKind::Local { names, .. } => names.iter().map(|n| n.name).collect(),
+                StmtKind::LocalFunction { name, .. } => vec![name],
+                StmtKind::Const { name, .. } => vec![name],
+                _ => Vec::new(),
+            };
+            for name in later {
+                self.later_locals
+                    .entry(name.text().into())
+                    .or_insert((start, name.span()));
+            }
             let kind = match s.kind() {
                 StmtKind::Export(inner) => inner.kind(),
                 k => k,
@@ -3167,10 +3203,17 @@ impl<'e, 'p> Checker<'e, 'p> {
                     .typeof_types
                     .insert((x.span().start, x.span().end), ty);
             }
-            let scope = self.scope.clone();
-            let t = self.env.resolve(e, &scope);
-            if let Some(b) = self.env.def_mut(def).bases.first_mut() {
-                *b = t;
+            // (the class found when the environment was built: the path
+            // may name it only as a value, decision L104)
+            let base = self.env.def(def).bases.first().copied();
+            if let Some(b) = base
+                && let Ty::Named(bd, _) = self.env.types.get(b).clone()
+            {
+                let scope = self.scope.clone();
+                let t = self.env.value_base(bd, e, &scope);
+                if let Some(b) = self.env.def_mut(def).bases.first_mut() {
+                    *b = t;
+                }
             }
         }
         self.check_implements(c, instance);

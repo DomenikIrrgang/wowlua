@@ -92,7 +92,7 @@ t:SetText('HELLO')
     }
     assert!(white > 30, "glyph pixels: {white}");
     // A frame's own rectangle, and twice the size.
-    let crop = scene::extent(&vm, id("Box")).unwrap();
+    let crop = scene::extent(&vm, &s, id("Box")).unwrap();
     let part = r
         .render_blocking(&s, 2.0, Some(crop), &mut NoAssets)
         .unwrap();

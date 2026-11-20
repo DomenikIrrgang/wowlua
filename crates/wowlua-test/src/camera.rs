@@ -78,7 +78,7 @@ pub fn shoot(
     }
     let crop = match frame {
         Some(id) => Some(
-            wowlua_engine::scene::extent(vm, id)
+            wowlua_engine::scene::extent(vm, &scene, id)
                 .ok_or("the frame has no rectangle (it is not laid out)")?,
         ),
         None => None,

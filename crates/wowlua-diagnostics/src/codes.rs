@@ -32,6 +32,8 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E1004", summary: "A parameter's default reads that parameter or a later one, which is not set yet (in Lua every parameter is in scope there, so the name is the parameter, not an outer one)" },
     CodeInfo { code: "W1004", summary: "Local shadows another local, or a `local function` is named like a local of the same block; also a parameter named `self` inside a class's method or constructor, which hides the instance (a plain `function M:m()`'s `self` may be shadowed, as frame handlers do)" },
     CodeInfo { code: "W1005", summary: "Unreachable code" },
+    CodeInfo { code: "E1006", summary: "A function reads or assigns a global that a file-level local of the same name, declared further down, hides after it (strict mode)" },
+    CodeInfo { code: "W1006", summary: "A function reads or assigns a global that a file-level local of the same name, declared further down, hides after it (basic mode)" },
     CodeInfo { code: "E1010", summary: "Assignment to an exported or imported binding" },
     CodeInfo { code: "E1011", summary: "Top-level `import` after another (non-import) statement" },
     CodeInfo { code: "E1012", summary: "Module has no export with this name" },

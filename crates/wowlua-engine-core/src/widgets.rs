@@ -4792,9 +4792,13 @@ fn set_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let _ = vm.heap.table_mut(list).set(n, Value::Num(1.0));
     let key = vm.str("FontObject");
     let _ = vm.heap.table_mut(props).set(key, Value::Table(list));
-    // Its own font gives way to the object's.
+    // Its own font gives way to the object's, and so does its own color:
+    // the string reads the object's after (the game, Forever 1.60.1, a
+    // reskin's texts; issue #278, decision T651; unverified: the shadow,
+    // which stays its own).
     let own = vm.str("Font");
     let _ = vm.heap.table_mut(props).set(own, Value::Nil);
+    unstore(vm, id, "TextColor");
     Ok(vec![])
 }
 
@@ -5314,6 +5318,7 @@ pub fn drag_begin(vm: &mut Vm, id: WidgetId, button: &str) -> Dragging {
     crate::input::cursor_onto(vm, id);
     let from = engine(vm).world.input.cursor;
     let b = vm.str(button);
+    engine_mut(vm).world.input.dragging = Some(id);
     run_script(vm, id, "OnDragStart", &[b]);
     let e = engine(vm);
     let moved = if e.world.widgets[id.0].moving {
@@ -5354,8 +5359,14 @@ pub fn drag_move(vm: &mut Vm, d: &Dragging, dx: f64, dy: f64) {
     }
 }
 
-/// The mouse let go: `OnDragStop`.
+/// The mouse let go: `OnDragStop`, unless the frame had it already (it
+/// hid mid-drag, `input::drop_hidden_focus`).
 pub fn drag_end(vm: &mut Vm, d: &Dragging) {
+    let input = &mut engine_mut(vm).world.input;
+    if input.dragging != Some(d.frame) {
+        return;
+    }
+    input.dragging = None;
     run_script(vm, d.frame, "OnDragStop", &[]);
 }
 

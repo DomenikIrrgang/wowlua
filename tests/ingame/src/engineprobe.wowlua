@@ -881,17 +881,25 @@ local function allCVars(): { [string]: string }
 end
 
 --- The CVars `C_CVar.GetCVarInfo` flags (secure: addons may not set them;
---- read-only; locked from the user), by name, sorted.
+--- read-only; locked from the user; stored on the server per account or
+--- per character), by name, sorted.
 local function cvarFlags(): { [string]: string }
     if not (G.ConsoleGetAllCommands and C_CVar and C_CVar.GetCVarInfo) then
         return { absent = "ConsoleGetAllCommands or C_CVar.GetCVarInfo" }
     end
     const cvarType = G.Enum.ConsoleCommandType and G.Enum.ConsoleCommandType.Cvar
-    const lists: { secure: string[], readOnly: string[], locked: string[] } = { secure = {}, readOnly = {}, locked = {} }
+    const lists: { secure: string[], readOnly: string[], locked: string[], account: string[], character: string[] } =
+        { secure = {}, readOnly = {}, locked = {}, account = {}, character = {} }
     for _, info in ipairs(G.ConsoleGetAllCommands() :: any[]) do
         if info.commandType == cvarType and type(info.command) == "string" then
-            local ok, _, _, _, _, locked, secure, readOnly = pcall(C_CVar.GetCVarInfo, info.command)
+            local ok, _, _, account, character, locked, secure, readOnly = pcall(C_CVar.GetCVarInfo, info.command)
             if ok then
+                if account then
+                    table.insert(lists.account, info.command)
+                end
+                if character then
+                    table.insert(lists.character, info.command)
+                end
                 if secure then
                     table.insert(lists.secure, info.command)
                 end

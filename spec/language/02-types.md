@@ -959,6 +959,18 @@ strict mode. In pure Lua files both are always warnings (§2.1). Accidental
 globals are a common source of addon bugs and taint. Explicit
 `_G.name = value` or `_G["name"]` is always allowed.
 
+A function's body sees a file-level `local` (or `const`, `local function`)
+only when the function comes after it, as in Lua. A function above the
+declaration that names it reads or assigns the **global** of that name. When
+such a global exists (declared, or assigned by the package), the name is
+error E1006 in strict mode and warning W1006 in basic mode (decision L103):
+the author meant the local, and the code would silently use the game's
+value (`GLYPHS` is the client's string "Glyphs"). Move the declaration above
+the function, or write `_G.name` to mean the global. When no such global
+exists the read is E1001/W1001, which names the local further down. Code at
+the file's top level is not reported: it runs before the declaration, so
+`local print = print` and saving a global before shadowing it are fine.
+
 A global that any file of the package assigns can be read everywhere (typed
 `any`); the assignment itself is still W1002/E1002 unless declared. A file
 that sets the environment of its own code gets no global diagnostics, because
@@ -1060,10 +1072,10 @@ wowlua models this with the type `Secret<T>`:
 
 | Rule | Detail |
 |------|--------|
-| Sources | API return values and event payload fields that Blizzard's API documentation marks as possibly secret are typed `T \| Secret<T>` by the generated `wow-api` types, for the flavors where restrictions apply. A documented structure such a function returns is a readable table whose fields may be secret, as the client answers: the function returns the structure's companion `<Name>Secret` (`C_Spell.GetSpellCooldown` returns `SpellCooldownInfoSecret?`), whose fields are `T \| Secret<T>` except those documented `NeverSecret`, and whose lists of structures hold companions. Functions that never answer secrets keep the plain structure (`C_Spell.GetItemCooldown` returns `SpellCooldownInfo?`). |
+| Sources | API return values and event payload fields that Blizzard's API documentation marks as possibly secret are typed `T \| Secret<T>` by the generated `wow-api` types, for the flavors where restrictions apply. A documented structure such a function returns is a readable table whose fields may be secret, as the client answers: the function returns the structure's companion `<Name>Secret` (`C_Spell.GetSpellCooldown` returns `SpellCooldownInfoSecret?`), whose fields are `T \| Secret<T>` except those documented `NeverSecret`, and whose lists of structures hold companions. Functions that never answer secrets keep the plain structure (`C_Spell.GetItemCooldown` returns `SpellCooldownInfo?`), and so do the aura getters, which raise for addon code while auras are restricted rather than answer a secret table (`C_UnitAuras.GetAuraDataByIndex` returns `AuraData?`, decision T656). |
 | Allowed operations | Assignment, passing as an argument where the parameter accepts `Secret<T>`, `..` (the result is `string \| Secret<string>`), `string.format`, `tostring`, `type()`, truthiness of non-boolean secrets |
 | Errors | Arithmetic, comparison, `#`, indexing, calling, use as a table key, or a boolean test on `Secret<boolean>`: error E2040 in strict mode and warning W2040 in basic mode and in pure Lua files |
-| Narrowing | `issecretvalue(v)` is declared as the predicate `v is Secret<unknown>`, and the global `canaccessvalue(v)` narrows as its complement (declared returning `boolean`; a local of that name does not narrow). The false branch of `issecretvalue` and the true branch of `canaccessvalue` remove all `Secret<…>` members (§2.2.8); the true branch of `issecretvalue` and the false branch of `canaccessvalue` keep only them. |
+| Narrowing | `issecretvalue(v)` is declared as the predicate `v is Secret<unknown>`, and the global `canaccessvalue(v)` narrows as its complement (declared returning `boolean`; a local of that name does not narrow). The false branch of `issecretvalue` and the true branch of `canaccessvalue` remove all `Secret<…>` members (§2.2.8); the true branch of `issecretvalue` and the false branch of `canaccessvalue` keep only them. A secret value has its value's `type()`, so `type(v) == "number"` narrows `number \| Secret<number> \| string` to `number \| Secret<number>`: it keeps the secret (decision L107). |
 | Widget setters | Declared to accept `T \| Secret<T>` where Blizzard documents secret support, so values can be displayed without being read |
 | Widget getters | Where Blizzard documents their results as possibly secret (`SecretReturns`, or `SecretReturnsForAspect`: a widget's aspect a setter was given a secret for reads back secret, `FontString:GetText()` after a secret `SetText`), declared to return `AspectSecret<T, T \| Secret<T>>`: `T`, or `T \| Secret<T>` with the manifest's `check.secret-widget-results` (§9.8). (`StatusBar:GetValue()` after a secret `SetValue` among them). The checker can't follow which widget got a secret; the emulated client returns one where the game does (decision T474) |
 | Assignability | `Secret<T>` is not assignable to `T`. `T` is assignable to `T \| Secret<T>`. |

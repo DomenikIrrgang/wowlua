@@ -1026,6 +1026,12 @@ impl Checker<'_, '_> {
         if n.text() == "super" && !self.classes.is_empty() {
             return self.super_member("", n.span());
         }
+        let later = self.later_local(n);
+        if let Some(local) = later
+            && self.known_global(n.text())
+        {
+            self.report_later_local(n, local, "reads");
+        }
         match self.env.declared.global(n.text()) {
             Some(t) => t,
             None if n.text() == "_G" => Types::TABLE,
@@ -1056,10 +1062,46 @@ impl Checker<'_, '_> {
                     super::query::Mode::Strict => "E1001",
                     super::query::Mode::Basic => "W1001",
                 };
-                self.report(code, n.span(), msg);
+                match later {
+                    Some(local) => {
+                        msg.push_str(&format!(
+                            ": the file-level local `{}` is declared further down, after this function",
+                            n.text()
+                        ));
+                        let d = self.diagnostic(code, msg);
+                        self.diagnostics.push(
+                            d.with_label(n.span(), "here")
+                                .with_label(local, "declared here")
+                                .with_help("move the declaration above the function, or declare the local there and assign it here"),
+                        );
+                    }
+                    None => self.report(code, n.span(), msg),
+                }
                 Types::ANY
             }
         }
+    }
+
+    /// E1006 / W1006: a function reads or assigns a global that a
+    /// file-level local of that name, declared further down, hides there.
+    fn report_later_local(&mut self, n: Name<'_>, local: Span, verb: &str) {
+        let code = match self.mode {
+            super::query::Mode::Strict => "E1006",
+            super::query::Mode::Basic => "W1006",
+        };
+        let msg = format!(
+            "`{name}` here {verb} the global `{name}`: the file-level local `{name}` is declared further down, after this function",
+            name = n.text()
+        );
+        let d = self.diagnostic(code, msg);
+        self.diagnostics.push(
+            d.with_label(n.span(), "the global")
+                .with_label(local, "the local, declared here")
+                .with_help(format!(
+                    "move the declaration above the function; to mean the global, write `_G.{}`",
+                    n.text()
+                )),
+        );
     }
 
     /// A global the checker knows: declared, allowed, or assigned by the
@@ -1075,6 +1117,11 @@ impl Checker<'_, '_> {
     /// Assigning a global (W1002 / E1002 unless declared).
     pub fn assign_global(&mut self, n: Name<'_>, value: TypeId) {
         self.forget_fields(super::narrow::GLOBAL_ROOT, Some(n.text()));
+        if let Some(local) = self.later_local(n)
+            && self.known_global(n.text())
+        {
+            self.report_later_local(n, local, "assigns");
+        }
         match self.env.declared.global(n.text()) {
             Some(t) => self.check_assignable(n.span(), value, t),
             None if self.dynamic_env || self.extra_globals.contains(n.text()) => {}

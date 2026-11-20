@@ -84,6 +84,7 @@ static HOOKS: hooks::Hooks = hooks::Hooks {
     trainer_learn: trainer::control_learn,
     trainer_unlearn: trainer::control_unlearn,
     look_of: scene::look_of,
+    frame_under_cursor: play::frame_under_cursor,
     format_with: formatters::format_with,
     navigation_frame: questinfo::navigation_frame,
     poi_map: questinfo::poi_map,

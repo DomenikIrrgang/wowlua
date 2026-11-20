@@ -15,7 +15,18 @@ fn place(
     match &p.keys[key as usize] {
         Key::Lua(proto) => {
             let source = map(&proto.source).unwrap_or_else(|| {
-                String::from_utf8_lossy(&wowlua_vm::vm::chunkid(&proto.source)).into_owned()
+                // wowlua's runtime (the monitor's wrappers, the profiler's)
+                // is wowlua's, though built into the addon's folder: named
+                // so, a tool skips it for the code it calls (issue #282).
+                let raw = String::from_utf8_lossy(&proto.source).replace('\\', "/");
+                match raw.find("/wowlua/") {
+                    Some(i) if raw.contains("Interface/AddOns/") => {
+                        format!("[wowlua] {}", &raw[i + 1..])
+                    }
+                    _ => {
+                        String::from_utf8_lossy(&wowlua_vm::vm::chunkid(&proto.source)).into_owned()
+                    }
+                }
             });
             let name = if proto.line_defined == 0 {
                 format!("main chunk of {source}")

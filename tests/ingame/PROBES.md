@@ -3707,3 +3707,123 @@ Out of combat, each line in the chat, one at a time.
    Seen: (to do). wowlua: `nrc <the recipe's ID> false`. If you know a
    recipe that costs nothing to make, choose it and run the line again.
 
+
+## A frame with one anchor and no size (issue #259, 2026-11-20)
+
+Found in game: a bag window whose panel had one anchor (`BOTTOMRIGHT` to
+its parent) and no size read `GetLeft()` nil, and its body, anchored inside
+it and then sized, never heard `OnSizeChanged`: the window stayed 0 x 0.
+wowlua gives such a frame a 0-wide rect at its anchor, so the body's
+`OnSizeChanged` fires there. These steps record each case alone before
+wowlua's rule changes. Run each setup line, then its read line a second
+later (a frame must pass).
+
+Out of combat, each line in the chat, one at a time.
+
+1. One anchor, never sized:
+
+   ```
+   /run P1=CreateFrame("Frame",nil,UIParent) P1:SetPoint("BOTTOMRIGHT",-28,28) B1=CreateFrame("Frame",nil,P1) B1:SetPoint("TOPLEFT") N1=0 B1:SetScript("OnSizeChanged",function() N1=N1+1 end) B1:SetSize(200,100)
+   ```
+
+2. Read it:
+
+   ```
+   /run print("1",P1:GetLeft(),P1:GetWidth(),P1:IsRectValid(),B1:GetLeft(),B1:IsRectValid(),N1)
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+3. One anchor and `SetSize(0, 0)` said outright:
+
+   ```
+   /run P2=CreateFrame("Frame",nil,UIParent) P2:SetPoint("BOTTOMRIGHT",-28,28) P2:SetSize(0,0) B2=CreateFrame("Frame",nil,P2) B2:SetPoint("TOPLEFT") N2=0 B2:SetScript("OnSizeChanged",function() N2=N2+1 end) B2:SetSize(200,100)
+   ```
+
+4. Read it:
+
+   ```
+   /run print("2",P2:GetLeft(),P2:GetWidth(),P2:IsRectValid(),B2:GetLeft(),B2:IsRectValid(),N2)
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+5. One anchor and only a width:
+
+   ```
+   /run P3=CreateFrame("Frame",nil,UIParent) P3:SetPoint("BOTTOMRIGHT",-28,28) P3:SetWidth(50) B3=CreateFrame("Frame",nil,P3) B3:SetPoint("TOPLEFT") N3=0 B3:SetScript("OnSizeChanged",function() N3=N3+1 end) B3:SetSize(200,100)
+   ```
+
+6. Read it:
+
+   ```
+   /run print("3",P3:GetLeft(),P3:GetTop(),P3:GetWidth(),P3:IsRectValid(),B3:GetLeft(),B3:IsRectValid(),N3)
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+7. Two anchors across (left and right edges), no height:
+
+   ```
+   /run P4=CreateFrame("Frame",nil,UIParent) P4:SetPoint("TOPLEFT",100,-100) P4:SetPoint("TOPRIGHT",-100,-100) B4=CreateFrame("Frame",nil,P4) B4:SetPoint("TOPLEFT") N4=0 B4:SetScript("OnSizeChanged",function() N4=N4+1 end) B4:SetSize(200,100)
+   ```
+
+8. Read it:
+
+   ```
+   /run print("4",P4:GetLeft(),P4:GetTop(),P4:GetWidth(),P4:GetHeight(),P4:IsRectValid(),B4:GetLeft(),B4:IsRectValid(),N4)
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+9. Take one screenshot of the chat with the four lines, then hide the frames:
+
+   ```
+   /run P1:Hide() P2:Hide() P3:Hide() P4:Hide()
+   ```
+
+## Colors without alpha (decision T655, 2026-11-20)
+
+Found in game (issues #255, #256): `C_CurveUtil.EvaluateColorFromBoolean`
+refuses a color without alpha (`C_ClassColor.GetClassColor`'s has none),
+as either color. wowlua now requires the alpha there only. These steps
+check the client's other functions documented as taking a `colorRGBA`, so
+wowlua can type and refuse them as the game does. Each line prints `true`
+where the call took the class color, `false` and the error where it
+refused it.
+
+Out of combat, each line in the chat, one at a time.
+
+1. A texture's gradient (the class color as the second color):
+
+   ```
+   /run CC=C_ClassColor.GetClassColor("WARRIOR") T=UIParent:CreateTexture() print("cc a",CC.a,"grad",pcall(T.SetGradient,T,"HORIZONTAL",CC,CreateColor(1,1,1,1)))
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+2. A texture's color from a boolean (the class color not chosen):
+
+   ```
+   /run print("vcb",pcall(T.SetVertexColorFromBoolean,T,true,CreateColor(1,1,1,1),CC))
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+3. A color curve's point:
+
+   ```
+   /run local c=C_CurveUtil.CreateColorCurve() print("curve",pcall(c.AddPoint,c,0,CC))
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+4. A vertex color animation's start and end colors:
+
+   ```
+   /run local g=UIParent:CreateAnimationGroup() local a=g:CreateAnimation("VertexColor") print("anim",pcall(a.SetStartColor,a,CC),pcall(a.SetEndColor,a,CC))
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+Take one screenshot of the four lines.

@@ -28,6 +28,9 @@ pub struct Input {
     pub mouse_focus: Option<WidgetId>,
     /// The edit box with the keyboard focus.
     pub keyboard_focus: Option<WidgetId>,
+    /// The frame being dragged, from its `OnDragStart` to its
+    /// `OnDragStop` (the drag's end, or the frame hiding).
+    pub dragging: Option<WidgetId>,
     /// Shift, Ctrl, Alt and Meta (the Mac's Cmd) held (the left keys).
     pub modifiers: [bool; 4],
     /// The user's actions running (a click, typing, a key): scripts' and
@@ -96,6 +99,34 @@ pub fn cursor_onto(vm: &mut Vm, id: WidgetId) {
         let input = &mut engine_mut(vm).world.input;
         input.cursor = ((l + w / 2.0) * ui, (b + h / 2.0) * ui);
         input.placed = true;
+    }
+}
+
+/// Whether frame `over`, on top under the pointer, takes a click meant for
+/// `id`: a frame the addon or a test made (not Blizzard's: the engine's
+/// stacking of Blizzard's UI is not exact enough to take clicks from what
+/// a test names), and not one of `id`'s parents, which is never above it
+/// in the game (decision T657).
+fn covers(vm: &Vm, over: WidgetId, id: WidgetId) -> bool {
+    let e = engine(vm);
+    let mut cur = e.world.widgets[id.0].parent;
+    while let Some(p) = cur {
+        if p == over {
+            return false;
+        }
+        cur = e.world.widgets[p.0].parent;
+    }
+    match &e.world.widgets[over.0].created {
+        None => false,
+        Some((chunk, _)) => {
+            let chunk = String::from_utf8_lossy(chunk)
+                .to_ascii_lowercase()
+                .replace('\\', "/");
+            !(chunk.contains("/blizzard_")
+                || chunk.contains("framexml/")
+                || chunk.contains("sharedxml/")
+                || chunk.contains("gluexml/"))
+        }
     }
 }
 
@@ -295,6 +326,22 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
         button = vm.str("RightButton");
         engine_mut(vm).world.input.modifiers[3] = false;
     }
+    // The mouse onto the frame's middle, and the click goes to the frame
+    // on top there that takes the mouse, as in the game (issue #277,
+    // decision T657): an overlay left over a button takes it. A frame
+    // without a rectangle, or with nothing taking the mouse there, is
+    // clicked itself.
+    cursor_onto(vm, id);
+    // (a third argument true clicks the frame itself: a recorded
+    // scenario's click, whose target the game told)
+    let exact = c.arg(3).truthy();
+    let id = if !exact && mouse_inside(vm, id, [0.0; 4]) {
+        (crate::hooks::get().frame_under_cursor)(vm)
+            .filter(|&t| t != id && covers(vm, t, id))
+            .unwrap_or(id)
+    } else {
+        id
+    };
     // The mouse is over what it clicks.
     mouse_onto(vm, Some(id));
     as_user(vm, |vm| {
@@ -414,6 +461,26 @@ pub fn drop_hidden_focus(vm: &mut Vm) {
         && !widgets::visible(engine(vm), id)
     {
         set_keyboard_focus(vm, None);
+    }
+    // A frame that hides under the mouse gets its `OnLeave`, and one hidden
+    // mid-drag its `OnDragStop`, during the `Hide()` (the game, Forever
+    // 1.60.1: one probe each, issue #263; `OnLeave`'s `motion` false is
+    // unverified). The mouse stays where it is.
+    if let Some(id) = engine(vm).world.input.mouse_focus
+        && !widgets::visible(engine(vm), id)
+    {
+        engine_mut(vm).world.input.mouse_focus = None;
+        widgets::run_script(vm, id, "OnLeave", &[Value::Bool(false)]);
+        if frame_unit(vm, id).is_some() && engine(vm).units.mouseover.is_some() {
+            engine_mut(vm).units.mouseover = None;
+            widgets::fire_event(vm, "UPDATE_MOUSEOVER_UNIT", &[]);
+        }
+    }
+    if let Some(id) = engine(vm).world.input.dragging
+        && !widgets::visible(engine(vm), id)
+    {
+        engine_mut(vm).world.input.dragging = None;
+        widgets::run_script(vm, id, "OnDragStop", &[]);
     }
 }
 

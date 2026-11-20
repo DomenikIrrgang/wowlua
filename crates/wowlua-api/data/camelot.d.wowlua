@@ -28874,7 +28874,7 @@ end
 
 declare class CooldownViewerItemDataMixin
     function SetCooldownID(cooldownID: unknown, forceSet: unknown?)
-    function FindLinkedSpellForCurrentAuras(unit: UnitTokenRestrictedForAddOns): (unknown, (AuraData | Secret<AuraData>)?)
+    function FindLinkedSpellForCurrentAuras(unit: UnitTokenRestrictedForAddOns): (unknown, AuraData?)
     function RefreshLinkedSpell(): unknown
     function RefreshSpellCategoryData()
     function OnCooldownIDSet()
@@ -81910,7 +81910,7 @@ declare namespace C_CurveUtil
     --- Evaluates a potentially-secret boolean value and returns a color.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_CurveUtil.EvaluateColorFromBoolean)
-    function EvaluateColorFromBoolean(boolean: boolean | Secret<boolean>, valueIfTrue: ColorMixin | Secret<ColorMixin>, valueIfFalse: ColorMixin | Secret<ColorMixin>): ColorMixin
+    function EvaluateColorFromBoolean(boolean: boolean | Secret<boolean>, valueIfTrue: ColorWithAlpha | Secret<ColorWithAlpha>, valueIfFalse: ColorWithAlpha | Secret<ColorWithAlpha>): ColorWithAlpha
     --- Evaluates a potentially-secret boolean value and returns a single color component (eg. alpha).
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_CurveUtil.EvaluateColorValueFromBoolean)
@@ -100629,11 +100629,11 @@ declare namespace C_TooltipInfo
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_TooltipInfo.GetUnitAura)
-    function GetUnitAura(unitToken: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): (TooltipData | Secret<TooltipData>)?
+    function GetUnitAura(unitToken: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): TooltipData?
     --- Obtains aura info like other functions with the caveat that the filters will always at least include the typically mutually exclusive HELPFUL|HARMFUL regardless of what the argument value is set to
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_TooltipInfo.GetUnitAuraByAuraInstanceID)
-    function GetUnitAuraByAuraInstanceID(unitToken: UnitTokenRestrictedForAddOns, auraInstanceID: number, filter: AuraFilters?): (TooltipData | Secret<TooltipData>)?
+    function GetUnitAuraByAuraInstanceID(unitToken: UnitTokenRestrictedForAddOns, auraInstanceID: number, filter: AuraFilters?): TooltipData?
     --- Returns the tooltip data of a helpful aura on the unit.
     ---
     --- **Parameters**
@@ -100643,7 +100643,7 @@ declare namespace C_TooltipInfo
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_TooltipInfo.GetUnitBuff)
-    function GetUnitBuff(unitToken: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): (TooltipData | Secret<TooltipData>)?
+    function GetUnitBuff(unitToken: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): TooltipData?
     --- Returns the tooltip data of a helpful aura on the unit by its aura instance ID.
     ---
     --- **Parameters**
@@ -100652,7 +100652,7 @@ declare namespace C_TooltipInfo
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_TooltipInfo.GetUnitBuffByAuraInstanceID)
-    function GetUnitBuffByAuraInstanceID(unitToken: UnitTokenRestrictedForAddOns, auraInstanceID: number, filter: AuraFilters?): (TooltipData | Secret<TooltipData>)?
+    function GetUnitBuffByAuraInstanceID(unitToken: UnitTokenRestrictedForAddOns, auraInstanceID: number, filter: AuraFilters?): TooltipData?
     --- Returns the tooltip data for a harmful aura on the unit, by index.
     ---
     --- **Parameters**
@@ -100662,7 +100662,7 @@ declare namespace C_TooltipInfo
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_TooltipInfo.GetUnitDebuff)
-    function GetUnitDebuff(unitToken: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): (TooltipData | Secret<TooltipData>)?
+    function GetUnitDebuff(unitToken: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): TooltipData?
     --- Returns the tooltip data for a harmful aura on the unit, by its aura instance ID.
     ---
     --- **Parameters**
@@ -100672,7 +100672,7 @@ declare namespace C_TooltipInfo
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_TooltipInfo.GetUnitDebuffByAuraInstanceID)
-    function GetUnitDebuffByAuraInstanceID(unitToken: UnitTokenRestrictedForAddOns, auraInstanceID: number, filter: AuraFilters?): (TooltipData | Secret<TooltipData>)?
+    function GetUnitDebuffByAuraInstanceID(unitToken: UnitTokenRestrictedForAddOns, auraInstanceID: number, filter: AuraFilters?): TooltipData?
     --- Returns the tooltip data for the item in the item upgrade window.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -103957,7 +103957,7 @@ declare namespace C_UnitAuras
     --- - `aura`: Structured information about the found aura, if any.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_UnitAuras.GetAuraDataByAuraInstanceID)
-    function GetAuraDataByAuraInstanceID(unit: UnitTokenRestrictedForAddOns, auraInstanceID: number): (AuraData | Secret<AuraData>)?
+    function GetAuraDataByAuraInstanceID(unit: UnitTokenRestrictedForAddOns, auraInstanceID: number): AuraData?
     --- Returns the aura on the unit at the given index.
     ---
     --- **Parameters**
@@ -103967,7 +103967,7 @@ declare namespace C_UnitAuras
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_UnitAuras.GetAuraDataByIndex)
-    function GetAuraDataByIndex(unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): (AuraData | Secret<AuraData>)?
+    function GetAuraDataByIndex(unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): AuraData?
     --- Returns information about an aura on a unit by a given slot index.
     ---
     --- **Parameters**
@@ -103977,7 +103977,7 @@ declare namespace C_UnitAuras
     --- - `aura`: Structured information about the found aura, if any.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_UnitAuras.GetAuraDataBySlot)
-    function GetAuraDataBySlot(unit: UnitTokenRestrictedForAddOns, slot: number): (AuraData | Secret<AuraData>)?
+    function GetAuraDataBySlot(unit: UnitTokenRestrictedForAddOns, slot: number): AuraData?
     --- Returns the aura on the unit with the given spell name.
     ---
     --- **Parameters**
@@ -103986,7 +103986,7 @@ declare namespace C_UnitAuras
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_UnitAuras.GetAuraDataBySpellName)
-    function GetAuraDataBySpellName(unit: UnitTokenRestrictedForAddOns, spellName: string, filter: AuraFilters?): (AuraData | Secret<AuraData>)?
+    function GetAuraDataBySpellName(unit: UnitTokenRestrictedForAddOns, spellName: string, filter: AuraFilters?): AuraData?
     --- Queries the dispel type associated with an aura instance and remaps it to a color via a curve, with the dispel type ID used as the 'x' value.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_UnitAuras.GetAuraDispelTypeColor)
@@ -104021,7 +104021,7 @@ declare namespace C_UnitAuras
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_UnitAuras.GetBuffDataByIndex)
-    function GetBuffDataByIndex(unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): (AuraData | Secret<AuraData>)?
+    function GetBuffDataByIndex(unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): AuraData?
     --- Obtains the spell ID of a passive cooldown effect associated with a spell.
     ---
     --- **Returns**
@@ -104038,7 +104038,7 @@ declare namespace C_UnitAuras
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_UnitAuras.GetDebuffDataByIndex)
-    function GetDebuffDataByIndex(unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): (AuraData | Secret<AuraData>)?
+    function GetDebuffDataByIndex(unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?): AuraData?
     --- Returns the alerts passed to SetGroupBuffVisualAlerts plus an entry for every linked rank spell of those group buffs.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_UnitAuras.GetGroupBuffVisualAlerts)
@@ -104050,7 +104050,7 @@ declare namespace C_UnitAuras
     --- Returns information about an aura on the player by a given spell ID.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_UnitAuras.GetPlayerAuraBySpellID)
-    function GetPlayerAuraBySpellID(spellID: SpellIdentifier | Secret<SpellIdentifier>): (AuraData | Secret<AuraData>)?
+    function GetPlayerAuraBySpellID(spellID: SpellIdentifier | Secret<SpellIdentifier>): AuraData?
     --- Returns the client-predicted amount of time that a new spellcast of the same spell would carry over to the new application of that aura. Takes an optional spellID to use as the new duration if that cannot be derived from the aura, if that value isn't supplied the aura's spellID will be used
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_UnitAuras.GetRefreshCarryOverDuration)
@@ -104062,7 +104062,7 @@ declare namespace C_UnitAuras
     --- Returns the first instance of an aura on a unit matching a given spell ID. Returns nil if no such aura is found. Additionally can return nil if querying a unit that is not visible (eg. party members on other maps).
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_C_UnitAuras.GetUnitAuraBySpellID)
-    function GetUnitAuraBySpellID(unit: UnitTokenRestrictedForAddOns, spellID: SpellIdentifier | Secret<SpellIdentifier>): (AuraData | Secret<AuraData>)?
+    function GetUnitAuraBySpellID(unit: UnitTokenRestrictedForAddOns, spellID: SpellIdentifier | Secret<SpellIdentifier>): AuraData?
     --- Returns the instance IDs of the unit's auras that pass the filter.
     ---
     --- **Parameters**
@@ -105310,7 +105310,7 @@ declare namespace AuraUtil
     function ShouldDisplayBuff(unitCaster: string, spellId: unknown, canApplyAura: unknown?): unknown
     function ShouldDisplayDebuff(unitCaster: string, spellId: unknown): unknown
     function UnitFrameDebuffComparator(a: unknown, b: unknown): unknown
-    function UnpackAuraData(auraData: ((AuraData | Secret<AuraData>))?): (string?, number?, number?, string?, number?, number?, string?, boolean?, boolean?, number?, boolean?, boolean?, boolean?, boolean?, number?, ...unknown)
+    function UnpackAuraData(auraData: AuraData?): (string?, number?, number?, string?, number?, number?, string?, boolean?, boolean?, number?, boolean?, boolean?, boolean?, boolean?, number?, ...unknown)
 end
 
 declare namespace Menu

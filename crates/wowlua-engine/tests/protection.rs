@@ -261,3 +261,55 @@ return b:GetWidth(), kid:GetParent() == b",
     run(&mut vm, "mock.player:leaveCombat()");
     assert_eq!(run(&mut vm, ask), out_of_combat);
 }
+
+/// `SetPropagateKeyboardInput` is blocked for tainted code in combat on
+/// any frame, an addon's own hidden one too; `EnableKeyboard` is not (the
+/// game, Forever 1.60.1; issue #262, decision T647).
+#[test]
+fn propagating_keys_is_blocked_in_combat_on_any_frame() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local seen = {}
+local w = CreateFrame('Frame')
+w:RegisterEvent('ADDON_ACTION_BLOCKED')
+w:SetScript('OnEvent', function(_, e, addon, action) seen[#seen + 1] = addon .. ' ' .. action end)
+local f = CreateFrame('Frame')
+f:Hide()
+f:SetPropagateKeyboardInput(true)
+local before = tostring(f:GetPropagateKeyboardInput())
+mock.player:enterCombat()
+f:SetPropagateKeyboardInput(false)
+f:EnableKeyboard(true)
+return before, tostring(f:GetPropagateKeyboardInput()), tostring(f:IsKeyboardEnabled()), table.concat(seen, ',')",
+    );
+    assert_eq!(
+        r,
+        [
+            "true",
+            "true",
+            "true",
+            "MyAddon SetPropagateKeyboardInput()"
+        ]
+    );
+}
+
+/// `C_AuctionHouse.PlaceBid` from addon code is refused unless the player
+/// is acting: in a button's click it goes on (issue #264, decision T660).
+#[test]
+fn a_bid_needs_the_players_action() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "C_AuctionHouse.PlaceBid(7, 500)
+local direct = #mock.refusals()
+local b = CreateFrame('Button', nil, UIParent)
+b:SetSize(40, 20)
+b:SetPoint('CENTER')
+b:SetScript('OnClick', function() C_AuctionHouse.PlaceBid(7, 500) end)
+mock.click(b)
+local r = mock.refusals()
+return direct, #r, r[1].event, r[1].action",
+    );
+    assert_eq!(r, ["1", "1", "ADDON_ACTION_BLOCKED", "PlaceBid()"]);
+}

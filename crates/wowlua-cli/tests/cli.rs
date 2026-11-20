@@ -1793,6 +1793,104 @@ fn deep_operator_chains_compile() {
     }
 }
 
+/// `UnitAura`, `UnitBuff` and `UnitDebuff` are Blizzard's deprecation
+/// fallbacks the classic clients load; WoW Forever loads them in no game
+/// of its (`[AllowLoadGameType classic]`), so camelot has none (issue
+/// #271, decision T654).
+#[test]
+fn unit_aura_only_where_the_client_loads_it() {
+    for (flavor, ok) in [("camelot", false), ("vanilla", true)] {
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            dir.path(),
+            &[
+                (
+                    "wowlua.json",
+                    &format!(
+                        r#"{{ "package": {{ "name": "auras", "version": "1.0.0" }}, "flavors": {{ "{flavor}": {{}} }},
+  "check": {{ "mode": "strict" }} }}"#
+                    ),
+                ),
+                (
+                    "src/main.wowlua",
+                    "print(UnitAura(\"player\", 1), UnitBuff(\"player\", 1), UnitDebuff(\"player\", 1))\n",
+                ),
+            ],
+        );
+        let out = wowlua(dir.path())
+            .args(["check", "--message-format", "short"])
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let missing = stderr.matches("1001]: `Unit").count();
+        assert_eq!(missing, if ok { 0 } else { 3 }, "{flavor}: {stderr}");
+    }
+}
+
+/// `C_CurveUtil.EvaluateColorFromBoolean` takes colors with their alpha
+/// (`ColorWithAlpha`): a class color, which has none, is refused;
+/// `CreateColor` with an alpha makes one (issue #255, decision T655).
+#[test]
+fn colors_without_alpha() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "colors", "version": "1.0.0" }, "flavors": { "camelot": {} },
+  "check": { "mode": "strict" } }"#,
+            ),
+            (
+                "src/main.wowlua",
+                "local class = C_ClassColor.GetClassColor(\"WARRIOR\")\nlocal red = CreateColor(1, 0, 0, 1)\nif class then\n    print(C_CurveUtil.EvaluateColorFromBoolean(false, red, class))\nend\nlocal c = C_CurveUtil.EvaluateColorFromBoolean(true, red, CreateColor(0, 1, 0, 1))\nlocal a: number = c.a\nprint(a, CreateColor(1, 1, 1).a)\n",
+            ),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
+    assert_eq!(errors.len(), 1, "{stderr}");
+    assert!(
+        errors[0].starts_with("src/main.wowlua:4:") && errors[0].contains("E2001"),
+        "{stderr}"
+    );
+}
+
+/// The aura getters answer addon code a plain table, or raise while auras
+/// are restricted: `AuraData?`, no secret table to narrow first (issue
+/// #283, decision T656).
+#[test]
+fn aura_getters_answer_plain_tables() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "auras", "version": "1.0.0" }, "flavors": { "camelot": {} },
+  "check": { "mode": "strict" } }"#,
+            ),
+            (
+                "src/main.wowlua",
+                "local a = C_UnitAuras.GetAuraDataByIndex(\"player\", 1, \"HELPFUL\")\nif a then print(a.auraInstanceID) end\nlocal b = C_UnitAuras.GetPlayerAuraBySpellID(1459)\nif b then print(b.auraInstanceID) end\n",
+            ),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        out.status.success() && !stderr.contains("E2040"),
+        "{stderr}"
+    );
+}
+
 /// With `check.lua`, a later flavor takes a plain Lua file's type check
 /// from an earlier one where what the file read of the declarations is the
 /// same (debug builds, and so this test, check every reused file again and
@@ -3531,6 +3629,22 @@ show(pcall(takeDuration :: any, 5))
 export function onEvent(event: EventName) end
 show(pcall(onEvent, "PLAYER_LOGIN"))
 show(pcall(onEvent :: any, "NOT_AN_EVENT"))
+-- An exported class's constructor is checked; a function in it and the
+-- function after the class are not exported (issue #252).
+export class Gadget
+    name: string
+    onChange: (value: string) -> ()
+    constructor(name: string)
+        self.name = name
+        self.onChange = function(value: string) print("changed", value) end
+    end
+end
+local function after(_x: number) end
+local newGadget: any = Gadget.new
+show(pcall(newGadget, 5))
+local change: any = Gadget.new("g").onChange
+show(pcall(change, nil))
+show(pcall(after :: any, "x"))
 "#;
     write(
         dir.path(),
@@ -3562,6 +3676,10 @@ show(pcall(onEvent :: any, "NOT_AN_EVENT"))
             "false Chk: src/main.wowlua:49: bad argument #1 '_d' to 'takeDuration' (DurationObject expected, got number)",
             "true nil",
             "false Chk: src/main.wowlua:54: bad argument #1 'event' to 'onEvent' (\"ACCOUNT_STORE_CURRENCY_AVAILABLE_UPDATED\" | \"ACCOUNT_STORE_FRONT_UPDATED\" | \"ACCOUNT_STORE_ITEM_INFO_UPDATED\" | \"ACCOUNT_STORE_TRANSACTION_ERROR\" | \"STORE_FRONT_STATE_UPDATED\" | \"ACHIEVEMENT_EARNED\" | \"ACHIEVEMENT_PLAYER_NAME\" | \"ACHIEVEMENT_SEARCH_UPDATED\" | … (1774 more) expected, got string)",
+            "false Chk: src/main.wowlua:62: bad argument #1 'name' to 'Gadget.new' (string expected, got number)",
+            "changed nil",
+            "true nil",
+            "true nil",
         ]
         .join("\n")
     );
