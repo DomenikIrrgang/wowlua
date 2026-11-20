@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,229 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,230 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -857,7 +857,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,229 rules unverified: each rests on Blizzard's
+The engine's code marks 1,230 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1516,12 +1516,13 @@ page changes only when a rule is added, removed or reworded.
 - [healcalc.rs](../crates/wowlua-engine-core/src/healcalc.rs): A unit fills it with its health, its damage and heal absorbs and the heals being cast on it (`setAbsorb`, `setHealAbs...
 - [healcalc.rs](../crates/wowlua-engine-core/src/healcalc.rs): `UnitGetDetailedHealPrediction(unit, healer, calculator)`: the unit's health, maximum, absorbs and incoming heals kep...
 
-### input (7)
+### input (8)
 
 - [input.rs](../crates/wowlua-engine-core/src/input.rs): The key itself, pressed: to the keyboard frames as any key (`/stdtest engine keys`: `OnKeyDown("LSHIFT")`; unverified...
 - [input.rs](../crates/wowlua-engine-core/src/input.rs): An enabled button's click, down or up as it registered for clicks (`RegisterForClicks`: by default the left button's...
 - [input.rs](../crates/wowlua-engine-core/src/input.rs): Whether a click is the Mac's Cmd+Left as a right click (decision T624): the Mac client, Cmd held, the left button, an...
 - [input.rs](../crates/wowlua-engine-core/src/input.rs): The keyboard focus let go once its edit box is out of sight (hidden, or a parent hidden or changed): keys reach the g...
+- [input.rs](../crates/wowlua-engine-core/src/input.rs): A frame that hides under the mouse gets its `OnLeave`, and one hidden mid-drag its `OnDragStop`, during the `Hide()`...
 - [input.rs](../crates/wowlua-engine-core/src/input.rs): A key the focused edit box takes, whether it took it: every key while it has the focus (unverified: typing into chat...
 - [input.rs](../crates/wowlua-engine-core/src/input.rs): The user clicks into an edit box: after its text (the engine's click is at the box's middle; unverified where the cli...
 - [input.rs](../crates/wowlua-engine-core/src/input.rs): `IsMouseOver(top, bottom, left, right)`: the mouse over the region's rectangle grown by the offsets (`mouse_inside`),...
@@ -2186,7 +2187,7 @@ page changes only when a rule is added, removed or reworded.
 
 ### trainer (13)
 
-- [trainer.rs](../crates/wowlua-engine/src/trainer.rs): The trainer's choice (`SelectTrainerService`, `GetTrainerSelectionIndex`, decision T617): the first available service...
+- [trainer.rs](../crates/wowlua-engine/src/trainer.rs): The trainer's choice (`SelectTrainerService`, `GetTrainerSelectionIndex`, decisions T617, T650): the first available...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): Beast Training (decision T618): in WoW Forever a hunter's spell, not an NPC (reported by the user, 2026-11-10): the p...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): Unverified: a profession trainer, the filters' list kept until the window reopens, a spell bought without room on the...
 - [trainer.rs](../crates/wowlua-engine/src/trainer.rs): A rank no data gives a level (its service reads 0, no learn level recorded, not in SuuUI's data): estimated between t...
@@ -2585,6 +2586,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Group pets and mouseover (decision T644, 2026-11-14)
 - A group pet's reaction as it comes (2026-11-14)
 - No reagent cost and cash on delivery (decision T645, 2026-11-19)
+- A frame with one anchor and no size (issue #259, 2026-11-20)
 
 ## In-game regressions
 

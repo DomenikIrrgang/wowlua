@@ -272,8 +272,16 @@ pub fn refuses_method(vm: &mut Vm, id: WidgetId, f: &crate::api::Function) -> bo
         .and_then(serde_json::Value::as_bool)
         == Some(true)
         || f.short == "SetAttribute";
+    // On any frame, protected or not: `SetPropagateKeyboardInput` on an
+    // addon's own hidden frame in a fight was refused, `EnableKeyboard`
+    // allowed (the game, Forever 1.60.1 70888, one probe; issue #262,
+    // decision T647).
+    let any_frame = f.short == "SetPropagateKeyboardInput";
     let e = engine(vm);
-    if !(protected_method && e.units.lockdown && tainted(vm) && widgets::protected(e, id)) {
+    if !(e.units.lockdown
+        && tainted(vm)
+        && (any_frame || (protected_method && widgets::protected(e, id))))
+    {
         return false;
     }
     let action = action_name(vm);

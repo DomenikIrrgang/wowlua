@@ -673,7 +673,7 @@ fn classes_and_enums(files: &[FileInput], analysis: &mut Analysis) {
                         ),
                     )
                     .with_label(e.span(), "imported with `import type`")
-                    .with_help(format!("import it as a value: `import {first} from …`")),
+                    .with_help(format!("import it as a value (`import {first} from …`); another addon's class is extended by the name its `@global` gives it")),
                 );
             }
             let base = match c.extends().map(classes::type_path) {

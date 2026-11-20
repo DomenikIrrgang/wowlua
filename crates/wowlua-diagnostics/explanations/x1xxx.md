@@ -223,6 +223,49 @@ end
 print(sign(2))
 ```
 
+## E1006
+
+A function names a file-level `local` (or `const`, `local function`) that is
+declared further down the file, after the function. As in Lua, the function
+can't see that local: the name there is the global of the same name, and
+that global exists (the game declares it, or the package assigns it). So the
+function quietly uses the game's value, not yours. `GLYPHS`, for example, is
+the client's string "Glyphs". Move the declaration above the function, or
+write `_G.GLYPHS` if you mean the global. (In basic mode this is the warning
+W1006.) Code at the file's top level runs before the declaration, so reading
+the global there, as in `local print = print`, is fine.
+
+```wowlua fails
+--!strict
+local function texture(name: string): string
+    return GLYPHS .. name
+end
+
+local GLYPHS = "Interface\\AddOns\\MyAddon\\Glyphs\\"
+print(texture("star"), GLYPHS)
+```
+
+```wowlua compiles
+--!strict
+local GLYPHS = "Interface\\AddOns\\MyAddon\\Glyphs\\"
+
+local function texture(name: string): string
+    return GLYPHS .. name
+end
+print(texture("star"))
+```
+
+Related: W1006, E1001
+
+## W1006
+
+The basic-mode form of E1006: a function names a file-level local declared
+further down the file, so it reads (or assigns) the global of that name
+instead. Move the declaration above the function, or write `_G.name` to mean
+the global.
+
+Related: E1006
+
 ## E1010
 
 The code assigns to an exported `local` after its declaration, or to an

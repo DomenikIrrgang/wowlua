@@ -11,7 +11,7 @@ wowlua <command> [options]
 | Option | Meaning |
 |--------|---------|
 | `-p, --package <name>` | Select a workspace member |
-| `--manifest <path>` | Use a specific `wowlua.json` |
+| `--manifest <path>` | Use a specific `wowlua.json`, read in place of its folder's: a workspace root's (when the root is a package too) or a member's (decision T649) |
 | `--locked` | Fail if `wowlua.lock` would change (E4104) |
 | `--offline` | Use only the cache; never access the network (E4105 if something is missing) |
 | `--frozen` | `--locked` plus `--offline` ([Package manager §10.6](package-manager.md#106-lockfile)) |

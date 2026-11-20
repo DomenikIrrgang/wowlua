@@ -26,15 +26,14 @@
 //! window opened or a filter changed; a service learned meanwhile stays.
 //!
 //! The trainer's choice (`SelectTrainerService`, `GetTrainerSelectionIndex`,
-//! decision T617): the first available service as its list comes
+//! decisions T617, T650): the first available service as its list comes
 //! (recorded: the selection 11 of 14 class trainers probed read with the
 //! window open; the scenario's click on that one sent nothing), no event
 //! for it. `SelectTrainerService(i)` selects a listed service, any other
-//! index none (Blizzard's "> count effectively resets it"); a change sends
-//! `TRAINER_DESCRIPTION_UPDATE()` at once, as Blizzard's trainer frame takes
-//! the game's choice up in it and selects again there (the same one again:
-//! nothing). Unverified: the event at once rather than a round trip later,
-//! and with none available the choice none (three probes read 2).
+//! index none (Blizzard's "> count effectively resets it"), and sends no
+//! event (recorded at a pet trainer, 2026-11-17: Blizzard's trainer frame
+//! keeps the row it chose). Unverified: a class trainer's, and with none
+//! available the choice none (three probes read 2).
 //!
 //! Beast Training (decision T618): in WoW Forever a hunter's spell, not
 //! an NPC (reported by the user, 2026-11-10): the player's cast of it
@@ -1021,8 +1020,7 @@ fn get_trainer_selection_index(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `SelectTrainerService(i)`: a listed service chosen, any other index
-/// none; a change sends `TRAINER_DESCRIPTION_UPDATE()` at once (decision
-/// T617).
+/// none; no event (decision T650: the game sent none).
 fn select_trainer_service(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Num(_) = vm.hidden(c.arg(1)) else {
         return Ok(vec![]);
@@ -1031,10 +1029,7 @@ fn select_trainer_service(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     let new = service(vm, &c).map(|(i, _)| i);
-    let old = std::mem::replace(&mut engine_mut(vm).world.trainers.selected, new);
-    if old != new {
-        fire(vm, "TRAINER_DESCRIPTION_UPDATE", &[]);
-    }
+    engine_mut(vm).world.trainers.selected = new;
     Ok(vec![])
 }
 

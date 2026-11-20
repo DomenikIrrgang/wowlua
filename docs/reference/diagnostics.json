@@ -904,6 +904,46 @@
       ],
       "related": []
     },
+    "E1006": {
+      "area": "names",
+      "text": "A function names a file-level `local` (or `const`, `local function`) that is\ndeclared further down the file, after the function. As in Lua, the function\ncan't see that local: the name there is the global of the same name, and\nthat global exists (the game declares it, or the package assigns it). So the\nfunction quietly uses the game's value, not yours. `GLYPHS`, for example, is\nthe client's string \"Glyphs\". Move the declaration above the function, or\nwrite `_G.GLYPHS` if you mean the global. (In basic mode this is the warning\nW1006.) Code at the file's top level runs before the declaration, so reading\nthe global there, as in `local print = print`, is fine.",
+      "examples": [
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "--!strict\nlocal function texture(name: string): string\n    return GLYPHS .. name\nend\n\nlocal GLYPHS = \"Interface\\\\AddOns\\\\MyAddon\\\\Glyphs\\\\\"\nprint(texture(\"star\"), GLYPHS)\n"
+            }
+          ],
+          "output": "error[E1006]: `GLYPHS` here reads the global `GLYPHS`: the file-level local `GLYPHS` is declared further down, after this function\n  ┌─ src/main.wowlua:3:12\n  │\n3 │     return GLYPHS .. name\n  │            ^^^^^^ the global\n  ·\n6 │ local GLYPHS = \"Interface\\\\AddOns\\\\MyAddon\\\\Glyphs\\\\\"\n  │       ------ the local, declared here\n  │\n  = help: move the declaration above the function; to mean the global, write `_G.GLYPHS`"
+        },
+        {
+          "compiles": true,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "--!strict\nlocal GLYPHS = \"Interface\\\\AddOns\\\\MyAddon\\\\Glyphs\\\\\"\n\nlocal function texture(name: string): string\n    return GLYPHS .. name\nend\nprint(texture(\"star\"))\n"
+            }
+          ],
+          "output": null
+        }
+      ],
+      "related": [
+        "W1006",
+        "E1001"
+      ]
+    },
+    "W1006": {
+      "area": "names",
+      "text": "The basic-mode form of E1006: a function names a file-level local declared\nfurther down the file, so it reads (or assigns) the global of that name\ninstead. Move the declaration above the function, or write `_G.name` to mean\nthe global.",
+      "examples": [],
+      "related": [
+        "E1006"
+      ]
+    },
     "E1010": {
       "area": "names",
       "text": "The code assigns to an exported `local` after its declaration, or to an\nimported name. Importers copy an export once while the file loads, so a\nlater assignment would never reach them; exported and imported bindings are\ntherefore read-only. Change a table's contents instead (`state.count += 1`),\nor export functions that read and change the value.",
@@ -3014,7 +3054,7 @@
               "text": "export class Animal\nend\n"
             }
           ],
-          "output": "error[E3008]: class `Dog` extends `Animal`, which `import type` imports: a type only, with no class at run time\n  ┌─ src/main.wowlua:2:19\n  │\n2 │ class Dog extends Animal\n  │                   ^^^^^^ imported with `import type`\n  │\n  = help: import it as a value: `import Animal from …`"
+          "output": "error[E3008]: class `Dog` extends `Animal`, which `import type` imports: a type only, with no class at run time\n  ┌─ src/main.wowlua:2:19\n  │\n2 │ class Dog extends Animal\n  │                   ^^^^^^ imported with `import type`\n  │\n  = help: import it as a value (`import Animal from …`); another addon's class is extended by the name its `@global` gives it"
         },
         {
           "compiles": true,

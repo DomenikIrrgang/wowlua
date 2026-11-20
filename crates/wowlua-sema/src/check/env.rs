@@ -1456,13 +1456,150 @@ impl<'p> Env<'p> {
         self.diagnostics.truncate(reported);
         match self.types.get(t) {
             Ty::Named(d, _) => Some(*d),
-            _ => None,
+            _ => {
+                let p = extends_path(e)?;
+                let p: Vec<&str> = p.iter().map(|s| s.as_str()).collect();
+                self.value_class(&p, module, sources, 0)
+            }
         }
+    }
+
+    /// The class a value path names at run time, as `extends` reads it
+    /// (spec §3.1.4): a class the module declares, a file-level `local` or
+    /// `const` set to such a path (a re-export), an import of one, a
+    /// namespace import's, or a class another module makes a global with
+    /// `@global`.
+    fn value_class(
+        &self,
+        path: &[&str],
+        module: usize,
+        sources: &[Source],
+        depth: u8,
+    ) -> Option<DefId> {
+        if depth > 16 {
+            return None;
+        }
+        let src = sources
+            .iter()
+            .find(|s| s.index == module && !s.declaration)?;
+        match path {
+            [] => None,
+            [name] => {
+                for s in src.parse.view().block().stmts() {
+                    let kind = match s.kind() {
+                        StmtKind::Export(inner) => inner.kind(),
+                        k => k,
+                    };
+                    let value = match kind {
+                        StmtKind::Class(c) if c.name().text() == *name => {
+                            return self
+                                .module_types
+                                .get(&module)?
+                                .get(*name)
+                                .copied()
+                                .filter(|&d| self.def(d).kind == DefKind::Class);
+                        }
+                        StmtKind::Const { name: n, value, .. } if n.text() == *name => value,
+                        StmtKind::Local { names, values }
+                            if names.len() == 1
+                                && names.first().is_some_and(|n| n.name.text() == *name) =>
+                        {
+                            values.first()
+                        }
+                        StmtKind::Local { names, .. }
+                            if names.iter().any(|n| n.name.text() == *name) =>
+                        {
+                            return None;
+                        }
+                        StmtKind::LocalFunction { name: n, .. } if n.text() == *name => {
+                            return None;
+                        }
+                        _ => continue,
+                    };
+                    let path = value.and_then(value_path)?;
+                    let path: Vec<&str> = path.iter().map(|s| s.as_str()).collect();
+                    return self.value_class(&path, module, sources, depth + 1);
+                }
+                if let Some((_, m, export)) = src.imports.iter().find(|(l, ..)| l.as_ref() == *name)
+                {
+                    return self.value_class(&[export], *m, sources, depth + 1);
+                }
+                if src.namespaces.iter().any(|(n, _)| n.as_ref() == *name) {
+                    return None;
+                }
+                // `@global("Name") export class C`, in any module.
+                sources.iter().filter(|s| !s.declaration).find_map(|s| {
+                    s.parse.view().block().stmts().iter().find_map(|st| {
+                        let inner = match st.kind() {
+                            StmtKind::Export(inner) => inner.kind(),
+                            k => k,
+                        };
+                        let StmtKind::Class(c) = inner else {
+                            return None;
+                        };
+                        let mut names = Vec::new();
+                        super::global_names(st, &mut names);
+                        if !names.iter().any(|n| n == name) {
+                            return None;
+                        }
+                        self.module_types
+                            .get(&s.index)?
+                            .get(c.name().text())
+                            .copied()
+                            .filter(|&d| self.def(d).kind == DefKind::Class)
+                    })
+                })
+            }
+            [ns, rest @ ..] => {
+                let &(_, m) = src.namespaces.iter().find(|(n, _)| n.as_ref() == *ns)?;
+                self.value_class(rest, m, sources, depth + 1)
+            }
+        }
+    }
+
+    /// `extends N<A>` for class `def` (`N` may name it only as a value,
+    /// spec §3.1.4): the class's type with the arguments given.
+    pub(crate) fn value_base(&mut self, def: DefId, e: Type<'_>, scope: &Scope) -> TypeId {
+        let args: Vec<TypeId> = match e.kind() {
+            TypeKind::Ref { args, .. } => args
+                .iter()
+                .map(|a| match a {
+                    TypeArg::Type(t) => self.resolve(t, scope),
+                    TypeArg::Pack(_) => Types::ANY,
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        let expected = self.def(def).params.len();
+        if !args.is_empty() && args.len() != expected {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    "E2013",
+                    format!(
+                        "`{}` takes {expected} type argument{}, but {} were given",
+                        self.def(def).name,
+                        if expected == 1 { "" } else { "s" },
+                        args.len()
+                    ),
+                )
+                .with_label(e.span(), "here"),
+            );
+        }
+        let mut args = args;
+        args.resize(expected, Types::ANY);
+        self.types.intern(Ty::Named(def, args))
     }
 
     /// What a class extends: a class (E3008 for an interface, a type, an
     /// enum or a value that is no class, spec §3.1.4).
-    fn class_base(&mut self, c: ClassDecl<'_>, e: Type<'_>, scope: &Scope) -> Option<TypeId> {
+    fn class_base(
+        &mut self,
+        c: ClassDecl<'_>,
+        e: Type<'_>,
+        scope: &Scope,
+        module: usize,
+        sources: &[Source],
+    ) -> Option<TypeId> {
         let not_a_class = |env: &mut Self, what: &str| {
             let name = match e.kind() {
                 TypeKind::Ref { path, .. } => {
@@ -1479,26 +1616,62 @@ impl<'p> Env<'p> {
                     ),
             );
         };
-        // A name that is no type: a value (`local Base = {}`).
-        if let TypeKind::Ref { path, .. } = e.kind()
-            && let Some([name]) = path.exactly::<1>()
-            && !scope.params.iter().any(|(n, _)| n.as_ref() == name.text())
-            && self.lookup_type(name.text(), scope).is_none()
+        // `extends` reads its path as a value at run time: the class it
+        // names there (a re-export, an import, a `@global` class), whatever
+        // types the path names (decision L104).
+        let path = extends_path(e);
+        let is_param = path
+            .as_ref()
+            .is_some_and(|p| p.len() == 1 && scope.params.iter().any(|(n, _)| n.as_ref() == p[0]));
+        let value = match &path {
+            Some(p) if !is_param => {
+                let p: Vec<&str> = p.iter().map(|s| s.as_str()).collect();
+                self.value_class(&p, module, sources, 0)
+            }
+            _ => None,
+        };
+        // The type the path names: an alias of a class, or none.
+        let named = match e.kind() {
+            TypeKind::Ref { path, .. } if !is_param => match path.len() {
+                1 => self.lookup_type(path.at(0).text(), scope),
+                2 => scope
+                    .module
+                    .and_then(|m| self.module_namespaces.get(&m))
+                    .and_then(|ns| ns.get(path.at(0).text()))
+                    .and_then(|m| self.module_types.get(m))
+                    .and_then(|t| t.get(path.at(1).text()))
+                    .copied(),
+                _ => None,
+            },
+            _ => None,
+        };
+        let alias = named.is_some_and(|d| self.def(d).kind == DefKind::Alias);
+        if let Some(d) = value {
+            // The value is the class: through an alias or no type at all.
+            if alias || named.is_none() {
+                if let Some(n) = named
+                    && let TypeKind::Ref { path, .. } = e.kind()
+                    && let Some(last) = path.last()
+                {
+                    let span = self.def(n).span;
+                    self.note_declared_at(last.span(), span);
+                }
+                return Some(self.value_base(d, e, scope));
+            }
+        } else if path.is_some()
+            && !is_param
+            && named.is_none()
+            && path.as_ref().is_some_and(|p| p.len() == 1)
         {
+            // A name that is no type: a value (`local Base = {}`).
             not_a_class(self, "a value, not a class");
             return None;
         }
-        // (an alias of a class names no value either)
-        let alias = match e.kind() {
-            TypeKind::Ref { path, .. } => path
-                .exactly::<1>()
-                .and_then(|[n]| self.lookup_type(n.text(), scope))
-                .is_some_and(|d| self.def(d).kind == DefKind::Alias),
-            _ => false,
-        };
         let t = self.resolve(e, scope);
         let what = match self.types.get(t) {
-            _ if alias => Some("a type alias, not a class"),
+            _ if alias => {
+                Some("a type alias, not a class: there is no class of that name at run time")
+            }
             Ty::Named(b, _) => match self.def(*b).kind {
                 DefKind::Class => None,
                 DefKind::Interface => Some("an interface, not a class"),
@@ -1528,7 +1701,7 @@ impl<'p> Env<'p> {
         let instance = self.instance(def);
         scope.self_ty = Some(instance);
         if let Some(e) = c.extends()
-            && let Some(t) = self.class_base(c, e, &scope)
+            && let Some(t) = self.class_base(c, e, &scope, module, sources)
         {
             self.def_mut(def).bases.push(t);
             if let Ty::Named(b, _) = self.types.get(t).clone() {
@@ -1736,16 +1909,44 @@ impl<'p> Env<'p> {
         let new = match ctor {
             Some(t) => t,
             None => {
+                // (the base's type parameters are the arguments `extends`
+                // gives it: `Sub<T> extends Box<T>` takes `Box<T>`'s with
+                // `Sub`'s `T`)
                 let base_new =
                     self.def(def)
                         .bases
                         .first()
                         .and_then(|&b| match self.types.get(b).clone() {
-                            Ty::Named(bd, _) => self.def(bd).statics.get("new").map(|m| m.ty),
+                            Ty::Named(bd, args) => self
+                                .def(bd)
+                                .statics
+                                .get("new")
+                                .map(|m| (m.ty, self.def(bd).params.clone(), args)),
                             _ => None,
                         });
-                let mut f = match base_new.map(|t| self.types.get(t).clone()) {
-                    Some(Ty::Func(f)) => std::sync::Arc::unwrap_or_clone(f),
+                let base_new =
+                    base_new.and_then(|(t, params, args)| match self.types.get(t).clone() {
+                        Ty::Func(f) => {
+                            let mut f = std::sync::Arc::unwrap_or_clone(f);
+                            if !params.is_empty() {
+                                f.type_params = Vec::new();
+                                f.outer = Vec::new();
+                                let mut args = args;
+                                args.resize(params.len(), Types::ANY);
+                                let g = self.types.func(f);
+                                let g =
+                                    super::subst::substitute(&mut self.types, g, &params, &args);
+                                match self.types.get(g).clone() {
+                                    Ty::Func(g) => return Some(std::sync::Arc::unwrap_or_clone(g)),
+                                    _ => return None,
+                                }
+                            }
+                            Some(f)
+                        }
+                        _ => None,
+                    });
+                let mut f = match base_new {
+                    Some(f) => f,
                     _ => Func {
                         // Root widget classes: (name?, parent?, template?, id?).
                         params: if self.def(def).widget.is_some() && self.def(def).bases.first().is_some_and(|&b| matches!(self.types.get(b), Ty::Named(bd, _) if self.def(*bd).native)) {
@@ -2667,5 +2868,28 @@ impl<'a> FnSig<'a> {
             body,
             end_span: body.span(),
         }
+    }
+}
+
+/// The names an `extends` type is written with (`Base`, `api.Base`).
+fn extends_path(e: Type<'_>) -> Option<Vec<String>> {
+    match e.kind() {
+        TypeKind::Ref { path, .. } => Some(path.iter().map(|n| n.text().to_string()).collect()),
+        TypeKind::Paren(inner) => extends_path(inner),
+        _ => None,
+    }
+}
+
+/// The names a value expression is written with (`Base`, `base.Base`).
+fn value_path(e: Expr<'_>) -> Option<Vec<String>> {
+    match e.kind() {
+        ExprKind::Name(n) => Some(vec![n.text().to_string()]),
+        ExprKind::Field { obj, name } => {
+            let mut p = value_path(obj)?;
+            p.push(name.text().to_string());
+            Some(p)
+        }
+        ExprKind::Paren(inner) => value_path(inner),
+        _ => None,
     }
 }

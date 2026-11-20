@@ -19,6 +19,7 @@ const BURST = 5
 interface Scriptable
 	function SetScript(script: string, fn: any)
 	function HookScript(script: string, fn: any)
+	function GetScript(script: string): any
 	--- Frames have names; animations do not.
 	GetName?: (self: Scriptable) -> string?
 end
@@ -85,10 +86,10 @@ local function label(frame: Scriptable, location: string): string
 	end
 	return "frame at " .. location
 end
-local function wrap(frame: Scriptable, script: string, fn: any, location: string): any
-	if type(fn) ~= "function" then
-		return fn
-	end
+-- Each wrapper's handler, while the wrapper exists: the addon's own
+-- `GetScript` gives the handler back (`mon.getScript`).
+local originals: { [any]: any } = setmetatable({}, { __mode = "k" })
+local function wrapped(frame: Scriptable, script: string, fn: any, location: string): any
 	if script == "OnEvent" then
 		return function(self: any, event: any, ...: any): ...any
 			local key = tostring(event)
@@ -117,11 +118,28 @@ local function wrap(frame: Scriptable, script: string, fn: any, location: string
 		return timed(s, "sc", key, clock(), top, fn(...))
 	end
 end
+local function wrap(frame: Scriptable, script: string, fn: any, location: string): any
+	if type(fn) ~= "function" then
+		return fn
+	end
+	local w = wrapped(frame, script, fn, location)
+	originals[w] = fn
+	return w
+end
 function mon.setScript(frame: Scriptable, script: string, fn: any, location: string): any
 	return frame:SetScript(script, wrap(frame, script, fn, location))
 end
 function mon.hookScript(frame: Scriptable, script: string, fn: any, location: string): any
 	return frame:HookScript(script, wrap(frame, script, fn, location))
+end
+-- The addon's `frame:GetScript(script)`: the handler it set, not the
+-- monitor's wrapper, so `GetScript(…) == fn` holds as in a release build.
+function mon.getScript(frame: Scriptable, script: string): any
+	local fn = frame:GetScript(script)
+	if fn == nil then
+		return nil
+	end
+	return originals[fn] ?? fn
 end
 local function timer(kind: string, fn: any, location: string): any
 	if type(fn) ~= "function" then

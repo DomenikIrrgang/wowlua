@@ -197,6 +197,36 @@ end
     );
 }
 
+/// The monitor wraps the handlers an addon sets, but the addon's own
+/// `GetScript` gives back the handler it set (issue #258): `GetScript(…) ==
+/// fn` holds as in a release build, and the wrapper still runs and counts.
+#[test]
+fn get_script_gives_the_handler_back() {
+    run(
+        "",
+        r#"
+@test
+local function identity()
+    local shown = 0
+    local function onShow() shown += 1 end
+    ticker:SetScript("OnShow", onShow)
+    expect(ticker:GetScript("OnShow") == onShow).toBe(true)
+    ticker:Hide()
+    ticker:Show()
+    expect(shown).toBe(1)
+    local scripts: any = probe().runtime.mon.scripts
+    local counted = false
+    for key, stat in pairs(scripts) do
+        if key:find("OnShow", 1, true) and stat.count > 0 then counted = true end
+    end
+    expect(counted).toBe(true)
+    ticker:SetScript("OnShow", nil)
+    expect(ticker:GetScript("OnShow")).toBeNil()
+end
+"#,
+    );
+}
+
 /// A recording keeps its slowest calls when the newest 200 no longer hold
 /// them, at most 3 per function, sums every slow call by function and root,
 /// and names each second's worst call (§7.3.1, decision T615).

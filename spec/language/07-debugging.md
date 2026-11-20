@@ -101,7 +101,7 @@ lowered below the compiled level.
 |--------------|------------------------|
 | `"none"` | None, not even `@profile`-decorated ones |
 | `"decorated"` | Functions, methods and classes marked `@profile` |
-| `"exports"` | `@profile` plus every exported function and every public method of exported classes |
+| `"exports"` | `@profile` plus every exported function and every public method of exported classes, the constructor (`C.new`) included |
 | `"all"` | Every named function and method, except `@noprofile` ones |
 
 Collected per function:
@@ -267,7 +267,7 @@ inserts checks at function entry for **checkable** parameter types:
 | `runtime-checks` | Functions checked |
 |------------------|-------------------|
 | `"none"` | None, except `@checked` |
-| `"exports"` | Exported functions, public methods of exported classes, `@global` functions, event/slash/hook handlers, and `@checked` |
+| `"exports"` | Exported functions, public methods of exported classes (the constructor too, labelled `C.new`; a function written inside one is not exported), `@global` functions, event/slash/hook handlers, and `@checked` (decision L106) |
 | `"all"` | Every annotated function, plus `::` assertions with checkable types, except `@unchecked` |
 
 Details:
@@ -643,6 +643,11 @@ assignments of a slash command's handler (`SlashCmdList.KEY = fn`,
 well, since their frames dispatch the addon's `@event` handlers, timers and
 jobs; wowlua library dependencies are not. Nothing global is hooked, so no
 other addon or Blizzard frame is affected.
+
+The addon's own `frame:GetScript(name)` calls are routed too, and give back
+the handler the addon set rather than the monitor's wrapper, so
+`frame:GetScript(name) == fn` holds as in a build without the monitor
+(decision L108). Other addons and Blizzard's code see the wrapper.
 
 | Monitored | Recorded per entry |
 |-----------|--------------------|

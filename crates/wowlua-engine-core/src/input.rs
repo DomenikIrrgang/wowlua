@@ -28,6 +28,9 @@ pub struct Input {
     pub mouse_focus: Option<WidgetId>,
     /// The edit box with the keyboard focus.
     pub keyboard_focus: Option<WidgetId>,
+    /// The frame being dragged, from its `OnDragStart` to its
+    /// `OnDragStop` (the drag's end, or the frame hiding).
+    pub dragging: Option<WidgetId>,
     /// Shift, Ctrl, Alt and Meta (the Mac's Cmd) held (the left keys).
     pub modifiers: [bool; 4],
     /// The user's actions running (a click, typing, a key): scripts' and
@@ -414,6 +417,26 @@ pub fn drop_hidden_focus(vm: &mut Vm) {
         && !widgets::visible(engine(vm), id)
     {
         set_keyboard_focus(vm, None);
+    }
+    // A frame that hides under the mouse gets its `OnLeave`, and one hidden
+    // mid-drag its `OnDragStop`, during the `Hide()` (the game, Forever
+    // 1.60.1: one probe each, issue #263; `OnLeave`'s `motion` false is
+    // unverified). The mouse stays where it is.
+    if let Some(id) = engine(vm).world.input.mouse_focus
+        && !widgets::visible(engine(vm), id)
+    {
+        engine_mut(vm).world.input.mouse_focus = None;
+        widgets::run_script(vm, id, "OnLeave", &[Value::Bool(false)]);
+        if frame_unit(vm, id).is_some() && engine(vm).units.mouseover.is_some() {
+            engine_mut(vm).units.mouseover = None;
+            widgets::fire_event(vm, "UPDATE_MOUSEOVER_UNIT", &[]);
+        }
+    }
+    if let Some(id) = engine(vm).world.input.dragging
+        && !widgets::visible(engine(vm), id)
+    {
+        engine_mut(vm).world.input.dragging = None;
+        widgets::run_script(vm, id, "OnDragStop", &[]);
     }
 }
 

@@ -213,3 +213,32 @@ fn timer_callbacks_must_be_functions() {
         r[0]
     );
 }
+
+/// A timer that has run its last, or is cancelled, keeps nothing (issue
+/// #267): only what the addon holds stays. A handle kept by the addon still
+/// answers, keeps its fields and can be invoked.
+#[test]
+fn finished_timers_are_let_go() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local function noop() end
+collectgarbage('collect')
+local base = collectgarbage('count')
+for _ = 1, 10000 do C_Timer.NewTimer(0.05, noop) end
+for _ = 1, 10000 do C_Timer.After(0.05, noop) end
+for _ = 1, 10000 do C_Timer.NewTimer(5, noop):Cancel() end
+mock.advanceFrames(10)
+mock.advanceTime(6)
+collectgarbage('collect')
+local grown = collectgarbage('count') - base
+local runs = 0
+local kept = C_Timer.NewTimer(1, function(self) runs = runs + 1 self.seen = (self.seen or 0) + 1 end)
+kept.note = 'mine'
+mock.advanceTime(2)
+collectgarbage('collect')
+kept:Invoke()
+return tostring(grown < 100), runs, kept.note, kept.seen, tostring(kept:IsCancelled())",
+    );
+    assert_eq!(r, ["true", "2", "mine", "2", "false"]);
+}

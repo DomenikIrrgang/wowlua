@@ -311,17 +311,17 @@ impl<'a> Lowerer<'a> {
                 let ArgsKind::Parens { args, .. } = args.kind() else {
                     return None;
                 };
-                if args.len() != 2 || !matches!(name.text(), "SetScript" | "HookScript") {
-                    return None;
-                }
-                let helper = if name.text() == "SetScript" {
-                    "setScript"
-                } else {
-                    "hookScript"
+                let helper = match (name.text(), args.len()) {
+                    ("SetScript", 2) => "setScript",
+                    ("HookScript", 2) => "hookScript",
+                    // The handler, not the wrapper (issue #258).
+                    ("GetScript", 1) => "getScript",
+                    _ => return None,
                 };
                 let mut items = vec![obj];
                 items.extend(args);
-                (helper, items, 3)
+                let arity = items.len();
+                (helper, items, arity)
             }
             ExprKind::Call { callee, args } => {
                 let ArgsKind::Parens { args, .. } = args.kind() else {
@@ -353,7 +353,9 @@ impl<'a> Lowerer<'a> {
         while lowered.len() < arity {
             lowered.push(lit(ir::ExprKind::Nil, pos));
         }
-        lowered.push(self.string(&self.location(e.span()), pos));
+        if helper != "getScript" {
+            lowered.push(self.string(&self.location(e.span()), pos));
+        }
         self.uses_runtime = true;
         self.slices.insert(Slice::Monitor);
         let wl = self.runtime_ref(pos);

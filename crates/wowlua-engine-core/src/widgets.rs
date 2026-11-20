@@ -5314,6 +5314,7 @@ pub fn drag_begin(vm: &mut Vm, id: WidgetId, button: &str) -> Dragging {
     crate::input::cursor_onto(vm, id);
     let from = engine(vm).world.input.cursor;
     let b = vm.str(button);
+    engine_mut(vm).world.input.dragging = Some(id);
     run_script(vm, id, "OnDragStart", &[b]);
     let e = engine(vm);
     let moved = if e.world.widgets[id.0].moving {
@@ -5354,8 +5355,14 @@ pub fn drag_move(vm: &mut Vm, d: &Dragging, dx: f64, dy: f64) {
     }
 }
 
-/// The mouse let go: `OnDragStop`.
+/// The mouse let go: `OnDragStop`, unless the frame had it already (it
+/// hid mid-drag, `input::drop_hidden_focus`).
 pub fn drag_end(vm: &mut Vm, d: &Dragging) {
+    let input = &mut engine_mut(vm).world.input;
+    if input.dragging != Some(d.frame) {
+        return;
+    }
+    input.dragging = None;
     run_script(vm, d.frame, "OnDragStop", &[]);
 }
 

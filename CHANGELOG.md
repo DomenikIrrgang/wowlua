@@ -2,6 +2,27 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### New
+
+- E1006 (W1006 in basic mode): a function that uses a file-level `local` declared further down the file is reported when a global of that name exists. The function can't see the local yet, so it read the game's global instead, silently (`GLYPHS` is the client's string "Glyphs"). Move the local above the function, or write `_G.GLYPHS` to mean the global. When no such global exists, E1001 now says the local is declared further down.
+- An addon can extend a class of an addon it depends on: give the class `@global("Name")` and write `class Plugin extends Name`.
+- A class re-exported by another module (`export const Base = base.Base`) can be extended when imported by name (`import Base from "./api"`), as it already could through `import * as api`.
+
+### Fixed
+
+- Tests: `SelectTrainerService(i)` no longer fires `TRAINER_DESCRIPTION_UPDATE`, as on WoW Forever, so Blizzard's trainer frame keeps its own row and its Train button follows that row, not your addon's choice.
+- `--manifest <file>` works in a workspace: at a root that is a package too, and in a member, `wowlua build`, `test` and `perf run` read that file instead of the folder's `wowlua.json`. So `wowlua perf run --manifest wowlua.perf.json` can measure without runtime checks while `wowlua test` keeps them.
+- Tests and `wowlua perf`: a `C_Timer` timer that has fired its last time or is cancelled no longer stays in memory. Each one kept 125 to 210 bytes for the whole run, counted as your addon's memory.
+- Tests: `frame:SetPropagateKeyboardInput(…)` from addon code in combat is now blocked (`ADDON_ACTION_BLOCKED`) on any frame, as on WoW Forever, so a key-capturing frame that switches it in a fight fails in tests too. It was allowed.
+- Tests: a frame that hides while the mouse is over it now gets its `OnLeave` during the `Hide()`, and one hidden in the middle of a drag its `OnDragStop`, as in the game. `OnLeave` never ran, and `OnDragStop` ran only when the mouse came up.
+- Dev builds (the monitor): `frame:GetScript(name)` gives back the function your addon set, so `frame:GetScript("OnSizeChanged") == fitter` is true as in a release build. It gave the monitor's wrapper, so such a check was never true in a dev build.
+- `type(v) == "number"` no longer makes a secret value plain: `UnitHealth("player")` stays `number | Secret<number>` after it, so `hp + 1` is still E2040. In the game a secret number's `type()` is "number" too, and the arithmetic fails in combat.
+- Runtime checks (`"exports"`, the dev build's default): the constructor of an exported class now checks its arguments (`bad argument #1 'name' to 'Gadget.new'`). A function written inside the constructor, or the first function after the class, was checked instead, as if it were exported, under the constructor's name.
+- A generic subclass without its own constructor (`class Sub<T> extends Box<T> end`) now infers its type argument: `Sub.new(5)` is a `Sub<number>` and a wrong argument is reported. It was `Sub<any>`, unchecked.
+- `class X extends api.Alias`, where `api.Alias` is only a type alias of a class, is now E3008 like the by-name form. It passed the check and extended nil when the addon ran.
+
 ## 0.13.16 (2026-11-19)
 
 ### New

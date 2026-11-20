@@ -794,7 +794,7 @@ fn global_decorated(block: Block<'_>, out: &mut Vec<String>) {
 }
 
 /// The globals one statement's `@global` creates.
-fn global_names(s: wowlua_syntax::view::Stmt<'_>, out: &mut Vec<String>) {
+pub(crate) fn global_names(s: wowlua_syntax::view::Stmt<'_>, out: &mut Vec<String>) {
     let Some(d) = s.decorators().iter().find(|d| d.is_named("global")) else {
         return;
     };
@@ -2794,6 +2794,63 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// A function above a file-level local that names it reads the
+    /// global: E1006 in strict mode, W1006 in basic mode when the global
+    /// exists, E1001 naming the local when it does not; top-level code and
+    /// functions below the local are not reported (decision L103).
+    #[test]
+    fn later_file_locals_hide_globals() {
+        let codes_of = |src: &str, mode: Mode| -> Vec<&'static str> {
+            check_source(src, mode)
+                .iter()
+                .filter_map(|d| d.code)
+                .collect()
+        };
+        // a function, a class method, an assignment
+        strict_err(
+            "local function early(): string\n    return tostring(print)\nend\nlocal print = 1\nprint(early())\n",
+            "E1006",
+        );
+        strict_err(
+            "class Button\n    function label(): string\n        return tostring(print)\n    end\nend\nlocal print = 1\nprint(Button.new():label())\n",
+            "E1006",
+        );
+        strict_err(
+            "local function early()\n    print = nil\nend\nlocal print = 1\nprint(early)\n",
+            "E1006",
+        );
+        strict_err(
+            "local function early(): string\n    return tostring(print)\nend\nconst print = 1\nprint(early())\n",
+            "E1006",
+        );
+        assert!(codes_of(
+            "local function early(): string\n    return tostring(print)\nend\nlocal print = 1\nprint(early())\n",
+            Mode::Basic
+        )
+        .contains(&"W1006"));
+        // no such global: E1001, naming the local
+        let d = check_source(
+            "local function early(): number\n    return PREFIX\nend\nlocal PREFIX = 1\nprint(early(), PREFIX)\n",
+            Mode::Strict,
+        );
+        let e = d.iter().find(|d| d.code == Some("E1001")).expect("E1001");
+        assert!(e.message.contains("declared further down"), "{}", e.message);
+        assert!(!d.iter().any(|d| d.code == Some("E1006")));
+        // the top level, a function below the local, `local x = x`
+        for src in [
+            "local p = print\nlocal print = 1\np(print)\n",
+            "local print = print\nlocal function f() print(1) end\nf()\n",
+            "local tostring = 1\nlocal function f(): number return tostring end\nprint(f())\n",
+            "local function f() _G.print(1) end\nlocal print = 1\nf()\n_G.print(print)\n",
+        ] {
+            let c = codes_of(src, Mode::Strict);
+            assert!(
+                !c.contains(&"E1006") && !c.contains(&"E1001"),
+                "{src}\n{c:?}"
+            );
+        }
+    }
+
     /// The expected type binds a type parameter only where it fits what
     /// the arguments bound (decision L36): a wider expected type widens it
     /// (strict mode's invariance needs that), a mismatch keeps the
@@ -2953,6 +3010,19 @@ print(a, b, c, d, e, name, realm, more)
         );
         strict_ok(
             "local function f(v: string | Secret<string>)\n if not canaccessvalue(v) then return end\n print(v:upper())\nend\nprint(f)\n",
+        );
+        // `type()` of a secret value is its value's: the test keeps it
+        // secret (decision L107), and its other branch drops what it ruled
+        // out.
+        strict_err(
+            "local function f(hp: number | Secret<number>)\n if type(hp) == \"number\" then print(hp + 1) end\nend\nprint(f)\n",
+            "E2040",
+        );
+        strict_ok(
+            "local function f(v: number | string | Secret<number> | Secret<string>)\n if type(v) == \"number\" then return end\n local s: string | Secret<string> = v\n print(s)\nend\nprint(f)\n",
+        );
+        strict_ok(
+            "local function f(v: number | Secret<number> | nil)\n if type(v) ~= \"number\" then return end\n if issecretvalue(v) then return end\n print(v + 1)\nend\nprint(f)\n",
         );
         // A local named `canaccessvalue` is not the global.
         strict_err(
@@ -3886,6 +3956,94 @@ print(a, b, c, d, e, name, realm, more)
     /// A class field typed by another module's `typeof` alias (a record of
     /// `typeof(UnitHealth)` and the like) reads the alias's type in the
     /// class's methods, not `any` (decision L76).
+    /// `extends` names the class it reads at run time (decision L104): a
+    /// re-export by name or namespace, with or without a type alias, and a
+    /// `@global` class; a type-only alias has no class to extend, by name
+    /// or through a namespace.
+    #[test]
+    fn extends_reads_a_class_value() {
+        let base = "export class Base\n name: string\n constructor(name: string) self.name = name end\nend\n";
+        let both = "import * as base from \"./base\"\nexport const Base = base.Base\nexport type Base = base.Base\n";
+        let value = "import * as base from \"./base\"\nexport const Base = base.Base\n";
+        let alias = "import * as base from \"./base\"\nexport type Base = base.Base\n";
+        let derived = |import: &str, ext: &str| {
+            format!(
+                "{import}\nclass Derived extends {ext}\n constructor() super(\"d\") end\nend\nlocal n: string = Derived.new().name\nprint(n)\n"
+            )
+        };
+        for (api, import, ext) in [
+            (both, "import Base from \"./api\"", "Base"),
+            (value, "import Base from \"./api\"", "Base"),
+            (both, "import * as api from \"./api\"", "api.Base"),
+            (value, "import * as api from \"./api\"", "api.Base"),
+        ] {
+            let errs = check_modules(
+                &[
+                    ("base.wowlua", base),
+                    ("api.wowlua", api),
+                    ("main.wowlua", &derived(import, ext)),
+                ],
+                Mode::Strict,
+            );
+            assert!(errs.is_empty(), "{api}{import} extends {ext}: {errs:#?}");
+        }
+        // the class's members come along: a wrong type is still E2001
+        let errs = check_modules(
+            &[
+                ("base.wowlua", base),
+                ("api.wowlua", value),
+                (
+                    "main.wowlua",
+                    "import Base from \"./api\"\nclass Derived extends Base\nend\nlocal n: number = Derived.new(\"x\").name\nprint(n)\n",
+                ),
+            ],
+            Mode::Strict,
+        );
+        assert!(errs.len() == 1 && errs[0].starts_with("E2001"), "{errs:#?}");
+        // a type-only alias: nothing at run time
+        for (import, ext) in [
+            ("import Base from \"./api\"", "Base"),
+            ("import * as api from \"./api\"", "api.Base"),
+        ] {
+            let errs = check_modules(
+                &[
+                    ("base.wowlua", base),
+                    ("api.wowlua", alias),
+                    ("main.wowlua", &derived(import, ext)),
+                ],
+                Mode::Strict,
+            );
+            assert!(
+                errs.iter().any(|e| e.starts_with("E3008")),
+                "{import}: {errs:#?}"
+            );
+        }
+        // a `@global` class, by its global name
+        let errs = check_modules(
+            &[
+                (
+                    "base.wowlua",
+                    "@global(\"LibBase\")\nexport class Base\n name: string\n constructor(name: string) self.name = name end\nend\n",
+                ),
+                (
+                    "main.wowlua",
+                    "class Plugin extends LibBase\n constructor() super(\"p\") end\nend\nlocal n: string = Plugin.new().name\nprint(n)\n",
+                ),
+            ],
+            Mode::Strict,
+        );
+        assert!(errs.is_empty(), "{errs:#?}");
+        // a plain value is still no class
+        let errs = check_modules(
+            &[(
+                "main.wowlua",
+                "local Base = {}\nclass Derived extends Base\nend\nprint(Derived)\n",
+            )],
+            Mode::Strict,
+        );
+        assert!(errs.iter().any(|e| e.starts_with("E3008")), "{errs:#?}");
+    }
+
     #[test]
     fn typeof_alias_of_another_module_in_classes() {
         let api = "local function health(u: string): number return #u end\nexport type Api = { health: typeof(health) }\n";

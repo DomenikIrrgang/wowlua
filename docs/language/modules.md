@@ -280,6 +280,21 @@ Another addon in the same workspace that lists yours in
 `MyAddonAPI` with its types. For callbacks between addons, see
 [Talking to other addons](../stdlib/comm.md).
 
+A class works the same way. With `@global("MyAddonWidget")` on `export class
+Widget`, a plugin addon that depends on yours extends it by that name:
+
+```wowlua title=src/plugin.wowlua fragment
+class FancyWidget extends MyAddonWidget
+    override function draw()
+        super:draw()
+    end
+end
+```
+
+Inside one addon, `extends` also follows re-exports: after `export const
+Widget = widgets.Widget` in an `api` module, both `import Widget from "./api"`
+and `import * as api from "./api"` (`extends api.Widget`) extend the class.
+
 ## Where to go next
 
 - [Build info and profiles](flavors.md): imports and code that only exist in

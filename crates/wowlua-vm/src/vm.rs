@@ -248,8 +248,10 @@ pub struct Vm {
     /// What a native function costs the client, estimated, for profiles
     /// (the host's model; none: natives cost nothing; decision T611).
     pub native_cost: Option<crate::profile::NativeCostFn>,
-    /// Values kept alive outside the heap (host references).
+    /// Values kept alive outside the heap (host references), by key
+    /// (`pin`); a freed key holds nil and waits in `pin_free`.
     pub(crate) pinned: Vec<Value>,
+    pub(crate) pin_free: Vec<usize>,
     pub(crate) gc_threshold: usize,
     pub(crate) gc_stopped: bool,
     /// `collectgarbage("setpause")`, percent.
@@ -312,6 +314,36 @@ fn split_slots(slots: &[Slot]) -> (Args<Value>, Args<Taint>, Args<Origin>) {
 }
 
 impl Vm {
+    /// Keeps `v` alive until [`Vm::unpin`] (a host's reference to a Lua
+    /// value, outside every table); returns its key.
+    pub fn pin(&mut self, v: Value) -> usize {
+        match self.pin_free.pop() {
+            Some(key) => {
+                self.pinned[key] = v;
+                key
+            }
+            None => {
+                self.pinned.push(v);
+                self.pinned.len() - 1
+            }
+        }
+    }
+
+    /// The value pinned as `key` (nil once unpinned).
+    pub fn pinned(&self, key: usize) -> Value {
+        self.pinned.get(key).copied().unwrap_or(Value::Nil)
+    }
+
+    /// Lets go of the value pinned as `key`.
+    pub fn unpin(&mut self, key: usize) {
+        if let Some(slot) = self.pinned.get_mut(key)
+            && !slot.is_nil()
+        {
+            *slot = Value::Nil;
+            self.pin_free.push(key);
+        }
+    }
+
     /// A VM with Lua 5.1's base library and the standard libraries.
     pub fn new() -> Vm {
         let mut heap = Heap::default();
@@ -373,6 +405,7 @@ impl Vm {
                 let _ = std::io::stdout().write_all(bytes);
             }),
             pinned: Vec::new(),
+            pin_free: Vec::new(),
             gc_threshold: 4 << 20,
             gc_stopped: false,
             gc_pause: 200,

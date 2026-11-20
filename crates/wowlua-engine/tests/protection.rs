@@ -261,3 +261,35 @@ return b:GetWidth(), kid:GetParent() == b",
     run(&mut vm, "mock.player:leaveCombat()");
     assert_eq!(run(&mut vm, ask), out_of_combat);
 }
+
+/// `SetPropagateKeyboardInput` is blocked for tainted code in combat on
+/// any frame, an addon's own hidden one too; `EnableKeyboard` is not (the
+/// game, Forever 1.60.1; issue #262, decision T647).
+#[test]
+fn propagating_keys_is_blocked_in_combat_on_any_frame() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local seen = {}
+local w = CreateFrame('Frame')
+w:RegisterEvent('ADDON_ACTION_BLOCKED')
+w:SetScript('OnEvent', function(_, e, addon, action) seen[#seen + 1] = addon .. ' ' .. action end)
+local f = CreateFrame('Frame')
+f:Hide()
+f:SetPropagateKeyboardInput(true)
+local before = tostring(f:GetPropagateKeyboardInput())
+mock.player:enterCombat()
+f:SetPropagateKeyboardInput(false)
+f:EnableKeyboard(true)
+return before, tostring(f:GetPropagateKeyboardInput()), tostring(f:IsKeyboardEnabled()), table.concat(seen, ',')",
+    );
+    assert_eq!(
+        r,
+        [
+            "true",
+            "true",
+            "true",
+            "MyAddon SetPropagateKeyboardInput()"
+        ]
+    );
+}

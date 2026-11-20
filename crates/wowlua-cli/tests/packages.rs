@@ -1374,6 +1374,55 @@ fn addon_dependencies_typed() {
     assert!(!toc.contains("api") && !toc.contains("shared"), "{toc}");
 }
 
+/// `--manifest` names the manifest to read at a workspace root that is a
+/// package too, and in a member: not the folder's `wowlua.json` (issue
+/// #266).
+#[test]
+fn manifest_option_in_a_workspace() {
+    let e = env();
+    let root = &e.project;
+    let manifest = |title: &str| {
+        format!(
+            r#"{{ "package": {{ "name": "root-addon", "version": "1.0.0" }}, "addon": {{ "name": "RootAddon", "title": "{title}" }},
+  "workspace": {{ "members": ["addons/*"] }} }}"#
+        )
+    };
+    let member = |title: &str| {
+        format!(
+            r#"{{ "package": {{ "name": "member", "version": "1.0.0" }}, "addon": {{ "name": "Member", "title": "{title}" }} }}"#
+        )
+    };
+    write(
+        root,
+        &[
+            ("wowlua.json", &manifest("FromDefault")),
+            ("wowlua.other.json", &manifest("FromOther")),
+            ("src/main.wowlua", "print(1)\n"),
+            ("addons/member/wowlua.json", &member("MemberDefault")),
+            ("addons/member/wowlua.other.json", &member("MemberOther")),
+            ("addons/member/src/main.wowlua", "print(2)\n"),
+        ],
+    );
+    wowlua(root, &e.home)
+        .args([
+            "build",
+            "--manifest",
+            "wowlua.other.json",
+            "-p",
+            "root-addon",
+        ])
+        .assert()
+        .success();
+    let toc = std::fs::read_to_string(root.join("dist/dev/RootAddon/RootAddon.toc")).unwrap();
+    assert!(toc.contains("## Title: FromOther"), "{toc}");
+    wowlua(&root.join("addons/member"), &e.home)
+        .args(["build", "--manifest", "wowlua.other.json"])
+        .assert()
+        .success();
+    let toc = std::fs::read_to_string(root.join("dist/dev/Member/Member.toc")).unwrap();
+    assert!(toc.contains("## Title: MemberOther"), "{toc}");
+}
+
 #[test]
 fn workspaces() {
     let e = env();

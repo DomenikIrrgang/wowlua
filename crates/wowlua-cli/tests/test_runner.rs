@@ -3898,9 +3898,10 @@ end
 /// Beast Training with Blizzard's trainer frame (decisions T616 to T618):
 /// the pet's training points shown, the game's Train disabled until its
 /// frame has a choice the pet can pay for (its `Click()` and a secure
-/// button's `click` action on it do nothing meanwhile), a choice told with
-/// `SelectTrainerService` taken up by the frame (`TRAINER_DESCRIPTION_UPDATE`),
-/// Train teaching the pet.
+/// button's `click` action on it do nothing meanwhile), an addon's
+/// `SelectTrainerService` not taken up by the frame (no
+/// `TRAINER_DESCRIPTION_UPDATE`, decision T650), a row the player clicks
+/// chosen, Train teaching the pet.
 #[test]
 fn blizzard_ui_beast_training() {
     blizzard_ui_test(
@@ -3953,13 +3954,22 @@ local function beast()
     mock.waitSeconds(1)
     expect(trainClicks).toBe(0)
     expect(C_SpellBook.IsSpellKnown(17253, Enum.SpellBookSpellBank.Pet)).toBe(false)
-    -- Claw chosen (more than the pet's points): the frame takes it up, Train stays off
+    -- The addon's choice: the game's, which the frame does not take up
     SelectTrainerService(3)
     expect(GetTrainerSelectionIndex()).toBe(3)
+    expect(frame.selectedService).never.toBe(3)
+    local function row(i: number): any
+        local found: any = nil
+        frame.ScrollBox:ForEachFrame(function(b: any) if b.displayIndex == i then found = b end end)
+        return found
+    end
+    -- Claw clicked (more than the pet's points): the frame's choice, Train stays off
+    mock.click(row(3))
     expect(frame.selectedService).toBe(3)
+    expect(GetTrainerSelectionIndex()).toBe(3)
     expect(train:IsEnabled()).toBe(false)
-    -- Bite chosen: Train on, the secure click teaches the pet
-    SelectTrainerService(2)
+    -- Bite clicked: Train on, the secure click teaches the pet
+    mock.click(row(2))
     expect(frame.selectedService).toBe(2)
     expect(train:IsEnabled()).toBe(true)
     mock.click(secure)

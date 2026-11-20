@@ -3531,6 +3531,22 @@ show(pcall(takeDuration :: any, 5))
 export function onEvent(event: EventName) end
 show(pcall(onEvent, "PLAYER_LOGIN"))
 show(pcall(onEvent :: any, "NOT_AN_EVENT"))
+-- An exported class's constructor is checked; a function in it and the
+-- function after the class are not exported (issue #252).
+export class Gadget
+    name: string
+    onChange: (value: string) -> ()
+    constructor(name: string)
+        self.name = name
+        self.onChange = function(value: string) print("changed", value) end
+    end
+end
+local function after(_x: number) end
+local newGadget: any = Gadget.new
+show(pcall(newGadget, 5))
+local change: any = Gadget.new("g").onChange
+show(pcall(change, nil))
+show(pcall(after :: any, "x"))
 "#;
     write(
         dir.path(),
@@ -3562,6 +3578,10 @@ show(pcall(onEvent :: any, "NOT_AN_EVENT"))
             "false Chk: src/main.wowlua:49: bad argument #1 '_d' to 'takeDuration' (DurationObject expected, got number)",
             "true nil",
             "false Chk: src/main.wowlua:54: bad argument #1 'event' to 'onEvent' (\"ACCOUNT_STORE_CURRENCY_AVAILABLE_UPDATED\" | \"ACCOUNT_STORE_FRONT_UPDATED\" | \"ACCOUNT_STORE_ITEM_INFO_UPDATED\" | \"ACCOUNT_STORE_TRANSACTION_ERROR\" | \"STORE_FRONT_STATE_UPDATED\" | \"ACHIEVEMENT_EARNED\" | \"ACHIEVEMENT_PLAYER_NAME\" | \"ACHIEVEMENT_SEARCH_UPDATED\" | … (1774 more) expected, got string)",
+            "false Chk: src/main.wowlua:62: bad argument #1 'name' to 'Gadget.new' (string expected, got number)",
+            "changed nil",
+            "true nil",
+            "true nil",
         ]
         .join("\n")
     );

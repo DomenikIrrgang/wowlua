@@ -19,6 +19,7 @@ local perf = wl.perf
 
 
 
+
 --- Frames have names; animations do not.
 
 
@@ -85,10 +86,10 @@ local function label(frame, location)
 	end
 	return "frame at " .. location
 end
-local function wrap(frame, script, fn, location)
-	if type(fn) ~= "function" then
-		return fn
-	end
+-- Each wrapper's handler, while the wrapper exists: the addon's own
+-- `GetScript` gives the handler back (`mon.getScript`).
+local originals = setmetatable({}, {__mode = "k"})
+local function wrapped(frame, script, fn, location)
 	if script == "OnEvent" then
 		return function(self, event, ...)
 			local key = tostring(event)
@@ -117,11 +118,28 @@ local function wrap(frame, script, fn, location)
 		return timed(s, "sc", key, clock(), top, fn(...))
 	end
 end
+local function wrap(frame, script, fn, location)
+	if type(fn) ~= "function" then
+		return fn
+	end
+	local w = wrapped(frame, script, fn, location)
+	originals[w] = fn
+	return w
+end
 function mon.setScript(frame, script, fn, location)
 	return frame:SetScript(script, wrap(frame, script, fn, location))
 end
 function mon.hookScript(frame, script, fn, location)
 	return frame:HookScript(script, wrap(frame, script, fn, location))
+end
+-- The addon's `frame:GetScript(script)`: the handler it set, not the
+-- monitor's wrapper, so `GetScript(…) == fn` holds as in a release build.
+function mon.getScript(frame, script)
+	local fn = frame:GetScript(script)
+	if fn == nil then
+		return nil
+	end
+	do local __wl_t1 = originals[fn] if __wl_t1 == nil then __wl_t1 = fn end return __wl_t1 end
 end
 local function timer(kind, fn, location)
 	if type(fn) ~= "function" then
