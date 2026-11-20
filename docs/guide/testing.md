@@ -270,9 +270,10 @@ along with every parent), `toHaveText`, `toHaveSize` and `toBeAnchoredTo`.
 `mock.pressBinding` cover the rest of what a player does.
 
 `mock.click` clicks the way a player does: the mouse moves onto the frame's
-middle, and the click goes to the frame on top there that takes the mouse. If
-your addon leaves an invisible overlay over a button, the overlay gets the
-click in the test, as it would in the game.
+middle, and a frame your addon shows over it in a higher strata (an
+invisible overlay, a dim, a click catcher) gets the click, as it would in the
+game. A first-run window or a modal shade your addon opens over everything
+takes clicks in tests too: start your tests past it.
 
 ## Time and waiting
 

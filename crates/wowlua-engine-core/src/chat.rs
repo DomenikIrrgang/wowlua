@@ -323,6 +323,13 @@ fn chat_line(
 /// the world does not have, `ERR_CHAT_PLAYER_NOT_FOUND_S`. A channel's
 /// message is not answered.
 fn send_chat(vm: &mut Vm, c: NativeCall) -> Ret {
+    // Tainted execution in combat lockdown: blocked, nothing sent ("Blocked
+    // in combat: SendChatMessage()", WoW Forever 1.60.1 70888, the player's
+    // own lines after an addon tainted the chat; issue #260, decision
+    // T664; unverified: every chat type alike).
+    if crate::protection::refuses_in_combat(vm) {
+        return Ok(vec![]);
+    }
     let message = match vm.hidden(c.arg(1)) {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
         Value::Num(n) => n.to_string(),
