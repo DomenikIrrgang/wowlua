@@ -265,3 +265,23 @@ return table.concat(ran, ' '), polls, GetTime()",
     );
     assert_eq!(r, ["outer@0.1 inner", "5", "2"]);
 }
+
+/// A timer set without a delay in a timer's callback runs at the latest in
+/// the next `advanceTime`, even one shorter than a frame (decision T666):
+/// a step of 0.01 s after it is a later frame.
+#[test]
+fn a_zero_delay_timer_runs_in_the_next_short_advance() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local ran = {}
+C_Timer.After(0.005, function()
+    C_Timer.After(0, function() ran[#ran + 1] = 'inner@' .. GetTime() end)
+end)
+mock.advanceTime(0.01)
+local first = #ran
+mock.advanceTime(0.01)
+return first, table.concat(ran, ' ')",
+    );
+    assert_eq!(r, ["0", "inner@0.01"]);
+}
