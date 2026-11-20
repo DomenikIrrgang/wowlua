@@ -407,8 +407,10 @@ Some global functions are blocked for tainted code in combat lockdown
 only, with `ADDON_ACTION_BLOCKED`: `C_SpellBook.PickupSpellBookItem`
 (decision T253; found in game) and `C_GuildInfo.GetMOTD`, which
 Blizzard's deprecated guild script also names `GetGuildRosterMOTD`
-(decision T265; found in game). Blizzard's own code, the secure drag
-handlers among it, may call them.
+(decision T265; found in game), and `C_ChatInfo.SendChatMessage`, nothing
+sent (decision T664; found in game: "Blocked in combat:
+SendChatMessage()"). Blizzard's own code, the secure drag handlers among
+it, may call them.
 
 Others are forbidden to tainted code in combat lockdown only, with
 `ADDON_ACTION_FORBIDDEN` and nothing done: `SetCVar` of a secure CVar

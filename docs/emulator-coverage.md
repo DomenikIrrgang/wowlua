@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,236 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,237 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -857,7 +857,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,236 rules unverified: each rests on Blizzard's
+The engine's code marks 1,237 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1056,10 +1056,11 @@ page changes only when a rule is added, removed or reworded.
 - [character.rs](../crates/wowlua-engine-core/src/character.rs): `GetInventoryAlertStatus(slot)`: no durability warning (recorded for whole gear; unverified for damaged).
 - [character.rs](../crates/wowlua-engine-core/src/character.rs): `GetInventoryItemBroken(unit, slot)`, `GetInventoryItemEquippedUnusable( unit, slot)`: whole and usable (recorded; un...
 
-### chat (2)
+### chat (3)
 
 - [chat.rs](../crates/wowlua-engine-core/src/chat.rs): Addon messages: `C_ChatInfo` registers prefixes and sends; a sent message is kept for the test (`sentAddonMessages`),...
 - [chat.rs](../crates/wowlua-engine-core/src/chat.rs): `C_ChatInfo.SendChatMessage(message, chatType, languageID, target)` (`SendChatMessage`): the server's answer on the n...
+- [chat.rs](../crates/wowlua-engine-core/src/chat.rs): Tainted execution in combat lockdown: blocked, nothing sent ("Blocked in combat: SendChatMessage()", WoW Forever 1.60...
 
 ### chatwindows (1)
 

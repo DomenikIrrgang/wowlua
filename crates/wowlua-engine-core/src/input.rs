@@ -107,7 +107,13 @@ pub fn cursor_onto(vm: &mut Vm, id: WidgetId) {
 /// stacking of Blizzard's UI is not exact enough to take clicks from what
 /// a test names), and not one of `id`'s parents, which is never above it
 /// in the game (decision T657).
-fn covers(vm: &Vm, over: WidgetId, id: WidgetId) -> bool {
+fn covers(vm: &mut Vm, over: WidgetId, id: WidgetId) -> bool {
+    // Only from a higher strata: the engine's levels within one strata are
+    // not yet the client's in every case (a parent's level change carried
+    // to its children), so a frame of the same strata keeps the click.
+    if widgets::strata_rank(vm, over) <= widgets::strata_rank(vm, id) {
+        return false;
+    }
     let e = engine(vm);
     let mut cur = e.world.widgets[id.0].parent;
     while let Some(p) = cur {

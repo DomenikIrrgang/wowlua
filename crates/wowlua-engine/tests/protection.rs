@@ -313,3 +313,29 @@ return direct, #r, r[1].event, r[1].action",
     );
     assert_eq!(r, ["1", "1", "ADDON_ACTION_BLOCKED", "PlaceBid()"]);
 }
+
+/// A chat message sent from tainted code in combat is blocked
+/// (`ADDON_ACTION_BLOCKED`, nothing sent); out of combat it goes out
+/// (issue #260, decision T664).
+#[test]
+fn a_tainted_chat_message_in_combat_is_blocked() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local said = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('CHAT_MSG_SAY')
+f:SetScript('OnEvent', function(_, _, text) said[#said + 1] = text end)
+C_ChatInfo.SendChatMessage('before', 'SAY')
+mock.advanceTime(1)
+mock.player:enterCombat()
+C_ChatInfo.SendChatMessage('during', 'SAY')
+mock.advanceTime(1)
+local r = mock.refusals()
+return table.concat(said, ','), #r, r[1].event, r[1].action",
+    );
+    assert_eq!(
+        r,
+        ["before", "1", "ADDON_ACTION_BLOCKED", "SendChatMessage()"]
+    );
+}

@@ -15,10 +15,11 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### Changed
 
 - `wowlua:chat`: `whisper` and `whisperBnet` no longer open the chat line from your code. They aim it: the player's next Enter opens the whisper, and an open line switches to it; they return `true` when the line is open. Opening it from an addon made the game's chat state the addon's, and on WoW Forever every message the player sent in a fight was blocked until `/reload`. `insertLink` returns whether a line took the link and no longer opens one. `chat.open` is documented as safe only from the player's own click or key.
-- `mock.click(frame)` clicks what a player's click on the frame's middle would: the frame on top there that takes the mouse. A frame left over a button (an overlay, a dim, a click catcher) now takes the click in tests too, as in the game. When nothing there takes the mouse, the frame you name is clicked as before.
+- `mock.click(frame)` clicks what a player's click on the frame's middle would: a frame your addon or test shows over it in a higher strata (an overlay, a dim, a click catcher, a first-run window) takes the click, as in the game. Otherwise the frame you name is clicked as before.
 
 ### Fixed
 
+- Tests: `C_ChatInfo.SendChatMessage` from addon code in combat is blocked (`ADDON_ACTION_BLOCKED`, nothing sent), as on WoW Forever.
 - Profiles with the monitor on: a test file's own scripts and timers no longer run under the monitor's wrapper, and the wrapper shows as `[wowlua] wowlua/runtime.lua` in `--profile-out` reports instead of a file of your addon. Your addon's cost per frame is no longer inflated by the test's own work.
 - Tests: `TakeInboxItem` with no room in the bags is refused as in the game ("Inventory is full.", then `MAIL_FAILED` with the item), and the item stays in the letter. It was lost. Taking an item from a COD letter now pays the COD.
 - Tests (WoW Forever): `C_AuctionHouse.PlaceBid` from addon code is refused (`ADDON_ACTION_BLOCKED`) unless it runs in the player's click or key press, as in the game, so an addon's "the game said no" path runs in tests too.
