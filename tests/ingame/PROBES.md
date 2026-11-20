@@ -3875,3 +3875,74 @@ Out of combat, each line in the chat, one at a time.
    ```
    /reload
    ```
+
+## A group header updated by addon code, then fewer units in a fight (issue #275, 2026-11-20)
+
+Found in game: an addon that called `SecureGroupPetHeader_Update` itself
+had hundreds of "Blocked in combat: …UnitButton1:Hide()" when a pet went
+away in a fight. wowlua refuses nothing there. Which read turns Blizzard's
+later secure update tainted is not known (the shared `sortingTable` and
+`tokenTable`, the buttons' fields, or their attributes). These steps record
+the case alone with your own pet, and read what the direct update leaves
+tainted, before wowlua's rule changes. On a hunter or a warlock with the pet
+out, out of combat, next to a training dummy. Each line in the chat, one at
+a time.
+
+1. Turn Lua errors on:
+
+   ```
+   /console scriptErrors 1
+   ```
+
+2. Count the refused actions:
+
+   ```
+   /run PB=0 PBF=nil local f=CreateFrame("Frame") f:RegisterEvent("ADDON_ACTION_BLOCKED") f:SetScript("OnEvent",function(_,_,_,fn) PB=PB+1 PBF=PBF or fn end)
+   ```
+
+3. A pet header, shown (it updates itself, secure):
+
+   ```
+   /run PH=CreateFrame("Frame","ProbePetHeader",UIParent,"SecureGroupPetHeaderTemplate") PH:SetAttribute("template","SecureUnitButtonTemplate") PH:SetAttribute("showSolo",true) PH:SetAttribute("showPlayer",true) PH:SetAttribute("showParty",true) PH:SetPoint("CENTER") PH:Show()
+   ```
+
+4. Read its first button before the addon's update:
+
+   ```
+   /run local b=PH:GetAttribute("child1") print("1", b and b:GetAttribute("unit"), issecurevariable(PH,1))
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+5. The addon's own update, then the same read:
+
+   ```
+   /run SecureGroupPetHeader_Update(PH) local b=PH:GetAttribute("child1") print("2", b and b:GetAttribute("unit"), issecurevariable(PH,1))
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+6. Attack the dummy. In the fight, dismiss your pet (Dismiss Pet, or
+   Dismiss Demon). Leave the fight.
+
+7. Read the count and the first function named:
+
+   ```
+   /run print("3", PB, PBF)
+   ```
+
+   Seen: (to do: 0, or a number and "ProbePetHeaderUnitButton1:Hide()").
+   wowlua: `3 0 nil`.
+
+8. Summon your pet again, then reload:
+
+   ```
+   /reload
+   ```
+
+9. The control, without the addon's update: do steps 1, 2, 3, 4, 6 and 7
+   again, and leave out step 5.
+
+   Seen: (to do: expected `3 0 nil`). wowlua: `3 0 nil`.
+
+10. Take one screenshot of the chat after each of steps 7 and 9.
