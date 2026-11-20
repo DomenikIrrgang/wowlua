@@ -201,6 +201,23 @@ export function callOwned<A..., R...>(context: { [string]: unknown }, owner: unk
     return isolate(context, owner, fn, ...)
 end
 
+--- `fn` made isolated once, reporting with `context` and `owner`: the
+--- context set and `xpcall` called in one function, nothing made per call
+--- (for hooks, which run often; issue #268). Its results are dropped.
+export function isolatedOwned<A...>(context: { [string]: unknown }, owner: unknown, fn: (A...) -> ()): (A...) -> ()
+    if not passesArgs then
+        return function(...: A...)
+            isolate(context, owner, fn, ...)
+        end
+    end
+    return function(...: A...)
+        local outer, outerOwner = current, currentOwner
+        current, currentOwner = context, owner
+        xpcall(fn, handler, ...)
+        current, currentOwner = outer, outerOwner
+    end
+end
+
 --- An isolated version of `fn` (its results are dropped).
 export function wrap<A...>(fn: (A...) -> ()): (A...) -> ()
     return function(...: A...)

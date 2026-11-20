@@ -4,12 +4,14 @@
 -- that load-on-demand addon has loaded, and `opts.owner` names whose hook it
 -- is to error listeners.
 import onAddonLoaded from "wowlua:lifecycle"
-import callOwned from "wowlua:errors"
+import isolatedOwned from "wowlua:errors"
 
 --- Options of `hook` and `hookScript`: `addon` installs the hook once that
 --- load-on-demand addon has loaded; `owner` is passed to error listeners
---- as the hook's owner.
-export type Options = { addon?: string, owner?: unknown }
+--- as the hook's owner; `isolate = false` installs the function as it is,
+--- for a hook that runs very often and cannot fail (an error in it then
+--- goes to the game's error handler, unreported to `onError`).
+export type Options = { addon?: string, owner?: unknown, isolate?: boolean }
 
 --- What `@hook(…)` and `@hookScript(…)` give: the decorator, which hooks the
 --- function it decorates.
@@ -30,17 +32,17 @@ local function install(addon: string?, fn: () -> ())
     end
 end
 
-local function isolated(fn: any, what: string, owner: any): any
-    local context = { component = "hooks: " .. what }
-    return function(...)
-        callOwned(context, owner, fn, ...)
+local function isolated(fn: any, what: string, opts: Options?): any
+    if opts?.isolate == false then
+        return fn
     end
+    return isolatedOwned({ component = "hooks: " .. what }, opts?.owner, fn)
 end
 
 local function hookNow(target: any, name: any, fn: any, opts: Options?)
     if name == nil then
         -- A global function: `hook(name, fn)`.
-        install(nil, function() hooksecurefunc(target, isolated(fn, target, nil)) end)
+        install(nil, function() hooksecurefunc(target, isolated(fn, target, opts)) end)
         return
     end
     install(opts?.addon, function()
@@ -48,7 +50,7 @@ local function hookNow(target: any, name: any, fn: any, opts: Options?)
         if t == nil then
             error("hook: `" .. tostring(target) .. "` does not exist", 0)
         end
-        hooksecurefunc(t, name, isolated(fn, tostring(name), opts?.owner))
+        hooksecurefunc(t, name, isolated(fn, tostring(name), opts))
     end)
 end
 
@@ -58,7 +60,7 @@ local function hookScriptNow(frame: any, script: string, fn: any, opts: Options?
         if f == nil then
             error("hookScript: `" .. tostring(frame) .. "` does not exist", 0)
         end
-        f:HookScript(script, isolated(fn, script, opts?.owner))
+        f:HookScript(script, isolated(fn, script, opts))
     end)
 end
 
