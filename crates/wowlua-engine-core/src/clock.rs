@@ -245,8 +245,11 @@ fn schedule(vm: &mut Vm, seconds: f64, callback: Value, runs: f64, handle: bool)
     // second): within an advance of the clock that has the time, as the
     // game runs it on its next frame, and so one that sets itself again
     // does not hold time still (issue #270, decision T659; unverified: the
-    // client's order).
-    if seconds <= 0.0 && engine(vm).timers.advancing.is_some() {
+    // client's order). At the latest just after this advance: the next
+    // `advanceTime`, however short, is a later frame (decision T666).
+    if seconds <= 0.0
+        && let Some(end) = engine(vm).timers.advancing
+    {
         let frame = match engine(vm).timers.tick_time {
             t if t > 0.0 => t,
             _ => 1.0 / 60.0,
@@ -254,7 +257,7 @@ fn schedule(vm: &mut Vm, seconds: f64, callback: Value, runs: f64, handle: bool)
         // (in whole milliseconds, as the clock counts: a frame's 16.67
         // ms after a time the clock rounded is not past the next frame)
         let next = ((now(vm) + frame) * 1000.0).floor() / 1000.0;
-        due = due.max(next).max(now(vm) + NEXT_RUN);
+        due = due.max(next.min(end + NEXT_RUN)).max(now(vm) + NEXT_RUN);
     }
     let index = engine(vm).timers.list.len();
     engine_mut(vm).timers.active.push(index);
