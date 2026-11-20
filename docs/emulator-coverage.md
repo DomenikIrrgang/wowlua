@@ -2595,6 +2595,9 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - No reagent cost and cash on delivery (decision T645, 2026-11-19)
 - A frame with one anchor and no size (issue #259, 2026-11-20)
 - Colors without alpha (decision T655, 2026-11-20)
+- Scripts an addon's call sets off (issue #260, 2026-11-20)
+- A group header updated by addon code, then fewer units in a fight (issue #275,
+  2026-11-20)
 
 ## In-game regressions
 
