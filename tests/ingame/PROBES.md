@@ -3827,3 +3827,122 @@ Out of combat, each line in the chat, one at a time.
    Seen: (to do). wowlua: (to do).
 
 Take one screenshot of the four lines.
+
+## Scripts an addon's call sets off (issue #260, 2026-11-20)
+
+Issue #260 says a script that an addon's own call sets off (`Show` →
+`OnShow`, `SetFocus` → `OnEditFocusGained`) runs inside the addon's
+execution, tainted, where wowlua starts it secure. Nobody saw it directly.
+Against it: SuuUI's secure windows bind Escape in a
+`SecureHandlerShowHideTemplate` frame's `_onshow`, which Blizzard's code
+refuses ("Invalid 'self' frame handle") when it runs tainted before the
+frame has a handle, and SuuUI shows those windows from its own code. These
+steps record both kinds of frame before wowlua's rule changes. Step 3 taints
+your chat until the `/reload` of step 5.
+
+Out of combat, each line in the chat, one at a time.
+
+1. Turn Lua errors on:
+
+   ```
+   /console scriptErrors 1
+   ```
+
+2. A secure handler frame, made and shown again by addon code, with no handle made for it before:
+
+   ```
+   /run PW=CreateFrame("Frame","ProbeWatch",UIParent,"SecureHandlerShowHideTemplate") PW:SetAttribute("_onshow",[[ self:SetAttribute("ran", true) ]]) PW:Hide() PW:Show() print("1", PW:GetAttribute("ran"))
+   ```
+
+   Seen: (to do: `1 true` and no error, or `1 nil` and an "Invalid 'self'
+   frame handle" error). wowlua: `1 true`.
+
+3. The chat line focused by addon code a second later (the line closed by
+   then), and who last wrote the game's active chat line:
+
+   ```
+   /run C_Timer.After(1,function() ChatFrame1EditBox:SetFocus() print("2", issecurevariable("ACTIVE_CHAT_EDIT_BOX")) ChatFrame1EditBox:ClearFocus() end)
+   ```
+
+   Seen: (to do: `2 true`, or `2 false` and the addon's name). wowlua:
+   `2 true`.
+
+4. Take one screenshot of the chat with both lines (and the error, if one
+   showed).
+
+5. Reload, so your chat is untainted again:
+
+   ```
+   /reload
+   ```
+
+## A group header updated by addon code, then fewer units in a fight (issue #275, 2026-11-20)
+
+Found in game: an addon that called `SecureGroupPetHeader_Update` itself
+had hundreds of "Blocked in combat: …UnitButton1:Hide()" when a pet went
+away in a fight. wowlua refuses nothing there. Which read turns Blizzard's
+later secure update tainted is not known (the shared `sortingTable` and
+`tokenTable`, the buttons' fields, or their attributes). These steps record
+the case alone with your own pet, and read what the direct update leaves
+tainted, before wowlua's rule changes. On a hunter or a warlock with the pet
+out, out of combat, next to a training dummy. Each line in the chat, one at
+a time.
+
+1. Turn Lua errors on:
+
+   ```
+   /console scriptErrors 1
+   ```
+
+2. Count the refused actions:
+
+   ```
+   /run PB=0 PBF=nil local f=CreateFrame("Frame") f:RegisterEvent("ADDON_ACTION_BLOCKED") f:SetScript("OnEvent",function(_,_,_,fn) PB=PB+1 PBF=PBF or fn end)
+   ```
+
+3. A pet header, shown (it updates itself, secure):
+
+   ```
+   /run PH=CreateFrame("Frame","ProbePetHeader",UIParent,"SecureGroupPetHeaderTemplate") PH:SetAttribute("template","SecureUnitButtonTemplate") PH:SetAttribute("showSolo",true) PH:SetAttribute("showPlayer",true) PH:SetAttribute("showParty",true) PH:SetPoint("CENTER") PH:Show()
+   ```
+
+4. Read its first button before the addon's update:
+
+   ```
+   /run local b=PH:GetAttribute("child1") print("1", b and b:GetAttribute("unit"), issecurevariable(PH,1))
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+5. The addon's own update, then the same read:
+
+   ```
+   /run SecureGroupPetHeader_Update(PH) local b=PH:GetAttribute("child1") print("2", b and b:GetAttribute("unit"), issecurevariable(PH,1))
+   ```
+
+   Seen: (to do). wowlua: (to do).
+
+6. Attack the dummy. In the fight, dismiss your pet (Dismiss Pet, or
+   Dismiss Demon). Leave the fight.
+
+7. Read the count and the first function named:
+
+   ```
+   /run print("3", PB, PBF)
+   ```
+
+   Seen: (to do: 0, or a number and "ProbePetHeaderUnitButton1:Hide()").
+   wowlua: `3 0 nil`.
+
+8. Summon your pet again, then reload:
+
+   ```
+   /reload
+   ```
+
+9. The control, without the addon's update: do steps 1, 2, 3, 4, 6 and 7
+   again, and leave out step 5.
+
+   Seen: (to do: expected `3 0 nil`). wowlua: `3 0 nil`.
+
+10. Take one screenshot of the chat after each of steps 7 and 9.
