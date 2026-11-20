@@ -3827,3 +3827,51 @@ Out of combat, each line in the chat, one at a time.
    Seen: (to do). wowlua: (to do).
 
 Take one screenshot of the four lines.
+
+## Scripts an addon's call sets off (issue #260, 2026-11-20)
+
+Issue #260 says a script that an addon's own call sets off (`Show` →
+`OnShow`, `SetFocus` → `OnEditFocusGained`) runs inside the addon's
+execution, tainted, where wowlua starts it secure. Nobody saw it directly.
+Against it: SuuUI's secure windows bind Escape in a
+`SecureHandlerShowHideTemplate` frame's `_onshow`, which Blizzard's code
+refuses ("Invalid 'self' frame handle") when it runs tainted before the
+frame has a handle, and SuuUI shows those windows from its own code. These
+steps record both kinds of frame before wowlua's rule changes. Step 3 taints
+your chat until the `/reload` of step 5.
+
+Out of combat, each line in the chat, one at a time.
+
+1. Turn Lua errors on:
+
+   ```
+   /console scriptErrors 1
+   ```
+
+2. A secure handler frame, made and shown again by addon code, with no handle made for it before:
+
+   ```
+   /run PW=CreateFrame("Frame","ProbeWatch",UIParent,"SecureHandlerShowHideTemplate") PW:SetAttribute("_onshow",[[ self:SetAttribute("ran", true) ]]) PW:Hide() PW:Show() print("1", PW:GetAttribute("ran"))
+   ```
+
+   Seen: (to do: `1 true` and no error, or `1 nil` and an "Invalid 'self'
+   frame handle" error). wowlua: `1 true`.
+
+3. The chat line focused by addon code a second later (the line closed by
+   then), and who last wrote the game's active chat line:
+
+   ```
+   /run C_Timer.After(1,function() ChatFrame1EditBox:SetFocus() print("2", issecurevariable("ACTIVE_CHAT_EDIT_BOX")) ChatFrame1EditBox:ClearFocus() end)
+   ```
+
+   Seen: (to do: `2 true`, or `2 false` and the addon's name). wowlua:
+   `2 true`.
+
+4. Take one screenshot of the chat with both lines (and the error, if one
+   showed).
+
+5. Reload, so your chat is untainted again:
+
+   ```
+   /reload
+   ```
