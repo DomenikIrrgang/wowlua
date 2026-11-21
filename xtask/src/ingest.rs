@@ -1860,6 +1860,12 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             "forever-camelot-lfgsearch.lua",
             "/stdtest engine lfgsearch, a group finder search\nfrom the window's OnShow, the window opened five ways",
         ),
+        (
+            "engineLfgSearch2",
+            "lfgsearch2",
+            "forever-camelot-lfgsearch2.lua",
+            "/stdtest engine lfgsearch order2, the group finder\nsearch from OnShow, the micro button first, then the bare key twice",
+        ),
     ] {
         if let Ok(log) = state.get::<mlua::Table>(key)
             && gate.take(&stamps, part, &version).is_some()

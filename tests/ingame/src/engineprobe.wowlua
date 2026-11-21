@@ -15,7 +15,7 @@
 --   /stdtest engine blocked  arms a probe of protected frames: enter combat,
 --                            it runs half a second later
 --   /stdtest engine input    the scripts hovering, clicking and typing run
---   /stdtest engine lfgsearch
+--   /stdtest engine lfgsearch [order2]
 --                            a group finder search from the window's
 --                            OnShow, the window opened five ways (guided,
 --                            lfgsearch.wowlua)
@@ -1799,7 +1799,7 @@ export function engineProbe(arg: string?)
         keysProbe()
         return
     elseif words[1] == "lfgsearch" then
-        lfgSearchProbe()
+        lfgSearchProbe(words[2])
         return
     elseif words[1] == "cursor" then
         cursorProbe()

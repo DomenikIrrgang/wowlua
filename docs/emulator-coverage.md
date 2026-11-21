@@ -12,11 +12,12 @@ is out of date.
 
 ## Summary
 
-Every recording comes from the camelot flavor (WoW Forever 1.60.1 (70450)), the
-client the engine is built against: its numbers below are measured against what
-that client answered. The other flavors have their API documentation, the same
-engine modules and the generated stand-ins, but no recording of their own: what
-their clients answer differently is unverified.
+Every recording comes from the camelot flavor (WoW Forever 1.60.1 (70450), WoW
+Forever 1.60.1 (71037)), the client the engine is built against: its numbers
+below are measured against what that client answered. The other flavors have
+their API documentation, the same engine modules and the generated stand-ins,
+but no recording of their own: what their clients answer differently is
+unverified.
 
 - **API functions:** 5,110 of the 5,115 documented camelot functions have
   behaviour (99.9%): 1,079 modelled, 349 answered from recordings, 3,682 by a

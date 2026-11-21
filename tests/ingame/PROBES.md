@@ -4048,3 +4048,21 @@ out of combat, with the group finder closed:
    key is refused and step 2's keyboard frame let it through. wowlua (the
    engine's test, `the_lfg_search_probe_runs_its_steps`): steps 1 to 4
    `ok=true refusals=0`, step 5 refused.
+
+4. The second order tells the two apart. After another `/reload`, out of
+   combat, with the group finder closed:
+
+   ```
+   /stdtest engine lfgsearch order2
+   ```
+
+   Its steps: the micro button first, then the bare key twice, then the key
+   held a second (watched), then StdTest's own code. Close the window with
+   Escape after each. `/reload` when it says "recorded", then `cargo xtask
+   ingest` writes `forever-camelot-lfgsearch2.lua`.
+
+   Seen: (to do: the first open refused, the rest allowed, if the first open
+   after a reload is the rule; the micro button allowed and both bare keys
+   refused, if the bare key is). wowlua (the engine's test,
+   `the_lfg_search_probe_runs_its_second_order`): steps 1 to 4 `ok=true
+   refusals=0`, step 5 refused.
