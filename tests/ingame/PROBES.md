@@ -4067,9 +4067,25 @@ each variant, right after a `/reload`:
 Then `cargo xtask ingest` writes
 `crates/wowlua-engine/tests/client/forever-camelot-groupheader2-<variant>.lua`.
 
-Seen: (to do). wowlua (the engine's test,
-`the_group_header_probe_runs_its_variants`), every variant alike but for
-its `after` line: nothing refused.
+Seen (2026-11-21, WoW Forever 1.60.1 71037, alone,
+`forever-camelot-groupheader2-<variant>.lua`): both headers' first updates
+secure in every variant; `none`: `in fight … b=- button1 shown=false
+refusals=0`; `other`, `self` and `rewrite` alike: `in fight … b=player
+button1 shown=true refusals=5`, B's button's `Hide()`, `ClearAllPoints()`
+and `SetAttribute()`, B's `SetWidth()` and `SetHeight()`, each once. So:
+
+- `other`: B, which addon code never touched, is refused: the taint is in
+  the tables every header shares. B's update in the fight wipes them, then
+  reads `tokenTable[1]` and `#sortingTable`, slots A's direct update wrote:
+  a slot a secure `wipe` clears keeps the taint of its last writer;
+- `rewrite`: B's secure update with the same unit doesn't clean it. Its
+  `tinsert(sortingTable, unit)` reads `#sortingTable` on the wiped table,
+  whose `[1]` still has StdTest's taint: `#` takes the taint of the slot
+  its border search ends on, the update turns tainted there, and writes
+  `[1]` tainted again.
+
+wowlua before the fix (the engine's test), every variant alike but for its
+`after` line: nothing refused.
 
 ```text
 shown a=player secure b=player secure refusals=0
