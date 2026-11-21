@@ -2598,6 +2598,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Scripts an addon's call sets off (issue #260, 2026-11-20)
 - A group header updated by addon code, then fewer units in a fight (issue #275,
   2026-11-20)
+- A group finder search from the window's OnShow (issue #264, 2026-11-21)
 
 ## In-game regressions
 

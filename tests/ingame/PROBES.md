@@ -3988,3 +3988,56 @@ a time.
    Seen: (to do: expected `3 0 nil`). wowlua: `3 0 nil`.
 
 10. Take one screenshot of the chat after each of steps 7 and 9.
+
+## A group finder search from the window's OnShow (issue #264, 2026-11-21)
+
+Found in game: an addon's `OnShow` hook on `LFGParentFrame` called
+`C_LFGList.Search`. With the window opened by its key binding
+(`TOGGLEGROUPFINDER`), out of combat, the game refused the search on four
+days (2026-11-10, 11, 13 and 15, WoW Forever 1.60.1): `ADDON_ACTION_BLOCKED`
+naming `UNKNOWN()` (through `pcall`), the stack the binding →
+`LFGVanilla_ToggleFrame` → `ShowUIPanel` → `SetAttribute` → `Show` → the
+hook. A probe on 2026-10-15 saw it allowed. wowlua takes the key, a click and
+a typed command as the player's action, and allows the search all three ways.
+Which one the game refuses, and why (the panel manager's secure
+`SetAttribute`, the key's press or release, or a client change), is not
+known. `/stdtest engine lfgsearch` records it before wowlua's rule changes: it
+hooks the window's `OnShow`, searches there, and asks you to open the window
+five ways, one after another. A search changes nothing: it only asks for the
+Dungeons listings.
+
+Right after a `/reload` (so no addon code has touched the panel manager),
+out of combat, with the group finder closed:
+
+1. Start it:
+
+   ```
+   /stdtest engine lfgsearch
+   ```
+
+2. Do what each of its chat lines asks, then close the window with Escape;
+   the next line comes once the window is closed:
+   1. press the Toggle Group Finder key (`I` by default);
+   2. press it again and hold it a second before you release it (StdTest
+      notes the key's press, so the times tell whether the window opened on
+      the press or on the release);
+   3. click the group finder button of the micro menu;
+   4. type `/run ShowUIPanel(LFGParentFrame)` in the chat;
+   5. nothing: StdTest opens the window from its own code a second later
+      (the control, refused in wowlua as in the game).
+
+3. When it says "recorded", reload, so the file is written and the hook is
+   gone:
+
+   ```
+   /reload
+   ```
+
+   Then `cargo xtask ingest` writes
+   `crates/wowlua-engine/tests/client/forever-camelot-lfgsearch.lua`: each
+   show's refusals and its stack.
+
+   Seen: (to do). wowlua (the engine's test,
+   `the_lfg_search_probe_runs_its_steps`): steps 1 to 4 `ok=true
+   refusals=0`, step 5 `refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()`;
+   step 2's show on the press.

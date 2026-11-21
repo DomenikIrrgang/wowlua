@@ -78,6 +78,7 @@ fn build() -> tempfile::TempDir {
         "achievements.wowlua",
         "trainer.wowlua",
         "group.wowlua",
+        "lfgsearch.wowlua",
         "startup.wowlua",
         "scenario.wowlua",
         "snapshot.wowlua",
@@ -3063,4 +3064,84 @@ fn the_engine_measures_each_screen_as_the_client_did() {
         differ.len(),
         differ.join("\n")
     );
+}
+
+/// `/stdtest engine lfgsearch` played in the engine on Blizzard's UI: the
+/// group finder opened by its key twice, the micro button, a typed
+/// `/run ShowUIPanel(LFGParentFrame)` and StdTest's own code, each closed
+/// with Escape. The engine allows the search from `OnShow` the four ways
+/// the player acts, and refuses it from the timer; WoW Forever refused it
+/// after the key (issue #264), which the probe's recording will settle.
+#[test]
+fn the_lfg_search_probe_runs_its_steps() {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    wowlua_engine::login::login(&mut vm, "StdTest", false, false);
+    wowlua_engine::clock::advance_frames(&mut vm, 30, 1000.0 / 60.0);
+    addon(
+        &mut vm,
+        r#"local function close()
+    __engine.advanceTime(0.5)
+    __engine.pressKey("ESCAPE")
+    __engine.advanceTime(0.5)
+end
+-- The client's default keys (this client has none bound).
+SetBinding("I", "TOGGLEGROUPFINDER")
+SetBinding("ESCAPE", "TOGGLEGAMEMENU")
+StdTestEngineProbe("lfgsearch")
+__engine.pressKey("I")
+close()
+__engine.pressKey("I")
+close()
+__engine.click(LFDMicroButton)
+close()
+__engine.slash("/run ShowUIPanel(LFGParentFrame)")
+close()
+__engine.advanceTime(1.5)
+close()
+local lines = {}
+for _, line in ipairs(StdTestState.engineLfgSearch) do
+    if line:find("^s1 stack ") then
+        BindingStack = line
+    elseif not line:find("^s%d+ stack ") and not line:find("^s%d+ client ") then
+        lines[#lines + 1] = line
+    end
+end
+LfgSearchLog = table.concat(lines, "\n")"#,
+    );
+    let log = vm.get_global("LfgSearchLog");
+    let log = text(&vm, log);
+    assert_eq!(
+        log.lines().collect::<Vec<_>>(),
+        [
+            "s1 show t=0.00 ok=true refusals=0",
+            "s2 key down I t=1.00",
+            "s2 show t=1.00 ok=true refusals=0",
+            "s3 show t=2.00 ok=true refusals=0",
+            "s4 show t=3.00 ok=true refusals=0",
+            "s5 show t=4.60 ok=true refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()",
+            "s5 recorded",
+        ],
+        "{log}"
+    );
+    // The binding's show, through the panel manager's secure attribute.
+    let stack = vm.get_global("BindingStack");
+    let stack = text(&vm, stack);
+    for frame in [
+        "SetAttribute",
+        "ShowUIPanel",
+        "LFGVanilla_ToggleFrame",
+        "pressKey",
+    ] {
+        assert!(stack.contains(frame), "{frame} in {stack}");
+    }
 }
