@@ -415,6 +415,10 @@ pub struct World {
     pub timeline: crate::timeline::Timeline,
     /// The chat windows' settings set since login (`chatwindows.rs`).
     pub chat_windows: crate::chatwindows::ChatWindows,
+    /// The frames whose `OnShow` runs now, the innermost last: what an
+    /// engine function can ask of its caller's script (the group finder's
+    /// first search, issue #264).
+    pub showing: Vec<WidgetId>,
 }
 
 impl World {
@@ -1486,7 +1490,14 @@ fn run_script_of(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value], truste
     } else {
         None
     };
+    let on_show = script == "OnShow";
+    if on_show {
+        engine_mut(vm).world.showing.push(id);
+    }
     run_script_body(vm, id, script, args, trusted_only);
+    if on_show {
+        engine_mut(vm).world.showing.pop();
+    }
     vm.dispatch_exit(d);
 }
 

@@ -8,7 +8,9 @@
 -- showed the window. Out of combat, best right after a /reload (nothing
 -- of the panel manager's touched by addon code before). A search changes
 -- nothing: it asks for the Dungeons listings. Into
--- StdTestState.engineLfgSearch, its lines in order.
+-- StdTestState.engineLfgSearch, its lines in order. `/stdtest engine
+-- lfgsearch order2`: the micro button first, then the bare key twice, then
+-- the watched key and StdTest's own code, into engineLfgSearch2.
 import state from "/state"
 import stamp from "/state"
 import say from "/harness"
@@ -18,17 +20,43 @@ local G = _G :: any
 --- The category searched: Dungeons.
 const CATEGORY = 2
 
---- The steps: what the player does, and whether the probe's keyboard frame
---- notes the keys meanwhile. The last one StdTest does itself.
-const STEPS: { text: string, keys?: boolean, auto?: boolean }[] = {
-    { text = "press your Toggle Group Finder key (I by default), then close the window with Escape" },
-    {
-        text = "press the Toggle Group Finder key again and hold it a second before you release it, then close the window with Escape",
-        keys = true,
+type Step = { text: string, keys?: boolean, auto?: boolean }
+
+const KEY = "press your Toggle Group Finder key (I by default), then close the window with Escape"
+const KEY_HELD = "press the Toggle Group Finder key again and hold it a second before you release it, then close the window with Escape"
+const MICRO = "click the group finder button of the micro menu, then close the window with Escape"
+const TYPED = "type /run ShowUIPanel(LFGParentFrame) in the chat, then close the window with Escape"
+const OWN = "StdTest opens the window from its own code in a second; then close it with Escape"
+
+--- The orders of steps: what the player does, and whether the probe's
+--- keyboard frame notes the keys meanwhile; the last one StdTest does
+--- itself. Each with its saved key and stamp. The first run (2026-11-21)
+--- refused the key's first open and allowed its second, watched one; the
+--- second order tells "the first open after a reload" from "the bare key":
+--- the micro button first, then the bare key twice.
+const ORDERS: { [string]: { key: string, part: string, steps: Step[] } } = {
+    default = {
+        key = "engineLfgSearch",
+        part = "lfgsearch",
+        steps = {
+            { text = KEY },
+            { text = KEY_HELD, keys = true },
+            { text = MICRO },
+            { text = TYPED },
+            { text = OWN, auto = true },
+        },
     },
-    { text = "click the group finder button of the micro menu, then close the window with Escape" },
-    { text = "type /run ShowUIPanel(LFGParentFrame) in the chat, then close the window with Escape" },
-    { text = "StdTest opens the window from its own code in a second; then close it with Escape", auto = true },
+    order2 = {
+        key = "engineLfgSearch2",
+        part = "lfgsearch2",
+        steps = {
+            { text = MICRO },
+            { text = KEY },
+            { text = "press the Toggle Group Finder key once more, then close the window with Escape" },
+            { text = KEY_HELD, keys = true },
+            { text = OWN, auto = true },
+        },
+    },
 }
 
 --- A stack line as `File.lua:line function`, or the line as it is.
@@ -51,7 +79,13 @@ end
 
 local running = false
 
-export function lfgSearchProbe()
+export function lfgSearchProbe(order: string?)
+    const chosen = ORDERS[order ?? "default"]
+    if not chosen then
+        say("engine lfgsearch: the orders are none (the first) and order2")
+        return
+    end
+    const steps = chosen.steps
     if running then
         say("engine lfgsearch: already running; follow its last line")
         return
@@ -72,8 +106,8 @@ export function lfgSearchProbe()
     running = true
     const log: string[] = {}
     const st = state() :: any
-    st.engineLfgSearch = log
-    stamp("lfgsearch")
+    st[chosen.key] = log
+    stamp(chosen.part)
     local step = 1
     local shown = false
     local active = true
@@ -152,12 +186,12 @@ export function lfgSearchProbe()
         say(`engine lfgsearch: {why}; type /reload so the file is written (it also clears the probe's hook)`)
     end
     local function begin()
-        const s = STEPS[step]
+        const s = steps[step]
         watchKeys(s.keys == true)
-        say(`engine lfgsearch {step}/{#STEPS}: {s.text}`)
+        say(`engine lfgsearch {step}/{#steps}: {s.text}`)
         if s.auto then
             C_Timer.After(1, function()
-                if active and step == #STEPS then
+                if active and step == #steps then
                     G.ShowUIPanel(parent)
                 end
             end)
@@ -180,7 +214,7 @@ export function lfgSearchProbe()
         end
         shown = false
         watchKeys(false)
-        if step == #STEPS then
+        if step == #steps then
             finish("recorded")
             return
         end

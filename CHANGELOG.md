@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- Tests (WoW Forever): `C_LFGList.Search` from your addon's code while the group finder opens for the first time after login (a hook on its `OnShow`) is refused (`ADDON_ACTION_BLOCKED`), even when the player opened it, as in the game. The window's later openings allow it, and so does the first one once anything has searched since login. Your addon's "the game said no" path for that first search now runs in tests.
+
 ## 0.13.17 (2026-11-21)
 
 ### New

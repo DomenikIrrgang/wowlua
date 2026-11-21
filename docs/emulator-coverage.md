@@ -12,11 +12,12 @@ is out of date.
 
 ## Summary
 
-Every recording comes from the camelot flavor (WoW Forever 1.60.1 (70450)), the
-client the engine is built against: its numbers below are measured against what
-that client answered. The other flavors have their API documentation, the same
-engine modules and the generated stand-ins, but no recording of their own: what
-their clients answer differently is unverified.
+Every recording comes from the camelot flavor (WoW Forever 1.60.1 (70450), WoW
+Forever 1.60.1 (71037)), the client the engine is built against: its numbers
+below are measured against what that client answered. The other flavors have
+their API documentation, the same engine modules and the generated stand-ins,
+but no recording of their own: what their clients answer differently is
+unverified.
 
 - **API functions:** 5,110 of the 5,115 documented camelot functions have
   behaviour (99.9%): 1,079 modelled, 349 answered from recordings, 3,682 by a
@@ -28,7 +29,7 @@ their clients answer differently is unverified.
   them (98.0%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,237 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,238 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -857,7 +858,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,237 rules unverified: each rests on Blizzard's
+The engine's code marks 1,238 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1674,7 +1675,7 @@ page changes only when a rule is added, removed or reworded.
 - [levels.rs](../crates/wowlua-engine-core/src/levels.rs): Unverified: more than one level at once, a level with talents or spells to learn, a pet's; the skill lines' changes'...
 - [levels.rs](../crates/wowlua-engine-core/src/levels.rs): The health full at the new maximum (the packet's `UNIT_HEALTH`; no aura state's change told, `quest` 70.006, the play...
 
-### lfg (26)
+### lfg (27)
 
 - [lfg.rs](../crates/wowlua-engine-core/src/lfg.rs): Seconds listed (unverified whether it grows between searches).
 - [lfg.rs](../crates/wowlua-engine/src/lfg.rs): Unverified: Blizzard's own (untainted) code searching and listing without a hardware event (its UI searches from `LFG...
@@ -1683,6 +1684,7 @@ page changes only when a rule is added, removed or reworded.
 - [lfg.rs](../crates/wowlua-engine/src/lfg.rs): A server's listing delisted: later searches do not find it, and when the last search found it, its result is told del...
 - [lfg.rs](../crates/wowlua-engine/src/lfg.rs): The next search's answer a failure: `LFG_LIST_SEARCH_FAILED(reason)`, the results none (Blizzard's browse tab shows `...
 - [lfg.rs](../crates/wowlua-engine/src/lfg.rs): An addon's restricted call refused: `ADDON_ACTION_BLOCKED(addon, action)` (recorded through `pcall`: `"UNKNOWN()"`).
+- [lfg.rs](../crates/wowlua-engine/src/lfg.rs): An addon's search in `LFGParentFrame`'s `OnShow` before any search since login, refused even in the player's action (...
 - [lfg.rs](../crates/wowlua-engine/src/lfg.rs): A description is checked: in the same answer the listing's update and the check's verdict, not censored (recorded onc...
 - [lfg.rs](../crates/wowlua-engine/src/lfg.rs): The player's own listing as a search finds it: the player its only member (alone in the recording; a group's members...
 - [lfg.rs](../crates/wowlua-engine/src/lfg.rs): `C_LFGList.GetLfgCategoryInfo(categoryID)`: as recorded (no `searchPromptOverride`); an unknown category nothing (unv...
@@ -2598,7 +2600,8 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Scripts an addon's call sets off (issue #260, 2026-11-20)
 - A group header updated by addon code, then fewer units in a fight (issue #275,
   2026-11-20)
-- A group finder search from the window's OnShow (issue #264, 2026-11-21)
+- A group finder search from the window's OnShow (issue #264, decision T669,
+  2026-11-21)
 
 ## In-game regressions
 

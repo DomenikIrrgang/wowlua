@@ -3989,7 +3989,7 @@ a time.
 
 10. Take one screenshot of the chat after each of steps 7 and 9.
 
-## A group finder search from the window's OnShow (issue #264, 2026-11-21)
+## A group finder search from the window's OnShow (issue #264, decision T669, 2026-11-21)
 
 Found in game: an addon's `OnShow` hook on `LFGParentFrame` called
 `C_LFGList.Search`. With the window opened by its key binding
@@ -4037,7 +4037,75 @@ out of combat, with the group finder closed:
    `crates/wowlua-engine/tests/client/forever-camelot-lfgsearch.lua`: each
    show's refusals and its stack.
 
-   Seen: (to do). wowlua (the engine's test,
-   `the_lfg_search_probe_runs_its_steps`): steps 1 to 4 `ok=true
-   refusals=0`, step 5 `refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()`;
-   step 2's show on the press.
+   Seen (2026-11-21, WoW Forever 1.60.1 71037, twice, at 19:02 and 20:08;
+   `forever-camelot-lfgsearch.lua` the second): step 1, the key's first open
+   after the reload, `refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()`; steps 2 to 4
+   `ok=true refusals=0`; step 5 refused as step 1. Step 2's show on the
+   press. Steps 1 and 2 have the same stack (the binding → `ShowUIPanel` →
+   `SetAttribute` → `Show`), and steps 3 and 4 run through `SetAttribute`
+   too, so the panel manager is not the cause. Not settled: whether the
+   first open after a reload is refused whichever way it comes, or the bare
+   key is refused and step 2's keyboard frame let it through. wowlua (the
+   engine's test, `the_lfg_search_probe_runs_its_steps`): steps 1 to 4
+   `ok=true refusals=0`, step 5 refused.
+
+4. The second order tells the two apart. After another `/reload`, out of
+   combat, with the group finder closed:
+
+   ```
+   /stdtest engine lfgsearch order2
+   ```
+
+   Its steps: the micro button first, then the bare key twice, then the key
+   held a second (watched), then StdTest's own code. Close the window with
+   Escape after each. `/reload` when it says "recorded", then `cargo xtask
+   ingest` writes `forever-camelot-lfgsearch2.lua`.
+
+   Seen (2026-11-21 20:08, after a reload, `forever-camelot-lfgsearch2.lua`):
+   step 1, the micro button's first open, `refusals=1 ADDON_ACTION_BLOCKED
+   StdTest UNKNOWN()`; steps 2 to 4 (the bare key twice, the watched key)
+   `ok=true refusals=0`; step 5 refused. The first open after a reload is
+   refused whichever way it comes; the key is not the cause. wowlua (the engine's test,
+   `the_lfg_search_probe_runs_its_second_order`): steps 1 to 4 `ok=true
+   refusals=0`, step 5 refused.
+
+5. A check by typed lines (2026-11-21, after a reload, the window closed): a
+   watcher, a hook on the window's `OnShow` that searches, both from `/run`,
+   then a search from `/run`, then the key:
+
+   ```
+   /run PB={} local f=CreateFrame("Frame") f:RegisterEvent("ADDON_ACTION_BLOCKED") f:SetScript("OnEvent",function(_,_,a,fn) PB[#PB+1]=tostring(a).." "..tostring(fn) end)
+   /run LFGParentFrame:HookScript("OnShow",function() local n=#PB pcall(C_LFGList.Search,2) print("show",#PB-n,PB[#PB]) end)
+   /run local n=#PB pcall(C_LFGList.Search,2) print("run",#PB-n,PB[#PB])
+   ```
+
+   Seen: `run 0 nil`, `show 0 nil`: the session's first search and the
+   window's first open both allowed. Neither "the first search" nor "the
+   first open" holds alone. Left: the time since the reload (the probe's
+   first open came seconds after it, the typed lines much later), the
+   search before the open, or the hook's source (StdTest's code or a typed
+   line). wowlua: `run 0 nil`, `show 0 nil`.
+
+6. The time: `/reload`, wait a minute without doing anything, then
+   `/stdtest engine lfgsearch` and press the key for its step 1. Once the
+   window has opened, close it and `/reload` (the other steps are not
+   needed).
+
+   Seen (2026-11-21 20:19): step 1 refused (`ADDON_ACTION_BLOCKED StdTest
+   UNKNOWN()`), a minute after the reload. The time does not decide it.
+   Left: the search before the open, or the hook's source.
+
+7. The search before the open: `/reload`, then a search from a typed line,
+   then `/stdtest engine lfgsearch` and the key for its step 1 (close the
+   window and `/reload` once it has opened):
+
+   ```
+   /run C_LFGList.Search(2)
+   ```
+
+   Seen (2026-11-21 20:22): step 1 allowed (`ok=true refusals=0`). A search
+   before the window's first open lets its `OnShow` search through. wowlua
+   follows it (decision T669): an addon's search in the group finder's
+   `OnShow` is refused while nothing has searched since login. Still
+   unverified: an addon's first search from its own button's click, and a
+   first open without a search before the one that searches.

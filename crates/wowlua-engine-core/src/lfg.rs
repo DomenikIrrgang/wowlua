@@ -93,4 +93,6 @@ pub struct Lfg {
     pub secure_refs: BTreeMap<String, WidgetId>,
     /// `C_LFGListRoles.SetRoles`' tank, healer and damage.
     pub roles: [bool; 3],
+    /// A search was asked for since login, refused or not (issue #264).
+    pub searched: bool,
 }

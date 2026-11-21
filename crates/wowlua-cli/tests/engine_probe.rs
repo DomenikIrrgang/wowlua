@@ -3066,17 +3066,14 @@ fn the_engine_measures_each_screen_as_the_client_did() {
     );
 }
 
-/// `/stdtest engine lfgsearch` played in the engine on Blizzard's UI: the
-/// group finder opened by its key twice, the micro button, a typed
-/// `/run ShowUIPanel(LFGParentFrame)` and StdTest's own code, each closed
-/// with Escape. The engine allows the search from `OnShow` the four ways
-/// the player acts, and refuses it from the timer; WoW Forever refused it
-/// after the key (issue #264), which the probe's recording will settle.
-#[test]
-fn the_lfg_search_probe_runs_its_steps() {
+/// `/stdtest engine lfgsearch [order2]` played in the engine on
+/// Blizzard's UI: `actions` open the group finder once per step, each
+/// closed with Escape, then StdTest's own code opens it. The probe's lines
+/// but for the client and the stacks, and the first show's stack.
+fn play_lfg_search(order: &str, key: &str, actions: &[&str]) -> Option<(Vec<String>, String)> {
     let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
         eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
-        return;
+        return None;
     };
     let dir = build();
     let out = dir.path().join("dist/dev/StdTest");
@@ -3087,9 +3084,15 @@ fn the_lfg_search_probe_runs_its_steps() {
     let mut vm = client_in(vm, &out);
     wowlua_engine::login::login(&mut vm, "StdTest", false, false);
     wowlua_engine::clock::advance_frames(&mut vm, 30, 1000.0 / 60.0);
+    let mut steps = String::new();
+    for action in actions {
+        steps.push_str(action);
+        steps.push_str("\nclose()\n");
+    }
     addon(
         &mut vm,
-        r#"local function close()
+        &format!(
+            r#"local function close()
     __engine.advanceTime(0.5)
     __engine.pressKey("ESCAPE")
     __engine.advanceTime(0.5)
@@ -3097,33 +3100,49 @@ end
 -- The client's default keys (this client has none bound).
 SetBinding("I", "TOGGLEGROUPFINDER")
 SetBinding("ESCAPE", "TOGGLEGAMEMENU")
-StdTestEngineProbe("lfgsearch")
-__engine.pressKey("I")
+StdTestEngineProbe("lfgsearch {order}")
+{steps}__engine.advanceTime(1.5)
 close()
-__engine.pressKey("I")
-close()
-__engine.click(LFDMicroButton)
-close()
-__engine.slash("/run ShowUIPanel(LFGParentFrame)")
-close()
-__engine.advanceTime(1.5)
-close()
-local lines = {}
-for _, line in ipairs(StdTestState.engineLfgSearch) do
+local lines = {{}}
+for _, line in ipairs(StdTestState.{key}) do
     if line:find("^s1 stack ") then
-        BindingStack = line
+        FirstStack = line
     elseif not line:find("^s%d+ stack ") and not line:find("^s%d+ client ") then
         lines[#lines + 1] = line
     end
 end
-LfgSearchLog = table.concat(lines, "\n")"#,
+LfgSearchLog = table.concat(lines, "\n")"#
+        ),
     );
     let log = vm.get_global("LfgSearchLog");
     let log = text(&vm, log);
+    let stack = vm.get_global("FirstStack");
+    let stack = text(&vm, stack);
+    Some((log.lines().map(str::to_string).collect(), stack))
+}
+
+const PRESS_KEY: &str = r#"__engine.pressKey("I")"#;
+const CLICK_MICRO: &str = "__engine.click(LFDMicroButton)";
+const TYPE_RUN: &str = r#"__engine.slash("/run ShowUIPanel(LFGParentFrame)")"#;
+
+/// The probe's first order: the key twice (the second time watched), the
+/// micro button, a typed `/run ShowUIPanel(LFGParentFrame)`, StdTest's own
+/// code. As WoW Forever answered (`forever-camelot-lfgsearch.lua`): the
+/// window's first open refuses the search from `OnShow`, the player's
+/// opens after it allow it, the timer's is refused.
+#[test]
+fn the_lfg_search_probe_runs_its_steps() {
+    let Some((log, stack)) = play_lfg_search(
+        "",
+        "engineLfgSearch",
+        &[PRESS_KEY, PRESS_KEY, CLICK_MICRO, TYPE_RUN],
+    ) else {
+        return;
+    };
     assert_eq!(
-        log.lines().collect::<Vec<_>>(),
+        log,
         [
-            "s1 show t=0.00 ok=true refusals=0",
+            "s1 show t=0.00 ok=true refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()",
             "s2 key down I t=1.00",
             "s2 show t=1.00 ok=true refusals=0",
             "s3 show t=2.00 ok=true refusals=0",
@@ -3131,11 +3150,8 @@ LfgSearchLog = table.concat(lines, "\n")"#,
             "s5 show t=4.60 ok=true refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()",
             "s5 recorded",
         ],
-        "{log}"
     );
-    // The binding's show, through the panel manager's secure attribute.
-    let stack = vm.get_global("BindingStack");
-    let stack = text(&vm, stack);
+    // The key's show, through the panel manager's secure attribute.
     for frame in [
         "SetAttribute",
         "ShowUIPanel",
@@ -3144,4 +3160,32 @@ LfgSearchLog = table.concat(lines, "\n")"#,
     ] {
         assert!(stack.contains(frame), "{frame} in {stack}");
     }
+}
+
+/// The probe's second order (`lfgsearch order2`): the micro button first,
+/// then the bare key twice, the watched key, StdTest's own code. As WoW
+/// Forever answered (`forever-camelot-lfgsearch2.lua`): the micro button's
+/// first open refused, the keys' opens after it allowed.
+#[test]
+fn the_lfg_search_probe_runs_its_second_order() {
+    let Some((log, stack)) = play_lfg_search(
+        "order2",
+        "engineLfgSearch2",
+        &[CLICK_MICRO, PRESS_KEY, PRESS_KEY, PRESS_KEY],
+    ) else {
+        return;
+    };
+    assert_eq!(
+        log,
+        [
+            "s1 show t=0.00 ok=true refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()",
+            "s2 show t=1.00 ok=true refusals=0",
+            "s3 show t=2.00 ok=true refusals=0",
+            "s4 key down I t=3.00",
+            "s4 show t=3.00 ok=true refusals=0",
+            "s5 show t=4.60 ok=true refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()",
+            "s5 recorded",
+        ],
+    );
+    assert!(stack.contains("ToggleGroupFinderFrame"), "{stack}");
 }

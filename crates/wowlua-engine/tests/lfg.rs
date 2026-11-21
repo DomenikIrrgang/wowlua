@@ -262,6 +262,125 @@ return slash, SeenText()",
     );
 }
 
+/// The group finder window as the addon sees it (Blizzard's stands in for
+/// it by its name), a hook on its `OnShow` that searches, and a button that
+/// opens it.
+const WINDOW: &str = "Shows = {}
+local w = CreateFrame('Frame', 'LFGParentFrame', UIParent)
+w:Hide()
+w:HookScript('OnShow', function()
+    local ok = pcall(C_LFGList.Search, 2)
+    Shows[#Shows + 1] = tostring(ok) .. ' ' .. SeenText()
+end)
+local open = CreateFrame('Button', nil, UIParent)
+open:SetSize(100, 20)
+open:SetPoint('CENTER')
+open:SetScript('OnClick', function() w:Show() end)
+OpenButton = open
+function ShowsText() local s = table.concat(Shows, '; ') Shows = {} return s end";
+
+/// The group finder's first open after login (issue #264, recorded): an
+/// addon's search in its `OnShow` is refused even in the player's click,
+/// and every open after it allows it.
+#[test]
+fn the_group_finders_first_open_refuses_an_addons_search() {
+    let mut vm = vm();
+    run(&mut vm, WATCH);
+    run(&mut vm, WINDOW);
+    let r = run(
+        &mut vm,
+        "mock.click(OpenButton)
+LFGParentFrame:Hide()
+mock.advanceTime(1)
+SeenText()
+mock.click(OpenButton)
+mock.advanceTime(1)
+return ShowsText(), SeenText()",
+    );
+    assert_eq!(
+        r,
+        [
+            "true ADDON_ACTION_BLOCKED(MyAddon, UNKNOWN()); true ",
+            "LFG_LIST_SEARCH_RESULTS_RECEIVED()"
+        ]
+    );
+}
+
+/// A search before the window's first open (recorded: one typed with
+/// `/run`) lets the open's search through; so does an addon's from its own
+/// click (unverified), which is allowed itself.
+#[test]
+fn a_search_before_the_first_open_lets_it_search() {
+    for before in [
+        "SLASH_FINDER1 = '/finder'
+SlashCmdList.FINDER = function() C_LFGList.Search(2) end
+mock.slash('/finder')",
+        "local b = CreateFrame('Button', nil, UIParent)
+b:SetSize(10, 10)
+b:SetPoint('TOPLEFT')
+b:SetScript('OnClick', function() C_LFGList.Search(2) end)
+mock.click(b)",
+    ] {
+        let mut vm = vm();
+        run(&mut vm, WATCH);
+        run(&mut vm, WINDOW);
+        let r = run(
+            &mut vm,
+            &format!(
+                "{before}
+mock.advanceTime(1)
+local first = SeenText()
+mock.click(OpenButton)
+mock.advanceTime(1)
+return first, ShowsText(), SeenText()"
+            ),
+        );
+        assert_eq!(
+            r,
+            [
+                "LFG_LIST_SEARCH_RESULTS_RECEIVED()",
+                "true ",
+                "LFG_LIST_SEARCH_RESULTS_RECEIVED()"
+            ],
+            "{before}"
+        );
+    }
+}
+
+/// Only the group finder's window: another frame's `OnShow` searches in
+/// the player's click from the first, and Blizzard's own code in the
+/// window's `OnShow` is not refused (unverified).
+#[test]
+fn only_an_addons_search_in_the_group_finders_first_show_is_refused() {
+    let mut vm = vm();
+    run(&mut vm, WATCH);
+    let r = run(
+        &mut vm,
+        "local other = CreateFrame('Frame', 'OtherFrame', UIParent)
+other:Hide()
+other:SetScript('OnShow', function() pcall(C_LFGList.Search, 2) end)
+local b = CreateFrame('Button', nil, UIParent)
+b:SetSize(10, 10)
+b:SetPoint('TOPLEFT')
+b:SetScript('OnClick', function() other:Show() end)
+mock.click(b)
+mock.advanceTime(1)
+return SeenText()",
+    );
+    assert_eq!(r, ["LFG_LIST_SEARCH_RESULTS_RECEIVED()"]);
+    let mut vm = self::vm();
+    run(&mut vm, WATCH);
+    secure(
+        &mut vm,
+        "local w = CreateFrame('Frame', 'LFGParentFrame', UIParent)
+w:Hide()
+w:SetScript('OnShow', function() C_LFGList.Search(2) end)
+w:Show()",
+    );
+    let r = run(&mut vm, "mock.advanceTime(1) return SeenText()");
+    assert_eq!(r, ["LFG_LIST_SEARCH_RESULTS_RECEIVED()"]);
+}
+
 #[test]
 fn a_test_lists_the_player_as_the_games_panel_does() {
     let mut vm = vm();
