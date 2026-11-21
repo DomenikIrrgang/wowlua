@@ -87,7 +87,7 @@ return tostring(named:IsProtected()), tostring(outOfCombat), table.concat(seen, 
         [
             "true",
             "false",
-            "Hide(),SetPoint()",
+            "MySecureButton:Hide(),SetPoint()",
             "true",
             "0",
             "false",

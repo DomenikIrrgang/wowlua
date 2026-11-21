@@ -115,7 +115,19 @@ The client's security model, in the VM:
 - **Propagation.** A value written by insecure code carries that taint; secure
   code that reads a tainted value becomes tainted for the rest of its
   execution. Taint follows table fields, globals, upvalues and locals, and
-  crosses coroutines as in the client.
+  crosses coroutines as in the client. A slot keeps the taint of its last
+  writer when `wipe` clears it, whoever wipes; the length of a table (`#`,
+  and `table.insert`, `table.remove`, `table.getn`, `table.concat` and
+  `unpack` counting it) reads the nil slot its border search ends on, and
+  that slot's taint taints the execution (a full list's last element
+  doesn't, unverified); `table.insert` stores its value with
+  the value's taint or the execution's, and `table.insert` and
+  `table.remove` move elements with theirs. So an addon's call of
+  `SecureGroupHeader_Update` leaves its taint in the tables every group
+  header shares, and the next update of any header that lists fewer units
+  turns tainted, its protected calls refused in combat; a secure update
+  with as many units doesn't clean it (decision T670, found in game, issue
+  #275).
 - **Executions.** A script the client starts itself (an event, `OnUpdate`,
   the user's click or key) starts a secure execution. A script that a
   widget method sets off while Lua calls it goes on with the caller's
@@ -159,7 +171,10 @@ The client's security model, in the VM:
   - Protected methods (the documentation's `IsProtectedFunction`: `Show`,
     `Hide`, `SetPoint`, `SetSize`, `SetParent`, …) and `SetAttribute` of a
     protected frame, in combat lockdown: `ADDON_ACTION_BLOCKED`, after the
-    method's own argument checks (`/stdtest engine blocked`).
+    method's own argument checks (`/stdtest engine blocked`). The action
+    names a named frame before the method
+    (`"MyAddon", "MyHeaderUnitButton1:Hide()"`, decision T670), the method
+    alone for a frame without a name, `UNKNOWN()` through `pcall`.
     `SetPropagateKeyboardInput` is blocked in combat lockdown on any frame,
     protected or not (decision T647). A frame is
     protected through a secure template (`Secure…Template`; `IsProtected`

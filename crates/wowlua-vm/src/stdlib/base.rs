@@ -378,7 +378,7 @@ fn unpack(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = vm.check_table(&c, 1)?;
     let i = vm.opt_int(&c, 2, 1)?;
     let e = if c.arg(3).is_nil() {
-        vm.heap.table(t).border() as i64
+        vm.table_len(t) as i64
     } else {
         vm.check_int(&c, 3)?
     };

@@ -2598,8 +2598,8 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - A frame with one anchor and no size (issue #259, decision T667, 2026-11-20)
 - Colors without alpha (decision T655, 2026-11-20)
 - Scripts an addon's call sets off (issue #260, 2026-11-20)
-- A group header updated by addon code, then fewer units in a fight (issue #275,
-  2026-11-20)
+- A group header updated by addon code, then fewer units (issue #275,
+  2026-11-21)
 - A group finder search from the window's OnShow (issue #264, decision T669,
   2026-11-21)
 
@@ -2614,4 +2614,5 @@ The bugs found in the game that must fail in the emulator as they failed there
 | `0 / 0` in `wowlua:serialize` raised "Division by zero" in game (decision S38), as `Vm::wow` does | `serialize_round_trips_and_rejects` ([crates/wowlua-cli/tests/stdlib.rs](../crates/wowlua-cli/tests/stdlib.rs)) |
 | SuuUI's reparented status-bar containers broke Edit Mode: opening it raised a Lua error at `StatusTrackingManager.lua:228` (SuuUI 27a38b3) | `suuui_reparented_status_bars_break_edit_mode` ([crates/wowlua-cli/tests/test_runner.rs](../crates/wowlua-cli/tests/test_runner.rs)) |
 | Taint met in combat: SuuUI's call of Blizzard's `ToggleAllBags` tainted the bag frames' fields, so Escape in combat could not close the spells window ("Interface action failed", SuuUI 85ad391); a protected frame changed by an addon in combat is blocked, a tainted read of a secret aura fails | `suuui_bag_calls_taint_escape_in_combat` ([crates/wowlua-cli/tests/test_runner.rs](../crates/wowlua-cli/tests/test_runner.rs)); `protected_frames_are_blocked_in_combat` ([crates/wowlua-engine/tests/protection.rs](../crates/wowlua-engine/tests/protection.rs)); `tainted_reads_in_combat_fail_as_recorded` ([crates/wowlua-engine/tests/auras.rs](../crates/wowlua-engine/tests/auras.rs)) |
+| Taint met in combat: an addon's raid frames called `SecureGroupHeader_Update` and `SecureGroupPetHeader_Update` themselves, and when a pet or a member left in a fight every group header's update had its protected calls refused, hundreds in one frame (WoW Forever 1.60.1, issue #275, decision T670) | `blizzard_ui_group_headers_after_a_direct_update` ([crates/wowlua-cli/tests/test_runner.rs](../crates/wowlua-cli/tests/test_runner.rs)); `the_group_header_probe_runs_its_variants` ([crates/wowlua-cli/tests/engine_probe.rs](../crates/wowlua-cli/tests/engine_probe.rs)) |
 

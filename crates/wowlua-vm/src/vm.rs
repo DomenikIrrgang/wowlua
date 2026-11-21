@@ -1986,6 +1986,17 @@ impl Vm {
         self.call_tm_slots(tm, &[xs, xs])
     }
 
+    /// A table's length (`luaH_getn`, for `#` and the C functions that
+    /// count a list): the slot the border search ends on is read, its
+    /// taint taints the execution. WoW Forever (issue #275): a secure
+    /// group header's `tinsert` and `#unitTable` on the shared list an
+    /// addon's update wrote, then wiped, turned the update tainted.
+    pub fn table_len(&mut self, t: TableRef) -> usize {
+        let (n, last) = self.heap.table(t).border_slot();
+        self.cur.taint.read_from(last.t, last.o);
+        n
+    }
+
     /// `#v` (Lua 5.1: `__len` only for userdata).
     pub fn len(&mut self, v: Value, reg: Option<u8>) -> Result<Value, LuaError> {
         Ok(self.len_slot(v, reg)?.v)
@@ -2000,7 +2011,7 @@ impl Vm {
         }
         match v {
             Value::Table(t) => {
-                let n = self.heap.table(t).border() as f64;
+                let n = self.table_len(t) as f64;
                 Ok(self.cur.taint.fresh(Value::Num(n)))
             }
             Value::Str(s) => {

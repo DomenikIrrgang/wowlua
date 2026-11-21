@@ -9,6 +9,7 @@ use crate::error::LuaError;
 use crate::function::NativeCall;
 use crate::heap::TableRef;
 use crate::stdlib::{Ret, register};
+use crate::taint::Slot;
 use crate::value::Value;
 use crate::vm::{Rules, Vm};
 
@@ -486,12 +487,24 @@ fn strcmputf8i(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // -------------------------------------------------------------- tables
 
+/// `wipe(t)`: each key set to nil. A cleared slot keeps the taint of its
+/// last writer, whoever wipes it: WoW Forever (issue #275,
+/// `forever-camelot-groupheader2-other.lua`) refused a secure group
+/// header's update after it wiped the shared tables another header's
+/// update, run by an addon, had written.
 fn wipe(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = vm.check_table(&c, 1)?;
     let keys: Vec<Value> = vm.heap.table(t).entries().map(|(k, _)| k).collect();
     for k in keys {
-        // `lua_settable`: metamethods run for each key.
-        vm.set_index(Value::Table(t), k, Value::Nil, None)?;
+        let old = vm.heap.table(t).get_slot(k);
+        let cleared = Slot {
+            v: Value::Nil,
+            t: old.t,
+            o: old.o,
+        };
+        // `lua_settable`: metamethods run for each key (none for a key
+        // that is there, but a frozen or secured table still refuses).
+        vm.set_index_slot(Value::Table(t), k, cleared, None)?;
     }
     Ok(vec![Value::Table(t)])
 }

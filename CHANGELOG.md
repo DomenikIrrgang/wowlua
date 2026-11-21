@@ -6,6 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Tests (WoW Forever): calling `SecureGroupHeader_Update` or `SecureGroupPetHeader_Update` from your addon's code leaves your taint in tables every group header shares, as in the game. The next update of any header that lists fewer units (a pet gone, a member left) is then refused in a fight (its buttons' `Hide()`, `ClearAllPoints()` and `SetAttribute()`, its `SetWidth()` and `SetHeight()`), Blizzard's own headers too. Your tests of that case passed before. Never call a header's update yourself: set an attribute of your own per layout (`header:SetAttribute("myaddon-layout", n)`), and the header updates itself securely. Behind it, `wipe(t)` now leaves each cleared slot with the taint of whoever wrote it last, `#t` (and `table.insert` and the other functions that count a list) takes the taint of the empty slot where counting stops, and `table.insert` stores your value as yours. A refused method of a named frame is reported as `Name:Method()`, as in the game.
 - Tests (WoW Forever): `C_LFGList.Search` from your addon's code while the group finder opens for the first time after login (a hook on its `OnShow`) is refused (`ADDON_ACTION_BLOCKED`), even when the player opened it, as in the game. The window's later openings allow it, and so does the first one once anything has searched since login. Your addon's "the game said no" path for that first search now runs in tests.
 
 ## 0.13.17 (2026-11-21)

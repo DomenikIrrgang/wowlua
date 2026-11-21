@@ -455,6 +455,14 @@ impl Table {
 
     /// The length operator on a table without `__len` (`luaH_getn`).
     pub fn border(&self) -> usize {
+        self.border_slot().0
+    }
+
+    /// [`border`](Self::border) and the nil slot past the border its
+    /// search ends on; a secure nil when it reads none (a full array part
+    /// and no hash part). The client's `#` takes that slot's taint (issue
+    /// #275); a full list's last element doesn't taint it (unverified).
+    pub fn border_slot(&self) -> (usize, Slot) {
         let mut j = self.arr.len();
         if j > 0 && self.arr[j - 1].v.is_nil() {
             let mut i = 0;
@@ -466,33 +474,39 @@ impl Table {
                     i = m;
                 }
             }
-            return i;
+            // The search ends on the nil slot at `i + 1` (`j`), read.
+            return (i, self.arr[i]);
         }
         if self.nodes.is_empty() {
-            return j;
+            return (j, Slot::NIL);
         }
         let mut i = j;
         j += 1;
-        while !self.get_int(j).is_nil() {
+        let mut at = self.get_num_slot(j as f64);
+        while !at.v.is_nil() {
             i = j;
             j *= 2;
             if j > i32::MAX as usize {
                 let mut k = 1;
-                while !self.get_int(k).is_nil() {
+                loop {
+                    let s = self.get_num_slot(k as f64);
+                    if s.v.is_nil() {
+                        return (k - 1, s);
+                    }
                     k += 1;
                 }
-                return k - 1;
             }
+            at = self.get_num_slot(j as f64);
         }
         while j - i > 1 {
             let m = (i + j) / 2;
-            if self.get_int(m).is_nil() {
+            if self.get_num_slot(m as f64).v.is_nil() {
                 j = m;
             } else {
                 i = m;
             }
         }
-        i
+        (i, self.get_num_slot((i + 1) as f64))
     }
 
     /// The traversal index of `key` (`findindex`); `Err` if not present.

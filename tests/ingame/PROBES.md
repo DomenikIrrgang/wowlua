@@ -4084,8 +4084,9 @@ and `SetAttribute()`, B's `SetWidth()` and `SetHeight()`, each once. So:
   its border search ends on, the update turns tainted there, and writes
   `[1]` tainted again.
 
-wowlua before the fix (the engine's test), every variant alike but for its
-`after` line: nothing refused.
+wowlua since decision T670 (the engine's test,
+`the_group_header_probe_runs_its_variants`): as recorded, line for line.
+Before it, every variant alike but for its `after` line, nothing refused:
 
 ```text
 shown a=player secure b=player secure refusals=0

@@ -3229,11 +3229,26 @@ GroupHeaderLog = table.concat(lines, "\n")"#
     Some(text(&vm, log).lines().map(str::to_string).collect())
 }
 
+/// A recording's lines in order (`["001"] = "…"`), but the client's.
+fn recorded_lines(fixture: &str) -> Vec<String> {
+    let path = repo()
+        .join("crates/wowlua-engine/tests/client")
+        .join(fixture);
+    let text = fs::read_to_string(&path).expect("the recording");
+    let line = regex::Regex::new(r#"^\s*\["\d+"\] = "(.*)",$"#).unwrap();
+    text.lines()
+        .filter_map(|l| line.captures(l))
+        .map(|m| m[1].replace("\\\"", "\"").replace("\\\\", "\\"))
+        .filter(|l| !l.starts_with("client "))
+        .collect()
+}
+
 /// The group header probe's variants (`none`, `other`, `self`,
-/// `rewrite`), as wowlua answers them: no update after StdTest's direct one
-/// turns tainted, so nothing is refused in the fight. WoW Forever refused
-/// the fight's five protected calls after a direct update in the first
-/// round (`forever-camelot-groupheader-direct.lua`, PROBES.md, issue #275).
+/// `rewrite`) give what WoW Forever recorded
+/// (`forever-camelot-groupheader2-<variant>.lua`, issue #275): after an
+/// addon's direct `SecureGroupHeader_Update` of either header, the state
+/// driver's update in a fight that lists nobody has its five protected
+/// calls refused, also after a secure update of the same unit.
 #[test]
 fn the_group_header_probe_runs_its_variants() {
     for (variant, key) in [
@@ -3245,17 +3260,7 @@ fn the_group_header_probe_runs_its_variants() {
         let Some(log) = play_group_header(variant, key) else {
             return;
         };
-        let after = format!("after {variant} a=player b=player refusals=0");
-        assert_eq!(
-            log,
-            [
-                "shown a=player secure b=player secure refusals=0",
-                after.as_str(),
-                "in fight lockdown=true groupFilter=2 a=player b=- button1 shown=false refusals=0",
-                "fight over refusals=0",
-                "recorded",
-            ],
-            "{variant}"
-        );
+        let recorded = recorded_lines(&format!("forever-camelot-groupheader2-{variant}.lua"));
+        assert_eq!(log, recorded, "{variant}");
     }
 }
