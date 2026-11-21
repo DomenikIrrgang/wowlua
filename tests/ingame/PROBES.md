@@ -3964,65 +3964,43 @@ hook. A probe on 2026-10-15 saw it allowed. wowlua takes the key, a click and
 a typed command as the player's action, and allows the search all three ways.
 Which one the game refuses, and why (the panel manager's secure
 `SetAttribute`, the key's press or release, or a client change), is not
-known. These steps record the three ways before wowlua's rule changes. A
-search changes nothing: it only asks for the Dungeons listings.
+known. `/stdtest engine lfgsearch` records it before wowlua's rule changes: it
+hooks the window's `OnShow`, searches there, and asks you to open the window
+five ways, one after another. A search changes nothing: it only asks for the
+Dungeons listings.
 
-Out of combat, with the group finder closed, each line in the chat, one at a
-time.
+Right after a `/reload` (so no addon code has touched the panel manager),
+out of combat, with the group finder closed:
 
-1. Turn Lua errors on:
-
-   ```
-   /console scriptErrors 1
-   ```
-
-2. The client's build:
+1. Start it:
 
    ```
-   /run print("0", GetBuildInfo())
+   /stdtest engine lfgsearch
    ```
 
-   Seen: (to do).
+2. Do what each of its chat lines asks, then close the window with Escape;
+   the next line comes once the window is closed:
+   1. press the Toggle Group Finder key (`I` by default);
+   2. press it again and hold it a second before you release it (StdTest
+      notes the key's press, so the times tell whether the window opened on
+      the press or on the release);
+   3. click the group finder button of the micro menu;
+   4. type `/run ShowUIPanel(LFGParentFrame)` in the chat;
+   5. nothing: StdTest opens the window from its own code a second later
+      (the control, refused in wowlua as in the game).
 
-3. Count the refused actions:
-
-   ```
-   /run PS=0 PSF="-" local f=CreateFrame("Frame") f:RegisterEvent("ADDON_ACTION_BLOCKED") f:RegisterEvent("ADDON_ACTION_FORBIDDEN") f:SetScript("OnEvent",function(_,e,_,fn) PS=PS+1 PSF=e.." "..tostring(fn) end)
-   ```
-
-4. Search from the window's `OnShow`, and print the result: whether the
-   call raised no error, the refusals it caused, the last one, and whether
-   `SetAttribute` is on the stack:
-
-   ```
-   /run LFGParentFrame:HookScript("OnShow",function() local n=PS local ok=pcall(C_LFGList.Search,2) print("search",ok,PS-n,PS>n and PSF or "-",debugstack(2,30,0):find("SetAttribute",1,true) and "attr" or "direct") end)
-   ```
-
-5. Press the key bound to Toggle Group Finder (`I` by default) and hold it
-   a second before you release it. Note whether the window opened on the
-   press or on the release. Close it with Escape.
-
-   Seen: (to do: `search true 1 ADDON_ACTION_BLOCKED UNKNOWN() attr` as on
-   2026-11-15, or `search true 0 - attr`; opened on the press or the
-   release). wowlua: `search true 0 - attr`, on the press.
-
-6. Click the group finder button of the micro menu. Close the window with
-   Escape.
-
-   Seen: (to do). wowlua: `search true 0 - attr`.
-
-7. Open it from a typed command:
-
-   ```
-   /run ShowUIPanel(LFGParentFrame)
-   ```
-
-   Seen: (to do). wowlua: `search true 0 - attr`.
-
-8. Take one screenshot of the chat with the lines of steps 2 and 5 to 7.
-
-9. Reload, so the hook is gone:
+3. When it says "recorded", reload, so the file is written and the hook is
+   gone:
 
    ```
    /reload
    ```
+
+   Then `cargo xtask ingest` writes
+   `crates/wowlua-engine/tests/client/forever-camelot-lfgsearch.lua`: each
+   show's refusals and its stack.
+
+   Seen: (to do). wowlua (the engine's test,
+   `the_lfg_search_probe_runs_its_steps`): steps 1 to 4 `ok=true
+   refusals=0`, step 5 `refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()`;
+   step 2's show on the press.

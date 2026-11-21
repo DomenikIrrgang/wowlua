@@ -1838,7 +1838,9 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
     }
     // The cursor (`/stdtest engine cursor`): each step's state and the
     // events between; the keyboard (`/stdtest engine keys`): which frames
-    // each key reached, and the binding's clicks; in order.
+    // each key reached, and the binding's clicks; the group finder search
+    // (`/stdtest engine lfgsearch`): each show's refusals and stack; in
+    // order.
     for (key, part, fixture, about) in [
         (
             "engineCursor",
@@ -1851,6 +1853,12 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             "keys",
             "forever-camelot-keys.lua",
             "/stdtest engine keys, the keyboard frames each\nkey reached and the binding's clicks, in order",
+        ),
+        (
+            "engineLfgSearch",
+            "lfgsearch",
+            "forever-camelot-lfgsearch.lua",
+            "/stdtest engine lfgsearch, a group finder search\nfrom the window's OnShow, the window opened five ways",
         ),
     ] {
         if let Ok(log) = state.get::<mlua::Table>(key)

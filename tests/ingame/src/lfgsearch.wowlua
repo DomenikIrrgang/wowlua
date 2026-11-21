@@ -1,0 +1,191 @@
+-- /stdtest engine lfgsearch: an addon's group finder search from
+-- LFGParentFrame's OnShow, with the window opened five ways (issue #264):
+-- the key binding twice (the second time with a keyboard frame noting the
+-- key's press, timed against the show), the micro button, a typed
+-- `/run ShowUIPanel(LFGParentFrame)`, and StdTest's own code from a timer
+-- (no action of the player's). Each show: whether the search raised an
+-- error, the refusals it set off (event and function), and the stack that
+-- showed the window. Out of combat, best right after a /reload (nothing
+-- of the panel manager's touched by addon code before). A search changes
+-- nothing: it asks for the Dungeons listings. Into
+-- StdTestState.engineLfgSearch, its lines in order.
+import state from "/state"
+import stamp from "/state"
+import say from "/harness"
+
+local G = _G :: any
+
+--- The category searched: Dungeons.
+const CATEGORY = 2
+
+--- The steps: what the player does, and whether the probe's keyboard frame
+--- notes the keys meanwhile. The last one StdTest does itself.
+const STEPS: { text: string, keys?: boolean, auto?: boolean }[] = {
+    { text = "press your Toggle Group Finder key (I by default), then close the window with Escape" },
+    {
+        text = "press the Toggle Group Finder key again and hold it a second before you release it, then close the window with Escape",
+        keys = true,
+    },
+    { text = "click the group finder button of the micro menu, then close the window with Escape" },
+    { text = "type /run ShowUIPanel(LFGParentFrame) in the chat, then close the window with Escape" },
+    { text = "StdTest opens the window from its own code in a second; then close it with Escape", auto = true },
+}
+
+--- A stack line as `File.lua:line function`, or the line as it is.
+local function frameOf(line: string): string
+    local file, at, fn = line:match("([^/\\%[%]]+)%]?:(%d+): in [^`'<]*[`'<]([^'>]*)")
+    if file then
+        return `{file}:{at} {fn}`
+    end
+    return line
+end
+
+--- The stack from the hook out, short: one frame per entry, `<` between.
+local function stack(): string
+    const frames: string[] = {}
+    for line in debugstack(3, 16, 0):gmatch("[^\n]+") do
+        frames[#frames + 1] = frameOf(line)
+    end
+    return table.concat(frames, " < ")
+end
+
+local running = false
+
+export function lfgSearchProbe()
+    if running then
+        say("engine lfgsearch: already running; follow its last line")
+        return
+    end
+    if InCombatLockdown() then
+        say("engine lfgsearch: leave combat first")
+        return
+    end
+    const parent = G.LFGParentFrame
+    if not parent then
+        say("engine lfgsearch: no group finder window (LFGParentFrame) in this client")
+        return
+    end
+    if parent:IsShown() then
+        say("engine lfgsearch: close the group finder first")
+        return
+    end
+    running = true
+    const log: string[] = {}
+    const st = state() :: any
+    st.engineLfgSearch = log
+    stamp("lfgsearch")
+    local step = 1
+    local shown = false
+    local active = true
+    const start = GetTime()
+    --- Seconds since the probe started, to the hundredth.
+    local function elapsed(): string
+        return string.format("%.2f", GetTime() - start)
+    end
+    local function note(what: string)
+        if #log < 200 then
+            log[#log + 1] = `s{step} {what}`
+        end
+    end
+    note(`client {(GetBuildInfo())} ({select(2, GetBuildInfo())}) key {tostring((GetBindingKey("TOGGLEGROUPFINDER")))}`)
+
+    -- The refusals the client fires while the probe runs.
+    local refused: string[] = {}
+    const watcher = CreateFrame("Frame")
+    watcher:RegisterEvent("ADDON_ACTION_BLOCKED")
+    watcher:RegisterEvent("ADDON_ACTION_FORBIDDEN")
+    watcher:SetScript("OnEvent", function(_: any, event: string, addon: any, fn: any)
+        if active then
+            refused[#refused + 1] = `{event} {tostring(addon)} {tostring(fn)}`
+        end
+    end)
+
+    -- The key's press before the show (step 2 only): a keyboard frame that
+    -- passes every key on, so the binding still runs. Such a frame hears no
+    -- key's release (`/stdtest engine keys`), so the times tell it: the key
+    -- held a second, a show a second after the press came on the release.
+    -- Escape (the player's close) is left out; it stops at the show.
+    const keys = CreateFrame("Frame", nil, UIParent)
+    keys:SetSize(1, 1)
+    keys:SetPoint("TOPLEFT")
+    keys:SetScript("OnKeyDown", function(_: any, key: string)
+        if key ~= "ESCAPE" then
+            note(`key down {key} t={elapsed()}`)
+        end
+    end)
+    keys:Hide()
+    local function watchKeys(on: boolean)
+        keys:EnableKeyboard(on)
+        keys:SetPropagateKeyboardInput(true)
+        keys:SetShown(on)
+    end
+
+    parent:HookScript("OnShow", function()
+        if not active then
+            return
+        end
+        shown = true
+        const before = #refused
+        local ok, err = pcall(G.C_LFGList.Search, CATEGORY)
+        const these: string[] = {}
+        for i = before + 1, #refused do
+            these[#these + 1] = refused[i]
+        end
+        note(`show t={elapsed()} ok={tostring(ok)}{ok and "" or ` error={tostring(err)}`} refusals={#these}{#these > 0 and ` {table.concat(these, "; ")}` or ""}`)
+        note(`stack {stack()}`)
+        watchKeys(false)
+    end)
+
+    local ticker: any = nil
+    local function finish(why: string)
+        if not active then
+            return
+        end
+        active = false
+        running = false
+        watchKeys(false)
+        watcher:UnregisterAllEvents()
+        if ticker then
+            ticker:Cancel()
+        end
+        note(why)
+        say(`engine lfgsearch: {why}; type /reload so the file is written (it also clears the probe's hook)`)
+    end
+    local function begin()
+        const s = STEPS[step]
+        watchKeys(s.keys == true)
+        say(`engine lfgsearch {step}/{#STEPS}: {s.text}`)
+        if s.auto then
+            C_Timer.After(1, function()
+                if active and step == #STEPS then
+                    G.ShowUIPanel(parent)
+                end
+            end)
+        end
+    end
+
+    -- A step ends once the window has shown and is closed again.
+    const deadline = GetTime() + 300
+    ticker = C_Timer.NewTicker(0.1, function()
+        if GetTime() > deadline then
+            finish(`stopped at step {step}: five minutes passed`)
+            return
+        end
+        if InCombatLockdown() then
+            finish(`stopped at step {step}: combat started`)
+            return
+        end
+        if not shown or parent:IsShown() then
+            return
+        end
+        shown = false
+        watchKeys(false)
+        if step == #STEPS then
+            finish("recorded")
+            return
+        end
+        step += 1
+        begin()
+    end)
+    begin()
+end
