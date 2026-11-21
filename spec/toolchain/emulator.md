@@ -116,6 +116,24 @@ The client's security model, in the VM:
   code that reads a tainted value becomes tainted for the rest of its
   execution. Taint follows table fields, globals, upvalues and locals, and
   crosses coroutines as in the client.
+- **Executions.** A script the client starts itself (an event, `OnUpdate`,
+  the user's click or key) starts a secure execution. A script that a
+  widget method sets off while Lua calls it goes on with the caller's
+  execution instead, its taint with it, on a protected frame too: an
+  addon's `SetFocus` on the chat line runs Blizzard's `OnEditFocusGained`
+  as the addon's, and the `ACTIVE_CHAT_EDIT_BOX` it writes is the addon's,
+  so the player's chat is refused in combat until `/reload`; an addon's
+  `Click` of a `SecureHandlerClickTemplate` button runs its `OnClick`
+  tainted, and Blizzard's code refuses the `_onclick` snippet ("Invalid
+  'self' frame handle"). `OnShow` and `OnHide` start secure whoever shows
+  or hides the frame: an addon's `Show` of its
+  `SecureHandlerShowHideTemplate` frame runs the `_onshow` snippet.
+  Decision T668 (found in game, issue #260; `SetValue` →
+  `OnValueChanged` and `ClearFocus` → `OnEditFocusLost` unverified). The
+  `OnTextChanged` a `SetText` causes runs a frame later, so the client
+  starts it. The scripts `CreateFrame` runs go on with the caller's
+  execution (decision T243), its `OnShow` too; `OnAttributeChanged` starts
+  secure (decision T576, below).
 - **The secure API.** `issecure`, `issecurevariable`, `securecall`,
   `securecallfunction`, `secureexecuterange`, `hooksecurefunc` (hooks run
   insecure without tainting the hooked call), `forceinsecure`, `scrub`, and the

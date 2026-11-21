@@ -3638,9 +3638,8 @@ Mock.awaitText(" passed, ")
 
 /// `/stdtest engine owed Scripts` runs only the steps whose key starts with
 /// `Scripts` (the probe of issue #260 in PROBES.md), keeps the last run's
-/// answers, and records wowlua's own answers to them: both scripts an
-/// addon's call sets off start secure today (camelot's UI code, skipped
-/// without it).
+/// answers, and records wowlua's own answers to them, the game's (decision
+/// T668; camelot's UI code, skipped without it).
 #[test]
 fn ingame_owed_steps_run_by_prefix() {
     let ui = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
@@ -3677,10 +3676,12 @@ local function scripts()
         keys[#keys + 1] = k
     end
     table.sort(keys)
-    expect(table.concat(keys, " ")).toBe("M12.1.1 Scripts.2 Scripts.3")
+    expect(table.concat(keys, " ")).toBe("M12.1.1 Scripts.2 Scripts.3 Scripts.4 Scripts.5")
     expect(results["Scripts.2"]).toBe("1 true")
-    expect(results["Scripts.3"]).toBe("2 true nil")
-    expect(mock.printed()).toContain("|cff33ff99StdTest|r engine owed: 2 answers recorded (0 with an error); type /reload so the file is written")
+    expect(results["Scripts.3"]).toBe("2 false StdTest")
+    expect(results["Scripts.4"]).toBe("handler error: ...izzard_RestrictedAddOnEnvironment/SecureHandlers.lua:52: Invalid 'self' frame handle\n3 nil")
+    expect(results["Scripts.5"]).toBe("4 true nil\n4p false false\n4c false false")
+    expect(mock.printed()).toContain("|cff33ff99StdTest|r engine owed: 4 answers recorded (1 with an error); type /reload so the file is written")
 end
 
 @test("a prefix no step has")

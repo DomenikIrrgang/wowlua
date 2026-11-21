@@ -3837,18 +3837,25 @@ Take one screenshot of the four lines.
 
 Issue #260 says a script that an addon's own call sets off (`Show` →
 `OnShow`, `SetFocus` → `OnEditFocusGained`) runs inside the addon's
-execution, tainted, where wowlua starts it secure. Nobody saw it directly.
-Against it: SuuUI's secure windows bind Escape in a
-`SecureHandlerShowHideTemplate` frame's `_onshow`, which Blizzard's code
-refuses ("Invalid 'self' frame handle") when it runs tainted before the
-frame has a handle, and SuuUI shows those windows from its own code. These
-steps record both kinds of frame before wowlua's rule changes. Step 3 taints
-your chat until the `/reload` of step 5.
+execution, tainted, where wowlua started it secure. Against it: SuuUI's
+secure windows bind Escape in a `SecureHandlerShowHideTemplate` frame's
+`_onshow`, which Blizzard's code refuses ("Invalid 'self' frame handle")
+when it runs tainted before the frame has a handle, and SuuUI shows those
+windows from its own code. Steps 2 and 3 recorded both kinds of frame.
 
-StdTest runs steps 2 and 3 for you and records them: out of combat, type
-`/stdtest engine owed Scripts`, wait for its last line ("2 answers
-recorded"), then `/reload`. The answers are in
-`StdTestState.engineOwed.results` under `Scripts.2` and `Scripts.3`, an
+**Ran on 2026-11-21** (WoW Forever 1.60.1.71037, `/stdtest engine owed
+Scripts`, twice): steps 2 and 3 differ, so the rule depends on the frame
+or on the script; steps 4 (a protected frame's `OnClick`) and 5 (an
+unprotected frame's `OnShow`) say it is the script. wowlua follows them
+since (decision T668): a script that a widget method called from Lua sets
+off goes on with the caller's taint, protected frame or not, except
+`OnShow` and `OnHide`, which start secure. Steps 3 and 5 taint your chat
+and your world map until the `/reload` of step 7.
+
+StdTest runs steps 2 to 5 for you and records them: out of combat, with
+the world map closed, type `/stdtest engine owed Scripts`, wait for its
+last line ("4 answers recorded"), then `/reload`. The answers are in
+`StdTestState.engineOwed.results` under `Scripts.2` to `Scripts.5`, an
 error a script raised as `handler error: <text>` (or `error: <text>` when
 it reached the step). By hand instead: out of combat, each line in the
 chat, one at a time.
@@ -3865,8 +3872,7 @@ chat, one at a time.
    /run PW=CreateFrame("Frame","ProbeWatch",UIParent,"SecureHandlerShowHideTemplate") PW:SetAttribute("_onshow",[[ self:SetAttribute("ran", true) ]]) PW:Hide() PW:Show() print("1", PW:GetAttribute("ran"))
    ```
 
-   Seen: (to do: `1 true` and no error, or `1 nil` and an "Invalid 'self'
-   frame handle" error). wowlua: `1 true`.
+   Seen (2026-11-21): `1 true`, no error, twice. wowlua: `1 true`.
 
 3. The chat line focused by addon code a second later (the line closed by
    then), and who last wrote the game's active chat line:
@@ -3875,13 +3881,38 @@ chat, one at a time.
    /run C_Timer.After(1,function() ChatFrame1EditBox:SetFocus() print("2", issecurevariable("ACTIVE_CHAT_EDIT_BOX")) ChatFrame1EditBox:ClearFocus() end)
    ```
 
-   Seen: (to do: `2 true`, or `2 false` and the addon's name). wowlua:
-   `2 true`.
+   Seen (2026-11-21): `2 false StdTest`, twice. wowlua: `2 true` before
+   decision T668, `2 false StdTest` since.
 
-4. Take one screenshot of the chat with both lines (and the error, if one
+4. A secure click handler button, made and clicked by addon code, with no
+   handle made for it before: by frame its `_onclick` runs (`3 true`), by
+   script it is refused (`3 nil` and an "Invalid 'self' frame handle"
+   error):
+
+   ```
+   /run PC=CreateFrame("Button","ProbeClick",UIParent,"SecureHandlerClickTemplate") PC:SetAttribute("_onclick",[[ self:SetAttribute("ran", true) ]]) PC:Click() print("3", PC:GetAttribute("ran"))
+   ```
+
+   Seen (2026-11-21): `3 nil` and "SecureHandlers.lua:52: Invalid 'self'
+   frame handle". wowlua: `3 true` before decision T668, the game's since.
+
+5. The world map, closed, shown by addon code: its scroll container's
+   `OnShow` writes `gamepadZoomSpeed` from a CVar. By frame the field is
+   the addon's (`4 false` and the addon's name), by script it stays secure
+   (`4 true`); `4p` and `4c` say whether the map and the container are
+   protected:
+
+   ```
+   /run local m=WorldMapFrame m:Hide() m:Show() print("4", issecurevariable(m.ScrollContainer,"gamepadZoomSpeed")) print("4p", m:IsProtected()) print("4c", m.ScrollContainer:IsProtected()) m:Hide()
+   ```
+
+   Seen (2026-11-21): `4 true nil`, `4p false false`, `4c false false`.
+   wowlua: the same.
+
+6. Take one screenshot of the chat with the lines (and the errors, if one
    showed).
 
-5. Reload, so your chat is untainted again:
+7. Reload, so your chat and map are untainted again:
 
    ```
    /reload

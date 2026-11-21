@@ -80,6 +80,10 @@ pub struct Registry {
     /// `CreateFrame` running its new frame's `OnLoad` and `OnShow`: within
     /// the caller's execution, its taint going on (decision T243).
     pub creating: bool,
+    /// Widget methods running for Lua (nested): a script one sets off,
+    /// other than `OnShow` and `OnHide`, runs within the caller's
+    /// execution, its taint going on (decision T668).
+    pub in_method: u32,
     /// Inside a `<ScopedModifier forbidden="true">` (or `fullLockdown`)
     /// while the UI code loads.
     pub in_forbidden: bool,

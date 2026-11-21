@@ -573,11 +573,12 @@ end)
 -- Scripts an addon's call sets off (issue #260)
 ------------------------------------------------------------------------
 
--- Steps 2 and 3, run from StdTest's code where PROBES.md has a /run line
+-- Steps 2 to 5, run from StdTest's code where PROBES.md has a /run line
 -- (addon code either way). A script's error may go to the error handler
 -- rather than to the step's caller, so the steps record both. Step 3
--- waits the second the /run line's timer waits, and taints the chat until
--- /reload: these steps stay last, so no step runs after it.
+-- waits the second the /run line's timer waits; it taints the chat, and
+-- step 5 the world map, until /reload: these steps stay last, so no other
+-- step runs after them.
 -- `/stdtest engine owed Scripts` runs these alone.
 
 --- Runs `run`, recording what reaches the error handler meanwhile.
@@ -599,6 +600,16 @@ step("Scripts.3", function(print)
         ChatFrame1EditBox:SetFocus() print("2", issecurevariable("ACTIVE_CHAT_EDIT_BOX")) ChatFrame1EditBox:ClearFocus()
     end)
 end, 1)
+step("Scripts.4", function(print)
+    withErrors(print, function()
+        local PC=CreateFrame("Button","ProbeClick",UIParent,"SecureHandlerClickTemplate") keep(PC) PC:SetAttribute("_onclick",[[ self:SetAttribute("ran", true) ]]) PC:Click() print("3", PC:GetAttribute("ran"))
+    end)
+end)
+step("Scripts.5", function(print)
+    withErrors(print, function()
+        local m=WorldMapFrame m:Hide() m:Show() print("4", issecurevariable(m.ScrollContainer,"gamepadZoomSpeed")) print("4p", m:IsProtected()) print("4c", m.ScrollContainer:IsProtected()) m:Hide()
+    end)
+end)
 done()
 
 ns.__wowlua.define("owedsteps", { steps = steps, release = release })
