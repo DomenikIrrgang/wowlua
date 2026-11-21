@@ -3988,7 +3988,32 @@ each variant, `none` first:
 Then `cargo xtask ingest` writes
 `crates/wowlua-engine/tests/client/forever-camelot-groupheader-<variant>.lua`.
 
-Seen: (to do). wowlua (the engine's test,
+Seen (2026-11-21, WoW Forever 1.60.1 71037, a mage alone,
+`forever-camelot-groupheader-<variant>.lua`):
+
+- every variant: `nil slots: cleared=tainted StdTest wiped=tainted StdTest
+  never=secure` (StdTest's own clear, so it doesn't tell whether a slot
+  keeps the taint of its last writer or takes the clearer's); `own frame
+  tainted StdTest` (a name's global takes the creator's taint); `shown …
+  secure` for both headers (their `OnShow` ran secure); `fewer first=-
+  new=false secure`: the out-of-combat update left the button's global as it
+  was, so that line tells nothing (either the update made no button, or a
+  name already in use keeps its global);
+- `none`: `in fight … groupFilter=2 fight=- button1 shown=false refusals=0`;
+- `direct` and `rewrite` alike: `in fight … groupFilter=2 fight=player
+  button1 shown=true refusals=5`, each once: the button's `Hide()`,
+  `ClearAllPoints()` and `SetAttribute()`, the header's `SetWidth()` and
+  `SetHeight()`, every protected call after `#unitTable`.
+
+So the case is reproduced alone with plain group headers, and an update run
+by the header's own state driver in a fight. That `rewrite` is refused too
+says the taint is not only in the slots a secure update with the same unit
+writes again, but two things blur it: the first header's direct update
+(default `groupFilter`, so `tokenTable`'s keys 1 to 8) and its update out
+of combat both ran after the second's secure one, and both share the
+tables.
+
+wowlua (the engine's test,
 `the_group_header_probe_runs_its_variants`), every variant alike but for
 its `after` line (here `direct`'s): nothing tainted, nothing refused.
 
@@ -4002,10 +4027,6 @@ in fight lockdown=true groupFilter=2 fight=- button1 shown=false refusals=0
 fight over refusals=0
 recorded
 ```
-
-Expected in the game from the issue: `direct`'s fight refuses the `Hide` of
-`StdTestProbeFightHeaderUnitButton1` and more (`button1 shown=true`);
-`none`'s refuses nothing.
 
 ## A group finder search from the window's OnShow (issue #264, decision T669, 2026-11-21)
 
