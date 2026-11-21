@@ -4037,9 +4037,9 @@ out of combat, with the group finder closed:
    `crates/wowlua-engine/tests/client/forever-camelot-lfgsearch.lua`: each
    show's refusals and its stack.
 
-   Seen (2026-11-21, WoW Forever 1.60.1 71037,
-   `forever-camelot-lfgsearch.lua`): step 1, the key's first open after the
-   reload, `refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()`; steps 2 to 4
+   Seen (2026-11-21, WoW Forever 1.60.1 71037, twice, at 19:02 and 20:08;
+   `forever-camelot-lfgsearch.lua` the second): step 1, the key's first open
+   after the reload, `refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()`; steps 2 to 4
    `ok=true refusals=0`; step 5 refused as step 1. Step 2's show on the
    press. Steps 1 and 2 have the same stack (the binding → `ShowUIPanel` →
    `SetAttribute` → `Show`), and steps 3 and 4 run through `SetAttribute`
@@ -4061,8 +4061,10 @@ out of combat, with the group finder closed:
    Escape after each. `/reload` when it says "recorded", then `cargo xtask
    ingest` writes `forever-camelot-lfgsearch2.lua`.
 
-   Seen: (to do: the first open refused, the rest allowed, if the first open
-   after a reload is the rule; the micro button allowed and both bare keys
-   refused, if the bare key is). wowlua (the engine's test,
+   Seen (2026-11-21 20:08, after a reload, `forever-camelot-lfgsearch2.lua`):
+   step 1, the micro button's first open, `refusals=1 ADDON_ACTION_BLOCKED
+   StdTest UNKNOWN()`; steps 2 to 4 (the bare key twice, the watched key)
+   `ok=true refusals=0`; step 5 refused. The first open after a reload is
+   refused whichever way it comes; the key is not the cause. wowlua (the engine's test,
    `the_lfg_search_probe_runs_its_second_order`): steps 1 to 4 `ok=true
    refusals=0`, step 5 refused.
