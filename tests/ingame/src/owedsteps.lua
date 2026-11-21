@@ -569,4 +569,36 @@ step("SuuUI.9.2", function(print)
     for b=1,5 do local s=C_Container.ContainerIDToInventoryID(b) local id=GetInventoryItemID("player",s) print(b, id, id and C_Item.GetItemFamily(id)) end
 end)
 
+------------------------------------------------------------------------
+-- Scripts an addon's call sets off (issue #260)
+------------------------------------------------------------------------
+
+-- Steps 2 and 3, run from StdTest's code where PROBES.md has a /run line
+-- (addon code either way). A script's error may go to the error handler
+-- rather than to the step's caller, so the steps record both. Step 3
+-- waits the second the /run line's timer waits, and taints the chat until
+-- /reload: these steps stay last, so no step runs after it.
+-- `/stdtest engine owed Scripts` runs these alone.
+
+--- Runs `run`, recording what reaches the error handler meanwhile.
+local function withErrors(print, run)
+    local before = geterrorhandler()
+    seterrorhandler(function(e) print("handler error: "..tostring(e)) end)
+    local ok, err = pcall(run)
+    seterrorhandler(before)
+    if not ok then error(err, 0) end
+end
+
+step("Scripts.2", function(print)
+    withErrors(print, function()
+        local PW=CreateFrame("Frame","ProbeWatch",UIParent,"SecureHandlerShowHideTemplate") keep(PW) PW:SetAttribute("_onshow",[[ self:SetAttribute("ran", true) ]]) PW:Hide() PW:Show() print("1", PW:GetAttribute("ran"))
+    end)
+end)
+step("Scripts.3", function(print)
+    withErrors(print, function()
+        ChatFrame1EditBox:SetFocus() print("2", issecurevariable("ACTIVE_CHAT_EDIT_BOX")) ChatFrame1EditBox:ClearFocus()
+    end)
+end, 1)
+done()
+
 ns.__wowlua.define("owedsteps", { steps = steps, release = release })

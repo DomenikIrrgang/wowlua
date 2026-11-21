@@ -3845,7 +3845,13 @@ frame has a handle, and SuuUI shows those windows from its own code. These
 steps record both kinds of frame before wowlua's rule changes. Step 3 taints
 your chat until the `/reload` of step 5.
 
-Out of combat, each line in the chat, one at a time.
+StdTest runs steps 2 and 3 for you and records them: out of combat, type
+`/stdtest engine owed Scripts`, wait for its last line ("2 answers
+recorded"), then `/reload`. The answers are in
+`StdTestState.engineOwed.results` under `Scripts.2` and `Scripts.3`, an
+error a script raised as `handler error: <text>` (or `error: <text>` when
+it reached the step). By hand instead: out of combat, each line in the
+chat, one at a time.
 
 1. Turn Lua errors on:
 
