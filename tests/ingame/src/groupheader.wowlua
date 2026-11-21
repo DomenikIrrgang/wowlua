@@ -1,0 +1,261 @@
+-- /stdtest engine groupheader <variant>: a group header updated by addon
+-- code, then a later secure update that lists fewer units (issue #275).
+-- In the game an addon that called `SecureGroupPetHeader_Update` itself had
+-- every protected call of a later update refused in combat when a pet went
+-- away. Which read turns that secure update tainted is not known: the
+-- file-local `sortingTable` and `tokenTable` every header shares (read just
+-- after a secure `wipe` has cleared them), or the buttons and their
+-- attributes.
+--
+-- Alone, any class, out of combat. Two group headers that list you
+-- (`showSolo`): the first for an update out of combat, the second for one
+-- in a fight. Then the variant's addon action:
+--   none     nothing (the control)
+--   direct   `SecureGroupHeader_Update` on both from StdTest's code, as the
+--            addon did
+--   rewrite  as direct, then a secure update of the second with the same
+--            unit (an attribute of its own set), so every slot the direct
+--            update wrote is written again by secure code
+-- Then two updates that list nobody, each run by the header's own script:
+--   1. out of combat, at once: the first header's `showSolo` turned off
+--      (its OnAttributeChanged). Its first button is taken away first, so
+--      this update makes a new one; the global the new button's name writes
+--      takes the update's taint at that point, just after `#unitTable`.
+--      `own frame`, the control: a frame's name StdTest makes itself.
+--   2. in a fight: Blizzard's state driver turns the second header's
+--      `groupFilter` from 1 to 2 (`[combat] 2; 1`), so its update leaves
+--      you out. Every refusal (ADDON_ACTION_BLOCKED, ADDON_ACTION_FORBIDDEN)
+--      and the functions named, and whether its button was hidden.
+-- Taint lasts until /reload: one variant per session. Into
+-- StdTestState.engineGroupHeader<Variant>, its lines in order.
+import state from "/state"
+import stamp from "/state"
+import say from "/harness"
+
+local G = _G :: any
+
+const VARIANTS: { [string]: { key: string, part: string } } = {
+    none = { key = "engineGroupHeaderNone", part = "groupheader-none" },
+    direct = { key = "engineGroupHeaderDirect", part = "groupheader-direct" },
+    rewrite = { key = "engineGroupHeaderRewrite", part = "groupheader-rewrite" },
+}
+
+const FIRST = "StdTestProbeGroupHeader"
+const FIGHT = "StdTestProbeFightHeader"
+
+--- A variable's taint, as `issecurevariable` tells it.
+local function taintOf(t: any, k: any): string
+    local secure: any, by: any
+    if k == nil then
+        secure, by = issecurevariable(t)
+    else
+        secure, by = issecurevariable(t, k)
+    end
+    if secure then
+        return "secure"
+    end
+    return `tainted {tostring(by)}`
+end
+
+--- A header's shown buttons' units, in order (`-` for none).
+local function units(header: any): string
+    const list: string[] = {}
+    local i = 1
+    while true do
+        const button = header:GetAttribute(`child{i}`)
+        if not button then
+            break
+        end
+        if button:IsShown() then
+            list[#list + 1] = tostring(button:GetAttribute("unit"))
+        end
+        i += 1
+    end
+    return #list > 0 and table.concat(list, ",") or "-"
+end
+
+--- A group header from Blizzard's template, set up as raid frame addons
+--- do, listing you alone.
+local function makeHeader(name: string): any
+    const h = CreateFrame("Frame", name, UIParent, "SecureGroupHeaderTemplate") :: any
+    h:SetAttribute("template", "SecureUnitButtonTemplate")
+    h:SetAttribute("showSolo", true)
+    h:SetAttribute("showPlayer", true)
+    h:SetAttribute("showParty", true)
+    h:SetAttribute("showRaid", true)
+    h:SetPoint("CENTER")
+    h:Show()
+    return h
+end
+
+local running = false
+local ran = false
+
+export function groupHeaderProbe(variant: string?)
+    const chosen = VARIANTS[variant ?? ""]
+    if not chosen then
+        say("engine groupheader: name a variant: none (the control), direct or rewrite; one per session")
+        return
+    end
+    if running then
+        say("engine groupheader: already running; follow its last line")
+        return
+    end
+    if ran or G[FIRST] then
+        say("engine groupheader: one variant per session; type /reload first")
+        return
+    end
+    if InCombatLockdown() then
+        say("engine groupheader: leave combat first")
+        return
+    end
+    if IsInGroup() then
+        say("engine groupheader: leave your group first (the probe needs you alone)")
+        return
+    end
+    running = true
+    ran = true
+    const log: string[] = {}
+    const st = state() :: any
+    st[chosen.key] = log
+    stamp(chosen.part)
+    local function note(what: string)
+        if #log < 200 then
+            log[#log + 1] = what
+        end
+    end
+    note(`client {(GetBuildInfo())} ({select(2, GetBuildInfo())}) variant {variant}`)
+
+    -- The refusals the client fires while the probe runs.
+    const refused: string[] = {}
+    const watcher = CreateFrame("Frame")
+    watcher:RegisterEvent("ADDON_ACTION_BLOCKED")
+    watcher:RegisterEvent("ADDON_ACTION_FORBIDDEN")
+    local active = true
+    watcher:SetScript("OnEvent", function(_: any, event: string, addon: any, fn: any)
+        if active and #refused < 2000 then
+            refused[#refused + 1] = `{event} {tostring(addon)} {tostring(fn)}`
+        end
+    end)
+
+    -- Nil slots on StdTest's own tables: whether a slot cleared by code
+    -- keeps the taint of whoever cleared it (all of it StdTest's here).
+    -- Named keys: `issecurevariable` reads a number key as its string.
+    do
+        const cleared = { a = "a" } :: any
+        cleared.a = nil
+        const wiped = { a = "a" } :: any
+        wipe(wiped)
+        note(`nil slots: cleared={taintOf(cleared, "a")} wiped={taintOf(wiped, "a")} never={taintOf({}, "a")}`)
+    end
+    CreateFrame("Frame", "StdTestProbeOwnFrame")
+    note(`own frame {taintOf("StdTestProbeOwnFrame")}`)
+
+    const first = makeHeader(FIRST)
+    const fight = makeHeader(FIGHT)
+    G.RegisterAttributeDriver(fight, "groupFilter", "[combat] 2; 1")
+    -- Each first button made by the header's OnShow, set off by Show from
+    -- StdTest's code: its global tells whether that update ran secure.
+    note(`shown first={units(first)} {taintOf(`{FIRST}UnitButton1`)} fight={units(fight)} {taintOf(`{FIGHT}UnitButton1`)} refusals={#refused}`)
+
+    if variant == "direct" or variant == "rewrite" then
+        G.SecureGroupHeader_Update(first)
+        G.SecureGroupHeader_Update(fight)
+    end
+    if variant == "rewrite" then
+        fight:SetAttribute("stdtest-layout", 1)
+    end
+    note(`after {variant} first={units(first)} fight={units(fight)} refusals={#refused}`)
+
+    -- 1. The first header's next update lists nobody, and makes a new first
+    -- button (its first one taken away under `_ignore`, which stops the
+    -- header's own update).
+    const buttonName = `{FIRST}UnitButton1`
+    const old = G[buttonName]
+    first:SetAttribute("_ignore", "stdtest")
+    first:SetAttribute("child1", nil)
+    first:SetAttribute("_ignore", nil)
+    old:Hide()
+    const before = #refused
+    first:SetAttribute("showSolo", false)
+    note(`fewer first={units(first)} new={tostring(G[buttonName] ~= old)} {taintOf(buttonName)} refusals={#refused - before}`)
+
+    -- 2. A fight: the state driver's update of the second header.
+    local phase = "wait"
+    local inFight = 0
+    local seen = false
+    local ticker: any = nil
+    local function finish(why: string)
+        if not active then
+            return
+        end
+        active = false
+        running = false
+        watcher:UnregisterAllEvents()
+        if ticker then
+            ticker:Cancel()
+        end
+        note(why)
+        say(`engine groupheader: {why}; type /reload so the file is written`)
+    end
+    --- The refusals since `from`: their count and each function's count.
+    local function summary(from: number): string
+        const counts: { [string]: number } = {}
+        const order: string[] = {}
+        for i = from + 1, #refused do
+            const fn = refused[i]
+            const had = counts[fn]
+            if not had then
+                order[#order + 1] = fn
+            end
+            counts[fn] = (had ?? 0) + 1
+        end
+        const parts: string[] = {}
+        for i = 1, math.min(#order, 8) do
+            parts[#parts + 1] = `{order[i]} x{counts[order[i]]}`
+        end
+        return `refusals={#refused - from}{#parts > 0 and ` {table.concat(parts, "; ")}` or ""}`
+    end
+    local function ask()
+        say("engine groupheader: attack a training dummy or any enemy, stay in the fight 3 seconds, then leave it")
+    end
+    const fights = CreateFrame("Frame")
+    fights:RegisterEvent("PLAYER_REGEN_DISABLED")
+    fights:RegisterEvent("PLAYER_REGEN_ENABLED")
+    fights:SetScript("OnEvent", function(_: any, event: string)
+        if not active then
+            return
+        end
+        if event == "PLAYER_REGEN_DISABLED" and phase == "wait" then
+            phase = "fight"
+            seen = false
+            inFight = #refused
+            -- After the state driver has run (it checks every 0.2 seconds).
+            C_Timer.After(1.5, function()
+                if not active or phase ~= "fight" then
+                    return
+                end
+                seen = true
+                const button = G[`{FIGHT}UnitButton1`]
+                note(`in fight lockdown={tostring(InCombatLockdown())} groupFilter={tostring(fight:GetAttribute("groupFilter"))} fight={units(fight)} button1 shown={tostring(button and button:IsShown())} {summary(inFight)}`)
+            end)
+        elseif event == "PLAYER_REGEN_ENABLED" and phase == "fight" then
+            phase = "wait"
+            if not seen then
+                note("fight too short")
+                ask()
+                return
+            end
+            note(`fight over {summary(inFight)}`)
+            finish("recorded")
+        end
+    end)
+    const deadline = GetTime() + 600
+    ticker = C_Timer.NewTicker(1, function()
+        if GetTime() > deadline then
+            fights:UnregisterAllEvents()
+            finish(`stopped in phase {phase}: ten minutes passed`)
+        end
+    end)
+    ask()
+end

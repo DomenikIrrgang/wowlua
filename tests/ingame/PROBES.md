@@ -3918,76 +3918,94 @@ chat, one at a time.
    /reload
    ```
 
-## A group header updated by addon code, then fewer units in a fight (issue #275, 2026-11-20)
+## A group header updated by addon code, then fewer units (issue #275, 2026-11-21)
 
 Found in game: an addon that called `SecureGroupPetHeader_Update` itself
 had hundreds of "Blocked in combat: …UnitButton1:Hide()" when a pet went
 away in a fight. wowlua refuses nothing there. Which read turns Blizzard's
-later secure update tainted is not known (the shared `sortingTable` and
-`tokenTable`, the buttons' fields, or their attributes). These steps record
-the case alone with your own pet, and read what the direct update leaves
-tainted, before wowlua's rule changes. On a hunter or a warlock with the pet
-out, out of combat, next to a training dummy. Each line in the chat, one at
-a time.
+later secure update tainted is not known: the file-local `sortingTable` and
+`tokenTable` every header shares (read just after a secure `wipe` has
+cleared them), or the buttons and their attributes. `/stdtest engine
+groupheader` records it before wowlua's rule changes, alone, with any
+class. It makes two group headers that list you, does its variant's addon
+action, then has two updates list nobody, each run by the header's own
+script:
 
-1. Turn Lua errors on:
+- out of combat, at once: the first header's `showSolo` turned off. Its
+  first button is taken away first, so the update makes a new one, and the
+  global the new button's name writes (`StdTestProbeGroupHeaderUnitButton1`)
+  takes the update's taint just after `#unitTable` (`issecurevariable`
+  can't read the header's `[1]`: it reads a number key as its string). Its
+  control, `own frame`: the global of a frame StdTest makes itself. If that
+  one reads `secure` too, a name's global takes no taint and this line
+  can't tell either way;
+- in a fight: Blizzard's state driver turns the second header's
+  `groupFilter` from 1 to 2 (`RegisterAttributeDriver`, `[combat] 2; 1`),
+  so its update leaves you out. The probe counts the refusals and the
+  functions named, and whether the header's button was hidden.
 
-   ```
-   /console scriptErrors 1
-   ```
+It also notes whether a nil slot of StdTest's own tables keeps the taint of
+the code that cleared it, and whether the headers' first update (their
+`OnShow`, set off by StdTest's `Show`) ran secure.
 
-2. Count the refused actions:
+The variants, one per session (taint lasts until `/reload`):
 
-   ```
-   /run PB=0 PBF=nil local f=CreateFrame("Frame") f:RegisterEvent("ADDON_ACTION_BLOCKED") f:SetScript("OnEvent",function(_,_,_,fn) PB=PB+1 PBF=PBF or fn end)
-   ```
+- `none`: nothing (the control);
+- `direct`: `SecureGroupHeader_Update` on both headers from StdTest's
+  code, as the addon did;
+- `rewrite`: as `direct`, then a secure update of the second header with
+  the same unit (an attribute of its own set), so every `sortingTable` and
+  `tokenTable` slot the direct update wrote is written again by secure
+  code. Refusals here too: the taint is not in those slots.
 
-3. A pet header, shown (it updates itself, secure):
+Not in a group, out of combat, next to a training dummy (or any enemy). For
+each variant, `none` first:
 
-   ```
-   /run PH=CreateFrame("Frame","ProbePetHeader",UIParent,"SecureGroupPetHeaderTemplate") PH:SetAttribute("template","SecureUnitButtonTemplate") PH:SetAttribute("showSolo",true) PH:SetAttribute("showPlayer",true) PH:SetAttribute("showParty",true) PH:SetPoint("CENTER") PH:Show()
-   ```
-
-4. Read its first button before the addon's update:
-
-   ```
-   /run local b=PH:GetAttribute("child1") print("1", b and b:GetAttribute("unit"), issecurevariable(PH,1))
-   ```
-
-   Seen: (to do). wowlua: (to do).
-
-5. The addon's own update, then the same read:
-
-   ```
-   /run SecureGroupPetHeader_Update(PH) local b=PH:GetAttribute("child1") print("2", b and b:GetAttribute("unit"), issecurevariable(PH,1))
-   ```
-
-   Seen: (to do). wowlua: (to do).
-
-6. Attack the dummy. In the fight, dismiss your pet (Dismiss Pet, or
-   Dismiss Demon). Leave the fight.
-
-7. Read the count and the first function named:
+1. Right after a `/reload`, start it:
 
    ```
-   /run print("3", PB, PBF)
+   /stdtest engine groupheader none
    ```
 
-   Seen: (to do: 0, or a number and "ProbePetHeaderUnitButton1:Hide()").
-   wowlua: `3 0 nil`.
-
-8. Summon your pet again, then reload:
+2. Do what its chat line asks: attack the dummy, stay in the fight three
+   seconds, then leave it. If the fight was too short, it asks again. When
+   it says "recorded", reload, so the file is written:
 
    ```
    /reload
    ```
 
-9. The control, without the addon's update: do steps 1, 2, 3, 4, 6 and 7
-   again, and leave out step 5.
+3. The same with `direct`, then with `rewrite`:
 
-   Seen: (to do: expected `3 0 nil`). wowlua: `3 0 nil`.
+   ```
+   /stdtest engine groupheader direct
+   ```
 
-10. Take one screenshot of the chat after each of steps 7 and 9.
+   ```
+   /stdtest engine groupheader rewrite
+   ```
+
+Then `cargo xtask ingest` writes
+`crates/wowlua-engine/tests/client/forever-camelot-groupheader-<variant>.lua`.
+
+Seen: (to do). wowlua (the engine's test,
+`the_group_header_probe_runs_its_variants`), every variant alike but for
+its `after` line (here `direct`'s): nothing tainted, nothing refused.
+
+```text
+nil slots: cleared=tainted StdTest wiped=tainted StdTest never=secure
+own frame secure
+shown first=player secure fight=player secure refusals=0
+after direct first=player fight=player refusals=0
+fewer first=- new=true secure refusals=0
+in fight lockdown=true groupFilter=2 fight=- button1 shown=false refusals=0
+fight over refusals=0
+recorded
+```
+
+Expected in the game from the issue: `direct`'s fight refuses the `Hide` of
+`StdTestProbeFightHeaderUnitButton1` and more (`button1 shown=true`);
+`none`'s refuses nothing.
 
 ## A group finder search from the window's OnShow (issue #264, decision T669, 2026-11-21)
 

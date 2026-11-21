@@ -1839,8 +1839,9 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
     // The cursor (`/stdtest engine cursor`): each step's state and the
     // events between; the keyboard (`/stdtest engine keys`): which frames
     // each key reached, and the binding's clicks; the group finder search
-    // (`/stdtest engine lfgsearch`): each show's refusals and stack; in
-    // order.
+    // (`/stdtest engine lfgsearch`): each show's refusals and stack; a
+    // group header updated by addon code (`/stdtest engine groupheader`):
+    // the taints and refusals of the updates after it; in order.
     for (key, part, fixture, about) in [
         (
             "engineCursor",
@@ -1865,6 +1866,24 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             "lfgsearch2",
             "forever-camelot-lfgsearch2.lua",
             "/stdtest engine lfgsearch order2, the group finder\nsearch from OnShow, the micro button first, then the bare key twice",
+        ),
+        (
+            "engineGroupHeaderNone",
+            "groupheader-none",
+            "forever-camelot-groupheader-none.lua",
+            "/stdtest engine groupheader none, two group\nheaders alone, then fewer units out of combat and in a fight",
+        ),
+        (
+            "engineGroupHeaderDirect",
+            "groupheader-direct",
+            "forever-camelot-groupheader-direct.lua",
+            "/stdtest engine groupheader direct, the headers\nupdated by StdTest's code, then fewer units out of combat and in a fight",
+        ),
+        (
+            "engineGroupHeaderRewrite",
+            "groupheader-rewrite",
+            "forever-camelot-groupheader-rewrite.lua",
+            "/stdtest engine groupheader rewrite, as direct with\na secure update of the same units between, then fewer units",
         ),
     ] {
         if let Ok(log) = state.get::<mlua::Table>(key)

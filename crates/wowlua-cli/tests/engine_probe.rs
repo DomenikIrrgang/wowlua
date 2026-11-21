@@ -79,6 +79,7 @@ fn build() -> tempfile::TempDir {
         "trainer.wowlua",
         "group.wowlua",
         "lfgsearch.wowlua",
+        "groupheader.wowlua",
         "startup.wowlua",
         "scenario.wowlua",
         "snapshot.wowlua",
@@ -3188,4 +3189,76 @@ fn the_lfg_search_probe_runs_its_second_order() {
         ],
     );
     assert!(stack.contains("ToggleGroupFinderFrame"), "{stack}");
+}
+
+/// `/stdtest engine groupheader <variant>` alone: the probe's steps out of
+/// combat, then a fight of three seconds. Its lines, but the client's.
+fn play_group_header(variant: &str, key: &str) -> Option<Vec<String>> {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return None;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    wowlua_engine::login::login(&mut vm, "StdTest", false, false);
+    wowlua_engine::clock::advance_frames(&mut vm, 30, 1000.0 / 60.0);
+    addon(
+        &mut vm,
+        &format!(
+            r#"StdTestEngineProbe("groupheader {variant}")
+__engine.advanceTime(0.5)
+__engine.player:enterCombat()
+__engine.advanceFrames(180)
+__engine.player:leaveCombat()
+__engine.advanceFrames(90)
+local lines = {{}}
+for _, line in ipairs(StdTestState.{key}) do
+    if not line:find("^client ") then
+        lines[#lines + 1] = line
+    end
+end
+GroupHeaderLog = table.concat(lines, "\n")"#
+        ),
+    );
+    let log = vm.get_global("GroupHeaderLog");
+    Some(text(&vm, log).lines().map(str::to_string).collect())
+}
+
+/// The group header probe's three variants (`none`, `direct`, `rewrite`),
+/// as wowlua answers them before WoW Forever's recording (PROBES.md, issue
+/// #275): no update after StdTest's direct one turns tainted, in or out of
+/// combat, so nothing is refused. The global a named frame writes takes no
+/// taint here, not even from StdTest's own `CreateFrame` (`own frame`), so
+/// wowlua's out-of-combat line can't tell either way.
+#[test]
+fn the_group_header_probe_runs_its_variants() {
+    for (variant, key) in [
+        ("none", "engineGroupHeaderNone"),
+        ("direct", "engineGroupHeaderDirect"),
+        ("rewrite", "engineGroupHeaderRewrite"),
+    ] {
+        let Some(log) = play_group_header(variant, key) else {
+            return;
+        };
+        let after = format!("after {variant} first=player fight=player refusals=0");
+        assert_eq!(
+            log,
+            [
+                "nil slots: cleared=tainted StdTest wiped=tainted StdTest never=secure",
+                "own frame secure",
+                "shown first=player secure fight=player secure refusals=0",
+                after.as_str(),
+                "fewer first=- new=true secure refusals=0",
+                "in fight lockdown=true groupFilter=2 fight=- button1 shown=false refusals=0",
+                "fight over refusals=0",
+                "recorded",
+            ],
+            "{variant}"
+        );
+    }
 }
