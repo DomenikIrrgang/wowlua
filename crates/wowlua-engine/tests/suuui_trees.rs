@@ -457,6 +457,7 @@ local w2, h2 = fs:GetSize()
 fs:SetNonSpaceWrap(true)
 local w3, h3 = fs:GetSize()
 local t = UIParent:CreateTexture()
+t:SetSize(1, 1)
 t:SetPoint('LEFT', fs, 'RIGHT')
 fs:SetPoint('LEFT', UIParent, 'LEFT', 10, 0)
 return ('%d %d %d %d %d %d %d %d'):format(w0, h0, w1, h1, w2, h2, h3, t:GetLeft())",

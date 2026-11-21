@@ -19,6 +19,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Tests: a frame with one anchor and no size (or a size of 0, or only a width, or left and right anchors and no height) has no place, as in the game: `GetLeft()` and `GetRect()` return nil, `IsRectValid()` false, and frames anchored to it get no place and no `OnSizeChanged`. It had a 0-wide place at its anchor, so a window that waits for its body's first `OnSizeChanged` was sized in tests and stayed 0 x 0 in the game. Give such a frame a size, or anchor two opposite edges.
 - Tests: `C_ChatInfo.SendChatMessage` from addon code in combat is blocked (`ADDON_ACTION_BLOCKED`, nothing sent), as on WoW Forever.
 - Profiles with the monitor on: a test file's own scripts and timers no longer run under the monitor's wrapper, and the wrapper shows as `[wowlua] wowlua/runtime.lua` in `--profile-out` reports instead of a file of your addon. Your addon's cost per frame is no longer inflated by the test's own work.
 - Tests: `TakeInboxItem` with no room in the bags is refused as in the game ("Inventory is full.", then `MAIL_FAILED` with the item), and the item stays in the letter. It was lost. Taking an item from a COD letter now pays the COD.

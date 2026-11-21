@@ -789,6 +789,15 @@ The WoW API the VM's code calls, per flavor.
   a fit run before the frame is asked for, nor a frame laid out for
   itself (its own `GetSize` in a script, or asked before the frame
   anchored to it). Handlers nest ten deep at most; deeper, a size waits.
+  A region has a rectangle only when both its sides are resolved, each
+  by points on both its edges (left and right, bottom and top) or by a
+  size of its own above 0 (a font string's text gives it one): with one
+  point and no size, an explicit `SetSize(0, 0)`, one point and only a
+  width, or its left and right points and no height, `GetLeft` and
+  `GetRect` answer nothing, `GetWidth` and `GetHeight` the size it was
+  given, and what hangs on it has no rectangle and no `OnSizeChanged`
+  either (decision T667; `/stdtest engine owed` on WoW Forever 71037;
+  unverified: the other regions than frames, two points on one edge).
   `IsRectValid()` answers whether an anchored region was laid out since
   it was last anchored and has a place (UIParent's always) (decision
   T605; SuuUI's `anchors` probes and `/stdtest engine owed` on WoW

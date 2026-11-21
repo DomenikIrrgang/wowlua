@@ -3171,7 +3171,8 @@ return before, c.rect(c.item), table.concat(c.log, ' | ')",
 /// Anchored before what it hangs on has a place, a frame is placed once
 /// that has one (SuuUI's `anchors` and `anchors2` probes, WoW Forever
 /// 70862: a box on a parent with a width but no point, the parent's
-/// point and height set later).
+/// point and height set later): with its point but no height yet the
+/// parent has none (decision T667).
 #[test]
 fn a_frame_anchored_before_its_parent_has_a_place_is_placed_later() {
     let mut vm = vm();
@@ -3184,9 +3185,9 @@ Box:SetSize(20, 20)
 Box:SetPoint('TOPLEFT', Parent, 'TOPLEFT', 5, -5)
 local before = tostring(Box:GetLeft())
 Parent:SetPoint('TOPLEFT', 100, -100)
-return before, Box:GetLeft()",
+return before, tostring(Box:GetLeft())",
     );
-    assert_eq!(r, ["nil", "105"]);
+    assert_eq!(r, ["nil", "nil"]);
     wowlua_engine::clock::advance_frames(&mut vm, 1, 1000.0 / 60.0);
     let r = run(
         &mut vm,
@@ -3194,6 +3195,64 @@ return before, Box:GetLeft()",
 return Box:GetLeft(), Box:GetTop() - UIParent:GetTop()",
     );
     assert_eq!(r, ["105", "-105"]);
+}
+
+/// A side with neither both its edges' points nor a size leaves the whole
+/// rectangle unresolved: no edges, `IsRectValid` false, the size as given,
+/// and a child anchored inside it neither placed nor told its size
+/// (decision T667; `/stdtest engine owed` OneAnchor.1 to .4, WoW Forever
+/// 71037).
+#[test]
+fn a_side_without_two_points_or_a_size_leaves_no_rectangle() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "Cases = {}
+local function case(n, setup)
+    local p = CreateFrame('Frame', nil, UIParent)
+    setup(p)
+    local b = CreateFrame('Frame', nil, p)
+    b:SetPoint('TOPLEFT')
+    local c = { p = p, b = b, n = 0 }
+    b:SetScript('OnSizeChanged', function() c.n = c.n + 1 end)
+    b:SetSize(200, 100)
+    Cases[n] = c
+end
+case(1, function(p) p:SetPoint('BOTTOMRIGHT', -28, 28) end)
+case(2, function(p) p:SetPoint('BOTTOMRIGHT', -28, 28) p:SetSize(0, 0) end)
+case(3, function(p) p:SetPoint('BOTTOMRIGHT', -28, 28) p:SetWidth(50) end)
+case(4, function(p) p:SetPoint('TOPLEFT', 100, -100) p:SetPoint('TOPRIGHT', -100, -100) end)",
+    );
+    wowlua_engine::clock::advance_frames(&mut vm, 2, 1000.0 / 60.0);
+    let r = run(
+        &mut vm,
+        "local out = {}
+for i, c in ipairs(Cases) do
+    out[i] = table.concat({ tostring(c.p:GetLeft()), tostring(c.p:GetTop()), c.p:GetWidth(),
+        c.p:GetHeight(), tostring(c.p:IsRectValid()), tostring(c.b:GetLeft()),
+        tostring(c.b:IsRectValid()), c.n }, ' ')
+end
+return table.concat(out, ' | ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "nil nil 0 0 false nil false 0 | nil nil 0 0 false nil false 0 \
+          | nil nil 50 0 false nil false 0 | nil nil 0 0 false nil false 0"
+        ]
+    );
+    // Sized on its open side, the panel has a rectangle, and its child its
+    // place and its size.
+    let r = run(
+        &mut vm,
+        "local c = Cases[3]
+c.p:SetHeight(40)
+return c.p:GetLeft(), c.b:GetLeft(), tostring(c.p:IsRectValid())",
+    );
+    assert_eq!(r, ["1842", "1842", "true"]);
+    wowlua_engine::clock::advance_frames(&mut vm, 1, 1000.0 / 60.0);
+    let r = run(&mut vm, "return Cases[3].n");
+    assert_eq!(r, ["1"]);
 }
 
 /// The layout pass before a frame: an anchored frame resized between

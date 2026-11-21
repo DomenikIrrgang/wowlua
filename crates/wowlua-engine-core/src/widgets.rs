@@ -3945,6 +3945,20 @@ fn laid_out_rect(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -
     } else {
         w.height * s
     };
+    // A side with neither both its edges' points nor a size leaves the
+    // whole rectangle unresolved, an explicit 0 as one never set: no
+    // edges, and what hangs on it none either (WoW Forever 71037,
+    // 2026-11-21, `/stdtest engine owed` OneAnchor: one point and no
+    // size, one point and `SetSize(0, 0)`, one point and only a width,
+    // the left and right points and no height all answer `GetLeft()` nil
+    // and `IsRectValid()` false, their child no `OnSizeChanged`; decision
+    // T667). A font string's text gives it a size of its own.
+    let resolved = |near: Option<f64>, far: Option<f64>, size: f64| {
+        (near.is_some() && far.is_some()) || size > 0.0
+    };
+    if !resolved(left, right, width) || !resolved(bottom, top, height) {
+        return None;
+    }
     let (y, height) = match (bottom, top, center_y) {
         (Some(b), Some(t), _) => (b, (t - b).max(0.0)),
         (Some(b), None, _) => (b, height),
