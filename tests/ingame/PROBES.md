@@ -3951,3 +3951,78 @@ a time.
    Seen: (to do: expected `3 0 nil`). wowlua: `3 0 nil`.
 
 10. Take one screenshot of the chat after each of steps 7 and 9.
+
+## A group finder search from the window's OnShow (issue #264, 2026-11-21)
+
+Found in game: an addon's `OnShow` hook on `LFGParentFrame` called
+`C_LFGList.Search`. With the window opened by its key binding
+(`TOGGLEGROUPFINDER`), out of combat, the game refused the search on four
+days (2026-11-10, 11, 13 and 15, WoW Forever 1.60.1): `ADDON_ACTION_BLOCKED`
+naming `UNKNOWN()` (through `pcall`), the stack the binding →
+`LFGVanilla_ToggleFrame` → `ShowUIPanel` → `SetAttribute` → `Show` → the
+hook. A probe on 2026-10-15 saw it allowed. wowlua takes the key, a click and
+a typed command as the player's action, and allows the search all three ways.
+Which one the game refuses, and why (the panel manager's secure
+`SetAttribute`, the key's press or release, or a client change), is not
+known. These steps record the three ways before wowlua's rule changes. A
+search changes nothing: it only asks for the Dungeons listings.
+
+Out of combat, with the group finder closed, each line in the chat, one at a
+time.
+
+1. Turn Lua errors on:
+
+   ```
+   /console scriptErrors 1
+   ```
+
+2. The client's build:
+
+   ```
+   /run print("0", GetBuildInfo())
+   ```
+
+   Seen: (to do).
+
+3. Count the refused actions:
+
+   ```
+   /run PS=0 PSF="-" local f=CreateFrame("Frame") f:RegisterEvent("ADDON_ACTION_BLOCKED") f:RegisterEvent("ADDON_ACTION_FORBIDDEN") f:SetScript("OnEvent",function(_,e,_,fn) PS=PS+1 PSF=e.." "..tostring(fn) end)
+   ```
+
+4. Search from the window's `OnShow`, and print the result: whether the
+   call raised no error, the refusals it caused, the last one, and whether
+   `SetAttribute` is on the stack:
+
+   ```
+   /run LFGParentFrame:HookScript("OnShow",function() local n=PS local ok=pcall(C_LFGList.Search,2) print("search",ok,PS-n,PS>n and PSF or "-",debugstack(2,30,0):find("SetAttribute",1,true) and "attr" or "direct") end)
+   ```
+
+5. Press the key bound to Toggle Group Finder (`I` by default) and hold it
+   a second before you release it. Note whether the window opened on the
+   press or on the release. Close it with Escape.
+
+   Seen: (to do: `search true 1 ADDON_ACTION_BLOCKED UNKNOWN() attr` as on
+   2026-11-15, or `search true 0 - attr`; opened on the press or the
+   release). wowlua: `search true 0 - attr`, on the press.
+
+6. Click the group finder button of the micro menu. Close the window with
+   Escape.
+
+   Seen: (to do). wowlua: `search true 0 - attr`.
+
+7. Open it from a typed command:
+
+   ```
+   /run ShowUIPanel(LFGParentFrame)
+   ```
+
+   Seen: (to do). wowlua: `search true 0 - attr`.
+
+8. Take one screenshot of the chat with the lines of steps 2 and 5 to 7.
+
+9. Reload, so the hook is gone:
+
+   ```
+   /reload
+   ```
