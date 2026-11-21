@@ -4037,7 +4037,14 @@ out of combat, with the group finder closed:
    `crates/wowlua-engine/tests/client/forever-camelot-lfgsearch.lua`: each
    show's refusals and its stack.
 
-   Seen: (to do). wowlua (the engine's test,
-   `the_lfg_search_probe_runs_its_steps`): steps 1 to 4 `ok=true
-   refusals=0`, step 5 `refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()`;
-   step 2's show on the press.
+   Seen (2026-11-21, WoW Forever 1.60.1 71037,
+   `forever-camelot-lfgsearch.lua`): step 1, the key's first open after the
+   reload, `refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()`; steps 2 to 4
+   `ok=true refusals=0`; step 5 refused as step 1. Step 2's show on the
+   press. Steps 1 and 2 have the same stack (the binding → `ShowUIPanel` →
+   `SetAttribute` → `Show`), and steps 3 and 4 run through `SetAttribute`
+   too, so the panel manager is not the cause. Not settled: whether the
+   first open after a reload is refused whichever way it comes, or the bare
+   key is refused and step 2's keyboard frame let it through. wowlua (the
+   engine's test, `the_lfg_search_probe_runs_its_steps`): steps 1 to 4
+   `ok=true refusals=0`, step 5 refused.
