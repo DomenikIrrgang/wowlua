@@ -2593,7 +2593,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Group pets and mouseover (decision T644, 2026-11-14)
 - A group pet's reaction as it comes (2026-11-14)
 - No reagent cost and cash on delivery (decision T645, 2026-11-19)
-- A frame with one anchor and no size (issue #259, 2026-11-20)
+- A frame with one anchor and no size (issue #259, decision T667, 2026-11-20)
 - Colors without alpha (decision T655, 2026-11-20)
 - Scripts an addon's call sets off (issue #260, 2026-11-20)
 - A group header updated by addon code, then fewer units in a fight (issue #275,
