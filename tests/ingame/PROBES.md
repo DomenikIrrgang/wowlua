@@ -4068,3 +4068,27 @@ out of combat, with the group finder closed:
    refused whichever way it comes; the key is not the cause. wowlua (the engine's test,
    `the_lfg_search_probe_runs_its_second_order`): steps 1 to 4 `ok=true
    refusals=0`, step 5 refused.
+
+5. A check by typed lines (2026-11-21, after a reload, the window closed): a
+   watcher, a hook on the window's `OnShow` that searches, both from `/run`,
+   then a search from `/run`, then the key:
+
+   ```
+   /run PB={} local f=CreateFrame("Frame") f:RegisterEvent("ADDON_ACTION_BLOCKED") f:SetScript("OnEvent",function(_,_,a,fn) PB[#PB+1]=tostring(a).." "..tostring(fn) end)
+   /run LFGParentFrame:HookScript("OnShow",function() local n=#PB pcall(C_LFGList.Search,2) print("show",#PB-n,PB[#PB]) end)
+   /run local n=#PB pcall(C_LFGList.Search,2) print("run",#PB-n,PB[#PB])
+   ```
+
+   Seen: `run 0 nil`, `show 0 nil`: the session's first search and the
+   window's first open both allowed. Neither "the first search" nor "the
+   first open" holds alone. Left: the time since the reload (the probe's
+   first open came seconds after it, the typed lines much later), the
+   search before the open, or the hook's source (StdTest's code or a typed
+   line). wowlua: `run 0 nil`, `show 0 nil`.
+
+6. The time: `/reload`, wait a minute without doing anything, then
+   `/stdtest engine lfgsearch` and press the key for its step 1. Once the
+   window has opened, close it and `/reload` (the other steps are not
+   needed).
+
+   Seen: (to do: refused, or allowed if the time since the reload decides).
