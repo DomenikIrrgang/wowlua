@@ -4091,4 +4091,17 @@ out of combat, with the group finder closed:
    window has opened, close it and `/reload` (the other steps are not
    needed).
 
-   Seen: (to do: refused, or allowed if the time since the reload decides).
+   Seen (2026-11-21 20:19): step 1 refused (`ADDON_ACTION_BLOCKED StdTest
+   UNKNOWN()`), a minute after the reload. The time does not decide it.
+   Left: the search before the open, or the hook's source.
+
+7. The search before the open: `/reload`, then a search from a typed line,
+   then `/stdtest engine lfgsearch` and the key for its step 1 (close the
+   window and `/reload` once it has opened):
+
+   ```
+   /run C_LFGList.Search(2)
+   ```
+
+   Seen: (to do: allowed if a search before the open lets it through,
+   refused if StdTest's hook is refused at the first open anyway).
