@@ -401,6 +401,38 @@ do
 end
 
 ------------------------------------------------------------------------
+-- New (2026-11-20): a frame with one anchor and no size (issue #259,
+-- PROBES.md "A frame with one anchor and no size"), each case alone: the
+-- setup, then its read a second later.
+------------------------------------------------------------------------
+
+step("OneAnchor.1", function(print)
+    P1=CreateFrame("Frame",nil,UIParent) keep(P1) P1:SetPoint("BOTTOMRIGHT",-28,28) B1=CreateFrame("Frame",nil,P1) B1:SetPoint("TOPLEFT") N1=0 B1:SetScript("OnSizeChanged",function() N1=N1+1 end) B1:SetSize(200,100)
+end)
+step("OneAnchor.1", function(print)
+    print("1",P1:GetLeft(),P1:GetWidth(),P1:IsRectValid(),B1:GetLeft(),B1:IsRectValid(),N1)
+end, 1)
+step("OneAnchor.2", function(print)
+    P2=CreateFrame("Frame",nil,UIParent) keep(P2) P2:SetPoint("BOTTOMRIGHT",-28,28) P2:SetSize(0,0) B2=CreateFrame("Frame",nil,P2) B2:SetPoint("TOPLEFT") N2=0 B2:SetScript("OnSizeChanged",function() N2=N2+1 end) B2:SetSize(200,100)
+end)
+step("OneAnchor.2", function(print)
+    print("2",P2:GetLeft(),P2:GetWidth(),P2:IsRectValid(),B2:GetLeft(),B2:IsRectValid(),N2)
+end, 1)
+step("OneAnchor.3", function(print)
+    P3=CreateFrame("Frame",nil,UIParent) keep(P3) P3:SetPoint("BOTTOMRIGHT",-28,28) P3:SetWidth(50) B3=CreateFrame("Frame",nil,P3) B3:SetPoint("TOPLEFT") N3=0 B3:SetScript("OnSizeChanged",function() N3=N3+1 end) B3:SetSize(200,100)
+end)
+step("OneAnchor.3", function(print)
+    print("3",P3:GetLeft(),P3:GetTop(),P3:GetWidth(),P3:IsRectValid(),B3:GetLeft(),B3:IsRectValid(),N3)
+end, 1)
+step("OneAnchor.4", function(print)
+    P4=CreateFrame("Frame",nil,UIParent) keep(P4) P4:SetPoint("TOPLEFT",100,-100) P4:SetPoint("TOPRIGHT",-100,-100) B4=CreateFrame("Frame",nil,P4) B4:SetPoint("TOPLEFT") N4=0 B4:SetScript("OnSizeChanged",function() N4=N4+1 end) B4:SetSize(200,100)
+end)
+step("OneAnchor.4", function(print)
+    print("4",P4:GetLeft(),P4:GetTop(),P4:GetWidth(),P4:GetHeight(),P4:IsRectValid(),B4:GetLeft(),B4:IsRectValid(),N4)
+end, 1)
+done()
+
+------------------------------------------------------------------------
 -- Other owed lines that are pure code
 ------------------------------------------------------------------------
 

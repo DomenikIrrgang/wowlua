@@ -3716,7 +3716,9 @@ it and then sized, never heard `OnSizeChanged`: the window stayed 0 x 0.
 wowlua gives such a frame a 0-wide rect at its anchor, so the body's
 `OnSizeChanged` fires there. These steps record each case alone before
 wowlua's rule changes. Run each setup line, then its read line a second
-later (a frame must pass).
+later (a frame must pass). `/stdtest engine owed` runs them too (keys
+`OneAnchor.1` to `OneAnchor.4`, each case's setup a second before its
+read), so the steps by hand are needed only without StdTest.
 
 Out of combat, each line in the chat, one at a time.
 
@@ -3732,7 +3734,7 @@ Out of combat, each line in the chat, one at a time.
    /run print("1",P1:GetLeft(),P1:GetWidth(),P1:IsRectValid(),B1:GetLeft(),B1:IsRectValid(),N1)
    ```
 
-   Seen: (to do). wowlua: (to do).
+   Seen: (to do). wowlua: `1 1892 0 true 1892 true 1`.
 
 3. One anchor and `SetSize(0, 0)` said outright:
 
@@ -3746,7 +3748,7 @@ Out of combat, each line in the chat, one at a time.
    /run print("2",P2:GetLeft(),P2:GetWidth(),P2:IsRectValid(),B2:GetLeft(),B2:IsRectValid(),N2)
    ```
 
-   Seen: (to do). wowlua: (to do).
+   Seen: (to do). wowlua: `2 1892 0 true 1892 true 1`.
 
 5. One anchor and only a width:
 
@@ -3760,7 +3762,7 @@ Out of combat, each line in the chat, one at a time.
    /run print("3",P3:GetLeft(),P3:GetTop(),P3:GetWidth(),P3:IsRectValid(),B3:GetLeft(),B3:IsRectValid(),N3)
    ```
 
-   Seen: (to do). wowlua: (to do).
+   Seen: (to do). wowlua: `3 1842 28 50 true 1842 true 1`.
 
 7. Two anchors across (left and right edges), no height:
 
@@ -3774,7 +3776,7 @@ Out of combat, each line in the chat, one at a time.
    /run print("4",P4:GetLeft(),P4:GetTop(),P4:GetWidth(),P4:GetHeight(),P4:IsRectValid(),B4:GetLeft(),B4:IsRectValid(),N4)
    ```
 
-   Seen: (to do). wowlua: (to do).
+   Seen: (to do). wowlua: `4 100 980 1720 0 true 100 true 1`.
 
 9. Take one screenshot of the chat with the four lines, then hide the frames:
 
