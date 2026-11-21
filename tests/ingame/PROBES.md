@@ -3989,7 +3989,7 @@ a time.
 
 10. Take one screenshot of the chat after each of steps 7 and 9.
 
-## A group finder search from the window's OnShow (issue #264, 2026-11-21)
+## A group finder search from the window's OnShow (issue #264, decision T669, 2026-11-21)
 
 Found in game: an addon's `OnShow` hook on `LFGParentFrame` called
 `C_LFGList.Search`. With the window opened by its key binding
@@ -4103,5 +4103,9 @@ out of combat, with the group finder closed:
    /run C_LFGList.Search(2)
    ```
 
-   Seen: (to do: allowed if a search before the open lets it through,
-   refused if StdTest's hook is refused at the first open anyway).
+   Seen (2026-11-21 20:22): step 1 allowed (`ok=true refusals=0`). A search
+   before the window's first open lets its `OnShow` search through. wowlua
+   follows it (decision T669): an addon's search in the group finder's
+   `OnShow` is refused while nothing has searched since login. Still
+   unverified: an addon's first search from its own button's click, and a
+   first open without a search before the one that searches.

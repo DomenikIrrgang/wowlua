@@ -468,6 +468,32 @@ fn blocked(vm: &mut Vm, needs_hardware: bool) -> bool {
     true
 }
 
+/// An addon's search in `LFGParentFrame`'s `OnShow` before any search
+/// since login, refused even in the player's action (`ADDON_ACTION_BLOCKED`,
+/// through `pcall` `UNKNOWN()`); true if refused (decision T669). Recorded
+/// on WoW Forever 1.60.1 71037 (issue #264, `/stdtest engine lfgsearch`):
+/// after a reload,
+/// the window's first open refused the search, by its key or its micro
+/// button, a minute later too; every open after it allowed it, and so did
+/// the first open after a search typed with `/run` (itself allowed).
+/// Unverified: an addon's first search outside the window's `OnShow` (a
+/// click of its own button: allowed here), and an open with no search
+/// before the one that searches.
+fn first_in_window(vm: &mut Vm) -> bool {
+    let e = engine(vm);
+    let in_window = e
+        .world
+        .showing
+        .iter()
+        .any(|id| e.world.widgets[id.0].name.as_deref() == Some("LFGParentFrame"));
+    if e.world.lfg.searched || !in_window || !protection::tainted(vm) {
+        return false;
+    }
+    let action = protection::action_name(vm);
+    protection::refuse(vm, "ADDON_ACTION_BLOCKED", action);
+    true
+}
+
 /// `answer` a round trip later.
 fn request(vm: &mut Vm, answer: Answer) {
     let l = lfg_mut(vm);
@@ -956,12 +982,15 @@ fn remove_listing(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `C_LFGList.Search(categoryID, filter, preferredFilters, languageFilter,
 /// searchCrossFactionListings, advancedFilter, activityIDsFilter)`: an
-/// addon's needs a hardware event, else it is blocked (recorded); the
-/// answer, a round trip later: the server's listings in the category (of
-/// the activities asked for, if any), `LFG_LIST_SEARCH_RESULTS_RECEIVED()`.
-/// Returns nothing (recorded).
+/// addon's needs a hardware event, else it is blocked (recorded), and is
+/// blocked in the group finder's `OnShow` until a search was asked for
+/// since login ([`first_in_window`]); the answer, a round trip later: the
+/// server's listings in the category (of the activities asked for, if
+/// any), `LFG_LIST_SEARCH_RESULTS_RECEIVED()`. Returns nothing (recorded).
 fn search(vm: &mut Vm, c: NativeCall) -> Ret {
-    if blocked(vm, true) {
+    let first = first_in_window(vm);
+    lfg_mut(vm).searched = true;
+    if first || blocked(vm, true) {
         return Ok(vec![]);
     }
     let category = num_arg(&c, 1).unwrap_or(0.0);

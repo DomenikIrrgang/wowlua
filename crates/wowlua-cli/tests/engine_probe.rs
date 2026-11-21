@@ -3127,10 +3127,9 @@ const TYPE_RUN: &str = r#"__engine.slash("/run ShowUIPanel(LFGParentFrame)")"#;
 
 /// The probe's first order: the key twice (the second time watched), the
 /// micro button, a typed `/run ShowUIPanel(LFGParentFrame)`, StdTest's own
-/// code. The engine allows the search from `OnShow` the four ways the
-/// player acts and refuses it from the timer. WoW Forever refused the
-/// key's first open too (`forever-camelot-lfgsearch.lua`); the second
-/// order tells why before the engine's rule follows.
+/// code. As WoW Forever answered (`forever-camelot-lfgsearch.lua`): the
+/// window's first open refuses the search from `OnShow`, the player's
+/// opens after it allow it, the timer's is refused.
 #[test]
 fn the_lfg_search_probe_runs_its_steps() {
     let Some((log, stack)) = play_lfg_search(
@@ -3143,7 +3142,7 @@ fn the_lfg_search_probe_runs_its_steps() {
     assert_eq!(
         log,
         [
-            "s1 show t=0.00 ok=true refusals=0",
+            "s1 show t=0.00 ok=true refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()",
             "s2 key down I t=1.00",
             "s2 show t=1.00 ok=true refusals=0",
             "s3 show t=2.00 ok=true refusals=0",
@@ -3164,7 +3163,9 @@ fn the_lfg_search_probe_runs_its_steps() {
 }
 
 /// The probe's second order (`lfgsearch order2`): the micro button first,
-/// then the bare key twice, the watched key, StdTest's own code.
+/// then the bare key twice, the watched key, StdTest's own code. As WoW
+/// Forever answered (`forever-camelot-lfgsearch2.lua`): the micro button's
+/// first open refused, the keys' opens after it allowed.
 #[test]
 fn the_lfg_search_probe_runs_its_second_order() {
     let Some((log, stack)) = play_lfg_search(
@@ -3177,7 +3178,7 @@ fn the_lfg_search_probe_runs_its_second_order() {
     assert_eq!(
         log,
         [
-            "s1 show t=0.00 ok=true refusals=0",
+            "s1 show t=0.00 ok=true refusals=1 ADDON_ACTION_BLOCKED StdTest UNKNOWN()",
             "s2 show t=1.00 ok=true refusals=0",
             "s3 show t=2.00 ok=true refusals=0",
             "s4 key down I t=3.00",

@@ -179,6 +179,11 @@ The client's security model, in the VM:
     smart navigation sets its secure values from tainted template code
     through its own attribute handler, which asserts it runs secure;
     unverified, decision T576).
+    An addon's `C_LFGList.Search` needs the player's action (a click, a
+    key, a typed command), and in the group finder's `OnShow` it is refused
+    even then while nothing has searched since login: the window's first
+    open refuses a hook's search, its later ones allow it (decision T669,
+    found in game).
     `C_RestrictedActions.CheckAllowProtectedFunctions(object)` follows the
     same rule for its object: false for tainted code in combat lockdown on a
     protected frame (UIParent among them), true on an unprotected one, so an
