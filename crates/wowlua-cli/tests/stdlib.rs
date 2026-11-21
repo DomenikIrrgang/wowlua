@@ -3636,6 +3636,76 @@ Mock.awaitText(" passed, ")
     }
 }
 
+/// `/stdtest engine owed Scripts` runs only the steps whose key starts with
+/// `Scripts` (the probe of issue #260 in PROBES.md), keeps the last run's
+/// answers, and records wowlua's own answers to them, the game's (decision
+/// T668; camelot's UI code, skipped without it).
+#[test]
+fn ingame_owed_steps_run_by_prefix() {
+    let ui = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !ui.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/ingame");
+    let dir = tempfile::tempdir().unwrap();
+    copy_tree(&source, dir.path());
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    fs::create_dir_all(dir.path().join("tests")).unwrap();
+    fs::write(
+        dir.path().join("tests/owed.test.wowlua"),
+        r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local G = _G :: any
+
+@test("the owed steps of one probe")
+local function scripts()
+    G.StdTestState.engineOwed = { results = { ["M12.1.1"] = "kept" }, order = {}, times = {} }
+    mock.slash("/stdtest engine owed Scripts")
+    mock.advanceFrames(120)
+    const results = G.StdTestState.engineOwed.results
+    local keys: string[] = {}
+    for k in pairs(results) do
+        keys[#keys + 1] = k
+    end
+    table.sort(keys)
+    expect(table.concat(keys, " ")).toBe("M12.1.1 Scripts.2 Scripts.3 Scripts.4 Scripts.5")
+    expect(results["Scripts.2"]).toBe("1 true")
+    expect(results["Scripts.3"]).toBe("2 false StdTest")
+    expect(results["Scripts.4"]).toBe("handler error: ...izzard_RestrictedAddOnEnvironment/SecureHandlers.lua:52: Invalid 'self' frame handle\n3 nil")
+    expect(results["Scripts.5"]).toBe("4 true nil\n4p false false\n4c false false")
+    expect(mock.printed()).toContain("|cff33ff99StdTest|r engine owed: 4 answers recorded (1 with an error); type /reload so the file is written")
+end
+
+@test("a prefix no step has")
+local function none()
+    mock.slash("/stdtest engine owed Nothing")
+    expect(mock.printed()).toContain("|cff33ff99StdTest|r engine owed: no step's key starts with Nothing")
+end
+"#,
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .args(["test", "--flavor", "camelot", "owed"])
+        .env("WOWLUA_UI_SOURCE", &ui)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("2 passed, 0 failed"), "{text}");
+}
+
 /// W8101 (spec stdlib "events"): in shared flavor mode, an event some
 /// selected flavor lacks; a flavor guard covers it.
 #[test]

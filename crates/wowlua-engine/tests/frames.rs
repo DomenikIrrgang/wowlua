@@ -956,6 +956,87 @@ return Seen[1]",
     assert_eq!(r, ["true true"]);
 }
 
+/// A script that a widget method called from addon code sets off runs
+/// within the addon's execution, tainted, on a protected frame too: what
+/// Blizzard's script writes is the addon's. `OnShow` and `OnHide` start
+/// secure whoever shows the frame, as do the scripts the engine starts
+/// itself (events), and a secure caller's scripts go on secure. Decision
+/// T668; in game (issue #260), the chat line's `OnEditFocusGained` after an
+/// addon's `SetFocus` wrote `ACTIVE_CHAT_EDIT_BOX` as the addon's, an
+/// addon's `Click` of a secure click handler button ran its snippet
+/// tainted (refused), and an addon's `Show` of a secure handler frame or of
+/// the world map ran their `OnShow` secure.
+#[test]
+fn scripts_an_addons_call_sets_off_run_tainted_but_show_and_hide() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "E");
+    let secure = vm
+        .load(
+            b"Seen = {}
+local function record(self, what)
+    Seen[#Seen + 1] = self.label .. ' ' .. what .. ' ' .. tostring(issecure())
+    LastScript = self.label
+end
+local function make(kind, label, template)
+    local f = CreateFrame(kind, nil, UIParent, template)
+    f.label = label
+    f:Hide()
+    for _, s in ipairs({ 'OnShow', 'OnHide', 'OnClick' }) do
+        if f:HasScript(s) then
+            f:SetScript(s, function(self) record(self, s) end)
+        end
+    end
+    return f
+end
+Plain = make('Frame', 'plain')
+Box = make('EditBox', 'box')
+Box:SetAutoFocus(false)
+Box:SetScript('OnEditFocusGained', function(self) record(self, 'OnEditFocusGained') end)
+Button = make('Button', 'button')
+Guarded = make('Button', 'protected', 'SecureFrameTemplate')
+Plain:RegisterEvent('PLAYER_TARGET_CHANGED')
+Plain:SetScript('OnEvent', function(self) record(self, 'OnEvent') end)",
+            "=Blizzard",
+        )
+        .expect("compiles");
+    vm.call(secure, &[]).expect("runs");
+    let r = run(
+        &mut vm,
+        "Plain:Show()
+local shown = select(2, issecurevariable('LastScript'))
+Plain:Hide()
+Box:Show()
+Box:SetFocus()
+local focused = select(2, issecurevariable('LastScript'))
+Button:Show()
+Button:Click()
+Guarded:Show()
+Guarded:Click()
+E.fireEvent('PLAYER_TARGET_CHANGED')
+return tostring(shown), focused",
+    );
+    assert_eq!(r, ["nil", "MyAddon"]);
+    // Blizzard's own call: its script goes on secure.
+    let seen = vm
+        .with_execution_taint(wowlua_vm::Taint::SECURE, |vm| {
+            let f = vm
+                .load(
+                    b"Button:Click() return table.concat(Seen, ', ')",
+                    "=Blizzard",
+                )
+                .expect("compiles");
+            vm.call(f, &[])
+        })
+        .expect("runs");
+    assert_eq!(
+        text(&vm, seen[0]),
+        "plain OnShow true, plain OnHide true, box OnShow true, \
+         box OnEditFocusGained false, button OnShow true, button OnClick false, \
+         protected OnShow true, protected OnClick false, plain OnEvent true, \
+         button OnClick true"
+    );
+}
+
 /// Talents open at level 5, as the client's answer below it says.
 #[test]
 fn talents_open_at_level_five() {

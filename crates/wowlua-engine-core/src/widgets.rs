@@ -1230,9 +1230,18 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     let behaviour = engine(vm).method_behaviour(f.name, f.short);
     if let Some(b) = behaviour {
-        return b(vm, id, c);
+        return for_lua(vm, |vm| b(vm, id, c));
     }
     stored(vm, id, f, &c)
+}
+
+/// Runs a widget method's behaviour for Lua: the scripts it sets off
+/// continue the caller's execution (see [`run_script_body`]).
+fn for_lua(vm: &mut Vm, behaviour: impl FnOnce(&mut Vm) -> Ret) -> Ret {
+    engine_mut(vm).world.ui.in_method += 1;
+    let r = behaviour(vm);
+    engine_mut(vm).world.ui.in_method -= 1;
+    r
 }
 
 /// A method the client has but the documentation lacks (`CheckButton:
@@ -1257,7 +1266,7 @@ fn undocumented_method(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     let behaviour = engine(vm).method_behaviour(&full, &short);
     if let Some(b) = behaviour {
-        return b(vm, id, c);
+        return for_lua(vm, |vm| b(vm, id, c));
     }
     let props = engine(vm).world.widgets[id.0].props;
     if let Some(stem) = short.strip_prefix("Set") {
@@ -1500,8 +1509,7 @@ fn run_script_body(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value], trus
     let untrusted = |vm: &Vm, f: Value| {
         trusted_only && matches!(f, Value::Func(r) if !vm.heap.func(r).taint().is_secure())
     };
-    // (fresh: as the client calls a script; else within `CreateFrame`)
-    let fresh = !engine(vm).world.ui.creating;
+    let fresh = starts_fresh(engine(vm), script);
     let (table, scripts, hooks, props, has_intrinsic) = {
         let w = &engine(vm).world.widgets[id.0];
         (w.table, w.scripts, w.hooks, w.props, w.intrinsic_scripts)
@@ -1537,6 +1545,22 @@ fn run_script_body(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value], trus
             }
         }
     }
+}
+
+/// Whether a script starts a fresh execution, as the client calls a script,
+/// rather than going on with the running one's taint. It goes on while
+/// `CreateFrame` builds the frame (decision T243), and when a widget method
+/// called from Lua sets it off (`SetFocus` → `OnEditFocusGained`, `Click` →
+/// `OnClick`; decision T668), on a protected frame too. `OnShow` and
+/// `OnHide` start fresh whoever shows the frame: an addon's `Show` of its
+/// secure handler frame runs the `_onshow` snippet, which needs secure
+/// code (in game, issue #260). Events and `OnUpdate` are the engine's own,
+/// whoever caused them.
+fn starts_fresh(e: &Engine, script: &str) -> bool {
+    if e.world.ui.creating {
+        return false;
+    }
+    e.world.ui.in_method == 0 || matches!(script, "OnEvent" | "OnUpdate" | "OnShow" | "OnHide")
 }
 
 /// Whether any widget class has script type `script`.
@@ -4380,7 +4404,9 @@ fn set_attribute(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     // values from tainted template code through its own attribute handler,
     // which asserts it runs secure (decision T576; unverified).
     let creating = std::mem::replace(&mut engine_mut(vm).world.ui.creating, false);
+    let in_method = std::mem::replace(&mut engine_mut(vm).world.ui.in_method, 0);
     run_script(vm, id, "OnAttributeChanged", &[name, v]);
+    engine_mut(vm).world.ui.in_method = in_method;
     engine_mut(vm).world.ui.creating = creating;
     Ok(vec![])
 }

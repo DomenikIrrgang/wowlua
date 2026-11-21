@@ -133,12 +133,13 @@ local commands = router({
     },
     engine = {
         args = { "rest" },
-        help = "Record what the client's engine does: /stdtest engine [order | protected | blocked | input | merchant | soft | answers | collections | journals | journals2 | leftovers | layers [answer] | screen | glyphs | group | startup | owed | scenario <name> | scenario stop | fullprobe [stop | status | reset] | methodprobe [stop | status | reset] | record <label> | stop] (then /reload)",
+        help = "Record what the client's engine does: /stdtest engine [order | protected | blocked | input | merchant | soft | answers | collections | journals | journals2 | leftovers | layers [answer] | screen | glyphs | group | startup | owed [prefix] | scenario <name> | scenario stop | fullprobe [stop | status | reset] | methodprobe [stop | status | reset] | record <label> | stop] (then /reload)",
         run = function(arg: string?)
             -- The owed probes of PROBES.md (owed.wowlua; outside
             -- engineprobe.wowlua, which the engine's tests build alone).
-            if (arg ?? ""):match("^%s*owed%s*$") then
-                owedProbe()
+            local owed, only = (arg ?? ""):match("^%s*(owed)%s*(%S*)%s*$")
+            if owed then
+                owedProbe(only ~= "" and only or nil)
             else
                 engineProbe(arg)
             end

@@ -6,7 +6,9 @@
 -- `order`, every line in the order printed with the frame it came in;
 -- `times[key]`, when each step ran (seconds from the start). One step per
 -- frame, as lines typed one after another; what the steps made is hidden
--- after. About 25 seconds, out of combat.
+-- after. About 25 seconds, out of combat. `/stdtest engine owed <prefix>`
+-- runs only the steps whose key starts with the prefix (`Scripts`), and
+-- adds their answers to the last run's.
 import state from "/state"
 import stamp from "/state"
 import say from "/harness"
@@ -44,7 +46,26 @@ end
 
 local running = false
 
-export function owedProbe()
+--- Whether a step runs: the steps whose key starts with `only` (all
+--- without it), and a step without a key right after a step that runs.
+local function selected(steps: typeof(plan.steps), only: string?): typeof(plan.steps)
+    if only == nil then
+        return steps
+    end
+    const picked: typeof(plan.steps) = {}
+    local last = false
+    for _, s in ipairs(steps) do
+        if s.key ~= nil then
+            last = s.key:sub(1, #only) == only
+        end
+        if last then
+            picked[#picked + 1] = s
+        end
+    end
+    return picked
+end
+
+export function owedProbe(only: string?)
     if running then
         say("engine owed: already running; wait for its last line")
         return
@@ -53,11 +74,23 @@ export function owedProbe()
         say("engine owed: leave combat first (it opens the settings panel)")
         return
     end
+    const steps = selected(plan.steps, only)
+    if #steps == 0 then
+        say(`engine owed: no step's key starts with {only ?? ""}`)
+        return
+    end
     running = true
     const st = state() :: any
-    const results: { [string]: string } = {}
-    const order: string[] = {}
-    const times: { [string]: string } = {}
+    -- A run of some steps keeps the last run's answers.
+    const last = only ~= nil and st.engineOwed or nil
+    const results: { [string]: string } = last and last.results or {}
+    const order: string[] = last and last.order or {}
+    const times: { [string]: string } = last and last.times or {}
+    for _, s in ipairs(steps) do
+        if s.key ~= nil then
+            results[s.key] = nil
+        end
+    end
     st.engineOwed = {
         client = `{(GetBuildInfo())} ({select(2, GetBuildInfo())})`,
         at = date("%Y-%m-%d %H:%M:%S"),
@@ -95,7 +128,6 @@ export function owedProbe()
             end
         end
     end
-    const steps = plan.steps
     local index = 1
     local due = 0.0
     local waiting = false
@@ -109,10 +141,13 @@ export function owedProbe()
             running = false
             local count = 0
             local errors = 0
-            for _, r in pairs(results) do
-                count += 1
-                if r:find("error: ", 1, true) then
-                    errors += 1
+            for _, s in ipairs(steps) do
+                const r = s.key and results[s.key]
+                if r then
+                    count += 1
+                    if r:find("error: ", 1, true) then
+                        errors += 1
+                    end
                 end
             end
             say(`engine owed: {count} answers recorded ({errors} with an error); type /reload so the file is written`)
@@ -140,5 +175,9 @@ export function owedProbe()
             printer(label)(`error: {issecretvalue(err) and "<secret>" or tostring(err)}`)
         end
     end)
-    say(`engine owed: {#steps} steps, about 25 seconds; a few things show in the middle of the screen and go`)
+    if only then
+        say(`engine owed: {#steps} steps starting with {only}`)
+    else
+        say(`engine owed: {#steps} steps, about 25 seconds; a few things show in the middle of the screen and go`)
+    end
 end
