@@ -3229,32 +3229,29 @@ GroupHeaderLog = table.concat(lines, "\n")"#
     Some(text(&vm, log).lines().map(str::to_string).collect())
 }
 
-/// The group header probe's three variants (`none`, `direct`, `rewrite`),
-/// as wowlua answers them before WoW Forever's recording (PROBES.md, issue
-/// #275): no update after StdTest's direct one turns tainted, in or out of
-/// combat, so nothing is refused. The global a named frame writes takes no
-/// taint here, not even from StdTest's own `CreateFrame` (`own frame`), so
-/// wowlua's out-of-combat line can't tell either way.
+/// The group header probe's variants (`none`, `other`, `self`,
+/// `rewrite`), as wowlua answers them: no update after StdTest's direct one
+/// turns tainted, so nothing is refused in the fight. WoW Forever refused
+/// the fight's five protected calls after a direct update in the first
+/// round (`forever-camelot-groupheader-direct.lua`, PROBES.md, issue #275).
 #[test]
 fn the_group_header_probe_runs_its_variants() {
     for (variant, key) in [
-        ("none", "engineGroupHeaderNone"),
-        ("direct", "engineGroupHeaderDirect"),
-        ("rewrite", "engineGroupHeaderRewrite"),
+        ("none", "engineGroupHeader2None"),
+        ("other", "engineGroupHeader2Other"),
+        ("self", "engineGroupHeader2Self"),
+        ("rewrite", "engineGroupHeader2Rewrite"),
     ] {
         let Some(log) = play_group_header(variant, key) else {
             return;
         };
-        let after = format!("after {variant} first=player fight=player refusals=0");
+        let after = format!("after {variant} a=player b=player refusals=0");
         assert_eq!(
             log,
             [
-                "nil slots: cleared=tainted StdTest wiped=tainted StdTest never=secure",
-                "own frame secure",
-                "shown first=player secure fight=player secure refusals=0",
+                "shown a=player secure b=player secure refusals=0",
                 after.as_str(),
-                "fewer first=- new=true secure refusals=0",
-                "in fight lockdown=true groupFilter=2 fight=- button1 shown=false refusals=0",
+                "in fight lockdown=true groupFilter=2 a=player b=- button1 shown=false refusals=0",
                 "fight over refusals=0",
                 "recorded",
             ],

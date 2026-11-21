@@ -19,9 +19,9 @@
 --                            a group finder search from the window's
 --                            OnShow, the window opened five ways (guided,
 --                            lfgsearch.wowlua)
---   /stdtest engine groupheader none|direct|rewrite
+--   /stdtest engine groupheader none|other|self|rewrite
 --                            a group header updated by addon code, then
---                            fewer units out of combat and in a fight
+--                            an update listing fewer units in a fight
 --                            (alone, groupheader.wowlua)
 --   /stdtest engine scenario <name> / stop
 --                            a piece of gameplay: events, the answers

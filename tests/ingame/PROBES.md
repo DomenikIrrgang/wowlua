@@ -3927,8 +3927,12 @@ later secure update tainted is not known: the file-local `sortingTable` and
 `tokenTable` every header shares (read just after a secure `wipe` has
 cleared them), or the buttons and their attributes. `/stdtest engine
 groupheader` records it before wowlua's rule changes, alone, with any
-class. It makes two group headers that list you, does its variant's addon
-action, then has two updates list nobody, each run by the header's own
+class, in two rounds.
+
+### Round 1 (the probe at c4e4b3a)
+
+It made two group headers that list you, did its variant's addon
+action, then had two updates list nobody, each run by the header's own
 script:
 
 - out of combat, at once: the first header's `showSolo` turned off. Its
@@ -3988,7 +3992,7 @@ each variant, `none` first:
 Then `cargo xtask ingest` writes
 `crates/wowlua-engine/tests/client/forever-camelot-groupheader-<variant>.lua`.
 
-Seen (2026-11-21, WoW Forever 1.60.1 71037, a mage alone,
+Seen (2026-11-21, WoW Forever 1.60.1 71037, alone,
 `forever-camelot-groupheader-<variant>.lua`):
 
 - every variant: `nil slots: cleared=tainted StdTest wiped=tainted StdTest
@@ -4013,8 +4017,7 @@ writes again, but two things blur it: the first header's direct update
 of combat both ran after the second's secure one, and both share the
 tables.
 
-wowlua (the engine's test,
-`the_group_header_probe_runs_its_variants`), every variant alike but for
+wowlua then (the engine's test at c4e4b3a), every variant alike but for
 its `after` line (here `direct`'s): nothing tainted, nothing refused.
 
 ```text
@@ -4024,6 +4027,54 @@ shown first=player secure fight=player secure refusals=0
 after direct first=player fight=player refusals=0
 fewer first=- new=true secure refusals=0
 in fight lockdown=true groupFilter=2 fight=- button1 shown=false refusals=0
+fight over refusals=0
+recorded
+```
+
+### Round 2
+
+One header per role, nothing in between. Two group headers that list you,
+both filtered to group 1: A, and B, whose `groupFilter` the state driver
+turns to 2 in a fight. The variants, one per session:
+
+- `none`: nothing (the control);
+- `other`: `SecureGroupHeader_Update(A)` from StdTest's code. B refused in
+  the fight: the taint is in the tables every header shares;
+- `self`: `SecureGroupHeader_Update(B)` from StdTest's code (the first
+  round's `direct` without the other header);
+- `rewrite`: as `self`, then a secure update of B with the same unit. Clean
+  in the fight: the taint is in what an update with the same unit writes
+  again.
+
+Not in a group, out of combat, next to a training dummy (or any enemy). For
+each variant, right after a `/reload`:
+
+1. Start it:
+
+   ```
+   /stdtest engine groupheader none
+   ```
+
+2. Attack the dummy, stay in the fight three seconds, then leave it. When
+   it says "recorded", reload, so the file is written:
+
+   ```
+   /reload
+   ```
+
+3. The same with `other`, `self` and `rewrite`.
+
+Then `cargo xtask ingest` writes
+`crates/wowlua-engine/tests/client/forever-camelot-groupheader2-<variant>.lua`.
+
+Seen: (to do). wowlua (the engine's test,
+`the_group_header_probe_runs_its_variants`), every variant alike but for
+its `after` line: nothing refused.
+
+```text
+shown a=player secure b=player secure refusals=0
+after self a=player b=player refusals=0
+in fight lockdown=true groupFilter=2 a=player b=- button1 shown=false refusals=0
 fight over refusals=0
 recorded
 ```
