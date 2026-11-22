@@ -6851,3 +6851,100 @@ end
     let (_, out) = perf(dir.path(), &["run", "idle"]);
     assert!(!out.contains("busy ("), "{out}");
 }
+
+/// A raid's group headers with Blizzard's UI code (issue #275): six
+/// raiders, two of them with pets, a header per kind.
+const GROUP_HEADERS: &str = r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local G = _G :: { [string]: any }
+
+local function makeRaid(n: number): mock.MockUnit[]
+    local list: mock.MockUnit[] = {}
+    for i = 1, n do
+        list[i] = mock.spawnUnit({ name = "Raider" .. i, player = true, class = "HUNTER", reaction = "friendly", distance = 10 })
+        mock.group:add(list[i], { raid = true, subgroup = math.floor(i / 5) + 1, quiet = i < n })
+    end
+    mock.advanceFrames(2)
+    mock.advanceTime(0.4)
+    return list
+end
+
+local function header(name: string, template: string): any
+    local h = CreateFrame("Frame", name, UIParent, template) :: any
+    h:SetAttribute("template", "SecureUnitButtonTemplate")
+    h:SetAttribute("initialConfigFunction", [[ self:SetWidth(60); self:SetHeight(20) ]])
+    h:SetAttribute("showRaid", true)
+    h:SetAttribute("showParty", true)
+    h:SetAttribute("showPlayer", true)
+    h:SetPoint("CENTER")
+    h:Show()
+    return h
+end
+
+--- The headers, the raid and its pets; `layout` is what the addon does
+--- after laying them out. Then in a fight a pet goes, then a member: the
+--- refusals in the fight.
+local function fight(layout: (any, any) -> ()): number
+    local plain = header("ReproRaid", "SecureGroupHeaderTemplate")
+    local pets = header("ReproPets", "SecureGroupPetHeaderTemplate")
+    local raid = makeRaid(6)
+    local wolf = mock.spawnUnit({ name = "Wolf", reaction = "friendly", distance = 10 })
+    local cat = mock.spawnUnit({ name = "Cat", reaction = "friendly", distance = 10 })
+    mock.setPet(wolf, { owner = raid[2] })
+    mock.setPet(cat, { owner = raid[4] })
+    mock.advanceFrames(2)
+    layout(plain, pets)
+    mock.advanceFrames(2)
+    local before = #mock.refusals()
+    mock.player:enterCombat()
+    mock.setPet(nil, { owner = raid[2] })
+    mock.advanceFrames(2)
+    mock.group:remove(raid[6])
+    mock.advanceFrames(2)
+    return #mock.refusals() - before
+end
+"#;
+
+/// An addon's own `SecureGroupHeader_Update` and
+/// `SecureGroupPetHeader_Update` leave its taint in the tables every group
+/// header shares: in a fight, the headers' updates after a pet and a member
+/// leave are refused (WoW Forever, issue #275, decision T670).
+#[test]
+fn blizzard_ui_group_headers_after_a_direct_update() {
+    let test = format!(
+        "{GROUP_HEADERS}{}",
+        r#"
+@test("a direct update, then a pet and a member gone in a fight")
+local function direct()
+    local refused = fight(function(plain: any, pets: any)
+        G.SecureGroupHeader_Update(plain)
+        G.SecureGroupPetHeader_Update(pets)
+    end)
+    expect(refused).toBeGreaterThan(0)
+end
+"#
+    );
+    blizzard_ui_test("tests/header.test.wowlua", &test, "1 passed, 0 failed");
+}
+
+/// The fix the addon found in game: an attribute of its own set per
+/// layout, so the header's `OnAttributeChanged` runs the update securely;
+/// nothing is refused in the fight.
+#[test]
+fn blizzard_ui_group_headers_driven_by_their_attributes() {
+    let test = format!(
+        "{GROUP_HEADERS}{}",
+        r#"
+@test("an attribute of the addon's, then a pet and a member gone in a fight")
+local function attribute()
+    local refused = fight(function(plain: any, pets: any)
+        plain:SetAttribute("addon-layout", 1)
+        pets:SetAttribute("addon-layout", 1)
+    end)
+    expect(refused).toBe(0)
+end
+"#
+    );
+    blizzard_ui_test("tests/header.test.wowlua", &test, "1 passed, 0 failed");
+}

@@ -5,6 +5,7 @@ use crate::error::LuaError;
 use crate::function::NativeCall;
 use crate::heap::TableRef;
 use crate::stdlib::{Ret, register};
+use crate::taint::Slot;
 use crate::value::Value;
 use crate::vm::Vm;
 
@@ -28,11 +29,27 @@ pub fn open(vm: &mut Vm) {
 
 fn aux_getn(vm: &mut Vm, c: &NativeCall, n: usize) -> Result<(TableRef, usize), LuaError> {
     let t = vm.check_table(c, n)?;
-    Ok((t, vm.heap.table(t).border()))
+    Ok((t, vm.table_len(t)))
 }
 
 fn rawgeti(vm: &Vm, t: TableRef, i: i64) -> Value {
     vm.heap.table(t).get_num(i as f64)
+}
+
+/// `t[i]` with its taint, as `lua_rawgeti` pushes it: a tainted slot
+/// taints the execution, a secure one takes the execution's write taint
+/// (`setobj2s`).
+fn rawgeti_slot(vm: &mut Vm, t: TableRef, i: i64) -> Slot {
+    let s = vm.heap.table(t).get_slot(Value::Num(i as f64));
+    vm.taint_mut().copy(s)
+}
+
+/// `t[i] = s` keeping `s`'s taint (`lua_rawseti` of a pushed value).
+fn rawseti_slot(vm: &mut Vm, t: TableRef, i: i64, s: Slot) -> Result<(), LuaError> {
+    match vm.heap.table_mut(t).set_slot(Value::Num(i as f64), s) {
+        Ok(()) => Ok(()),
+        Err(e) => Err(vm.rt_error(e.message())),
+    }
 }
 
 fn rawseti(vm: &mut Vm, t: TableRef, i: i64, v: Value) -> Result<(), LuaError> {
@@ -112,16 +129,18 @@ fn insert(vm: &mut Vm, c: NativeCall) -> Ret {
             }
             let mut i = e;
             while i > pos {
-                let v = rawgeti(vm, t, i - 1);
-                rawseti(vm, t, i, v)?;
+                let v = rawgeti_slot(vm, t, i - 1);
+                rawseti_slot(vm, t, i, v)?;
                 i -= 1;
             }
             pos
         }
         _ => return Err(vm.error("wrong number of arguments to 'insert'")),
     };
-    let v = c.arg(c.len());
-    rawseti(vm, t, pos, v)?;
+    // The value with its taint, or the execution's (tainted by the length
+    // just read, a secure value is stored tainted).
+    let v = vm.taint_mut().copy(c.slot(c.len()));
+    rawseti_slot(vm, t, pos, v)?;
     Ok(vec![])
 }
 
@@ -134,11 +153,12 @@ fn remove(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     let result = rawgeti(vm, t, pos);
     while pos < e {
-        let v = rawgeti(vm, t, pos + 1);
-        rawseti(vm, t, pos, v)?;
+        let v = rawgeti_slot(vm, t, pos + 1);
+        rawseti_slot(vm, t, pos, v)?;
         pos += 1;
     }
-    rawseti(vm, t, e, Value::Nil)?;
+    let cleared = vm.taint_mut().copy(Slot::NIL);
+    rawseti_slot(vm, t, e, cleared)?;
     Ok(vec![result])
 }
 
@@ -150,7 +170,7 @@ fn concat(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = vm.check_table(&c, 1)?;
     let mut i = vm.opt_int(&c, 3, 1)?;
     let last = if c.arg(4).is_nil() {
-        vm.heap.table(t).border() as i64
+        vm.table_len(t) as i64
     } else {
         vm.check_int(&c, 4)?
     };

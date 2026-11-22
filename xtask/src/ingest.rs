@@ -1839,8 +1839,9 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
     // The cursor (`/stdtest engine cursor`): each step's state and the
     // events between; the keyboard (`/stdtest engine keys`): which frames
     // each key reached, and the binding's clicks; the group finder search
-    // (`/stdtest engine lfgsearch`): each show's refusals and stack; in
-    // order.
+    // (`/stdtest engine lfgsearch`): each show's refusals and stack; a
+    // group header updated by addon code (`/stdtest engine groupheader`):
+    // the taints and refusals of the updates after it; in order.
     for (key, part, fixture, about) in [
         (
             "engineCursor",
@@ -1865,6 +1866,30 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             "lfgsearch2",
             "forever-camelot-lfgsearch2.lua",
             "/stdtest engine lfgsearch order2, the group finder\nsearch from OnShow, the micro button first, then the bare key twice",
+        ),
+        (
+            "engineGroupHeader2None",
+            "groupheader2-none",
+            "forever-camelot-groupheader2-none.lua",
+            "/stdtest engine groupheader none (round 2), two\ngroup headers alone, then a fight in which one lists nobody",
+        ),
+        (
+            "engineGroupHeader2Other",
+            "groupheader2-other",
+            "forever-camelot-groupheader2-other.lua",
+            "/stdtest engine groupheader other (round 2), one\nheader updated by StdTest's code, the other's update in a fight",
+        ),
+        (
+            "engineGroupHeader2Self",
+            "groupheader2-self",
+            "forever-camelot-groupheader2-self.lua",
+            "/stdtest engine groupheader self (round 2), the\nheader updated by StdTest's code, then its update in a fight",
+        ),
+        (
+            "engineGroupHeader2Rewrite",
+            "groupheader2-rewrite",
+            "forever-camelot-groupheader2-rewrite.lua",
+            "/stdtest engine groupheader rewrite (round 2), as\nself with a secure update of the same unit between",
         ),
     ] {
         if let Ok(log) = state.get::<mlua::Table>(key)

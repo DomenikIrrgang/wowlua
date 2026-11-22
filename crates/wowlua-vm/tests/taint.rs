@@ -188,3 +188,117 @@ fn secureexecuterange_tells_the_host_of_dropped_errors() {
     assert_eq!(messages, ["range.lua:4: entry 1", "range.lua:4: entry 2"]);
     assert!(dropped[0].1.contains("range.lua:4"), "{}", dropped[0].1);
 }
+
+/// Runs `src` as secure code from a secure start (as the engine starts a
+/// script), its results as text.
+fn run_secure(vm: &mut Vm, src: &str) -> Vec<String> {
+    vm.taint_mut().stack = wowlua_vm::Taint::SECURE;
+    let f = vm.load(src.as_bytes(), "=secure").expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    r.iter()
+        .map(|&v| match v {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            Value::Bool(b) => b.to_string(),
+            Value::Num(n) => n.to_string(),
+            other => other.type_name().to_string(),
+        })
+        .collect()
+}
+
+fn run_addon(vm: &mut Vm, src: &str) {
+    let f = vm
+        .load_as(src.as_bytes(), "@MyAddon/main.lua", "MyAddon")
+        .expect("compiles");
+    vm.call(f, &[]).expect("runs");
+}
+
+/// A list Blizzard's code keeps, as the group headers' shared
+/// `sortingTable`: refilled by `wipe` and `tinsert`, counted with `#`.
+const SHARED_LIST: &str = "local list = {}
+function Refill(n)
+    wipe(list)
+    for i = 1, n do tinsert(list, 'unit' .. i) end
+end
+function Count()
+    wipe(list)
+    return #list
+end
+";
+
+/// A slot a secure `wipe` clears keeps the taint of its last writer, and
+/// `#` takes the taint of the slot it ends on (issue #275, WoW Forever's
+/// `forever-camelot-groupheader2-*.lua`): after an addon's call fills the
+/// shared list, secure code that wipes and counts it turns tainted.
+#[test]
+fn a_wiped_slot_keeps_its_writer_and_the_length_reads_it() {
+    let mut vm = Vm::wow();
+    run_secure(&mut vm, SHARED_LIST);
+    run_secure(&mut vm, "Refill(1)");
+    assert_eq!(
+        run_secure(&mut vm, "local n = Count() return n, issecure()"),
+        ["0", "true"],
+        "filled by secure code"
+    );
+    run_addon(&mut vm, "Refill(1)");
+    assert_eq!(
+        run_secure(&mut vm, "local n = Count() return n, issecure()"),
+        ["0", "false"],
+        "filled by the addon's call"
+    );
+}
+
+/// A secure refill with the same count doesn't clean the list: its
+/// `tinsert` counts the wiped list first, turns tainted on the addon's
+/// slot, and stores the new element tainted (WoW Forever's `rewrite`).
+#[test]
+fn a_secure_refill_after_an_addons_stays_tainted() {
+    let mut vm = Vm::wow();
+    run_secure(&mut vm, SHARED_LIST);
+    run_addon(&mut vm, "Refill(1)");
+    assert_eq!(
+        run_secure(&mut vm, "Refill(1) return issecure()"),
+        ["false"],
+    );
+    assert_eq!(
+        run_secure(&mut vm, "local n = Count() return n, issecure()"),
+        ["0", "false"],
+    );
+}
+
+/// `tinsert` stores the value with the caller's taint: removed, the slot
+/// it leaves is the addon's, and the length reads it; the length of a full
+/// list reads no nil slot, and its last element doesn't taint it.
+#[test]
+fn tinsert_stores_with_the_callers_taint() {
+    let mut vm = Vm::wow();
+    run_secure(&mut vm, "Shared = {} Keyed = {} Removed = {}");
+    run_addon(
+        &mut vm,
+        "tinsert(Shared, 'x') tinsert(Keyed, 'x') Keyed.k = 'y' \
+         tinsert(Removed, 'x') tinsert(Removed, 'y') Removed[2] = nil",
+    );
+    assert_eq!(
+        run_secure(
+            &mut vm,
+            "local t = {} t[1] = 'z' local a, by = issecurevariable(Shared, 1) \
+             return #t, issecure(), tostring(rawget(Shared, 1)), tostring(by)"
+        ),
+        ["1", "true", "x", "nil"],
+        "issecurevariable reads the number key as the string \"1\""
+    );
+    assert_eq!(
+        run_secure(&mut vm, "local _ = #Shared return issecure()"),
+        ["true"],
+        "a full list: no nil slot read"
+    );
+    assert_eq!(
+        run_secure(&mut vm, "local _ = #Keyed return issecure()"),
+        ["true"],
+        "the slot past the last element, never written, ends the search"
+    );
+    assert_eq!(
+        run_secure(&mut vm, "local n = #Removed return n, issecure()"),
+        ["1", "false"],
+        "the addon's cleared slot ends the search"
+    );
+}

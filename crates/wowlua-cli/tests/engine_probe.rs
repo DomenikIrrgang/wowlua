@@ -79,6 +79,7 @@ fn build() -> tempfile::TempDir {
         "trainer.wowlua",
         "group.wowlua",
         "lfgsearch.wowlua",
+        "groupheader.wowlua",
         "startup.wowlua",
         "scenario.wowlua",
         "snapshot.wowlua",
@@ -3188,4 +3189,78 @@ fn the_lfg_search_probe_runs_its_second_order() {
         ],
     );
     assert!(stack.contains("ToggleGroupFinderFrame"), "{stack}");
+}
+
+/// `/stdtest engine groupheader <variant>` alone: the probe's steps out of
+/// combat, then a fight of three seconds. Its lines, but the client's.
+fn play_group_header(variant: &str, key: &str) -> Option<Vec<String>> {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return None;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    wowlua_engine::login::login(&mut vm, "StdTest", false, false);
+    wowlua_engine::clock::advance_frames(&mut vm, 30, 1000.0 / 60.0);
+    addon(
+        &mut vm,
+        &format!(
+            r#"StdTestEngineProbe("groupheader {variant}")
+__engine.advanceTime(0.5)
+__engine.player:enterCombat()
+__engine.advanceFrames(180)
+__engine.player:leaveCombat()
+__engine.advanceFrames(90)
+local lines = {{}}
+for _, line in ipairs(StdTestState.{key}) do
+    if not line:find("^client ") then
+        lines[#lines + 1] = line
+    end
+end
+GroupHeaderLog = table.concat(lines, "\n")"#
+        ),
+    );
+    let log = vm.get_global("GroupHeaderLog");
+    Some(text(&vm, log).lines().map(str::to_string).collect())
+}
+
+/// A recording's lines in order (`["001"] = "…"`), but the client's.
+fn recorded_lines(fixture: &str) -> Vec<String> {
+    let path = repo()
+        .join("crates/wowlua-engine/tests/client")
+        .join(fixture);
+    let text = fs::read_to_string(&path).expect("the recording");
+    let line = regex::Regex::new(r#"^\s*\["\d+"\] = "(.*)",$"#).unwrap();
+    text.lines()
+        .filter_map(|l| line.captures(l))
+        .map(|m| m[1].replace("\\\"", "\"").replace("\\\\", "\\"))
+        .filter(|l| !l.starts_with("client "))
+        .collect()
+}
+
+/// The group header probe's variants (`none`, `other`, `self`,
+/// `rewrite`) give what WoW Forever recorded
+/// (`forever-camelot-groupheader2-<variant>.lua`, issue #275): after an
+/// addon's direct `SecureGroupHeader_Update` of either header, the state
+/// driver's update in a fight that lists nobody has its five protected
+/// calls refused, also after a secure update of the same unit.
+#[test]
+fn the_group_header_probe_runs_its_variants() {
+    for (variant, key) in [
+        ("none", "engineGroupHeader2None"),
+        ("other", "engineGroupHeader2Other"),
+        ("self", "engineGroupHeader2Self"),
+        ("rewrite", "engineGroupHeader2Rewrite"),
+    ] {
+        let Some(log) = play_group_header(variant, key) else {
+            return;
+        };
+        let recorded = recorded_lines(&format!("forever-camelot-groupheader2-{variant}.lua"));
+        assert_eq!(log, recorded, "{variant}");
+    }
 }

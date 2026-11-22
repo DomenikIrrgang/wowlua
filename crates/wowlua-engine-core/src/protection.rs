@@ -267,8 +267,10 @@ pub fn refuse(vm: &mut Vm, event: &'static str, action: String) {
 }
 
 /// A protected method of `id` refused: in combat lockdown, on a protected
-/// widget, for tainted code. The action names the widget by its name, or
-/// its type when it has none (unverified).
+/// widget, for tainted code. The action names a named widget before the
+/// method (`StdTestProbeHeaderBUnitButton1:Hide()`, WoW Forever, issue
+/// #275), the method alone for one without a name (unverified), and
+/// `UNKNOWN()` through `pcall` (`/stdtest engine blocked`).
 pub fn refuses_method(vm: &mut Vm, id: WidgetId, f: &crate::api::Function) -> bool {
     // `SetAttribute` too (`/stdtest engine blocked`).
     let protected_method = f
@@ -289,7 +291,10 @@ pub fn refuses_method(vm: &mut Vm, id: WidgetId, f: &crate::api::Function) -> bo
     {
         return false;
     }
-    let action = action_name(vm);
+    let action = match (vm.called_as(), engine(vm).world.widgets[id.0].name.clone()) {
+        (Some(method), Some(name)) => format!("{name}:{method}()"),
+        _ => action_name(vm),
+    };
     refuse(vm, "ADDON_ACTION_BLOCKED", action);
     true
 }
